@@ -11,7 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { 
@@ -22,6 +22,7 @@ import Animated, {
   runOnJS,
   interpolate,
 } from 'react-native-reanimated';
+import CollaborationPanel from '@/components/CollaborationPanel';
 
 const { width, height } = Dimensions.get('window');
 
@@ -339,6 +340,7 @@ export default function TripDetailsScreen() {
   const [viewMode, setViewMode] = useState<'split' | 'text' | 'map'>('split');
   const [selectedDay, setSelectedDay] = useState<string>('all');
   const [trip, setTrip] = useState(SAMPLE_ITINERARY);
+  const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
 
   // Handle reordering of places within a day
   const handlePlacesReorder = useCallback((dayIndex: number, newPlaces: any[]) => {
@@ -433,6 +435,12 @@ export default function TripDetailsScreen() {
           <TouchableOpacity style={styles.headerButton}>
             <Feather name="edit-2" size={20} color="#333" />
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.headerButton, isCollaborationOpen && styles.headerButtonActive]}
+            onPress={() => setIsCollaborationOpen(!isCollaborationOpen)}
+          >
+            <Ionicons name="people-outline" size={20} color={isCollaborationOpen ? '#3B82F6' : '#333'} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -485,7 +493,7 @@ export default function TripDetailsScreen() {
       </View>
 
       {/* Content Area */}
-      <View style={styles.content}>
+      <View style={[styles.content, isCollaborationOpen && styles.contentWithCollaboration]}>
         {viewMode === 'text' && renderTextContent()}
         
         {viewMode === 'map' && (
@@ -515,6 +523,13 @@ export default function TripDetailsScreen() {
           </>
         )}
       </View>
+      
+      {/* Collaboration Panel */}
+      <CollaborationPanel 
+        isOpen={isCollaborationOpen}
+        onClose={() => setIsCollaborationOpen(false)}
+        tripId={typeof id === 'string' ? id : 'paris-adventure'}
+      />
     </View>
   );
 }
@@ -552,6 +567,10 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  headerButtonActive: {
+    backgroundColor: '#EBF5FF',
+    borderRadius: 8,
   },
   viewModeTabs: {
     flexDirection: 'row',
@@ -608,6 +627,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     flexDirection: 'row',
+  },
+  contentWithCollaboration: {
+    marginRight: 400,
   },
   textContent: {
     flex: 1,
