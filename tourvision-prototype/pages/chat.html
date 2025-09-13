@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Trip Planner - TourVision</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../styles/common.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-gray-50" x-data="chatApp()" x-init="init()">
+    
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <aside class="w-80 sidebar flex flex-col">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                    <a href="../index.html" class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-lg">T</span>
+                        </div>
+                        <span class="font-bold text-xl text-gray-900">TourVision</span>
+                    </a>
+                    <button class="btn-icon-sm">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <button @click="startNewTrip()" class="w-full btn-primary flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    New Trip
+                </button>
+            </div>
+
+            <!-- Chat History -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Trips</h3>
+                <div class="space-y-2">
+                    <div class="card-active cursor-pointer">
+                        <h4 class="font-medium text-gray-900">Current: Paris Adventure</h4>
+                        <p class="text-sm text-gray-600">Planning in progress...</p>
+                    </div>
+                    <div class="card-hover">
+                        <h4 class="font-medium text-gray-900">Tokyo Dreams</h4>
+                        <p class="text-sm text-gray-600">7 days • 18 places</p>
+                    </div>
+                    <div class="card-hover">
+                        <h4 class="font-medium text-gray-900">Bali Escape</h4>
+                        <p class="text-sm text-gray-600">10 days • 25 places</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Chat Header -->
+            <header class="header-main px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="heading-xl">Paris Adventure</h1>
+                        <p class="text-muted">AI Trip Planning Assistant</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button class="btn-icon">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a9.001 9.001 0 01-7.432 0m9.032-4.026A9.001 9.001 0 0112 3c-2.796 0-5.29 1.28-6.716 3.342m9.032 4.026a9.003 9.003 0 01-9.032 0"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Messages Area -->
+            <div class="flex-1 overflow-y-auto px-6 py-4" id="chatMessages">
+                <div class="space-y-6" x-html="messagesHTML">
+                    <!-- Messages will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Quick Replies -->
+            <div x-show="showQuickReplies" class="px-6 pb-2">
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="reply in quickReplies">
+                        <button @click="sendQuickReply(reply)" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                            <span x-text="reply"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div class="flex items-end space-x-4">
+                    <div class="flex-1">
+                        <div class="relative">
+                            <textarea 
+                                x-model="userInput"
+                                @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
+                                placeholder="Ask me anything about your trip..."
+                                rows="1"
+                                class="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                style="min-height: 48px; max-height: 120px;"
+                            ></textarea>
+                            <button class="absolute right-2 bottom-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button 
+                        @click="sendMessage()"
+                        :disabled="!userInput.trim() || isTyping"
+                        class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center"
+                    >
+                        <svg x-show="!isTyping" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                        <svg x-show="isTyping" class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Artifact Preview -->
+        <aside x-show="showArtifact" class="w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col" x-data="dragDropItinerary()">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-900 dark:text-white">Trip Preview</h3>
+                    <button @click="showArtifact = false" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <!-- Place Selection Preview -->
+                <div class="space-y-4">
+                    <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-4 text-white">
+                        <h4 class="font-semibold mb-2">Paris Itinerary</h4>
+                        <p class="text-sm opacity-90">5 days • <span x-text="totalPlaces"></span> places selected</p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="(day, dayIndex) in itineraryDays" :key="day.id">
+                            <div 
+                                class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3"
+                                @drop="handleDrop($event, dayIndex)"
+                                @dragover.prevent="handleDragOver($event)"
+                                @dragleave="handleDragLeave($event)"
+                            >
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="day.name"></span>
+                                    <span class="text-sm text-gray-500"><span x-text="day.places.length"></span> places</span>
+                                </div>
+                                <div class="space-y-2">
+                                    <template x-for="(place, placeIndex) in day.places" :key="place.id">
+                                        <div 
+                                            :draggable="editMode"
+                                            @dragstart="handleDragStart($event, dayIndex, placeIndex)"
+                                            @dragend="handleDragEnd($event)"
+                                            :class="editMode ? 'cursor-move' : ''"
+                                            class="group flex items-center bg-white dark:bg-gray-600 rounded-lg px-3 py-2 transition-all hover:shadow-md"
+                                        >
+                                            <svg x-show="editMode" class="w-4 h-4 text-gray-400 mr-2 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                                            </svg>
+                                            <div class="flex-1 flex items-center">
+                                                <div :class="'w-2 h-2 rounded-full mr-2 ' + place.color"></div>
+                                                <span class="text-sm text-gray-700 dark:text-gray-200" x-text="place.name"></span>
+                                            </div>
+                                            <button x-show="editMode" @click="removePlace(dayIndex, placeIndex)" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition">
+                                                <svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <div 
+                                        x-show="day.places.length === 0" 
+                                        class="text-center py-4 text-sm text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg"
+                                    >
+                                        Drop places here
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button 
+                            @click="editMode = !editMode" 
+                            :class="editMode ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'"
+                            class="flex-1 px-4 py-2 text-white rounded-lg transition flex items-center justify-center"
+                        >
+                            <svg x-show="!editMode" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                            <svg x-show="editMode" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span x-text="editMode ? 'Done Editing' : 'Edit Order'"></span>
+                        </button>
+                        <button @click="viewFullItinerary()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                            View Full Itinerary
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        function dragDropItinerary() {
+            return {
+                editMode: false,
+                draggedItem: null,
+                itineraryDays: [
+                    {
+                        id: 'day1',
+                        name: 'Day 1',
+                        places: [
+                            { id: 'p1', name: 'Eiffel Tower', color: 'bg-blue-500' },
+                            { id: 'p2', name: 'Louvre Museum', color: 'bg-purple-500' },
+                            { id: 'p3', name: 'Seine River Cruise', color: 'bg-green-500' }
+                        ]
+                    },
+                    {
+                        id: 'day2',
+                        name: 'Day 2',
+                        places: [
+                            { id: 'p4', name: 'Versailles', color: 'bg-yellow-500' },
+                            { id: 'p5', name: 'Montmartre', color: 'bg-red-500' },
+                            { id: 'p6', name: 'Sacré-Cœur', color: 'bg-indigo-500' },
+                            { id: 'p7', name: 'Latin Quarter', color: 'bg-pink-500' }
+                        ]
+                    },
+                    {
+                        id: 'day3',
+                        name: 'Day 3',
+                        places: [
+                            { id: 'p8', name: 'Notre-Dame', color: 'bg-orange-500' },
+                            { id: 'p9', name: 'Arc de Triomphe', color: 'bg-teal-500' }
+                        ]
+                    },
+                    {
+                        id: 'day4',
+                        name: 'Day 4',
+                        places: [
+                            { id: 'p10', name: 'Musée d\'Orsay', color: 'bg-cyan-500' },
+                            { id: 'p11', name: 'Champs-Élysées', color: 'bg-lime-500' }
+                        ]
+                    },
+                    {
+                        id: 'day5',
+                        name: 'Day 5',
+                        places: [
+                            { id: 'p12', name: 'Marais District', color: 'bg-amber-500' }
+                        ]
+                    }
+                ],
+                
+                get totalPlaces() {
+                    return this.itineraryDays.reduce((total, day) => total + day.places.length, 0);
+                },
+                
+                handleDragStart(event, dayIndex, placeIndex) {
+                    this.draggedItem = { dayIndex, placeIndex, place: this.itineraryDays[dayIndex].places[placeIndex] };
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.target.classList.add('opacity-50');
+                },
+                
+                handleDragEnd(event) {
+                    event.target.classList.remove('opacity-50');
+                },
+                
+                handleDragOver(event) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    event.currentTarget.classList.add('bg-blue-100', 'dark:bg-blue-900/30', 'border-blue-500');
+                },
+                
+                handleDragLeave(event) {
+                    event.currentTarget.classList.remove('bg-blue-100', 'dark:bg-blue-900/30', 'border-blue-500');
+                },
+                
+                handleDrop(event, targetDayIndex) {
+                    event.preventDefault();
+                    event.currentTarget.classList.remove('bg-blue-100', 'dark:bg-blue-900/30', 'border-blue-500');
+                    
+                    if (this.draggedItem) {
+                        const { dayIndex: sourceDayIndex, placeIndex: sourcePlaceIndex, place } = this.draggedItem;
+                        
+                        // Remove from source
+                        this.itineraryDays[sourceDayIndex].places.splice(sourcePlaceIndex, 1);
+                        
+                        // Add to target
+                        this.itineraryDays[targetDayIndex].places.push(place);
+                        
+                        this.draggedItem = null;
+                    }
+                },
+                
+                removePlace(dayIndex, placeIndex) {
+                    this.itineraryDays[dayIndex].places.splice(placeIndex, 1);
+                },
+                
+                viewFullItinerary() {
+                    // Store the itinerary data in localStorage to pass between pages
+                    const itineraryData = {
+                        destination: 'Paris',
+                        duration: '5 days',
+                        days: this.itineraryDays,
+                        totalPlaces: this.totalPlaces,
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    localStorage.setItem('currentItinerary', JSON.stringify(itineraryData));
+                    
+                    // Navigate to the itinerary page
+                    window.location.href = 'itinerary.html';
+                }
+            }
+        }
+        
+        function chatApp() {
+            return {
+                darkMode: false,
+                userInput: '',
+                messages: [],
+                isTyping: false,
+                showQuickReplies: true,
+                quickReplies: ['5-day trip to Paris', 'Weekend in Tokyo', 'Beach vacation in Bali', 'Road trip across California'],
+                showArtifact: false,
+                currentStep: 'initial',
+                tripData: {
+                    destination: '',
+                    duration: '',
+                    budget: '',
+                    interests: []
+                },
+
+                init() {
+                    this.darkMode = localStorage.getItem('darkMode') === 'true';
+                    this.addBotMessage("👋 Hi! I'm your AI travel assistant. I'll help you plan the perfect trip. Where would you like to go?");
+                },
+
+                startNewTrip() {
+                    this.messages = [];
+                    this.currentStep = 'initial';
+                    this.tripData = { destination: '', duration: '', budget: '', interests: [] };
+                    this.showArtifact = false;
+                    this.addBotMessage("Let's plan a new adventure! Where would you like to go?");
+                    this.quickReplies = ['Paris, France', 'Tokyo, Japan', 'Bali, Indonesia', 'New York, USA'];
+                    this.showQuickReplies = true;
+                },
+
+                sendMessage() {
+                    if (!this.userInput.trim() || this.isTyping) return;
+                    
+                    const message = this.userInput;
+                    this.addUserMessage(message);
+                    this.userInput = '';
+                    this.showQuickReplies = false;
+                    this.processUserInput(message);
+                },
+
+                sendQuickReply(reply) {
+                    this.userInput = reply;
+                    this.sendMessage();
+                },
+
+                addUserMessage(text) {
+                    this.messages.push({
+                        type: 'user',
+                        text: text,
+                        timestamp: new Date()
+                    });
+                },
+
+                addBotMessage(text, options = {}) {
+                    this.messages.push({
+                        type: 'bot',
+                        text: text,
+                        timestamp: new Date(),
+                        ...options
+                    });
+                },
+
+                async processUserInput(message) {
+                    this.isTyping = true;
+                    
+                    // Simulate AI processing
+                    await this.simulateTyping(1500);
+                    
+                    // Trip planning flow
+                    if (this.currentStep === 'initial') {
+                        this.tripData.destination = message;
+                        this.currentStep = 'duration';
+                        this.addBotMessage(`Great choice! ${message} is an amazing destination! 🌟 How many days are you planning to stay?`);
+                        this.quickReplies = ['3 days', '5 days', '1 week', '2 weeks'];
+                        this.showQuickReplies = true;
+                    } else if (this.currentStep === 'duration') {
+                        this.tripData.duration = message;
+                        this.currentStep = 'budget';
+                        this.addBotMessage(`Perfect! ${message} is a good amount of time. What's your approximate budget per person?`);
+                        this.quickReplies = ['$500-1000', '$1000-2000', '$2000-5000', 'No budget limit'];
+                        this.showQuickReplies = true;
+                    } else if (this.currentStep === 'budget') {
+                        this.tripData.budget = message;
+                        this.currentStep = 'interests';
+                        this.addBotMessage("What are you most interested in? Select all that apply:");
+                        this.quickReplies = ['Culture & History', 'Food & Dining', 'Adventure & Outdoors', 'Shopping', 'Nightlife', 'Relaxation'];
+                        this.showQuickReplies = true;
+                    } else if (this.currentStep === 'interests') {
+                        this.tripData.interests.push(message);
+                        this.currentStep = 'generating';
+                        this.showQuickReplies = false;
+                        
+                        this.addBotMessage("Excellent! I'm now creating your personalized itinerary... 🎯");
+                        
+                        await this.simulateTyping(2000);
+                        
+                        // Show place selection
+                        this.addBotMessage("I've found some amazing places for your trip! Here are my top recommendations:", {
+                            type: 'bot',
+                            hasPlaces: true
+                        });
+                        
+                        // Simulate showing places
+                        await this.simulateTyping(1000);
+                        this.showArtifact = true;
+                        
+                        this.addBotMessage("I've selected 12 must-visit places based on your preferences. You can review them in the preview panel on the right. Would you like me to organize them into a day-by-day itinerary?");
+                        this.quickReplies = ['Yes, create itinerary', 'Show me more places', 'Change preferences'];
+                        this.showQuickReplies = true;
+                        this.currentStep = 'review';
+                    } else if (this.currentStep === 'review') {
+                        if (message.toLowerCase().includes('yes') || message.toLowerCase().includes('create')) {
+                            this.addBotMessage("Creating your day-by-day itinerary... ✨");
+                            await this.simulateTyping(2000);
+                            this.addBotMessage("Your itinerary is ready! I've organized everything by location to minimize travel time and included estimated costs. You can view, edit, or export it anytime.");
+                            this.quickReplies = ['Add hotels', 'Find restaurants', 'Export to PDF', 'Start over'];
+                            this.showQuickReplies = true;
+                        }
+                    }
+                    
+                    this.isTyping = false;
+                },
+
+                simulateTyping(duration) {
+                    return new Promise(resolve => setTimeout(resolve, duration));
+                },
+
+                get messagesHTML() {
+                    return this.messages.map(msg => {
+                        if (msg.type === 'user') {
+                            return `
+                                <div class="flex justify-end">
+                                    <div class="max-w-md px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl rounded-br-none">
+                                        ${msg.text}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            const placeCards = msg.hasPlaces ? `
+                                <div class="grid grid-cols-2 gap-3 mt-3">
+                                    <div class="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <h5 class="font-medium text-gray-900 dark:text-white text-sm">Eiffel Tower</h5>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Iconic landmark • 2-3 hours</p>
+                                        <div class="flex gap-2 mt-2">
+                                            <button class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded">Added</button>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <h5 class="font-medium text-gray-900 dark:text-white text-sm">Louvre Museum</h5>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Art & Culture • 4-5 hours</p>
+                                        <div class="flex gap-2 mt-2">
+                                            <button class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded">Added</button>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <h5 class="font-medium text-gray-900 dark:text-white text-sm">Montmartre</h5>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Neighborhood • 3-4 hours</p>
+                                        <div class="flex gap-2 mt-2">
+                                            <button class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded">Added</button>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <h5 class="font-medium text-gray-900 dark:text-white text-sm">Seine River</h5>
+                                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Cruise • 1-2 hours</p>
+                                        <div class="flex gap-2 mt-2">
+                                            <button class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded">Added</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : '';
+                            
+                            return `
+                                <div class="flex items-start space-x-3">
+                                    <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-white text-xs font-bold">AI</span>
+                                    </div>
+                                    <div class="max-w-md">
+                                        <div class="px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl rounded-tl-none shadow-sm border border-gray-200 dark:border-gray-700">
+                                            ${msg.text}
+                                        </div>
+                                        ${placeCards}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }).join('') + (this.isTyping ? `
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span class="text-white text-xs font-bold">AI</span>
+                            </div>
+                            <div class="px-4 py-3 bg-white dark:bg-gray-800 rounded-2xl rounded-tl-none shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div class="flex space-x-2">
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.4s"></div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : '');
+                }
+            }
+        }
+    </script>
+
+</body>
+</html>

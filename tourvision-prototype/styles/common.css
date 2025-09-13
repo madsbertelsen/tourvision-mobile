@@ -1,0 +1,226 @@
+/* TourVision Design System - TripAdvisor-inspired */
+
+/* ===== BUTTONS ===== */
+
+/* Primary Buttons */
+.btn-primary {
+  @apply px-4 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition text-sm font-medium;
+}
+
+.btn-primary-lg {
+  @apply w-14 h-14 bg-black text-white rounded-full shadow-lg hover:shadow-xl hover:bg-gray-800 transition flex items-center justify-center;
+}
+
+/* Secondary Buttons */
+.btn-secondary {
+  @apply px-4 py-2 bg-white text-gray-700 rounded-full hover:bg-gray-50 transition text-sm font-medium border border-gray-200;
+}
+
+/* Icon Buttons */
+.btn-icon {
+  @apply w-10 h-10 rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center;
+}
+
+.btn-icon-sm {
+  @apply w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center;
+}
+
+.btn-icon-black {
+  @apply w-10 h-10 bg-black text-white rounded-full hover:bg-gray-800 transition-colors flex items-center justify-center;
+}
+
+/* Toggle Pills */
+.toggle-pill {
+  @apply px-3 py-1.5 rounded-full text-sm font-medium transition-all;
+}
+
+.toggle-pill-active {
+  @apply bg-black text-white;
+}
+
+.toggle-pill-inactive {
+  @apply text-gray-700 hover:bg-gray-100;
+}
+
+/* ===== CARDS ===== */
+
+.card {
+  @apply bg-white rounded-2xl shadow-lg border border-gray-100 p-4;
+}
+
+.card-sm {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 p-3;
+}
+
+.card-active {
+  @apply bg-green-50 rounded-xl border border-green-200 p-3;
+}
+
+.card-hover {
+  @apply hover:bg-gray-50 rounded-xl cursor-pointer transition-colors p-3;
+}
+
+/* ===== CONTAINERS ===== */
+
+/* Dropdowns */
+.dropdown-menu {
+  @apply absolute bg-white rounded-xl shadow-xl border border-gray-100 z-50;
+}
+
+.dropdown-item {
+  @apply w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center space-x-3;
+}
+
+/* Icon Containers */
+.icon-container {
+  @apply w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center;
+}
+
+.icon-container-lg {
+  @apply w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center;
+}
+
+/* ===== BADGES & LABELS ===== */
+
+.badge {
+  @apply px-2 py-1 text-xs rounded-full font-medium;
+}
+
+.badge-green {
+  @apply badge bg-green-100 text-green-700;
+}
+
+.badge-blue {
+  @apply badge bg-blue-100 text-blue-700;
+}
+
+.badge-purple {
+  @apply badge bg-purple-100 text-purple-700;
+}
+
+/* ===== LAYOUT COMPONENTS ===== */
+
+/* Headers */
+.header-main {
+  @apply bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm;
+}
+
+/* Sidebars */
+.sidebar {
+  @apply bg-white border-r border-gray-200 shadow-sm;
+}
+
+/* Content Areas */
+.content-area {
+  @apply bg-white rounded-2xl shadow-sm p-6;
+}
+
+/* ===== FORM ELEMENTS ===== */
+
+/* Text Inputs */
+.input-text {
+  @apply px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent;
+}
+
+/* Select Dropdowns */
+.select-dropdown {
+  @apply px-3 py-2 bg-transparent text-gray-900 focus:outline-none;
+}
+
+/* Toggle Switches */
+.toggle-switch {
+  @apply w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500;
+}
+
+/* ===== TYPOGRAPHY ===== */
+
+.heading-xl {
+  @apply text-xl font-semibold text-gray-900;
+}
+
+.heading-lg {
+  @apply text-lg font-semibold text-gray-900;
+}
+
+.text-muted {
+  @apply text-sm text-gray-600;
+}
+
+.text-xs-muted {
+  @apply text-xs text-gray-500;
+}
+
+/* ===== UTILITY CLASSES ===== */
+
+/* Borders */
+.border-light {
+  @apply border-gray-100;
+}
+
+.border-medium {
+  @apply border-gray-200;
+}
+
+/* Shadows */
+.shadow-soft {
+  @apply shadow-sm;
+}
+
+.shadow-medium {
+  @apply shadow-lg;
+}
+
+.shadow-strong {
+  @apply shadow-xl;
+}
+
+/* Transitions */
+.transition-smooth {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+/* ===== COMPONENT COMPOSITIONS ===== */
+
+/* Nav Links */
+.nav-link {
+  @apply flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors;
+}
+
+.nav-link-active {
+  @apply flex items-center gap-3 px-4 py-2.5 bg-green-50 text-green-700 rounded-xl font-medium;
+}
+
+/* Trip Cards */
+.trip-card {
+  @apply card flex-shrink-0 w-64;
+}
+
+.trip-card-header {
+  @apply flex items-center justify-between mb-2;
+}
+
+.trip-card-title {
+  @apply font-semibold text-gray-900 mb-1;
+}
+
+.trip-card-subtitle {
+  @apply text-sm text-gray-600;
+}
+
+.trip-card-footer {
+  @apply mt-3 flex items-center text-xs text-gray-500;
+}
+
+/* Map Markers */
+.map-marker {
+  @apply w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg cursor-pointer transform hover:scale-110 transition;
+}
+
+/* Pro Tips */
+.pro-tip {
+  @apply bg-green-50 border border-green-200 rounded-xl p-4 my-4;
+}
+
+.pro-tip-title {
+  @apply font-semibold;
+}
