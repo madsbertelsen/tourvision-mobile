@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,36 +43,36 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-gray-50"
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
         colors={['#6366F1', '#8B5CF6']}
-        className="absolute top-0 left-0 right-0 h-[300px] rounded-b-[30px]"
+        style={styles.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
       
       <ScrollView 
-        contentContainerStyle={{ flexGrow: 1, paddingTop: 60 }}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="items-center mb-10">
-          <View className="w-20 h-20 bg-white rounded-[20px] justify-center items-center shadow-lg">
-            <Text className="text-[40px] font-bold text-indigo-500">T</Text>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoBox}>
+            <Text style={styles.logoText}>T</Text>
           </View>
-          <Text className="text-[32px] font-bold text-white mt-4">TourVision</Text>
-          <Text className="text-base text-white/90 mt-2">Plan your perfect journey</Text>
+          <Text style={styles.appTitle}>TourVision</Text>
+          <Text style={styles.appSubtitle}>Plan your perfect journey</Text>
         </View>
 
-        <View className="flex-1 bg-white rounded-t-[30px] px-6 pt-8 shadow-lg">
-          <Text className="text-[28px] font-bold text-gray-800 mb-2">Welcome Back</Text>
-          <Text className="text-base text-gray-500 mb-8">Sign in to continue your adventure</Text>
+        <View style={styles.formContainer}>
+          <Text style={styles.welcomeTitle}>Welcome Back</Text>
+          <Text style={styles.welcomeSubtitle}>Sign in to continue your adventure</Text>
 
-          <View className="flex-row items-center bg-gray-50 rounded-xl px-4 mb-4 border border-gray-200">
+          <View style={styles.inputContainer}>
             <Feather name="mail" size={20} color="#666" />
             <TextInput
-              className="flex-1 h-[52px] text-base text-gray-800 ml-3"
+              style={styles.input}
               placeholder="Email"
               placeholderTextColor="#999"
               value={email}
@@ -82,10 +83,10 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View className="flex-row items-center bg-gray-50 rounded-xl px-4 mb-4 border border-gray-200">
+          <View style={styles.inputContainer}>
             <Feather name="lock" size={20} color="#666" />
             <TextInput
-              className="flex-1 h-[52px] text-base text-gray-800 ml-3"
+              style={styles.input}
               placeholder="Password"
               placeholderTextColor="#999"
               value={password}
@@ -95,7 +96,7 @@ export default function LoginScreen() {
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
-              className="p-1"
+              style={styles.eyeButton}
             >
               <Feather 
                 name={showPassword ? 'eye-off' : 'eye'} 
@@ -106,39 +107,39 @@ export default function LoginScreen() {
           </View>
 
           <Link href="/forgot-password" asChild>
-            <TouchableOpacity className="self-end mb-6">
-              <Text className="text-indigo-500 font-medium">Forgot Password?</Text>
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
           </Link>
 
           <TouchableOpacity
-            className={`bg-indigo-500 rounded-xl py-4 items-center mb-6 ${isLoading ? 'opacity-70' : ''}`}
+            style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
             onPress={handleLogin}
             disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white text-lg font-semibold">Sign In</Text>
+              <Text style={styles.signInButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
 
-          <View className="flex-row items-center mb-6">
-            <View className="flex-1 h-[1px] bg-gray-200" />
-            <Text className="mx-4 text-gray-500">OR</Text>
-            <View className="flex-1 h-[1px] bg-gray-200" />
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity className="flex-row items-center justify-center bg-white border border-gray-200 rounded-xl py-4 mb-8">
-            <View className="w-5 h-5 bg-gray-300 rounded mr-3" />
-            <Text className="text-gray-700 text-base font-medium">Continue with Google</Text>
+          <TouchableOpacity style={styles.googleButton}>
+            <View style={styles.googleIcon} />
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
 
-          <View className="flex-row justify-center">
-            <Text className="text-gray-600">Don't have an account? </Text>
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>Don't have an account? </Text>
             <Link href="/register" asChild>
               <TouchableOpacity>
-                <Text className="text-indigo-500 font-semibold">Sign Up</Text>
+                <Text style={styles.signUpLink}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -147,3 +148,171 @@ export default function LoginScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  gradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 300,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 60,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoBox: {
+    width: 80,
+    height: 80,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  logoText: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#6366F1',
+  },
+  appTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    marginTop: 16,
+  },
+  appSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 8,
+  },
+  formContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 32,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  input: {
+    flex: 1,
+    height: 52,
+    fontSize: 16,
+    color: '#1F2937',
+    marginLeft: 12,
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: '#6366F1',
+    fontWeight: '500',
+  },
+  signInButton: {
+    backgroundColor: '#6366F1',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  signInButtonDisabled: {
+    opacity: 0.7,
+  },
+  signInButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#6B7280',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 32,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 10,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  signUpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  signUpText: {
+    color: '#6B7280',
+  },
+  signUpLink: {
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+});

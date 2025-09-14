@@ -1,8 +1,12 @@
 import CollaborationPanel from '@/components/CollaborationPanel';
 import MapView from '@/components/dom/MapViewDOM.tsx';
+import TransportationCard, { TransportationData } from '@/components/TransportationCard';
+import TransportationEditModal from '@/components/TransportationEditModal';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useTrip } from '@/hooks/useTrips';
+import { supabase } from '@/lib/supabase/client';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -38,19 +42,39 @@ const parseTripDocument = (trip: Tables<'trips'>) => {
       const dayDate = node.attrs?.date ? new Date(node.attrs.date) : new Date();
       const places: any[] = [];
       
+      const transportations: any[] = [];
+      
       if (node.content) {
+        let placeIndex = 0;
         node.content.forEach((child: any, idx: number) => {
           if (child.type === 'destinationNode') {
+            // Use a consistent destinationId that will match what's stored in transportationNode
+            const destId = child.attrs?.destinationId || `${currentDayIndex}-${placeIndex}`;
             places.push({
-              id: `place-${currentDayIndex}-${idx}`,
+              id: `place-${currentDayIndex}-${placeIndex}`,
+              destinationId: destId,
               name: child.attrs?.name || 'Unknown Place',
               time: child.attrs?.duration || '2 hours',
-              period: idx === 0 ? 'Morning' : idx === 1 ? 'Afternoon' : 'Evening',
+              period: placeIndex === 0 ? 'Morning' : placeIndex === 1 ? 'Afternoon' : 'Evening',
               description: child.attrs?.description || '',
               lat: child.attrs?.coordinates?.lat || 0,
               lng: child.attrs?.coordinates?.lng || 0,
-              colorIndex: idx,
+              colorIndex: placeIndex,
               cost: child.attrs?.cost || 'Free',
+            });
+            placeIndex++;
+          } else if (child.type === 'transportationNode') {
+            transportations.push({
+              transportId: child.attrs?.transportId,
+              mode: child.attrs?.mode || 'walking',
+              fromDestination: child.attrs?.fromDestination,
+              toDestination: child.attrs?.toDestination,
+              duration: child.attrs?.duration || '5 min',
+              distance: child.attrs?.distance,
+              cost: child.attrs?.cost?.amount,
+              route: child.attrs?.route,
+              routeUrl: child.attrs?.routeUrl,
+              routeGeometry: child.attrs?.routeGeometry,
             });
           }
         });
@@ -65,6 +89,7 @@ const parseTripDocument = (trip: Tables<'trips'>) => {
           year: 'numeric' 
         }),
         places,
+        transportations,
         totalCost: places.length > 0 ? '€' + (places.length * 15) + '.00' : 'Free',
         totalPlaces: places.length,
       });
@@ -308,8 +333,14 @@ const PlaceCard = ({
   );
 };
 
-const DaySection = ({ day, onPlacesReorder }: any) => {
+const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
   const [places, setPlaces] = useState(day.places);
+  const [transportationModal, setTransportationModal] = useState<{
+    visible: boolean;
+    fromIndex: number;
+    toIndex: number;
+    data?: TransportationData;
+  }>({ visible: false, fromIndex: 0, toIndex: 1 });
   
   const handleDragEnd = useCallback((fromIndex: number, toIndex: number) => {
     const newPlaces = [...places];
@@ -328,14 +359,65 @@ const DaySection = ({ day, onPlacesReorder }: any) => {
     }
   }, [places, day.day, onPlacesReorder]);
   
+  const handleTransportationSave = (transportation: TransportationData) => {
+    const fromPlace = places[transportationModal.fromIndex];
+    const toPlace = places[transportationModal.toIndex];
+    if (fromPlace && toPlace && onTransportationEdit) {
+      onTransportationEdit(
+        day.day - 1,
+        fromPlace.destinationId,
+        toPlace.destinationId,
+        transportation
+      );
+    }
+  };
+
+  const getTransportation = (fromIndex: number, toIndex: number) => {
+    const fromPlace = places[fromIndex];
+    const toPlace = places[toIndex];
+    if (!fromPlace || !toPlace) return undefined;
+    
+    const transport = day.transportations?.find((t: any) => 
+      t.fromDestination === fromPlace.destinationId && 
+      t.toDestination === toPlace.destinationId
+    );
+    
+    if (transport) {
+      return {
+        mode: transport.mode,
+        duration: transport.duration,
+        distance: transport.distance,
+        cost: transport.cost,
+        route: transport.route,
+        routeUrl: transport.routeUrl,
+        routeGeometry: transport.routeGeometry,
+      } as TransportationData;
+    }
+    
+    return undefined;
+  };
+
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     return (
-      <PlaceCard 
-        place={item} 
-        index={index}
-        onDragEnd={handleDragEnd}
-        totalItems={places.length}
-      />
+      <>
+        <PlaceCard 
+          place={item} 
+          index={index}
+          onDragEnd={handleDragEnd}
+          totalItems={places.length}
+        />
+        {index < places.length - 1 && (
+          <TransportationCard
+            transportation={getTransportation(index, index + 1)}
+            onPress={() => setTransportationModal({
+              visible: true,
+              fromIndex: index,
+              toIndex: index + 1,
+              data: getTransportation(index, index + 1),
+            })}
+          />
+        )}
+      </>
     );
   };
 
@@ -351,6 +433,23 @@ const DaySection = ({ day, onPlacesReorder }: any) => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         scrollEnabled={false}
+      />
+      
+      <TransportationEditModal
+        visible={transportationModal.visible}
+        onClose={() => setTransportationModal({ ...transportationModal, visible: false })}
+        onSave={handleTransportationSave}
+        initialData={transportationModal.data}
+        fromPlace={places[transportationModal.fromIndex]?.name || ''}
+        toPlace={places[transportationModal.toIndex]?.name || ''}
+        fromLocation={places[transportationModal.fromIndex] ? {
+          lat: places[transportationModal.fromIndex].lat,
+          lng: places[transportationModal.fromIndex].lng,
+        } : undefined}
+        toLocation={places[transportationModal.toIndex] ? {
+          lat: places[transportationModal.toIndex].lat,
+          lng: places[transportationModal.toIndex].lng,
+        } : undefined}
       />
       
       <View style={styles.dayFooter}>
@@ -370,6 +469,7 @@ export default function TripDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const responsive = useResponsive();
+  const queryClient = useQueryClient();
   const { data: tripData, isLoading, error } = useTrip(id as string);
   const [trip, setTrip] = useState<any>(null);
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
@@ -390,7 +490,10 @@ export default function TripDetail() {
   }, [tripData, isLoading, error]);
   
   // Handle reordering of places within a day
-  const handlePlacesReorder = useCallback((dayIndex: number, newPlaces: any[]) => {
+  const handlePlacesReorder = useCallback(async (dayIndex: number, newPlaces: any[]) => {
+    if (!tripData || !trip) return;
+    
+    // Update local state immediately for responsive UI
     setTrip(prevTrip => {
       const newTrip = { ...prevTrip };
       newTrip.days = [...prevTrip.days];
@@ -400,7 +503,224 @@ export default function TripDetail() {
       };
       return newTrip;
     });
-  }, []);
+    
+    // Reconstruct the document with the new order
+    const doc = tripData.itinerary_document as any;
+    if (!doc?.content) return;
+    
+    // Create a new document with updated places
+    const newContent = [...doc.content];
+    let currentDayIdx = 0;
+    
+    for (let i = 0; i < newContent.length; i++) {
+      if (newContent[i].type === 'dayNode') {
+        if (currentDayIdx === dayIndex) {
+          // Update this day's destinations
+          const dayNode = { ...newContent[i] };
+          const newDayContent = [];
+          
+          // Reconstruct the day's content with reordered places
+          for (const place of newPlaces) {
+            newDayContent.push({
+              type: 'destinationNode',
+              attrs: {
+                destinationId: place.destinationId, // Preserve the destinationId!
+                name: place.name,
+                description: place.description,
+                duration: place.time,
+                cost: place.cost,
+                coordinates: {
+                  lat: place.lat,
+                  lng: place.lng
+                }
+              }
+            });
+          }
+          
+          dayNode.content = newDayContent;
+          newContent[i] = dayNode;
+          break;
+        }
+        currentDayIdx++;
+      }
+    }
+    
+    const updatedDocument = {
+      ...doc,
+      content: newContent
+    };
+    
+    // Save to database
+    try {
+      const { error } = await supabase
+        .from('trips')
+        .update({ itinerary_document: updatedDocument })
+        .eq('id', tripData.id);
+        
+      if (error) {
+        console.error('Failed to save reordered itinerary:', error);
+        // Could show an error toast here
+      } else {
+        // Invalidate the cache for this specific trip
+        queryClient.invalidateQueries({ queryKey: ['trip', id] });
+        // Also invalidate the trips list cache to ensure consistency
+        queryClient.invalidateQueries({ queryKey: ['trips'] });
+      }
+    } catch (err) {
+      console.error('Error saving reordered itinerary:', err);
+    }
+  }, [tripData, trip, queryClient, id]);
+  
+  // Handle transportation edit
+  const handleTransportationEdit = useCallback(async (
+    dayIndex: number,
+    fromDestinationId: string,
+    toDestinationId: string,
+    transportation: TransportationData
+  ) => {
+    if (!tripData || !trip) return;
+    
+    console.log('handleTransportationEdit called with:', {
+      dayIndex,
+      fromDestinationId,
+      toDestinationId,
+      transportation,
+      hasGeometry: !!transportation.routeGeometry
+    });
+    
+    // Update local state immediately
+    setTrip(prevTrip => {
+      const newTrip = { ...prevTrip };
+      newTrip.days = [...prevTrip.days];
+      const day = { ...newTrip.days[dayIndex] };
+      
+      // Update or add transportation
+      if (!day.transportations) {
+        day.transportations = [];
+      }
+      
+      const existingIndex = day.transportations.findIndex((t: any) => 
+        t.fromDestination === fromDestinationId && t.toDestination === toDestinationId
+      );
+      
+      const transportData = {
+        transportId: `transport-${fromDestinationId}-${toDestinationId}`,
+        mode: transportation.mode,
+        fromDestination: fromDestinationId,
+        toDestination: toDestinationId,
+        duration: transportation.duration,
+        distance: transportation.distance,
+        cost: transportation.cost,
+        route: transportation.route,
+        routeUrl: transportation.routeUrl,
+        routeGeometry: transportation.routeGeometry,
+      };
+      
+      console.log('Transport data to save:', transportData);
+      
+      if (existingIndex >= 0) {
+        day.transportations[existingIndex] = transportData;
+      } else {
+        day.transportations.push(transportData);
+      }
+      
+      newTrip.days[dayIndex] = day;
+      return newTrip;
+    });
+    
+    // Save to database
+    const doc = tripData.itinerary_document as any;
+    if (!doc?.content) return;
+    
+    const newContent = [...doc.content];
+    let currentDayIdx = 0;
+    
+    for (let i = 0; i < newContent.length; i++) {
+      if (newContent[i].type === 'dayNode') {
+        if (currentDayIdx === dayIndex) {
+          const dayNode = { ...newContent[i] };
+          const newDayContent = [];
+          
+          // Rebuild day content with transportation nodes
+          const places = trip.days[dayIndex].places;
+          for (let j = 0; j < places.length; j++) {
+            const place = places[j];
+            
+            // Add destination node
+            newDayContent.push({
+              type: 'destinationNode',
+              attrs: {
+                destinationId: place.destinationId,
+                name: place.name,
+                description: place.description,
+                duration: place.time,
+                cost: place.cost,
+                coordinates: {
+                  lat: place.lat,
+                  lng: place.lng
+                }
+              }
+            });
+            
+            // Add transportation node if not last place
+            if (j < places.length - 1) {
+              const nextPlace = places[j + 1];
+              const transport = trip.days[dayIndex].transportations?.find((t: any) => 
+                t.fromDestination === place.destinationId && 
+                t.toDestination === nextPlace.destinationId
+              );
+              
+              if (transport) {
+                newDayContent.push({
+                  type: 'transportationNode',
+                  attrs: {
+                    transportId: transport.transportId,
+                    mode: transport.mode,
+                    fromDestination: transport.fromDestination,
+                    toDestination: transport.toDestination,
+                    duration: transport.duration,
+                    distance: transport.distance,
+                    cost: transport.cost ? {
+                      amount: transport.cost,
+                      currency: 'USD'
+                    } : undefined,
+                    route: transport.route,
+                    routeUrl: transport.routeUrl,
+                    routeGeometry: transport.routeGeometry,
+                  }
+                });
+              }
+            }
+          }
+          
+          dayNode.content = newDayContent;
+          newContent[i] = dayNode;
+          break;
+        }
+        currentDayIdx++;
+      }
+    }
+    
+    const updatedDocument = {
+      ...doc,
+      content: newContent
+    };
+    
+    try {
+      const { error } = await supabase
+        .from('trips')
+        .update({ itinerary_document: updatedDocument })
+        .eq('id', tripData.id);
+        
+      if (error) {
+        console.error('Failed to save transportation:', error);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['trip', id] });
+      }
+    } catch (err) {
+      console.error('Error saving transportation:', err);
+    }
+  }, [tripData, trip, queryClient, id]);
 
   // Get all locations for the map
   const allLocations = useMemo(() => {
@@ -415,6 +735,54 @@ export default function TripDetail() {
         colorIndex: place.colorIndex,
       }))
     );
+  }, [trip]);
+
+  // Get all transportation routes for the map
+  const allTransportationRoutes = useMemo(() => {
+    if (!trip?.days) return [];
+    
+    const routes = [];
+    for (const day of trip.days) {
+      console.log('Processing day:', day.day, 'transportations:', day.transportations);
+      if (day.transportations && day.places) {
+        for (const transport of day.transportations) {
+          console.log('Processing transport:', transport);
+          // Find the from and to places
+          const fromPlace = day.places.find(p => p.destinationId === transport.fromDestination);
+          const toPlace = day.places.find(p => p.destinationId === transport.toDestination);
+          
+          console.log('Found places:', { fromPlace, toPlace, hasGeometry: !!transport.routeGeometry });
+          
+          if (fromPlace && toPlace && transport.routeGeometry) {
+            // Get color based on transport mode
+            const modeColors = {
+              walking: '#10B981',
+              metro: '#EF4444',
+              bus: '#3B82F6',
+              taxi: '#F59E0B',
+              uber: '#000000',
+              bike: '#8B5CF6',
+              car: '#6B7280',
+              train: '#059669',
+            };
+            
+            const route = {
+              id: transport.transportId,
+              mode: transport.mode,
+              geometry: transport.routeGeometry,
+              color: modeColors[transport.mode] || '#6366F1',
+              fromPlace: fromPlace.name,
+              toPlace: toPlace.name,
+              duration: transport.duration,
+            };
+            console.log('Adding route:', route);
+            routes.push(route);
+          }
+        }
+      }
+    }
+    console.log('Total routes collected:', routes.length, routes);
+    return routes;
   }, [trip]);
 
   const filteredDays = useMemo(() => {
@@ -459,6 +827,7 @@ export default function TripDetail() {
                 key={day.day} 
                 day={day}
                 onPlacesReorder={handlePlacesReorder}
+                onTransportationEdit={handleTransportationEdit}
               />
             ))}
             
@@ -478,6 +847,7 @@ export default function TripDetail() {
           <Suspense fallback={<ActivityIndicator size="large" color="#3B82F6" />}>
             <MapView 
               locations={allLocations}
+              transportationRoutes={allTransportationRoutes}
               style={{ width: '100%', height: '100%' }}
             />
           </Suspense>
@@ -501,6 +871,7 @@ export default function TripDetail() {
             key={day.day} 
             day={day}
             onPlacesReorder={handlePlacesReorder}
+            onTransportationEdit={handleTransportationEdit}
           />
         ))}
         

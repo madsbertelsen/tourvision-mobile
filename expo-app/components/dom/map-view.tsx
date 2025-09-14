@@ -1,7 +1,7 @@
 'use dom';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import Map, { Marker, NavigationControl, GeolocateControl, Popup } from 'react-map-gl/dist/mapbox';
+import Map, { Marker, NavigationControl, GeolocateControl, Popup, Source, Layer } from 'react-map-gl/dist/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface Location {
@@ -25,6 +25,19 @@ const MARKER_COLORS = [
   '#84CC16', // Lime
 ];
 
+interface TransportationRoute {
+  id: string;
+  mode: string;
+  geometry: {
+    type: 'LineString';
+    coordinates: number[][];
+  };
+  color: string;
+  fromPlace: string;
+  toPlace: string;
+  duration: string;
+}
+
 interface MapViewProps {
   locations?: Location[];
   center?: { lat: number; lng: number };
@@ -32,6 +45,13 @@ interface MapViewProps {
   onLocationClick?: (location: Location) => void;
   onMapClick?: (lat: number, lng: number) => void;
   style?: React.CSSProperties;
+  showRoute?: boolean;
+  routeGeometry?: {
+    type: 'LineString';
+    coordinates: number[][];
+  };
+  routeColor?: string;
+  transportationRoutes?: TransportationRoute[];
 }
 
 export function MapView({
@@ -40,8 +60,13 @@ export function MapView({
   zoom = 10,
   onLocationClick,
   onMapClick,
-  style = { width: '100%', height: '400px' }
+  style = { width: '100%', height: '400px' },
+  showRoute = false,
+  routeGeometry,
+  routeColor = '#6366F1',
+  transportationRoutes = []
 }: MapViewProps) {
+  console.log('MapView received transportationRoutes:', transportationRoutes);
   // If we have locations, use the first one as center, otherwise use default
   const initialCenter = locations.length > 0 
     ? { lat: locations[0].lat, lng: locations[0].lng }
@@ -116,6 +141,68 @@ export function MapView({
       >
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
+        
+        {showRoute && routeGeometry && (
+          <Source
+            id="route"
+            type="geojson"
+            data={{
+              type: 'Feature',
+              properties: {},
+              geometry: routeGeometry,
+            }}
+          >
+            <Layer
+              id="route-line"
+              type="line"
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round',
+              }}
+              paint={{
+                'line-color': routeColor,
+                'line-width': 4,
+                'line-opacity': 0.75,
+              }}
+            />
+          </Source>
+        )}
+        
+        {/* Render all transportation routes */}
+        {transportationRoutes.map((route) => (
+          <Source
+            key={route.id}
+            id={`transport-route-${route.id}`}
+            type="geojson"
+            data={{
+              type: 'Feature',
+              properties: {
+                mode: route.mode,
+                fromPlace: route.fromPlace,
+                toPlace: route.toPlace,
+                duration: route.duration,
+              },
+              geometry: route.geometry,
+            }}
+          >
+            <Layer
+              id={`transport-route-line-${route.id}`}
+              type="line"
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round',
+              }}
+              paint={{
+                'line-color': route.color,
+                'line-width': 3,
+                'line-opacity': 0.6,
+                'line-dasharray': route.mode === 'walking' ? [2, 2] : 
+                                route.mode === 'metro' || route.mode === 'train' ? [5, 2] :
+                                route.mode === 'bus' ? [3, 3] : [1, 0],
+              }}
+            />
+          </Source>
+        ))}
         
         {locations.map((location, index) => {
           const colorIndex = location.colorIndex ?? index;

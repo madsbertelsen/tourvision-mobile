@@ -17,8 +17,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow places and route APIs to bypass auth for server-side enrichment
-  if (pathname.startsWith('/api/places') || pathname.startsWith('/api/route')) {
+  // Allow places, route, and transportation APIs to bypass auth for server-side enrichment
+  if (pathname.startsWith('/api/places') || 
+      pathname.startsWith('/api/route') || 
+      pathname.startsWith('/api/transportation')) {
     return NextResponse.next();
   }
 

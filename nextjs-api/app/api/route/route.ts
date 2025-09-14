@@ -1,5 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+// OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
 // GET handler for cacheable route requests
 export async function GET(request: NextRequest) {
   try {
@@ -57,6 +69,9 @@ export async function GET(request: NextRequest) {
       {
         headers: {
           'Cache-Control': 'public, max-age=3600, s-maxage=3600', // Cache for 1 hour
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
         },
       }
     );
