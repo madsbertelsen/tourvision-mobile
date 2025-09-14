@@ -8,12 +8,15 @@ import {
   Dimensions,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { formatUserDisplayName, getUserInitials } from '@/lib/auth/utils';
+import { useItineraries } from '@/hooks/useItineraries';
+import type { Tables } from '@/lib/database.types';
 
 const { width } = Dimensions.get('window');
 
@@ -99,6 +102,83 @@ const TripCard = ({ id, title, status, statusColor, details, date, gradient, par
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { data: itineraries, isLoading, error } = useItineraries();
+  
+  // Helper function to extract destination count from document
+  const getDestinationCount = (document: any): number => {
+    if (!document?.content) return 0;
+    let count = 0;
+    document.content.forEach((node: any) => {
+      if (node.type === 'dayNode' && node.content) {
+        node.content.forEach((child: any) => {
+          if (child.type === 'destinationNode') count++;
+        });
+      }
+    });
+    return count;
+  };
+  
+  // Helper function to get trip status
+  const getTripStatus = (itinerary: Tables<'itineraries'>): { status: string; color: string } => {
+    const doc = itinerary.document as any;
+    const hasPlanning = itinerary.title.toLowerCase().includes('planning') || 
+                       itinerary.description?.toLowerCase().includes('planning');
+    
+    if (hasPlanning) return { status: 'Planning', color: '#DBEAFE' };
+    
+    // Check dates in document to determine if upcoming or completed
+    const today = new Date();
+    let earliestDate: Date | null = null;
+    
+    if (doc?.content) {
+      doc.content.forEach((node: any) => {
+        if (node.type === 'dayNode' && node.attrs?.date) {
+          const date = new Date(node.attrs.date);
+          if (!earliestDate || date < earliestDate) {
+            earliestDate = date;
+          }
+        }
+      });
+    }
+    
+    if (earliestDate) {
+      if (earliestDate > today) return { status: 'Upcoming', color: '#FEF3C7' };
+      return { status: 'Completed', color: '#D1FAE5' };
+    }
+    
+    return { status: 'Draft', color: '#E5E5E5' };
+  };
+  
+  // Helper function to format date
+  const formatTripDate = (itinerary: Tables<'itineraries'>): string => {
+    const doc = itinerary.document as any;
+    if (doc?.content) {
+      for (const node of doc.content) {
+        if (node.type === 'dayNode' && node.attrs?.date) {
+          const date = new Date(node.attrs.date);
+          return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }
+      }
+    }
+    if (itinerary.created_at) {
+      const date = new Date(itinerary.created_at);
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+    return 'TBD';
+  };
+  
+  // Generate gradient colors based on title
+  const getGradientColors = (title: string): string[] => {
+    const gradients = [
+      ['#06B6D4', '#3B82F6'],
+      ['#8B5CF6', '#EC4899'],
+      ['#10B981', '#3B82F6'],
+      ['#F59E0B', '#EF4444'],
+      ['#6366F1', '#8B5CF6'],
+    ];
+    const index = title.length % gradients.length;
+    return gradients[index];
+  };
   
   const handleLogout = async () => {
     console.log('Logout button pressed');
@@ -235,51 +315,62 @@ export default function DashboardScreen() {
       {/* Recent Trips */}
       <View style={styles.recentTripsSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Trips</Text>
+          <Text style={styles.sectionTitle}>Your Trips</Text>
           <TouchableOpacity>
             <Text style={styles.viewAllButton}>View all →</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tripsContainer}
-        >
-          <TripCard
-            id="paris-adventure"
-            title="Paris Adventure"
-            status="Completed"
-            statusColor="#D1FAE5"
-            details="5 days • 12 places visited"
-            date="Sep 2024"
-            gradient={['#06B6D4', '#3B82F6']}
-            participants={['#3B82F6', '#8B5CF6', '#EC4899']}
-            onPress={() => router.push('/trip/paris-adventure')}
-          />
-          <TripCard
-            id="tokyo-dreams"
-            title="Tokyo Dreams"
-            status="Upcoming"
-            statusColor="#FEF3C7"
-            details="7 days • 18 places planned"
-            date="Dec 2024"
-            gradient={['#8B5CF6', '#EC4899']}
-            participants={['#10B981', '#F59E0B']}
-            onPress={() => router.push('/trip/tokyo-dreams')}
-          />
-          <TripCard
-            id="bali-escape"
-            title="Bali Escape"
-            status="Planning"
-            statusColor="#DBEAFE"
-            details="10 days • In progress"
-            date="Jan 2025"
-            gradient={['#10B981', '#3B82F6']}
-            participants={['#EF4444', '#8B5CF6', '#6B7280']}
-            onPress={() => router.push('/trip/bali-escape')}
-          />
-        </ScrollView>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366F1" />
+            <Text style={styles.loadingText}>Loading your trips...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>Failed to load trips</Text>
+            <Text style={styles.errorSubtext}>Please try again later</Text>
+          </View>
+        ) : itineraries && itineraries.length > 0 ? (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tripsContainer}
+          >
+            {itineraries.map((itinerary) => {
+              const { status, color } = getTripStatus(itinerary);
+              const destinationCount = getDestinationCount(itinerary.document);
+              const duration = itinerary.description?.match(/(\d+)\s*day/i)?.[1] || '?';
+              
+              return (
+                <TripCard
+                  key={itinerary.id}
+                  id={itinerary.id}
+                  title={itinerary.title}
+                  status={status}
+                  statusColor={color}
+                  details={`${duration} days • ${destinationCount} places`}
+                  date={formatTripDate(itinerary)}
+                  gradient={getGradientColors(itinerary.title)}
+                  participants={itinerary.collaborators?.slice(0, 3).map(() => {
+                    const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B'];
+                    return colors[Math.floor(Math.random() * colors.length)];
+                  })}
+                  onPress={() => router.push(`/trip/${itinerary.id}`)}
+                />
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Feather name="map" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyText}>No trips yet</Text>
+            <Text style={styles.emptySubtext}>Start planning your next adventure!</Text>
+            <TouchableOpacity style={styles.createButton}>
+              <Text style={styles.createButtonText}>Create Trip</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* User Profile Footer */}
@@ -576,5 +667,55 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: '#666',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+  errorSubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  createButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+  },
+  createButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

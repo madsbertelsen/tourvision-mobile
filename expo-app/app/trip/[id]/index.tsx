@@ -1,9 +1,10 @@
 import CollaborationPanel from '@/components/CollaborationPanel';
 import MapView from '@/components/dom/MapViewDOM.tsx';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useItinerary } from '@/hooks/useItineraries';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -21,8 +23,75 @@ import Animated, {
   withSpring,
   withTiming
 } from 'react-native-reanimated';
+import type { Tables } from '@/lib/database.types';
 
-// Sample Paris itinerary data
+// Helper function to parse itinerary document into structured data
+const parseItineraryDocument = (itinerary: Tables<'itineraries'>) => {
+  const doc = itinerary.document as any;
+  if (!doc?.content) return null;
+  
+  const days: any[] = [];
+  let currentDayIndex = 0;
+  
+  doc.content.forEach((node: any) => {
+    if (node.type === 'dayNode') {
+      const dayDate = node.attrs?.date ? new Date(node.attrs.date) : new Date();
+      const places: any[] = [];
+      
+      if (node.content) {
+        node.content.forEach((child: any, idx: number) => {
+          if (child.type === 'destinationNode') {
+            places.push({
+              id: `place-${currentDayIndex}-${idx}`,
+              name: child.attrs?.name || 'Unknown Place',
+              time: child.attrs?.duration || '2 hours',
+              period: idx === 0 ? 'Morning' : idx === 1 ? 'Afternoon' : 'Evening',
+              description: child.attrs?.description || '',
+              lat: child.attrs?.coordinates?.lat || 0,
+              lng: child.attrs?.coordinates?.lng || 0,
+              colorIndex: idx,
+              cost: child.attrs?.cost || 'Free',
+            });
+          }
+        });
+      }
+      
+      days.push({
+        day: currentDayIndex + 1,
+        title: node.attrs?.title || `Day ${currentDayIndex + 1}`,
+        date: dayDate.toLocaleDateString('en-US', { 
+          month: 'long', 
+          day: 'numeric', 
+          year: 'numeric' 
+        }),
+        places,
+        totalCost: places.length > 0 ? '€' + (places.length * 15) + '.00' : 'Free',
+        totalPlaces: places.length,
+      });
+      
+      currentDayIndex++;
+    }
+  });
+  
+  // Calculate date range
+  const startDate = days[0]?.date || new Date().toISOString();
+  const endDate = days[days.length - 1]?.date || new Date().toISOString();
+  
+  return {
+    id: itinerary.id,
+    title: itinerary.title,
+    description: itinerary.description || '',
+    dateRange: {
+      start: startDate,
+      end: endDate,
+    },
+    days,
+    totalCost: '€' + (days.reduce((sum, day) => sum + day.places.length * 15, 0)) + '.00',
+    totalPlaces: days.reduce((sum, day) => sum + day.places.length, 0),
+  };
+};
+
+// Sample fallback data
 const SAMPLE_ITINERARY = {
   id: 'paris-adventure',
   title: 'Paris Adventure - 5 days',
@@ -299,10 +368,27 @@ const DaySection = ({ day, onPlacesReorder }: any) => {
 
 export default function ItineraryTab() {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
   const responsive = useResponsive();
-  const [trip, setTrip] = useState(SAMPLE_ITINERARY);
+  const { data: itinerary, isLoading, error } = useItinerary(id as string);
+  const [trip, setTrip] = useState<any>(null);
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
-
+  
+  useEffect(() => {
+    if (itinerary) {
+      const parsedTrip = parseItineraryDocument(itinerary);
+      if (parsedTrip) {
+        setTrip(parsedTrip);
+      } else {
+        // Fallback to sample data if parsing fails
+        setTrip(SAMPLE_ITINERARY);
+      }
+    } else if (!isLoading && !error) {
+      // If no itinerary and not loading, use sample data
+      setTrip(SAMPLE_ITINERARY);
+    }
+  }, [itinerary, isLoading, error]);
+  
   // Handle reordering of places within a day
   const handlePlacesReorder = useCallback((dayIndex: number, newPlaces: any[]) => {
     setTrip(prevTrip => {
@@ -318,6 +404,7 @@ export default function ItineraryTab() {
 
   // Get all locations for the map
   const allLocations = useMemo(() => {
+    if (!trip?.days) return [];
     return trip.days.flatMap((day) =>
       day.places.map((place) => ({
         id: place.id,
@@ -331,8 +418,35 @@ export default function ItineraryTab() {
   }, [trip]);
 
   const filteredDays = useMemo(() => {
+    if (!trip?.days) return [];
     return trip.days;
   }, [trip]);
+  
+  // Early returns after all hooks
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={styles.loadingText}>Loading itinerary...</Text>
+      </View>
+    );
+  }
+  
+  if (error || !trip) {
+    return (
+      <View style={styles.errorContainer}>
+        <Feather name="alert-circle" size={48} color="#EF4444" />
+        <Text style={styles.errorText}>Failed to load itinerary</Text>
+        <Text style={styles.errorSubtext}>Please try again later</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Desktop: Show side-by-side layout
   if (!responsive.isMobile) {
@@ -562,5 +676,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#78350F',
     lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  errorSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  backButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

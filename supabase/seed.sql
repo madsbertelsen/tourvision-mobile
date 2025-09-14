@@ -44,7 +44,8 @@ SET full_name = EXCLUDED.full_name,
 
 -- Remove test user 2 for now to simplify debugging
 
--- Create sample itinerary for test user
+-- Create multiple sample itineraries for test user
+-- 1. Barcelona Adventure (5 days)
 INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
@@ -101,6 +102,238 @@ VALUES (
     }'::jsonb,
     'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
     true
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 2. Tokyo Dreams (7 days)
+INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+VALUES (
+    'b2c3d4e5-f6a7-8901-bcde-f01234567891',
+    'Tokyo Dreams',
+    'A week-long journey through modern and traditional Japan',
+    '{
+        "type": "doc",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": {"level": 1},
+                "content": [{"type": "text", "text": "Tokyo Dreams - 7 Day Adventure"}]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2024-12-01", "title": "Day 1: Arrival & Shibuya"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Shibuya Crossing",
+                            "coordinates": {"lat": 35.6595, "lng": 139.7004},
+                            "duration": "2 hours",
+                            "description": "Experience the world''s busiest pedestrian crossing"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Meiji Shrine",
+                            "coordinates": {"lat": 35.6764, "lng": 139.6993},
+                            "duration": "2 hours",
+                            "description": "Peaceful Shinto shrine in the heart of Tokyo"
+                        }
+                    }
+                ]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2024-12-02", "title": "Day 2: Traditional Tokyo"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Senso-ji Temple",
+                            "coordinates": {"lat": 35.7148, "lng": 139.7967},
+                            "duration": "3 hours",
+                            "description": "Tokyo''s oldest temple in Asakusa"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Tokyo Skytree",
+                            "coordinates": {"lat": 35.7101, "lng": 139.8107},
+                            "duration": "2 hours",
+                            "description": "Panoramic views from Japan''s tallest structure"
+                        }
+                    }
+                ]
+            }
+        ]
+    }'::jsonb,
+    'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
+    true
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 3. Paris Romance (4 days)
+INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+VALUES (
+    'c3d4e5f6-a7b8-9012-cdef-012345678902',
+    'Paris Romance',
+    'A romantic 4-day getaway in the City of Light',
+    '{
+        "type": "doc",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": {"level": 1},
+                "content": [{"type": "text", "text": "Paris Romance - 4 Days"}]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2024-10-15", "title": "Day 1: Classic Paris"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Eiffel Tower",
+                            "coordinates": {"lat": 48.8584, "lng": 2.2945},
+                            "duration": "3 hours",
+                            "description": "Iconic symbol of Paris with stunning views"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Louvre Museum",
+                            "coordinates": {"lat": 48.8606, "lng": 2.3376},
+                            "duration": "4 hours",
+                            "description": "World''s largest art museum"
+                        }
+                    }
+                ]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2024-10-16", "title": "Day 2: Montmartre & Seine"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Sacre-Coeur",
+                            "coordinates": {"lat": 48.8867, "lng": 2.3431},
+                            "duration": "2 hours",
+                            "description": "Beautiful basilica with panoramic city views"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Seine River Cruise",
+                            "coordinates": {"lat": 48.8589, "lng": 2.2935},
+                            "duration": "2 hours",
+                            "description": "Romantic evening cruise along the Seine"
+                        }
+                    }
+                ]
+            }
+        ]
+    }'::jsonb,
+    'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
+    false
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. New York City Explorer (3 days)
+INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+VALUES (
+    'd4e5f6a7-b8c9-0123-defa-123456789013',
+    'NYC Weekend',
+    'A whirlwind 3-day tour of the Big Apple',
+    '{
+        "type": "doc",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": {"level": 1},
+                "content": [{"type": "text", "text": "NYC Weekend Escape"}]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2024-11-08", "title": "Day 1: Manhattan Highlights"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Central Park",
+                            "coordinates": {"lat": 40.7829, "lng": -73.9654},
+                            "duration": "3 hours",
+                            "description": "Urban oasis in the heart of Manhattan"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Times Square",
+                            "coordinates": {"lat": 40.7580, "lng": -73.9855},
+                            "duration": "2 hours",
+                            "description": "The crossroads of the world"
+                        }
+                    },
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Empire State Building",
+                            "coordinates": {"lat": 40.7484, "lng": -73.9857},
+                            "duration": "2 hours",
+                            "description": "Art Deco skyscraper with incredible views"
+                        }
+                    }
+                ]
+            }
+        ]
+    }'::jsonb,
+    'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
+    true
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Bali Escape (10 days) - Currently Planning
+INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+VALUES (
+    'e5f6a7b8-c9d0-1234-efab-234567890124',
+    'Bali Escape',
+    'A 10-day tropical paradise adventure (Planning in progress)',
+    '{
+        "type": "doc",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": {"level": 1},
+                "content": [{"type": "text", "text": "Bali Escape - 10 Days (Planning)"}]
+            },
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": "Trip dates: January 2025"}]
+            },
+            {
+                "type": "dayNode",
+                "attrs": {"date": "2025-01-15", "title": "Day 1: Arrival in Ubud"},
+                "content": [
+                    {
+                        "type": "destinationNode",
+                        "attrs": {
+                            "name": "Ubud Monkey Forest",
+                            "coordinates": {"lat": -8.5069, "lng": 115.2625},
+                            "duration": "2 hours",
+                            "description": "Sacred monkey forest sanctuary"
+                        }
+                    }
+                ]
+            }
+        ]
+    }'::jsonb,
+    'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
+    false
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -161,7 +394,12 @@ Password: TestPassword123!
 
 Sample Data:
 ------------
-- 1 Itinerary: Barcelona Adventure
+- 5 Itineraries:
+  * Barcelona Adventure (5 days) - Completed
+  * Tokyo Dreams (7 days) - Upcoming
+  * Paris Romance (4 days) - Private
+  * NYC Weekend (3 days) - Public
+  * Bali Escape (10 days) - Planning
 - 3 Places: Sagrada Familia, Park Guell, Gothic Quarter
 - Collaboration features ready
 
