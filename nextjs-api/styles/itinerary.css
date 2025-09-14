@@ -1,0 +1,282 @@
+/* Styles for destination nodes */
+.destination-node {
+  margin: 1rem 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* Color-coded left border is applied via inline styles */
+.destination-node[data-color] {
+  /* Color overrides are applied via inline styles */
+}
+
+.destination-node[open] {
+  /* No shadow for cleaner look */
+}
+
+/* Hover state for destination nodes (triggered by map or direct hover) */
+.destination-node.hovered {
+  /* No hover animation */
+}
+
+.destination-node:hover {
+  /* No hover animation */
+}
+
+.destination-node summary {
+  padding: 1rem 1.25rem;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+  transition: background-color 0.2s ease;
+  list-style: none;
+}
+
+/* Apply color to the destination name text */
+.destination-node[data-color] summary,
+.destination-node[data-color] summary span,
+.details-node[style*="--destination-color"] > .details-summary,
+.details-node[style*="--destination-color"] > .details-summary > *,
+.details-node[data-destination] > .details-summary,
+.details-node[data-destination] > .details-summary > * {
+  color: var(--destination-color) !important;
+  font-weight: 600;
+}
+
+.destination-node summary:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.destination-node summary::marker,
+.destination-node summary::-webkit-details-marker {
+  display: none;
+}
+
+.destination-node summary::before {
+  content: '▶';
+  color: var(--destination-color, #666);
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+  transition: transform 0.2s ease;
+  display: inline-block;
+  font-weight: normal;
+}
+
+.destination-node[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.destination-node .details-content,
+.destination-node .detailsContent,
+.destination-node .destination-details-content {
+  padding: 0 1.25rem 1.25rem 2.5rem;
+  background: transparent;
+  border-top: none;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #4a5568;
+}
+
+/* Styles for transportation nodes */
+.transportation-node {
+  margin: 0.5rem 0;
+  border: 1px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(250, 250, 250, 0.5);
+}
+
+.transportation-node[open] {
+  background: #ffffff;
+  border-style: solid;
+}
+
+.transportation-node summary {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+  color: #666;
+}
+
+.transportation-node summary:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.transportation-node .details-content {
+  padding: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.transportation-node .transport-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.transportation-node .transport-meta span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.transportation-node .transport-details {
+  color: #555;
+  line-height: 1.4;
+}
+
+/* Dark mode styles */
+.dark .destination-node {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .destination-node[open] {
+  /* No shadow for cleaner look */
+}
+
+.dark .destination-node summary {
+  color: #e0e0e0;
+}
+
+.dark .destination-node summary:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dark .destination-node .details-content,
+.dark .destination-node .detailsContent,
+.dark .destination-node .destination-details-content {
+  color: #cbd5e0;
+}
+
+.dark .transportation-node {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(30, 30, 30, 0.5);
+}
+
+.dark .transportation-node[open] {
+  background: #1a1a1a;
+}
+
+.dark .transportation-node summary {
+  color: #999;
+}
+
+.dark .transportation-node summary:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dark .transportation-node .transport-meta {
+  color: #666;
+}
+
+.dark .transportation-node .transport-details {
+  color: #aaa;
+}
+
+/* Dark mode hover state for destination nodes */
+.dark .destination-node.hovered,
+.dark .destination-node:hover {
+  /* No hover animation */
+}
+
+/* Transport insertion widget styles */
+.transport-insertion-widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.75rem 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  position: relative;
+  height: 28px;
+}
+
+/* Show on hover or when editor is focused */
+.transport-insertion-widget:hover,
+.ProseMirror:focus-within .transport-insertion-widget {
+  opacity: 1;
+}
+
+.transport-insertion-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e2e8f0 20%, #e2e8f0 80%, transparent);
+}
+
+.dark .transport-insertion-line {
+  background: linear-gradient(90deg, transparent, #475569 20%, #475569 80%, transparent);
+}
+
+.transport-insertion-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dark .transport-insertion-button {
+  border-color: #475569;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.transport-insertion-button:hover {
+  transform: translateY(-1px);
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.dark .transport-insertion-button:hover {
+  background: #1e3a8a;
+  border-color: #60a5fa;
+  color: #60a5fa;
+  box-shadow: 0 2px 4px rgba(96, 165, 250, 0.1);
+}
+
+.transport-insertion-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.insertion-label {
+  display: none;
+}
+
+.transport-insertion-button:hover .insertion-label {
+  display: inline;
+}
+
+/* Keyboard navigation styles */
+.transport-insertion-widget:focus-within {
+  opacity: 1;
+}
+
+.transport-insertion-button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
