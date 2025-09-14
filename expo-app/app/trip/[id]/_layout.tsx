@@ -1,4 +1,5 @@
 import { useResponsive } from '@/hooks/useResponsive';
+import { useTrip } from '@/hooks/useTrips';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -9,6 +10,7 @@ export default function TripTabLayout() {
   const router = useRouter();
   const responsive = useResponsive();
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
+  const { data: trip } = useTrip(id as string);
 
   return (
     <Tabs
@@ -37,7 +39,7 @@ export default function TripTabLayout() {
           fontWeight: '600',
         },
         headerLeft: () => (
-          <TouchableOpacity onPress={() => router.back()} style={{ paddingLeft: 16 }}>
+          <TouchableOpacity onPress={() => router.push('/')} style={{ paddingLeft: 16 }}>
             <Feather name="arrow-left" size={24} color="#333" />
           </TouchableOpacity>
         ),
@@ -64,13 +66,15 @@ export default function TripTabLayout() {
             </TouchableOpacity>
           </View>
         ),
-        headerTitle: 'Paris Adventure - 5 days', // This will be dynamic based on trip data
+        headerTitle: trip?.title || 'Loading...', // Dynamic title from trip data
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Itinerary',
+          headerShown: true, // Show header with trip title
+          headerTitle: trip?.title || 'Loading...',
           tabBarIcon: ({ color, focused }) => (
             <Feather name="file-text" size={22} color={focused ? '#3B82F6' : '#666'} />
           ),
@@ -86,6 +90,8 @@ export default function TripTabLayout() {
         name="map"
         options={{
           title: 'Map',
+          headerShown: true, // Show header with trip title
+          headerTitle: trip?.title || 'Loading...',
           tabBarIcon: ({ color, focused }) => (
             <Feather name="map" size={22} color={focused ? '#3B82F6' : '#666'} />
           ),
@@ -101,6 +107,8 @@ export default function TripTabLayout() {
         name="collaboration"
         options={{
           title: 'Chat',
+          headerShown: true, // Show header with trip title
+          headerTitle: trip?.title || 'Loading...',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name="chatbubbles-outline" size={22} color={focused ? '#3B82F6' : '#666'} />
           ),

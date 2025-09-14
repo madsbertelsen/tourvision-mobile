@@ -91,7 +91,7 @@ function ProtectedLayout() {
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="trip" options={{ headerShown: false }} />
+      <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
     </Stack>

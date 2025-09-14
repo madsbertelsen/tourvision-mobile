@@ -120,6 +120,7 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 ### Tech Stack
 - **Expo SDK 54** - React Native framework with web support
 - **Expo Router** - File-based routing in `/app` directory
+- **NativeWind v4** - Tailwind CSS for React Native styling
 - **TipTap** - Rich text editor for trip itineraries (runs in DOM components)
 - **react-map-gl** - Cross-platform maps (runs in DOM components)
 - **Supabase** - Backend, auth, and real-time database
