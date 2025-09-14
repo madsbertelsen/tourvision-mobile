@@ -1,7 +1,7 @@
 import CollaborationPanel from '@/components/CollaborationPanel';
 import MapView from '@/components/dom/MapViewDOM.tsx';
 import { useResponsive } from '@/hooks/useResponsive';
-import { useItinerary } from '@/hooks/useItineraries';
+import { useTrip } from '@/hooks/useTrips';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,9 +25,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Tables } from '@/lib/database.types';
 
-// Helper function to parse itinerary document into structured data
-const parseItineraryDocument = (itinerary: Tables<'itineraries'>) => {
-  const doc = itinerary.document as any;
+// Helper function to parse trip document into structured data
+const parseTripDocument = (trip: Tables<'trips'>) => {
+  const doc = trip.itinerary_document as any;
   if (!doc?.content) return null;
   
   const days: any[] = [];
@@ -78,9 +78,9 @@ const parseItineraryDocument = (itinerary: Tables<'itineraries'>) => {
   const endDate = days[days.length - 1]?.date || new Date().toISOString();
   
   return {
-    id: itinerary.id,
-    title: itinerary.title,
-    description: itinerary.description || '',
+    id: trip.id,
+    title: trip.title,
+    description: trip.description || '',
     dateRange: {
       start: startDate,
       end: endDate,
@@ -366,17 +366,17 @@ const DaySection = ({ day, onPlacesReorder }: any) => {
   );
 };
 
-export default function ItineraryTab() {
+export default function TripDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const responsive = useResponsive();
-  const { data: itinerary, isLoading, error } = useItinerary(id as string);
+  const { data: tripData, isLoading, error } = useTrip(id as string);
   const [trip, setTrip] = useState<any>(null);
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
   
   useEffect(() => {
-    if (itinerary) {
-      const parsedTrip = parseItineraryDocument(itinerary);
+    if (tripData) {
+      const parsedTrip = parseTripDocument(tripData);
       if (parsedTrip) {
         setTrip(parsedTrip);
       } else {
@@ -384,10 +384,10 @@ export default function ItineraryTab() {
         setTrip(SAMPLE_ITINERARY);
       }
     } else if (!isLoading && !error) {
-      // If no itinerary and not loading, use sample data
+      // If no trip and not loading, use sample data
       setTrip(SAMPLE_ITINERARY);
     }
-  }, [itinerary, isLoading, error]);
+  }, [tripData, isLoading, error]);
   
   // Handle reordering of places within a day
   const handlePlacesReorder = useCallback((dayIndex: number, newPlaces: any[]) => {
@@ -427,7 +427,7 @@ export default function ItineraryTab() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading itinerary...</Text>
+        <Text style={styles.loadingText}>Loading trip...</Text>
       </View>
     );
   }
@@ -436,7 +436,7 @@ export default function ItineraryTab() {
     return (
       <View style={styles.errorContainer}>
         <Feather name="alert-circle" size={48} color="#EF4444" />
-        <Text style={styles.errorText}>Failed to load itinerary</Text>
+        <Text style={styles.errorText}>Failed to load trip</Text>
         <Text style={styles.errorSubtext}>Please try again later</Text>
         <TouchableOpacity 
           style={styles.backButton}

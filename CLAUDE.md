@@ -15,7 +15,7 @@ This is a monorepo with two main applications:
 - Authentication (login, register, logout, password reset)
 - Protected routes with automatic redirect
 - Dashboard with user profile display
-- Trip cards showing sample itineraries
+- Trip cards showing sample trips
 - Database seeding with test data
 - Web platform support
 
@@ -62,7 +62,7 @@ After running `npx supabase db reset`, you can login with:
 - **Password:** TestPassword123!
 
 The seed data includes:
-- 5 sample itineraries (Barcelona, Tokyo, Paris, NYC, Bali)
+- 5 sample trips (Barcelona, Tokyo, Paris, NYC, Bali)
 - Mix of public and private trips
 - Various planning stages
 
@@ -120,7 +120,7 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 ### Tech Stack
 - **Expo SDK 54** - React Native framework with web support
 - **Expo Router** - File-based routing in `/app` directory
-- **TipTap** - Rich text editor for itineraries (runs in DOM components)
+- **TipTap** - Rich text editor for trip itineraries (runs in DOM components)
 - **react-map-gl** - Cross-platform maps (runs in DOM components)
 - **Supabase** - Backend, auth, and real-time database
 - **Zustand** - State management with persistence
@@ -138,7 +138,7 @@ This app uses Expo DOM components to run web-only libraries (TipTap, react-map-g
 #### Custom TipTap Nodes
 The editor uses custom nodes for travel planning:
 - **DestinationNode** - Places with coordinates, booking info, duration
-- **DayNode** - Container for daily itineraries
+- **DayNode** - Container for daily travel plans
 - **TransportationNode** - Travel between destinations
 - **GroupSplitNode** - Split group activities
 - **TipNode** - Travel tips and recommendations
@@ -155,9 +155,9 @@ Each node has specific attributes stored in the TipTap document JSON structure.
 
 Key tables in Supabase:
 - `profiles` - User profiles extending auth.users
-- `itineraries` - Trip documents with TipTap JSON
+- `trips` - Trip records with itinerary documents (column: `itinerary_document`)
 - `places` - Location data with coordinates
-- `itinerary_places` - Junction table for places in itineraries
+- `trip_places` - Junction table for places in trips
 - `collaboration_sessions` - Real-time collaboration state
 - `map_tiles` - PMTiles storage for offline maps
 
@@ -166,10 +166,10 @@ Row Level Security (RLS) is enabled on all tables.
 ### State Management
 
 The app uses Zustand stores:
-- `/stores/itinerary-store.ts` - Main itinerary state with persistence
+- `/stores/itinerary-store.ts` - Main trip/itinerary state with persistence
 
 State includes:
-- Current itinerary document
+- Current trip's itinerary document
 - Destinations and split groups
 - View preferences
 - Collaboration state
@@ -226,14 +226,14 @@ For local development:
 
 The `supabase/seed.sql` file creates:
 - Test users with bcrypt-hashed passwords
-- 5 sample itineraries with various statuses
-- Sample places linked to itineraries
+- 5 sample trips with various statuses
+- Sample places linked to trips
 - Proper auth.users and auth.identities entries
 
 **Important:** The seed uses a hardcoded bcrypt hash for "TestPassword123!" that works reliably.
 
 ### Prototype Reference
-The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the data structure.
+The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the itinerary document structure stored in the `trips.itinerary_document` column.
 
 ### Testing Approach
 Currently no test framework is configured. When adding tests:

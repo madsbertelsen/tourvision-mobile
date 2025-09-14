@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { formatUserDisplayName, getUserInitials } from '@/lib/auth/utils';
-import { useItineraries } from '@/hooks/useItineraries';
+import { useTrips } from '@/hooks/useTrips';
 import type { Tables } from '@/lib/database.types';
 
 const { width } = Dimensions.get('window');
@@ -102,7 +102,7 @@ const TripCard = ({ id, title, status, statusColor, details, date, gradient, par
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { data: itineraries, isLoading, error } = useItineraries();
+  const { data: trips, isLoading, error } = useTrips();
   
   // Helper function to extract destination count from document
   const getDestinationCount = (document: any): number => {
@@ -119,10 +119,10 @@ export default function DashboardScreen() {
   };
   
   // Helper function to get trip status
-  const getTripStatus = (itinerary: Tables<'itineraries'>): { status: string; color: string } => {
-    const doc = itinerary.document as any;
-    const hasPlanning = itinerary.title.toLowerCase().includes('planning') || 
-                       itinerary.description?.toLowerCase().includes('planning');
+  const getTripStatus = (trip: Tables<'trips'>): { status: string; color: string } => {
+    const doc = trip.itinerary_document as any;
+    const hasPlanning = trip.title.toLowerCase().includes('planning') || 
+                       trip.description?.toLowerCase().includes('planning');
     
     if (hasPlanning) return { status: 'Planning', color: '#DBEAFE' };
     
@@ -150,8 +150,8 @@ export default function DashboardScreen() {
   };
   
   // Helper function to format date
-  const formatTripDate = (itinerary: Tables<'itineraries'>): string => {
-    const doc = itinerary.document as any;
+  const formatTripDate = (trip: Tables<'trips'>): string => {
+    const doc = trip.itinerary_document as any;
     if (doc?.content) {
       for (const node of doc.content) {
         if (node.type === 'dayNode' && node.attrs?.date) {
@@ -160,8 +160,8 @@ export default function DashboardScreen() {
         }
       }
     }
-    if (itinerary.created_at) {
-      const date = new Date(itinerary.created_at);
+    if (trip.created_at) {
+      const date = new Date(trip.created_at);
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
     return 'TBD';
@@ -331,32 +331,32 @@ export default function DashboardScreen() {
             <Text style={styles.errorText}>Failed to load trips</Text>
             <Text style={styles.errorSubtext}>Please try again later</Text>
           </View>
-        ) : itineraries && itineraries.length > 0 ? (
+        ) : trips && trips.length > 0 ? (
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.tripsContainer}
           >
-            {itineraries.map((itinerary) => {
-              const { status, color } = getTripStatus(itinerary);
-              const destinationCount = getDestinationCount(itinerary.document);
-              const duration = itinerary.description?.match(/(\d+)\s*day/i)?.[1] || '?';
+            {trips.map((trip) => {
+              const { status, color } = getTripStatus(trip);
+              const destinationCount = getDestinationCount(trip.itinerary_document);
+              const duration = trip.description?.match(/(\d+)\s*day/i)?.[1] || '?';
               
               return (
                 <TripCard
-                  key={itinerary.id}
-                  id={itinerary.id}
-                  title={itinerary.title}
+                  key={trip.id}
+                  id={trip.id}
+                  title={trip.title}
                   status={status}
                   statusColor={color}
                   details={`${duration} days • ${destinationCount} places`}
-                  date={formatTripDate(itinerary)}
-                  gradient={getGradientColors(itinerary.title)}
-                  participants={itinerary.collaborators?.slice(0, 3).map(() => {
+                  date={formatTripDate(trip)}
+                  gradient={getGradientColors(trip.title)}
+                  participants={trip.collaborators?.slice(0, 3).map(() => {
                     const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B'];
                     return colors[Math.floor(Math.random() * colors.length)];
                   })}
-                  onPress={() => router.push(`/trip/${itinerary.id}`)}
+                  onPress={() => router.push(`/trip/${trip.id}`)}
                 />
               );
             })}

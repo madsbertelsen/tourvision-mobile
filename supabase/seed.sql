@@ -44,9 +44,9 @@ SET full_name = EXCLUDED.full_name,
 
 -- Remove test user 2 for now to simplify debugging
 
--- Create multiple sample itineraries for test user
+-- Create multiple sample trips for test user
 -- 1. Barcelona Adventure (5 days)
-INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'Barcelona Adventure',
@@ -106,7 +106,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Tokyo Dreams (7 days)
-INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
 VALUES (
     'b2c3d4e5-f6a7-8901-bcde-f01234567891',
     'Tokyo Dreams',
@@ -175,7 +175,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. Paris Romance (4 days)
-INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
 VALUES (
     'c3d4e5f6-a7b8-9012-cdef-012345678902',
     'Paris Romance',
@@ -244,7 +244,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. New York City Explorer (3 days)
-INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
 VALUES (
     'd4e5f6a7-b8c9-0123-defa-123456789013',
     'NYC Weekend',
@@ -298,7 +298,7 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. Bali Escape (10 days) - Currently Planning
-INSERT INTO public.itineraries (id, title, description, document, created_by, is_public)
+INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
 VALUES (
     'e5f6a7b8-c9d0-1234-efab-234567890124',
     'Bali Escape',
@@ -366,8 +366,8 @@ VALUES
      'ChIJT-ydL02ipBIRYG8Y6KuFYYo')
 ON CONFLICT (id) DO NOTHING;
 
--- Link places to the sample itinerary
-INSERT INTO public.itinerary_places (itinerary_id, place_id, order_index, notes)
+-- Link places to the sample trip
+INSERT INTO public.trip_places (trip_id, place_id, order_index, notes)
 VALUES
     ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'f3b2c3d4-e5f6-7890-abcd-ef1234567890', 0, 'Start with Gothic Quarter exploration'),
     ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'f1b2c3d4-e5f6-7890-abcd-ef1234567890', 1, 'Book tickets in advance'),
@@ -394,7 +394,7 @@ Password: TestPassword123!
 
 Sample Data:
 ------------
-- 5 Itineraries:
+- 5 Trips:
   * Barcelona Adventure (5 days) - Completed
   * Tokyo Dreams (7 days) - Upcoming
   * Paris Romance (4 days) - Private

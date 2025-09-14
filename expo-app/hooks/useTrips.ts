@@ -3,53 +3,53 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/supabase/auth-context';
 import type { Tables } from '@/lib/database.types';
 
-type Itinerary = Tables<'itineraries'>;
+type Trip = Tables<'trips'>;
 
-export function useItineraries() {
+export function useTrips() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['itineraries', user?.id],
+    queryKey: ['trips', user?.id],
     queryFn: async () => {
       if (!user) return [];
 
       const { data, error } = await supabase
-        .from('itineraries')
+        .from('trips')
         .select('*')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching itineraries:', error);
+        console.error('Error fetching trips:', error);
         throw error;
       }
 
-      return data as Itinerary[];
+      return data as Trip[];
     },
     enabled: !!user,
   });
 }
 
-export function useItinerary(id: string) {
+export function useTrip(id: string) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['itinerary', id],
+    queryKey: ['trip', id],
     queryFn: async () => {
       if (!user || !id) return null;
 
       const { data, error } = await supabase
-        .from('itineraries')
+        .from('trips')
         .select('*')
         .eq('id', id)
         .single();
 
       if (error) {
-        console.error('Error fetching itinerary:', error);
+        console.error('Error fetching trip:', error);
         throw error;
       }
 
-      return data as Itinerary;
+      return data as Trip;
     },
     enabled: !!user && !!id,
   });
