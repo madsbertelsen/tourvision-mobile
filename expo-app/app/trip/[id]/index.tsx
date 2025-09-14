@@ -242,6 +242,9 @@ const PlaceCard = ({
   const markerColor = MARKER_COLORS[place.colorIndex % MARKER_COLORS.length];
   const displayIndex = typeof index === 'number' ? index + 1 : 1;
   
+  // State for card expansion
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   // Shared values for animations
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -250,8 +253,19 @@ const PlaceCard = ({
   const isDragging = useSharedValue(false);
   const startY = useSharedValue(0);
   
+  // Animation values for expansion
+  const contentHeight = useSharedValue(0);
+  const chevronRotation = useSharedValue(0);
+  
   // Calculate card height (approximate)
   const CARD_HEIGHT = 120;
+  
+  // Toggle expansion
+  const toggleExpansion = () => {
+    setIsExpanded(!isExpanded);
+    contentHeight.value = withSpring(isExpanded ? 0 : 150);
+    chevronRotation.value = withSpring(isExpanded ? 0 : 180);
+  };
   
   const handleDragEnd = useCallback((fromIdx: number, toIdx: number) => {
     if (onDragEnd) {
@@ -307,27 +321,69 @@ const PlaceCard = ({
     };
   });
   
+  const expandedContentStyle = useAnimatedStyle(() => {
+    return {
+      maxHeight: contentHeight.value,
+      opacity: contentHeight.value / 150,
+      overflow: 'hidden',
+    };
+  });
+  
+  const chevronStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${chevronRotation.value}deg` }],
+    };
+  });
+  
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.placeCard, animatedStyle]}>
-        <View style={styles.placeHeader}>
-          <View style={[styles.placeMarker, { backgroundColor: markerColor }]}>
-            <Text style={styles.placeMarkerText}>{displayIndex}</Text>
+      <Animated.View style={[styles.placeCard, animatedStyle, {overflow: 'visible'}]}>
+        <TouchableOpacity onPress={toggleExpansion} activeOpacity={0.9} style={{overflow: 'visible'}}>
+          <View style={styles.placeHeader}>
+            <View style={[styles.placeMarker, { backgroundColor: markerColor }]}>
+              <Text style={styles.placeMarkerText}>{displayIndex}</Text>
+            </View>
+            <View style={styles.placeInfo}>
+              <Text style={styles.placeName}>{place.name}</Text>
+              {!isExpanded && (
+                <Text style={styles.placeDescriptionCompact} numberOfLines={1}>
+                  {place.description}
+                </Text>
+              )}
+            </View>
+            <Animated.View style={[styles.expandIndicator, chevronStyle]}>
+              <Feather name="chevron-down" size={18} color="#9CA3AF" />
+            </Animated.View>
           </View>
-          <View style={styles.placeInfo}>
-            <Text style={styles.placeName}>{place.name}</Text>
-            <View style={styles.placeMetadata}>
-              <Feather name="clock" size={12} color="#666" />
-              <Text style={styles.placeTime}>{place.time}</Text>
-              <Text style={styles.metaSeparator}>•</Text>
-              <Text style={styles.placeCost}>{place.cost}</Text>
+        </TouchableOpacity>
+        
+        <Animated.View style={[expandedContentStyle, {overflow: 'visible'}]}>
+          <View style={styles.expandedContent}>
+            <Text style={styles.placeDescription}>{place.description}</Text>
+            <View style={styles.placeDetails}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailIcon}>
+                  <Feather name="clock" size={13} color="#6B7280" />
+                </View>
+                <Text style={styles.detailText}>{place.time}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <View style={styles.detailIcon}>
+                  <MaterialIcons name="attach-money" size={13} color="#6B7280" />
+                </View>
+                <Text style={[styles.detailText, styles.detailCost]}>{place.cost}</Text>
+              </View>
+              {place.period && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailIcon}>
+                    <Feather name="sun" size={13} color="#6B7280" />
+                  </View>
+                  <Text style={styles.detailText}>{place.period}</Text>
+                </View>
+              )}
             </View>
           </View>
-          <View style={styles.dragIndicator}>
-            <Feather name="menu" size={20} color="#999" />
-          </View>
-        </View>
-        <Text style={styles.placeDescription}>{place.description}</Text>
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
   );
@@ -335,12 +391,22 @@ const PlaceCard = ({
 
 const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
   const [places, setPlaces] = useState(day.places);
+  const [transportations, setTransportations] = useState(day.transportations || []);
   const [transportationModal, setTransportationModal] = useState<{
     visible: boolean;
     fromIndex: number;
     toIndex: number;
     data?: TransportationData;
   }>({ visible: false, fromIndex: 0, toIndex: 1 });
+  
+  // Sync local state when day props change
+  useEffect(() => {
+    setPlaces(day.places);
+  }, [day.places]);
+  
+  useEffect(() => {
+    setTransportations(day.transportations || []);
+  }, [day.transportations]);
   
   const handleDragEnd = useCallback((fromIndex: number, toIndex: number) => {
     const newPlaces = [...places];
@@ -362,13 +428,45 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
   const handleTransportationSave = (transportation: TransportationData) => {
     const fromPlace = places[transportationModal.fromIndex];
     const toPlace = places[transportationModal.toIndex];
-    if (fromPlace && toPlace && onTransportationEdit) {
-      onTransportationEdit(
-        day.day - 1,
-        fromPlace.destinationId,
-        toPlace.destinationId,
-        transportation
-      );
+    if (fromPlace && toPlace) {
+      // Update local transportations state immediately
+      const newTransport = {
+        transportId: `transport-${fromPlace.destinationId}-${toPlace.destinationId}`,
+        mode: transportation.mode,
+        fromDestination: fromPlace.destinationId,
+        toDestination: toPlace.destinationId,
+        duration: transportation.duration,
+        distance: transportation.distance,
+        cost: transportation.cost,
+        route: transportation.route,
+        routeUrl: transportation.routeUrl,
+        routeGeometry: transportation.routeGeometry,
+      };
+      
+      setTransportations(prev => {
+        const updated = [...prev];
+        const existingIndex = updated.findIndex((t: any) => 
+          t.fromDestination === fromPlace.destinationId && 
+          t.toDestination === toPlace.destinationId
+        );
+        
+        if (existingIndex >= 0) {
+          updated[existingIndex] = newTransport;
+        } else {
+          updated.push(newTransport);
+        }
+        return updated;
+      });
+      
+      // Also update parent component
+      if (onTransportationEdit) {
+        onTransportationEdit(
+          day.day - 1,
+          fromPlace.destinationId,
+          toPlace.destinationId,
+          transportation
+        );
+      }
     }
   };
 
@@ -377,12 +475,21 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
     const toPlace = places[toIndex];
     if (!fromPlace || !toPlace) return undefined;
     
-    const transport = day.transportations?.find((t: any) => 
+    // Check local transportations state first, then fall back to day.transportations
+    const transport = transportations.find((t: any) => 
+      t.fromDestination === fromPlace.destinationId && 
+      t.toDestination === toPlace.destinationId
+    ) || day.transportations?.find((t: any) => 
       t.fromDestination === fromPlace.destinationId && 
       t.toDestination === toPlace.destinationId
     );
     
     if (transport) {
+      console.log('getTransportation returning transport with geometry:', {
+        mode: transport.mode,
+        hasGeometry: !!transport.routeGeometry,
+        geometryLength: transport.routeGeometry?.coordinates?.length
+      });
       return {
         mode: transport.mode,
         duration: transport.duration,
@@ -415,6 +522,16 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
               toIndex: index + 1,
               data: getTransportation(index, index + 1),
             })}
+            fromLocation={{
+              lat: places[index].lat,
+              lng: places[index].lng,
+              name: places[index].name,
+            }}
+            toLocation={{
+              lat: places[index + 1].lat,
+              lng: places[index + 1].lng,
+              name: places[index + 1].name,
+            }}
           />
         )}
       </>
@@ -426,6 +543,26 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
       <View style={styles.stickyDayHeader}>
         <Text style={styles.dayTitle}>Day {day.day}: {day.title}</Text>
         <Text style={styles.dayDate}>{day.date}</Text>
+      </View>
+      
+      <View style={styles.daySummary}>
+        <View style={styles.summaryItem}>
+          <Feather name="map-pin" size={14} color="#6B7280" />
+          <Text style={styles.summaryText}>{places.length} places</Text>
+        </View>
+        <View style={styles.summaryDot} />
+        <View style={styles.summaryItem}>
+          <Feather name="dollar-sign" size={14} color="#6B7280" />
+          <Text style={styles.summaryText}>
+            €{places.reduce((sum, p) => {
+              // Handle different cost formats
+              if (!p.cost || p.cost === 'Free') return sum;
+              const costStr = typeof p.cost === 'string' ? p.cost : p.cost.toString();
+              const numericCost = parseFloat(costStr.replace(/[€$,]/g, '')) || 0;
+              return sum + numericCost;
+            }, 0).toFixed(2)}
+          </Text>
+        </View>
       </View>
       
       <FlatList
@@ -920,64 +1057,116 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   stickyDayHeader: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
+    borderTopColor: '#E5E7EB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
     position: Platform.OS === 'web' ? 'sticky' : 'relative',
     top: 0,
     zIndex: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   dayTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 4,
+    letterSpacing: -0.3,
   },
   dayDate: {
     fontSize: 14,
-    color: '#666',
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  daySummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  summaryDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#9CA3AF',
+    marginHorizontal: 12,
   },
   placeCard: {
     backgroundColor: 'white',
-    marginHorizontal: 20,
-    marginVertical: 8,
-    padding: 16,
-    borderRadius: 12,
+    marginLeft: 70,
+    marginRight: 16,
+    marginVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    position: 'relative',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   placeHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingLeft: 20,
+    position: 'relative',
   },
   placeMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    position: 'absolute',
+    left: -50,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   placeMarkerText: {
     color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
   },
   placeInfo: {
     flex: 1,
+    paddingRight: 8,
   },
   placeName: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    color: '#111827',
+    marginBottom: 2,
+    letterSpacing: -0.1,
   },
   placeMetadata: {
     flexDirection: 'row',
@@ -999,14 +1188,60 @@ const styles = StyleSheet.create({
   },
   placeDescription: {
     fontSize: 14,
-    color: '#444',
+    color: '#4B5563',
     lineHeight: 20,
+    marginBottom: 10,
+  },
+  placeDescriptionCompact: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+    lineHeight: 18,
   },
   dragIndicator: {
     position: 'absolute',
     right: 16,
     top: '50%',
     marginTop: -10,
+  },
+  expandIndicator: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  expandedContent: {
+    paddingTop: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  placeDetails: {
+    marginTop: 14,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  detailCost: {
+    color: '#10B981',
+    fontWeight: '600',
   },
   dayFooter: {
     backgroundColor: '#F9FAFB',

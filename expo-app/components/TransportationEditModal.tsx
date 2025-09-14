@@ -246,20 +246,27 @@ export default function TransportationEditModal({
                     }
                   />
                 </Suspense>
-                
-                {/* Transportation options overlay - vertical on left */}
-                <ScrollView 
-                  style={styles.mapOverlay}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.mapOverlayContent}
-                >
+              </View>
+              
+              {/* Transportation options overlay - vertical on left */}
+              <ScrollView 
+                style={styles.mapOverlay}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.mapOverlayContent}
+              >
                   {isLoadingOptions ? (
                     <View style={styles.overlayLoadingContainer}>
                       <ActivityIndicator size="small" color="#6366F1" />
                       <Text style={styles.overlayLoadingText}>Loading...</Text>
                     </View>
-                  ) : transportOptions.length > 0 ? (
-                    transportOptions.map((option) => {
+                  ) : (
+                    // Always show buttons - use API data if available, otherwise show default modes
+                    (transportOptions.length > 0 ? transportOptions : PRIMARY_TRANSPORT_MODES.map(mode => ({
+                      mode: mode.mode,
+                      formattedDuration: '',
+                      formattedDistance: '',
+                      routeUrl: '',
+                    }))).map((option) => {
                       const modeConfig = [...PRIMARY_TRANSPORT_MODES, ...SECONDARY_TRANSPORT_MODES].find(
                         m => m.mode === option.mode
                       );
@@ -275,7 +282,35 @@ export default function TransportationEditModal({
                             styles.overlayCard,
                             selectedMode === option.mode && styles.overlayCardSelected,
                           ]}
-                          onPress={() => handleModeSelect(option)}
+                          onPress={() => {
+                            if ('formattedDuration' in option && option.formattedDuration) {
+                              handleModeSelect(option as any);
+                            } else {
+                              // Manual selection when no API data
+                              setSelectedMode(option.mode);
+                              setSelectedOption(null);
+                              
+                              // Try to fetch route for this mode
+                              if (fromLocation && toLocation) {
+                                const modeMapping: Record<string, string> = {
+                                  walking: 'walking',
+                                  metro: 'walking',
+                                  bus: 'walking',
+                                  taxi: 'driving',
+                                  uber: 'driving',
+                                  car: 'driving',
+                                  bike: 'cycling',
+                                  train: 'walking'
+                                };
+                                
+                                const routeMode = modeMapping[option.mode] || 'walking';
+                                const routeUrl = `/api/route?coordinates=${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}&mode=${routeMode}`;
+                                
+                                // Fetch route geometry
+                                fetchRoute(routeUrl);
+                              }
+                            }
+                          }}
                         >
                           <View style={styles.overlayCardContent}>
                             {modeConfig && (
@@ -299,14 +334,16 @@ export default function TransportationEditModal({
                                 ]}>
                                   {modeConfig?.label || option.mode}
                                 </Text>
-                                {option.recommended && (
+                                {'recommended' in option && option.recommended && (
                                   <Text style={styles.overlayRecommended}> ★</Text>
                                 )}
                               </View>
-                              <Text style={styles.overlayDetails}>
-                                {option.formattedDuration}
-                              </Text>
-                              {option.estimatedCost !== undefined && option.estimatedCost > 0 && (
+                              {'formattedDuration' in option && option.formattedDuration && (
+                                <Text style={styles.overlayDetails}>
+                                  {option.formattedDuration}
+                                </Text>
+                              )}
+                              {'estimatedCost' in option && option.estimatedCost !== undefined && option.estimatedCost > 0 && (
                                 <Text style={styles.overlayPrice}>
                                   ${option.estimatedCost.toFixed(2)}
                                 </Text>
@@ -316,13 +353,59 @@ export default function TransportationEditModal({
                         </TouchableOpacity>
                       );
                     })
-                  ) : null}
-                </ScrollView>
-              </View>
+                  )}
+              </ScrollView>
             </View>
           )}
 
           <ScrollView style={styles.scrollContent}>
+            {/* Show mode selector when no locations available */}
+            {(!fromLocation || !toLocation) && (
+              <>
+                <Text style={styles.sectionTitle}>Transportation Mode</Text>
+                <View style={styles.modeGrid}>
+                  {PRIMARY_TRANSPORT_MODES.map((mode) => {
+                    const IconComponent = 
+                      mode.icon.library === 'Feather' ? Feather :
+                      mode.icon.library === 'MaterialIcons' ? MaterialIcons :
+                      Ionicons;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={mode.mode}
+                        style={[
+                          styles.modeCard,
+                          selectedMode === mode.mode && styles.modeCardSelected,
+                        ]}
+                        onPress={() => {
+                          setSelectedMode(mode.mode);
+                          // Clear any existing option data when manually selecting
+                          setSelectedOption(null);
+                        }}
+                      >
+                        <View style={[
+                          styles.modeIcon,
+                          { backgroundColor: `${mode.color}15` },
+                          selectedMode === mode.mode && { backgroundColor: mode.color },
+                        ]}>
+                          <IconComponent
+                            name={mode.icon.name}
+                            size={18}
+                            color={selectedMode === mode.mode ? 'white' : mode.color}
+                          />
+                        </View>
+                        <Text style={[
+                          styles.modeLabel,
+                          selectedMode === mode.mode && styles.modeLabelSelected,
+                        ]}>
+                          {mode.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             <Text style={styles.sectionTitle}>Duration</Text>
             <TextInput
@@ -432,13 +515,10 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     height: 300,
-    marginHorizontal: 20,
-    marginBottom: 10,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    position: 'relative',
   },
   mapLoading: {
     height: 300,
@@ -621,6 +701,8 @@ const styles = StyleSheet.create({
   },
   mapSection: {
     position: 'relative',
+    marginHorizontal: 20,
+    marginBottom: 10,
   },
   mapOverlay: {
     position: 'absolute',
@@ -628,6 +710,7 @@ const styles = StyleSheet.create({
     left: 12,
     bottom: 12,
     width: 140,
+    zIndex: 10,
   },
   mapOverlayContent: {
     paddingBottom: 6,

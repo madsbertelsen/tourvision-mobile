@@ -66,7 +66,12 @@ export function MapView({
   routeColor = '#6366F1',
   transportationRoutes = []
 }: MapViewProps) {
-  console.log('MapView received transportationRoutes:', transportationRoutes);
+  console.log('MapView render:', {
+    showRoute,
+    hasRouteGeometry: !!routeGeometry,
+    routeCoordinatesLength: routeGeometry?.coordinates?.length,
+    transportationRoutesCount: transportationRoutes.length
+  });
   // If we have locations, use the first one as center, otherwise use default
   const initialCenter = locations.length > 0 
     ? { lat: locations[0].lat, lng: locations[0].lng }
