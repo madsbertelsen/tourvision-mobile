@@ -77,9 +77,10 @@ function ProtectedLayout() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const isBranchingDemo = segments[0] === 'branching-demo';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // Redirect to login if not authenticated and not in auth group
+    if (!isAuthenticated && !inAuthGroup && !isBranchingDemo) {
+      // Redirect to login if not authenticated and not in auth group or branching demo
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       // Redirect to home if authenticated and in auth group
