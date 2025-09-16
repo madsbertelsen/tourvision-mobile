@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -44,11 +46,16 @@ interface ProposalComparisonViewProps {
   onAccept: () => void;
   onReject: () => void;
   onMerge: () => void;
+  onClose: () => void;
   votes?: {
     approve: number;
     reject: number;
     neutral: number;
   };
+  comments?: {
+    user: string;
+    text: string;
+  }[];
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -63,7 +70,9 @@ export default function ProposalComparisonView({
   onAccept,
   onReject,
   onMerge,
+  onClose,
   votes = { approve: 0, reject: 0, neutral: 0 },
+  comments = [],
 }: ProposalComparisonViewProps) {
   const [viewMode, setViewMode] = useState<'side-by-side' | 'diff'>('side-by-side');
 
@@ -238,9 +247,21 @@ export default function ProposalComparisonView({
   );
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <Modal
+      visible={true}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.container}>
+          {/* Close Button */}
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#333" />
+          </TouchableOpacity>
+
+          {/* Header */}
+          <View style={styles.header}>
         <View style={styles.proposalInfo}>
           <View style={styles.proposerInfo}>
             <View style={styles.avatar}>
@@ -360,13 +381,26 @@ export default function ProposalComparisonView({
         </TouchableOpacity>
       </View>
     </View>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
   container: {
     flex: 1,
     backgroundColor: 'white',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
   },
   header: {
     padding: 16,

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git-style Branching Visualization</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #161b22;
+            border-radius: 6px;
+            padding: 30px;
+            border: 1px solid #30363d;
+        }
+
+        h3 {
+            color: #c9d1d9;
+            margin-bottom: 30px;
+        }
+
+        .itinerary {
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            position: relative;
+            height: 50px;
+        }
+
+        /* Git graph area */
+        .graph {
+            width: 180px;
+            position: relative;
+            height: 50px;
+        }
+
+        /* SVG for the git graph */
+        .graph-svg {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            width: 180px;
+            height: 100px;
+            overflow: visible;
+        }
+
+        /* Content area */
+        .content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding-left: 20px;
+        }
+
+        .destination {
+            font-size: 14px;
+            color: #c9d1d9;
+            min-width: 200px;
+        }
+
+        .avatars {
+            display: flex;
+        }
+
+        .avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            border: 2px solid #161b22;
+            margin-left: -8px;
+        }
+
+        .avatar:first-child {
+            margin-left: 0;
+        }
+
+        .avatar.blue { background: #3B82F6; }
+        .avatar.purple { background: #8B5CF6; }
+        .avatar.green { background: #10B981; }
+        .avatar.red { background: #EF4444; }
+
+        .divider {
+            text-align: center;
+            color: #6e7681;
+            font-size: 12px;
+            margin: 15px 0;
+            padding: 0 20px;
+        }
+
+        .divider-line {
+            display: inline-block;
+            width: 100px;
+            height: 1px;
+            background: #30363d;
+            vertical-align: middle;
+            margin: 0 10px;
+        }
+
+        .legend {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+
+        .legend h4 {
+            color: #8b949e;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .legend-items {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #8b949e;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>Trip Itinerary - Day 1</h3>
+
+        <div class="itinerary">
+            <!-- Row 1: Sagrada Familia -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line continues down -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+                        <!-- Commit dot -->
+                        <circle cx="20" cy="50" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Sagrada Familia</span>
+                    <div class="avatars">
+                        <div class="avatar blue">B</div>
+                        <div class="avatar purple">P</div>
+                        <div class="avatar green">G</div>
+                        <div class="avatar red">R</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Hotel Casa Fuster (branching point) -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+
+                        <!-- Simple branch curves -->
+                        <!-- Branch 1 (green) - simple arc -->
+                        <path d="M 20 50 Q 45 50, 70 75 L 70 100" stroke="#3fb950" stroke-width="2" fill="none"/>
+
+                        <!-- Branch 2 (red) - simple arc -->
+                        <path d="M 20 50 Q 70 50, 120 100" stroke="#f85149" stroke-width="2" fill="none"/>
+
+                        <!-- Commit dot -->
+                        <circle cx="20" cy="50" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Hotel Casa Fuster</span>
+                    <div class="avatars">
+                        <div class="avatar blue">B</div>
+                        <div class="avatar purple">P</div>
+                        <div class="avatar green">G</div>
+                        <div class="avatar red">R</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span class="divider-line"></span>
+                Group splits into parallel paths
+                <span class="divider-line"></span>
+            </div>
+
+            <!-- Row 3: Gothic Quarter (main continues) -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line continues -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+                        <!-- Branch 1 line (already split) -->
+                        <line x1="70" y1="0" x2="70" y2="100" stroke="#3fb950" stroke-width="2"/>
+                        <!-- Branch 2 line (already split) -->
+                        <line x1="120" y1="0" x2="120" y2="100" stroke="#f85149" stroke-width="2"/>
+
+                        <!-- Commit dot on main branch -->
+                        <circle cx="20" cy="50" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Gothic Quarter</span>
+                    <div class="avatars">
+                        <div class="avatar blue">B</div>
+                        <div class="avatar purple">P</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 4: Barceloneta Beach (branch 1) -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line continues -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+                        <!-- Branch 1 line -->
+                        <line x1="70" y1="0" x2="70" y2="100" stroke="#3fb950" stroke-width="2"/>
+                        <!-- Branch 2 line -->
+                        <line x1="120" y1="0" x2="120" y2="100" stroke="#f85149" stroke-width="2"/>
+                        <!-- Commit dot on branch 1 -->
+                        <circle cx="70" cy="50" r="5" fill="#3fb950" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Barceloneta Beach</span>
+                    <div class="avatars">
+                        <div class="avatar green">G</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 5: Park Güell (branch 2) -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line continues -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+                        <!-- Branch 1 line -->
+                        <line x1="70" y1="0" x2="70" y2="100" stroke="#3fb950" stroke-width="2"/>
+                        <!-- Branch 2 line -->
+                        <line x1="120" y1="0" x2="120" y2="100" stroke="#f85149" stroke-width="2"/>
+                        <!-- Commit dot on branch 2 -->
+                        <circle cx="120" cy="50" r="5" fill="#f85149" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Park Güell</span>
+                    <div class="avatars">
+                        <div class="avatar red">R</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span class="divider-line"></span>
+                Groups reconverge
+                <span class="divider-line"></span>
+            </div>
+
+            <!-- Row 6: Las Ramblas (merge) -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line -->
+                        <line x1="20" y1="0" x2="20" y2="100" stroke="#58a6ff" stroke-width="2"/>
+
+                        <!-- Simple merge curves -->
+                        <!-- Branch 1 (green) - simple arc -->
+                        <path d="M 70 0 L 70 25 Q 45 50, 20 50" stroke="#3fb950" stroke-width="2" fill="none"/>
+
+                        <!-- Branch 2 (red) - simple arc -->
+                        <path d="M 120 0 Q 70 50, 20 50" stroke="#f85149" stroke-width="2" fill="none"/>
+
+                        <!-- Commit dot -->
+                        <circle cx="20" cy="50" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Las Ramblas</span>
+                    <div class="avatars">
+                        <div class="avatar blue">B</div>
+                        <div class="avatar purple">P</div>
+                        <div class="avatar green">G</div>
+                        <div class="avatar red">R</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 7: Dinner -->
+            <div class="row">
+                <div class="graph">
+                    <svg class="graph-svg" width="180" height="100">
+                        <!-- Main branch line -->
+                        <line x1="20" y1="0" x2="20" y2="50" stroke="#58a6ff" stroke-width="2"/>
+                        <!-- Commit dot -->
+                        <circle cx="20" cy="50" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="content">
+                    <span class="destination">Dinner at Cervecería Catalana</span>
+                    <div class="avatars">
+                        <div class="avatar blue">B</div>
+                        <div class="avatar purple">P</div>
+                        <div class="avatar green">G</div>
+                        <div class="avatar red">R</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <h4>Legend:</h4>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #3B82F6;"></span>
+                    <span>B = Blue User</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #8B5CF6;"></span>
+                    <span>P = Purple User</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #10B981;"></span>
+                    <span>G = Green User</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #EF4444;"></span>
+                    <span>R = Red User</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

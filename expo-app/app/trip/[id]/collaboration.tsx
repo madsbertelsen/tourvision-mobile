@@ -1,16 +1,20 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
   FlatList,
   KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
   TextInput,
-  TouchableOpacity,
-  View,
 } from 'react-native';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
+import { format } from 'date-fns';
+import AlternativeDayModal from '@/components/AlternativeDayModal';
+import ProposalComparisonView from '@/components/ProposalComparisonView';
 
 interface Message {
   id: string;
@@ -31,12 +35,93 @@ interface Activity {
   color: string;
 }
 
+// Mock data for proposals
+const mockProposals = [
+  {
+    id: '1',
+    dayNumber: 1,
+    title: 'Beach Day Alternative',
+    description: 'How about we spend more time at the beach and skip the museum?',
+    status: 'pending',
+    proposedBy: {
+      name: 'Sarah Chen',
+      avatar: 'SC',
+    },
+    proposedAt: new Date('2024-09-14T10:30:00'),
+    original: {
+      destinations: [
+        { id: '1', name: 'Gothic Quarter', duration: '3 hours', cost: 0, time: 'Morning' },
+        { id: '2', name: 'Barcelona Museum', duration: '2 hours', cost: 15, time: 'Afternoon' },
+      ],
+      transportations: [],
+      totalCost: 15,
+      totalDuration: '5 hours',
+    },
+    proposed: {
+      destinations: [
+        { id: '1', name: 'Barceloneta Beach', duration: '4 hours', cost: 0, time: 'Morning' },
+        { id: '2', name: 'Beach Restaurants', duration: '2 hours', cost: 30, time: 'Afternoon' },
+      ],
+      transportations: [{ mode: 'Metro', duration: '20 min', cost: 2.40 }],
+      totalCost: 32.40,
+      totalDuration: '6 hours',
+    },
+    votes: {
+      approve: 2,
+      reject: 1,
+      neutral: 1,
+    },
+    comments: [
+      { user: 'Mike Johnson', text: 'Great idea! The weather looks perfect for the beach.' },
+      { user: 'Emma Davis', text: 'I was really looking forward to the museum though...' },
+    ],
+  },
+  {
+    id: '2',
+    dayNumber: 2,
+    title: 'Earlier Start for Sagrada Familia',
+    description: 'Beat the crowds by starting at 8 AM instead of 10 AM',
+    status: 'accepted',
+    proposedBy: {
+      name: 'Mike Johnson',
+      avatar: 'MJ',
+    },
+    proposedAt: new Date('2024-09-13T15:45:00'),
+    original: {
+      destinations: [
+        { id: '1', name: 'Sagrada Familia', duration: '2 hours', cost: 0, time: '10:00 AM' },
+        { id: '2', name: 'Park Güell', duration: '2 hours', cost: 0, time: '2:00 PM' },
+      ],
+      transportations: [{ mode: 'Walk', duration: '5 min' }],
+      totalCost: 0,
+      totalDuration: '4 hours',
+    },
+    proposed: {
+      destinations: [
+        { id: '1', name: 'Sagrada Familia', duration: '2 hours', cost: 0, time: '8:00 AM' },
+        { id: '2', name: 'Park Güell', duration: '2 hours', cost: 0, time: '12:00 PM' },
+      ],
+      transportations: [{ mode: 'Walk', duration: '5 min' }],
+      totalCost: 0,
+      totalDuration: '4 hours',
+    },
+    votes: {
+      approve: 4,
+      reject: 0,
+      neutral: 0,
+    },
+    comments: [
+      { user: 'Sarah Chen', text: 'Perfect! Less crowds will make for better photos.' },
+    ],
+  },
+];
+
 const SAMPLE_MESSAGES: Message[] = [
   {
     id: '1',
     user: 'Sarah',
     avatar: '👩',
-    message: 'Should we book the Eiffel Tower tickets in advance?',
+    message: 'Should we book the Sagrada Familia tickets in advance?',
     timestamp: '10:30 AM',
     type: 'message',
   },
@@ -52,7 +137,7 @@ const SAMPLE_MESSAGES: Message[] = [
     id: '3',
     user: 'Emma',
     avatar: '👩‍🦰',
-    message: 'I suggest adding a Seine cruise at sunset - it\'s magical! 🌅',
+    message: 'I suggest trying tapas at La Boqueria market! 🥘',
     timestamp: '11:15 AM',
     type: 'suggestion',
   },
@@ -70,8 +155,8 @@ const SAMPLE_ACTIVITIES: Activity[] = [
   {
     id: '1',
     user: 'Emma',
-    action: 'added',
-    target: 'Seine River Cruise',
+    action: 'proposed alternative for',
+    target: 'Day 1: Beach Day',
     timestamp: '11:22 AM',
     icon: 'plus-circle',
     color: '#10B981',
@@ -79,8 +164,8 @@ const SAMPLE_ACTIVITIES: Activity[] = [
   {
     id: '2',
     user: 'John',
-    action: 'commented on',
-    target: 'Louvre Museum visit',
+    action: 'voted on',
+    target: 'Beach Day Alternative',
     timestamp: '10:00 AM',
     icon: 'message-circle',
     color: '#3B82F6',
@@ -88,17 +173,21 @@ const SAMPLE_ACTIVITIES: Activity[] = [
   {
     id: '3',
     user: 'Sarah',
-    action: 'updated time for',
-    target: 'Arc de Triomphe',
+    action: 'accepted proposal for',
+    target: 'Earlier Sagrada Familia',
     timestamp: 'Yesterday',
-    icon: 'edit',
-    color: '#F59E0B',
+    icon: 'check-circle',
+    color: '#10B981',
   },
 ];
 
 export default function CollaborationTab() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'activity'>('chat');
+  const { id } = useLocalSearchParams();
+  const [activeTab, setActiveTab] = useState<'proposals' | 'chat' | 'activity'>('proposals');
   const [message, setMessage] = useState('');
+  const [selectedProposal, setSelectedProposal] = useState<any>(null);
+  const [showAlternativeModal, setShowAlternativeModal] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number>(1);
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isSuggestion = item.type === 'suggestion';
@@ -141,6 +230,58 @@ export default function CollaborationTab() {
     );
   };
 
+  const handleVote = (proposalId: string, voteType: 'approve' | 'reject' | 'neutral') => {
+    console.log('Vote:', proposalId, voteType);
+    // In real app, this would update the backend
+  };
+
+  const handleAcceptProposal = (proposalId: string) => {
+    console.log('Accept proposal:', proposalId);
+    // In real app, this would update the trip itinerary
+  };
+
+  const handleRejectProposal = (proposalId: string) => {
+    console.log('Reject proposal:', proposalId);
+    // In real app, this would update the proposal status
+  };
+
+  const handleMergeProposal = (proposalId: string) => {
+    console.log('Merge proposal:', proposalId);
+    // In real app, this would open a merge interface
+  };
+
+  const handleSubmitAlternative = (proposal: any) => {
+    console.log('New proposal:', proposal);
+    setShowAlternativeModal(false);
+    // In real app, this would save to backend
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'accepted':
+        return '#10B981';
+      case 'rejected':
+        return '#EF4444';
+      case 'pending':
+        return '#F59E0B';
+      default:
+        return '#6B7280';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'accepted':
+        return 'check-circle';
+      case 'rejected':
+        return 'cancel';
+      case 'pending':
+        return 'schedule';
+      default:
+        return 'help-outline';
+    }
+  };
+
   const sendMessage = () => {
     if (message.trim()) {
       // In production, this would send to the backend
@@ -158,27 +299,41 @@ export default function CollaborationTab() {
       {/* Tab Selector */}
       <View style={styles.tabSelector}>
         <TouchableOpacity
+          style={[styles.tab, activeTab === 'proposals' && styles.activeTab]}
+          onPress={() => setActiveTab('proposals')}
+        >
+          <MaterialIcons
+            name="lightbulb-outline"
+            size={20}
+            color={activeTab === 'proposals' ? '#3B82F6' : '#666'}
+          />
+          <Text style={[styles.tabText, activeTab === 'proposals' && styles.activeTabText]}>
+            Proposals
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'chat' && styles.activeTab]}
           onPress={() => setActiveTab('chat')}
         >
-          <Ionicons 
-            name="chatbubbles-outline" 
-            size={20} 
-            color={activeTab === 'chat' ? '#3B82F6' : '#666'} 
+          <Ionicons
+            name="chatbubbles-outline"
+            size={20}
+            color={activeTab === 'chat' ? '#3B82F6' : '#666'}
           />
           <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText]}>
             Chat
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={[styles.tab, activeTab === 'activity' && styles.activeTab]}
           onPress={() => setActiveTab('activity')}
         >
-          <Feather 
-            name="activity" 
-            size={20} 
-            color={activeTab === 'activity' ? '#3B82F6' : '#666'} 
+          <Feather
+            name="activity"
+            size={20}
+            color={activeTab === 'activity' ? '#3B82F6' : '#666'}
           />
           <Text style={[styles.tabText, activeTab === 'activity' && styles.activeTabText]}>
             Activity
@@ -187,7 +342,121 @@ export default function CollaborationTab() {
       </View>
 
       {/* Content */}
-      {activeTab === 'chat' ? (
+      {activeTab === 'proposals' ? (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Add Proposal Button */}
+          <TouchableOpacity
+            style={styles.addProposalButton}
+            onPress={() => {
+              setSelectedDay(1);
+              setShowAlternativeModal(true);
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="white" />
+            <Text style={styles.addProposalButtonText}>Propose Alternative</Text>
+          </TouchableOpacity>
+
+          {/* Proposals List */}
+          <View style={styles.proposalsList}>
+            {mockProposals.map((proposal) => (
+              <TouchableOpacity
+                key={proposal.id}
+                style={styles.proposalCard}
+                onPress={() => setSelectedProposal(proposal)}
+                activeOpacity={0.7}
+              >
+                {/* Status Badge */}
+                <View style={styles.proposalHeader}>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(proposal.status) + '20' }]}>
+                    <MaterialIcons
+                      name={getStatusIcon(proposal.status)}
+                      size={16}
+                      color={getStatusColor(proposal.status)}
+                    />
+                    <Text style={[styles.statusText, { color: getStatusColor(proposal.status) }]}>
+                      {proposal.status.charAt(0).toUpperCase() + proposal.status.slice(1)}
+                    </Text>
+                  </View>
+                  <Text style={styles.dayLabel}>Day {proposal.dayNumber}</Text>
+                </View>
+
+                {/* Proposal Title */}
+                <Text style={styles.proposalTitle}>{proposal.title}</Text>
+                <Text style={styles.proposalDescription}>{proposal.description}</Text>
+
+                {/* Proposer Info */}
+                <View style={styles.proposerInfo}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{proposal.proposedBy.avatar}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.proposerName}>{proposal.proposedBy.name}</Text>
+                    <Text style={styles.proposedTime}>
+                      {format(proposal.proposedAt, 'MMM d, h:mm a')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Vote Summary */}
+                <View style={styles.voteSummary}>
+                  <View style={styles.voteItem}>
+                    <Ionicons name="thumbs-up" size={16} color="#10B981" />
+                    <Text style={styles.voteCount}>{proposal.votes.approve}</Text>
+                  </View>
+                  <View style={styles.voteItem}>
+                    <Ionicons name="thumbs-down" size={16} color="#EF4444" />
+                    <Text style={styles.voteCount}>{proposal.votes.reject}</Text>
+                  </View>
+                  <View style={styles.voteItem}>
+                    <MaterialIcons name="sentiment-neutral" size={16} color="#6B7280" />
+                    <Text style={styles.voteCount}>{proposal.votes.neutral}</Text>
+                  </View>
+                  <View style={[styles.voteItem, { marginLeft: 'auto' }]}>
+                    <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
+                    <Text style={styles.voteCount}>{proposal.comments.length}</Text>
+                  </View>
+                </View>
+
+                {/* Quick Actions */}
+                {proposal.status === 'pending' && (
+                  <View style={styles.quickActions}>
+                    <TouchableOpacity
+                      style={[styles.voteButton, styles.approveButton]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleVote(proposal.id, 'approve');
+                      }}
+                    >
+                      <Ionicons name="thumbs-up-outline" size={18} color="#10B981" />
+                      <Text style={[styles.voteButtonText, { color: '#10B981' }]}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.voteButton, styles.rejectButton]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleVote(proposal.id, 'reject');
+                      }}
+                    >
+                      <Ionicons name="thumbs-down-outline" size={18} color="#EF4444" />
+                      <Text style={[styles.voteButtonText, { color: '#EF4444' }]}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.voteButton, styles.neutralButton]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleVote(proposal.id, 'neutral');
+                      }}
+                    >
+                      <MaterialIcons name="sentiment-neutral" size={18} color="#6B7280" />
+                      <Text style={[styles.voteButtonText, { color: '#6B7280' }]}>Neutral</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      ) : activeTab === 'chat' ? (
         <>
           <FlatList
             data={SAMPLE_MESSAGES}
@@ -228,6 +497,43 @@ export default function CollaborationTab() {
             </View>
           ))}
         </ScrollView>
+      )}
+
+      {/* Alternative Day Modal */}
+      <AlternativeDayModal
+        visible={showAlternativeModal}
+        onClose={() => setShowAlternativeModal(false)}
+        onSubmit={handleSubmitAlternative}
+        dayNumber={selectedDay}
+        originalDestinations={[
+          { id: '1', name: 'Gothic Quarter', duration: '3 hours', cost: 0, time: 'Morning' },
+        ]}
+      />
+
+      {/* Proposal Comparison Modal */}
+      {selectedProposal && (
+        <ProposalComparisonView
+          original={selectedProposal.original}
+          proposed={selectedProposal.proposed}
+          proposedBy={selectedProposal.proposedBy}
+          proposedAt={selectedProposal.proposedAt}
+          description={selectedProposal.description}
+          onAccept={() => {
+            handleAcceptProposal(selectedProposal.id);
+            setSelectedProposal(null);
+          }}
+          onReject={() => {
+            handleRejectProposal(selectedProposal.id);
+            setSelectedProposal(null);
+          }}
+          onMerge={() => {
+            handleMergeProposal(selectedProposal.id);
+            setSelectedProposal(null);
+          }}
+          votes={selectedProposal.votes}
+          comments={selectedProposal.comments}
+          onClose={() => setSelectedProposal(null)}
+        />
       )}
     </KeyboardAvoidingView>
   );
@@ -376,5 +682,140 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 2,
+  },
+  content: {
+    flex: 1,
+  },
+  addProposalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  addProposalButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  proposalsList: {
+    padding: 20,
+    gap: 16,
+  },
+  proposalCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  proposalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dayLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  proposalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  proposalDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  proposerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  proposerName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  proposedTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  voteSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    gap: 16,
+  },
+  voteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  voteCount: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  voteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+  },
+  approveButton: {
+    backgroundColor: '#10B98110',
+    borderColor: '#10B98130',
+  },
+  rejectButton: {
+    backgroundColor: '#EF444410',
+    borderColor: '#EF444430',
+  },
+  neutralButton: {
+    backgroundColor: '#6B728010',
+    borderColor: '#6B728030',
+  },
+  voteButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

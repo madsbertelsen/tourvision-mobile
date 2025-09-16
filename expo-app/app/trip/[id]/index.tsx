@@ -2,10 +2,14 @@ import CollaborationPanel from '@/components/CollaborationPanel';
 import MapView from '@/components/dom/MapViewDOM.tsx';
 import TransportationCard, { TransportationData } from '@/components/TransportationCard';
 import TransportationEditModal from '@/components/TransportationEditModal';
+import TripMemberList from '@/components/TripMemberList';
+import AttendanceSelector from '@/components/AttendanceSelector';
+import BranchingIndicator from '@/components/BranchingIndicator';
+import { useAttendance } from '@/hooks/useAttendance';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useTrip } from '@/hooks/useTrips';
 import { supabase } from '@/lib/supabase/client';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -33,75 +37,89 @@ import type { Tables } from '@/lib/database.types';
 const parseTripDocument = (trip: Tables<'trips'>) => {
   const doc = trip.itinerary_document as any;
   if (!doc?.content) return null;
-  
+
   const days: any[] = [];
+  let currentDay: any = null;
   let currentDayIndex = 0;
-  
+  let placeIndex = 0;
+  let globalPlaceIndex = 0; // Track place index across all days for unique colors
+
+  // Process flattened structure where all nodes are at the same level
   doc.content.forEach((node: any) => {
-    if (node.type === 'dayNode') {
-      const dayDate = node.attrs?.date ? new Date(node.attrs.date) : new Date();
-      const places: any[] = [];
-      
-      const transportations: any[] = [];
-      
-      if (node.content) {
-        let placeIndex = 0;
-        node.content.forEach((child: any, idx: number) => {
-          if (child.type === 'destinationNode') {
-            // Use a consistent destinationId that will match what's stored in transportationNode
-            const destId = child.attrs?.destinationId || `${currentDayIndex}-${placeIndex}`;
-            places.push({
-              id: `place-${currentDayIndex}-${placeIndex}`,
-              destinationId: destId,
-              name: child.attrs?.name || 'Unknown Place',
-              time: child.attrs?.duration || '2 hours',
-              period: placeIndex === 0 ? 'Morning' : placeIndex === 1 ? 'Afternoon' : 'Evening',
-              description: child.attrs?.description || '',
-              lat: child.attrs?.coordinates?.lat || 0,
-              lng: child.attrs?.coordinates?.lng || 0,
-              colorIndex: placeIndex,
-              cost: child.attrs?.cost || 'Free',
-            });
-            placeIndex++;
-          } else if (child.type === 'transportationNode') {
-            transportations.push({
-              transportId: child.attrs?.transportId,
-              mode: child.attrs?.mode || 'walking',
-              fromDestination: child.attrs?.fromDestination,
-              toDestination: child.attrs?.toDestination,
-              duration: child.attrs?.duration || '5 min',
-              distance: child.attrs?.distance,
-              cost: child.attrs?.cost?.amount,
-              route: child.attrs?.route,
-              routeUrl: child.attrs?.routeUrl,
-              routeGeometry: child.attrs?.routeGeometry,
-            });
-          }
-        });
+    if (node.type === 'dayTransition' || node.type === 'dayNode') {
+      // Save the previous day if it exists
+      if (currentDay) {
+        days.push(currentDay);
       }
-      
-      days.push({
+
+      // Start a new day
+      const dayDate = node.attrs?.date ? new Date(node.attrs.date) : new Date();
+      currentDay = {
         day: currentDayIndex + 1,
         title: node.attrs?.title || `Day ${currentDayIndex + 1}`,
-        date: dayDate.toLocaleDateString('en-US', { 
-          month: 'long', 
-          day: 'numeric', 
-          year: 'numeric' 
+        date: dayDate.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
         }),
-        places,
-        transportations,
-        totalCost: places.length > 0 ? '€' + (places.length * 15) + '.00' : 'Free',
-        totalPlaces: places.length,
-      });
-      
+        places: [],
+        transportations: [],
+        totalCost: 'Free',
+        totalPlaces: 0,
+      };
       currentDayIndex++;
+      placeIndex = 0; // Reset local place index for each day
+
+    } else if (node.type === 'destinationNode' && currentDay) {
+      // Add destination to current day
+      const destId = node.attrs?.destinationId || `${currentDayIndex - 1}-${placeIndex}`;
+      currentDay.places.push({
+        id: `place-${currentDayIndex - 1}-${placeIndex}`,
+        destinationId: destId,
+        name: node.attrs?.name || 'Unknown Place',
+        time: node.attrs?.duration || '2 hours',
+        period: placeIndex === 0 ? 'Morning' : placeIndex === 1 ? 'Afternoon' : 'Evening',
+        description: node.attrs?.description || '',
+        lat: node.attrs?.coordinates?.lat || 0,
+        lng: node.attrs?.coordinates?.lng || 0,
+        colorIndex: globalPlaceIndex, // Use global index for unique colors
+        cost: node.attrs?.cost || 'Free',
+      });
+      placeIndex++;
+      globalPlaceIndex++; // Increment global index
+
+    } else if (node.type === 'transportationNode' && currentDay) {
+      // Add transportation to current day
+      currentDay.transportations.push({
+        transportId: node.attrs?.transportId,
+        mode: node.attrs?.mode || 'walking',
+        fromDestination: node.attrs?.fromDestination,
+        toDestination: node.attrs?.toDestination,
+        duration: node.attrs?.duration || '5 min',
+        distance: node.attrs?.distance,
+        cost: node.attrs?.cost?.amount,
+        route: node.attrs?.route,
+        routeUrl: node.attrs?.routeUrl,
+        routeGeometry: node.attrs?.routeGeometry,
+      });
     }
   });
-  
+
+  // Don't forget to add the last day
+  if (currentDay) {
+    days.push(currentDay);
+  }
+
+  // Update total costs and places for each day
+  days.forEach(day => {
+    day.totalPlaces = day.places.length;
+    day.totalCost = day.places.length > 0 ? '€' + (day.places.length * 15) + '.00' : 'Free';
+  });
+
   // Calculate date range
   const startDate = days[0]?.date || new Date().toISOString();
   const endDate = days[days.length - 1]?.date || new Date().toISOString();
-  
+
   return {
     id: trip.id,
     title: trip.title,
@@ -216,14 +234,14 @@ const SAMPLE_ITINERARY = {
 };
 
 const MARKER_COLORS = [
-  '#3B82F6', // Blue
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#EF4444', // Red
-  '#8B5CF6', // Violet
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#84CC16', // Lime
+  '#6B7280', // Gray 500
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
+  '#6B7280', // Same gray for consistency
 ];
 
 interface PlaceCardProps {
@@ -231,16 +249,20 @@ interface PlaceCardProps {
   index: number;
   onDragEnd?: (fromIndex: number, toIndex: number) => void;
   totalItems: number;
+  tripId: string;
+  dayIndex: number;
 }
 
-const PlaceCard = ({ 
-  place, 
+const PlaceCard = ({
+  place,
   index,
   onDragEnd,
-  totalItems
+  totalItems,
+  tripId,
+  dayIndex
 }: PlaceCardProps) => {
   const markerColor = MARKER_COLORS[place.colorIndex % MARKER_COLORS.length];
-  const displayIndex = typeof index === 'number' ? index + 1 : 1;
+  const displayIndex = place.colorIndex + 1; // Use global colorIndex for numbering
   
   // State for card expansion
   const [isExpanded, setIsExpanded] = useState(false);
@@ -382,6 +404,18 @@ const PlaceCard = ({
                 </View>
               )}
             </View>
+
+            {/* Attendance Selector */}
+            <View style={styles.attendanceSection}>
+              <AttendanceSelector
+                tripId={tripId}
+                destinationId={place.destinationId}
+                destinationName={place.name}
+                dayIndex={dayIndex}
+                compact={true}
+              />
+            </View>
+
           </View>
         </Animated.View>
       </Animated.View>
@@ -389,7 +423,7 @@ const PlaceCard = ({
   );
 };
 
-const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
+const DaySection = ({ day, tripId, onPlacesReorder, onTransportationEdit }: any) => {
   const [places, setPlaces] = useState(day.places);
   const [transportations, setTransportations] = useState(day.transportations || []);
   const [transportationModal, setTransportationModal] = useState<{
@@ -505,14 +539,44 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
   };
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
+    const nextPlace = places[index + 1];
+    const currentPlace = item;
+
+    // Debug logging
+    console.log('Rendering item:', {
+      index,
+      currentPlace: currentPlace?.name,
+      currentDestinationId: currentPlace?.destinationId,
+      nextPlace: nextPlace?.name,
+      nextDestinationId: nextPlace?.destinationId,
+      dayNumber: day.day,
+    });
+
+    // Show alternative after Hotel Casa Fuster (index 1) before Gothic Quarter
+    // Simplified condition for debugging
+    const showAlternative = index === 1 && day.day === 1;
+
+    console.log('Show alternative?', showAlternative);
+
     return (
       <>
-        <PlaceCard 
-          place={item} 
+        <PlaceCard
+          place={item}
           index={index}
           onDragEnd={handleDragEnd}
           totalItems={places.length}
+          tripId={tripId}
+          dayIndex={day.day - 1}
         />
+        {/* Show branching after Hotel Casa Fuster before Gothic Quarter */}
+        {showAlternative && (
+          <BranchingIndicator
+            tripId={tripId}
+            currentDestinationId={currentPlace?.destinationId || ''}
+            nextDestinationId={nextPlace?.destinationId || ''}
+            dayIndex={0}
+          />
+        )}
         {index < places.length - 1 && (
           <TransportationCard
             transportation={getTransportation(index, index + 1)}
@@ -541,28 +605,8 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
   return (
     <View style={styles.daySection}>
       <View style={styles.stickyDayHeader}>
-        <Text style={styles.dayTitle}>Day {day.day}: {day.title}</Text>
+        <Text style={styles.dayTitle}>{day.title}</Text>
         <Text style={styles.dayDate}>{day.date}</Text>
-      </View>
-      
-      <View style={styles.daySummary}>
-        <View style={styles.summaryItem}>
-          <Feather name="map-pin" size={14} color="#6B7280" />
-          <Text style={styles.summaryText}>{places.length} places</Text>
-        </View>
-        <View style={styles.summaryDot} />
-        <View style={styles.summaryItem}>
-          <Feather name="dollar-sign" size={14} color="#6B7280" />
-          <Text style={styles.summaryText}>
-            €{places.reduce((sum, p) => {
-              // Handle different cost formats
-              if (!p.cost || p.cost === 'Free') return sum;
-              const costStr = typeof p.cost === 'string' ? p.cost : p.cost.toString();
-              const numericCost = parseFloat(costStr.replace(/[€$,]/g, '')) || 0;
-              return sum + numericCost;
-            }, 0).toFixed(2)}
-          </Text>
-        </View>
       </View>
       
       <FlatList
@@ -588,16 +632,6 @@ const DaySection = ({ day, onPlacesReorder, onTransportationEdit }: any) => {
           lng: places[transportationModal.toIndex].lng,
         } : undefined}
       />
-      
-      <View style={styles.dayFooter}>
-        <View style={styles.dayStats}>
-          <Feather name="map-pin" size={14} color="#666" />
-          <Text style={styles.dayStatText}>{day.totalPlaces} places</Text>
-          <Text style={styles.metaSeparator}>•</Text>
-          <MaterialIcons name="attach-money" size={14} color="#666" />
-          <Text style={styles.dayStatText}>{day.totalCost}</Text>
-        </View>
-      </View>
     </View>
   );
 };
@@ -610,6 +644,16 @@ export default function TripDetail() {
   const { data: tripData, isLoading, error } = useTrip(id as string);
   const [trip, setTrip] = useState<any>(null);
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
+  const [showPersonalView, setShowPersonalView] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+
+  // Use attendance hook
+  const {
+    members,
+    myAttendance,
+    getMyStatus,
+    loading: attendanceLoading
+  } = useAttendance(id as string);
   
   useEffect(() => {
     if (tripData) {
@@ -960,23 +1004,14 @@ export default function TripDetail() {
         <View style={styles.desktopItinerary}>
           <ScrollView style={styles.textContent}>
             {filteredDays.map((day) => (
-              <DaySection 
-                key={day.day} 
+              <DaySection
+                key={day.day}
                 day={day}
+                tripId={id as string}
                 onPlacesReorder={handlePlacesReorder}
                 onTransportationEdit={handleTransportationEdit}
               />
             ))}
-            
-            <View style={styles.proTipCard}>
-              <View style={styles.proTipHeader}>
-                <Feather name="zap" size={16} color="#F59E0B" />
-                <Text style={styles.proTipTitle}>Pro Tip</Text>
-              </View>
-              <Text style={styles.proTipText}>
-                Book skip-the-line tickets in advance for popular attractions to save time!
-              </Text>
-            </View>
           </ScrollView>
         </View>
         
@@ -1002,25 +1037,46 @@ export default function TripDetail() {
   // Mobile: Show itinerary only (map is in separate tab)
   return (
     <View style={styles.container}>
+      {/* Member List and View Toggle */}
+      <View style={styles.headerControls}>
+        <TripMemberList
+          tripId={id as string}
+          compact={true}
+          onMemberPress={() => setShowMembers(true)}
+        />
+
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.viewToggleButton, !showPersonalView && styles.viewToggleActive]}
+            onPress={() => setShowPersonalView(false)}
+          >
+            <Ionicons name="people" size={16} color={!showPersonalView ? '#3B82F6' : '#6B7280'} />
+            <Text style={[styles.viewToggleText, !showPersonalView && styles.viewToggleTextActive]}>
+              Everyone
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewToggleButton, showPersonalView && styles.viewToggleActive]}
+            onPress={() => setShowPersonalView(true)}
+          >
+            <Ionicons name="person" size={16} color={showPersonalView ? '#3B82F6' : '#6B7280'} />
+            <Text style={[styles.viewToggleText, showPersonalView && styles.viewToggleTextActive]}>
+              My View
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView style={styles.textContent}>
         {filteredDays.map((day) => (
-          <DaySection 
-            key={day.day} 
+          <DaySection
+            key={day.day}
             day={day}
+            tripId={id as string}
             onPlacesReorder={handlePlacesReorder}
             onTransportationEdit={handleTransportationEdit}
           />
         ))}
-        
-        <View style={styles.proTipCard}>
-          <View style={styles.proTipHeader}>
-            <Feather name="zap" size={16} color="#F59E0B" />
-            <Text style={styles.proTipTitle}>Pro Tip</Text>
-          </View>
-          <Text style={styles.proTipText}>
-            Book skip-the-line tickets in advance for popular attractions to save time!
-          </Text>
-        </View>
       </ScrollView>
       
       {/* Collaboration Panel */}
@@ -1323,5 +1379,51 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  attendanceSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  headerControls: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 4,
+    marginTop: 12,
+  },
+  viewToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
+  },
+  viewToggleActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  viewToggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  viewToggleTextActive: {
+    color: '#3B82F6',
   },
 });
