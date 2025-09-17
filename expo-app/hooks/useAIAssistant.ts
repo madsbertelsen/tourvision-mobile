@@ -25,6 +25,38 @@ export interface AISuggestion {
   approval_count: number;
   rejection_count: number;
   required_approvals: number;
+  // Enriched data fields
+  enriched_data?: {
+    quick_facts?: string[];
+    highlights?: string[];
+    why_visit?: string;
+    best_for?: string[];
+    historical_context?: string;
+  };
+  practical_info?: {
+    duration?: string;
+    best_time?: string;
+    admission?: {
+      adults?: string;
+      children?: string;
+      notes?: string;
+    };
+    opening_hours?: string;
+    location_details?: {
+      address?: string;
+      distance_from_city?: string;
+      transport_options?: string[];
+    };
+    accessibility?: {
+      wheelchair?: string;
+      facilities?: string[];
+    };
+  };
+  external_resources?: {
+    official_website?: string;
+    wikipedia_url?: string;
+    booking_link?: string;
+  };
 }
 
 export interface SuggestionVote {

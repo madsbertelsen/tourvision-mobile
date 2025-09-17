@@ -130,10 +130,145 @@ export function AISuggestionPanel({
         {/* Expanded Content */}
         {isExpanded && (
           <View style={styles.expandedContent}>
+            {/* Quick Facts */}
+            {suggestion.enriched_data?.quick_facts && suggestion.enriched_data.quick_facts.length > 0 && (
+              <View style={styles.enrichedSection}>
+                <Text style={styles.sectionTitle}>Quick Facts</Text>
+                {suggestion.enriched_data.quick_facts.map((fact, index) => (
+                  <View key={index} style={styles.factItem}>
+                    <Text style={styles.bulletPoint}>•</Text>
+                    <Text style={styles.factText}>{fact}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Why Visit */}
+            {suggestion.enriched_data?.why_visit && (
+              <View style={styles.enrichedSection}>
+                <Text style={styles.sectionTitle}>Why Visit</Text>
+                <Text style={styles.enrichedText}>{suggestion.enriched_data.why_visit}</Text>
+              </View>
+            )}
+
+            {/* Highlights */}
+            {suggestion.enriched_data?.highlights && suggestion.enriched_data.highlights.length > 0 && (
+              <View style={styles.enrichedSection}>
+                <Text style={styles.sectionTitle}>Highlights</Text>
+                {suggestion.enriched_data.highlights.map((highlight, index) => (
+                  <View key={index} style={styles.factItem}>
+                    <Feather name="star" size={12} color="#F59E0B" />
+                    <Text style={styles.factText}>{highlight}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Practical Info */}
+            {suggestion.practical_info && (
+              <View style={styles.practicalSection}>
+                <Text style={styles.sectionTitle}>Practical Information</Text>
+                <View style={styles.infoGrid}>
+                  {suggestion.practical_info.duration && (
+                    <View style={styles.infoItem}>
+                      <Feather name="clock" size={14} color="#6B7280" />
+                      <Text style={styles.infoText}>{suggestion.practical_info.duration}</Text>
+                    </View>
+                  )}
+                  {suggestion.practical_info.best_time && (
+                    <View style={styles.infoItem}>
+                      <Feather name="sun" size={14} color="#6B7280" />
+                      <Text style={styles.infoText}>{suggestion.practical_info.best_time}</Text>
+                    </View>
+                  )}
+                  {suggestion.practical_info.admission?.adults && (
+                    <View style={styles.infoItem}>
+                      <Feather name="dollar-sign" size={14} color="#6B7280" />
+                      <Text style={styles.infoText}>{suggestion.practical_info.admission.adults}</Text>
+                    </View>
+                  )}
+                  {suggestion.practical_info.opening_hours && (
+                    <View style={styles.infoItem}>
+                      <Feather name="calendar" size={14} color="#6B7280" />
+                      <Text style={styles.infoText}>{suggestion.practical_info.opening_hours}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Location Details */}
+                {suggestion.practical_info.location_details && (
+                  <View style={styles.locationSection}>
+                    {suggestion.practical_info.location_details.address && (
+                      <View style={styles.infoItem}>
+                        <Feather name="map-pin" size={14} color="#6B7280" />
+                        <Text style={styles.infoText}>{suggestion.practical_info.location_details.address}</Text>
+                      </View>
+                    )}
+                    {suggestion.practical_info.location_details.transport_options && (
+                      <View style={styles.transportSection}>
+                        <Text style={styles.miniTitle}>Getting There:</Text>
+                        {suggestion.practical_info.location_details.transport_options.map((option, index) => (
+                          <Text key={index} style={styles.transportOption}>• {option}</Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Accessibility */}
+                {suggestion.practical_info.accessibility && (
+                  <View style={styles.accessibilitySection}>
+                    {suggestion.practical_info.accessibility.wheelchair && (
+                      <View style={styles.infoItem}>
+                        <Feather name="info" size={14} color="#6B7280" />
+                        <Text style={styles.infoText}>{suggestion.practical_info.accessibility.wheelchair}</Text>
+                      </View>
+                    )}
+                    {suggestion.practical_info.accessibility.facilities && suggestion.practical_info.accessibility.facilities.length > 0 && (
+                      <View style={styles.facilitiesRow}>
+                        {suggestion.practical_info.accessibility.facilities.map((facility, index) => (
+                          <View key={index} style={styles.facilityChip}>
+                            <Text style={styles.facilityText}>{facility}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* External Resources */}
+            {suggestion.external_resources && (
+              <View style={styles.resourcesSection}>
+                <Text style={styles.sectionTitle}>Learn More</Text>
+                <View style={styles.linksRow}>
+                  {suggestion.external_resources.official_website && (
+                    <TouchableOpacity style={styles.linkButton}>
+                      <Feather name="globe" size={14} color="#3B82F6" />
+                      <Text style={styles.linkText}>Official Site</Text>
+                    </TouchableOpacity>
+                  )}
+                  {suggestion.external_resources.wikipedia_url && (
+                    <TouchableOpacity style={styles.linkButton}>
+                      <Feather name="book" size={14} color="#3B82F6" />
+                      <Text style={styles.linkText}>Wikipedia</Text>
+                    </TouchableOpacity>
+                  )}
+                  {suggestion.external_resources.booking_link && (
+                    <TouchableOpacity style={styles.linkButton}>
+                      <Feather name="shopping-bag" size={14} color="#3B82F6" />
+                      <Text style={styles.linkText}>Book Now</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* AI Reasoning */}
             {suggestion.ai_reasoning && (
               <View style={styles.reasoningSection}>
-                <Text style={styles.sectionTitle}>AI Reasoning</Text>
+                <Text style={styles.sectionTitle}>AI Analysis</Text>
                 <Text style={styles.reasoningText}>{suggestion.ai_reasoning}</Text>
               </View>
             )}
@@ -557,5 +692,127 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  // New styles for enriched content
+  enrichedSection: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  enrichedText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  factItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+    paddingRight: 12,
+  },
+  bulletPoint: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginRight: 8,
+    width: 12,
+  },
+  factText: {
+    fontSize: 14,
+    color: '#4B5563',
+    flex: 1,
+    lineHeight: 20,
+  },
+  practicalSection: {
+    marginTop: 16,
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '50%',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginLeft: 6,
+    flex: 1,
+  },
+  locationSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  transportSection: {
+    marginTop: 8,
+  },
+  miniTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  transportOption: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginLeft: 12,
+    marginBottom: 2,
+  },
+  accessibilitySection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  facilitiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  facilityChip: {
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  facilityText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  resourcesSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  linksRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  linkText: {
+    fontSize: 13,
+    color: '#3B82F6',
+    fontWeight: '500',
   },
 });

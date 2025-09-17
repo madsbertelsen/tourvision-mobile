@@ -107,12 +107,13 @@ serve(async (req) => {
       // Get AI agent user ID (using a fixed service account ID)
       const AI_AGENT_USER_ID = '00000000-0000-0000-0000-000000000001'
 
-      // Create AI suggestion in database
+      // Create AI suggestion in database with source message reference
       const { data: createdSuggestion, error: suggestionError } = await supabase
         .from('ai_suggestions')
         .insert({
           trip_id,
           created_by: AI_AGENT_USER_ID,
+          source_message_id: message_id, // Link to the message that triggered this suggestion
           ...suggestion,
           required_approvals: config.required_approvals,
         })
@@ -125,6 +126,32 @@ serve(async (req) => {
       }
 
       console.log('Created suggestion:', createdSuggestion)
+
+      // Create a chat message from the AI agent as a reply to the triggering message
+      const aiMessageText = formatAISuggestionMessage(suggestion)
+
+      const { data: aiChatMessage, error: chatError } = await supabase
+        .from('trip_chat_messages')
+        .insert({
+          trip_id,
+          user_id: AI_AGENT_USER_ID,
+          message: aiMessageText,
+          reply_to: message_id, // Thread this as a reply to the original message
+          metadata: {
+            type: 'ai_suggestion',
+            suggestion_id: createdSuggestion.id,
+            suggestion_type: suggestion.suggestion_type,
+          },
+        })
+        .select()
+        .single()
+
+      if (chatError) {
+        console.error('Failed to create AI chat message:', chatError)
+        // Don't throw here - the suggestion was created successfully
+      } else {
+        console.log('Created AI chat message:', aiChatMessage)
+      }
 
       return new Response(
         JSON.stringify({
@@ -199,7 +226,7 @@ async function analyzeWithAI(
         apiKey: mistralKey,
       })
 
-      // Define the schema for the suggestion
+      // Define the schema for the suggestion with enriched data
       const suggestionSchema = z.object({
         should_suggest: z.boolean().describe('Whether a suggestion should be created'),
         suggestion_type: z.enum(['add', 'modify', 'remove', 'reorganize']).optional().describe('Type of change to make'),
@@ -207,31 +234,83 @@ async function analyzeWithAI(
         description: z.string().optional().describe('Detailed description of the change'),
         proposed_content: z.any().optional().describe('The proposed new document structure'),
         ai_reasoning: z.string().optional().describe('Explanation of why this change was suggested'),
+        // Enriched data fields
+        enriched_data: z.object({
+          quick_facts: z.array(z.string()).optional().describe('Key facts about the place or activity'),
+          highlights: z.array(z.string()).optional().describe('Main attractions or features'),
+          why_visit: z.string().optional().describe('Compelling reasons to visit'),
+          best_for: z.array(z.string()).optional().describe('Types of travelers who would enjoy this'),
+          historical_context: z.string().optional().describe('Historical significance if applicable'),
+        }).optional().describe('Rich contextual information about the suggestion'),
+        practical_info: z.object({
+          duration: z.string().optional().describe('Typical visit duration'),
+          best_time: z.string().optional().describe('Best time to visit'),
+          admission: z.object({
+            adults: z.string().optional(),
+            children: z.string().optional(),
+            notes: z.string().optional()
+          }).optional().describe('Admission costs'),
+          opening_hours: z.string().optional().describe('Operating hours'),
+          location_details: z.object({
+            address: z.string().optional(),
+            distance_from_city: z.string().optional(),
+            transport_options: z.array(z.string()).optional()
+          }).optional(),
+          accessibility: z.object({
+            wheelchair: z.string().optional(),
+            facilities: z.array(z.string()).optional()
+          }).optional()
+        }).optional().describe('Practical travel information'),
+        external_resources: z.object({
+          official_website: z.string().optional(),
+          wikipedia_url: z.string().optional(),
+          booking_link: z.string().optional()
+        }).optional().describe('External links for more information')
       })
 
       try {
         const { object } = await generateObject({
           model: mistral(config.model_name || 'mistral-small-latest'),
           schema: suggestionSchema,
-          system: `You are a travel planning assistant analyzing chat messages for actionable trip planning decisions.
+          system: `You are a knowledgeable travel planning assistant analyzing chat messages for actionable trip planning decisions.
 ${config.custom_instructions || ''}
 
-Analyze the conversation and determine if there's a clear decision or consensus that should trigger a document change.
+Your role is to:
+1. Analyze conversations for clear decisions or suggestions about trip planning
+2. When specific places, attractions, or activities are mentioned, provide comprehensive information to help the team make informed decisions
+3. Include practical details that travelers need (costs, hours, duration, accessibility)
+4. Explain why something is worth visiting and what makes it special
+5. Consider the context of the trip and suggest how it fits into the overall itinerary
+
 Look for:
-- Specific destinations or activities being agreed upon
+- Specific destinations or activities being suggested or agreed upon
 - Times and schedules being set
 - Accommodations being chosen
 - Transportation being planned
-- Activities being added or removed
+- Activities being added, modified, or removed
 
-Only suggest changes when there's clear agreement or a specific request from multiple participants.`,
+When a specific place or attraction is mentioned (like "Kronborg Castle", "Sagrada Familia", etc.):
+- Provide educational context so all team members understand what it is
+- Include practical information for planning (opening hours, costs, duration)
+- Explain its significance and why it might be worth visiting
+- Suggest optimal timing and any booking requirements
+- Consider accessibility and facilities available
+
+Only create suggestions when there's a clear request or consensus from participants.`,
           prompt: `Recent messages (newest first):
 ${messages.map((m, i) => `${i + 1}. "${m.message}"`).join('\n')}
 
 Current document structure:
 ${JSON.stringify(document, null, 2).slice(0, 1000)}
 
-Should this conversation trigger a document change? If yes, what specific change should be made?`,
+Analyze the conversation:
+1. Is there a specific place, attraction, or activity being discussed?
+2. If yes, provide comprehensive information about it to help the team make an informed decision
+3. Include practical details like location, cost, duration, and best time to visit
+4. Explain what makes it special or worth visiting
+5. Should this trigger a document change? If yes, what specific change with rich context?
+
+For any specific places mentioned, act as a knowledgeable guide providing context that helps team members who might not be familiar with the suggestion.`,
           temperature: config.temperature || 0.7,
         })
 
@@ -247,6 +326,10 @@ Should this conversation trigger a document change? If yes, what specific change
             chat_context: messageTexts.slice(0, 5),
             ai_reasoning: object.ai_reasoning || 'Based on team discussion',
             required_approvals: config.required_approvals || 1,
+            // Include enriched data fields
+            enriched_data: object.enriched_data || null,
+            practical_info: object.practical_info || null,
+            external_resources: object.external_resources || null,
           }
         }
       } catch (error) {
@@ -285,6 +368,68 @@ Should this conversation trigger a document change? If yes, what specific change
     console.error('AI analysis error:', error)
     return null
   }
+}
+
+// Helper function to format AI suggestion as a chat message
+function formatAISuggestionMessage(suggestion: any): string {
+  let message = `🤖 **${suggestion.title}**\n\n`
+
+  if (suggestion.description) {
+    message += `${suggestion.description}\n\n`
+  }
+
+  // Add enriched data if available
+  if (suggestion.enriched_data) {
+    const data = suggestion.enriched_data
+
+    if (data.why_visit) {
+      message += `**Why Visit:** ${data.why_visit}\n\n`
+    }
+
+    if (data.quick_facts && data.quick_facts.length > 0) {
+      message += `**Quick Facts:**\n`
+      data.quick_facts.forEach((fact: string) => {
+        message += `• ${fact}\n`
+      })
+      message += `\n`
+    }
+
+    if (data.highlights && data.highlights.length > 0) {
+      message += `**Highlights:**\n`
+      data.highlights.forEach((highlight: string) => {
+        message += `• ${highlight}\n`
+      })
+      message += `\n`
+    }
+  }
+
+  // Add practical info if available
+  if (suggestion.practical_info) {
+    const info = suggestion.practical_info
+
+    if (info.duration) {
+      message += `⏱ **Duration:** ${info.duration}\n`
+    }
+
+    if (info.best_time) {
+      message += `📅 **Best Time:** ${info.best_time}\n`
+    }
+
+    if (info.admission) {
+      message += `💰 **Admission:** `
+      if (info.admission.adults) message += `Adults: ${info.admission.adults}`
+      if (info.admission.children) message += `, Children: ${info.admission.children}`
+      message += `\n`
+    }
+
+    if (info.opening_hours) {
+      message += `🕒 **Hours:** ${info.opening_hours}\n`
+    }
+  }
+
+  message += `\n💡 *Click to view full suggestion details and vote*`
+
+  return message
 }
 
 // Helper function to modify document

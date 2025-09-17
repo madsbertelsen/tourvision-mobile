@@ -17,16 +17,10 @@ import AlternativeDayModal from '@/components/AlternativeDayModal';
 import ProposalComparisonView from '@/components/ProposalComparisonView';
 import { AISuggestionPanel } from '@/components/AISuggestionPanel';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
-import { useTripChat } from '@/hooks/useTripChat';
+import { useTripChat, ChatMessage } from '@/hooks/useTripChat';
 
-interface Message {
-  id: string;
-  user: string;
-  avatar: string;
-  message: string;
-  timestamp: string;
-  type: 'message' | 'suggestion' | 'comment';
-}
+// Remove this interface as we'll use ChatMessage from useTripChat
+// interface Message { ... }
 
 interface Activity {
   id: string;
@@ -210,24 +204,83 @@ export default function CollaborationTab() {
   } = useTripChat(tripId || '');
   const [selectedDay, setSelectedDay] = useState<number>(1);
 
-  const renderMessage = ({ item }: { item: Message }) => {
-    const isSuggestion = item.type === 'suggestion';
-    
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    const isAISuggestion = item.metadata?.type === 'ai_suggestion';
+    const isReply = !!item.reply_to;
+    const userName = item.user?.full_name || item.user?.email?.split('@')[0] || 'Unknown';
+    const avatarText = userName.substring(0, 2).toUpperCase();
+    const timestamp = format(new Date(item.created_at), 'h:mm a');
+
     return (
-      <View style={[styles.messageContainer, isSuggestion && styles.suggestionContainer]}>
-        <Text style={styles.avatar}>{item.avatar}</Text>
-        <View style={styles.messageContent}>
-          <View style={styles.messageHeader}>
-            <Text style={styles.userName}>{item.user}</Text>
-            <Text style={styles.timestamp}>{item.timestamp}</Text>
-          </View>
-          <Text style={styles.messageText}>{item.message}</Text>
-          {isSuggestion && (
-            <View style={styles.suggestionBadge}>
-              <Feather name="lightbulb" size={12} color="#F59E0B" />
-              <Text style={styles.suggestionText}>Suggestion</Text>
+      <View style={[
+        styles.messageContainer,
+        isAISuggestion && styles.aiSuggestionMessage,
+        isReply && styles.replyContainer
+      ]}>
+        {/* Threading indicator */}
+        {isReply && (
+          <View style={styles.threadLine} />
+        )}
+
+        <View style={styles.messageInner}>
+          {/* Avatar */}
+          {isAISuggestion ? (
+            <View style={[styles.avatarContainer, styles.aiAvatar]}>
+              <Feather name="cpu" size={20} color="#3B82F6" />
+            </View>
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>{avatarText}</Text>
             </View>
           )}
+
+          <View style={styles.messageContent}>
+            <View style={styles.messageHeader}>
+              <Text style={[styles.userName, isAISuggestion && styles.aiUserName]}>
+                {userName}
+              </Text>
+              <Text style={styles.timestamp}>{timestamp}</Text>
+            </View>
+
+            {/* Show parent message reference if this is a reply */}
+            {item.parent_message && (
+              <View style={styles.replyToContainer}>
+                <Text style={styles.replyToText}>
+                  Replying to: {item.parent_message.message.substring(0, 50)}...
+                </Text>
+              </View>
+            )}
+
+            {/* Message content or AI suggestion */}
+            {isAISuggestion && item.suggestion ? (
+              <View style={styles.aiSuggestionContent}>
+                <AISuggestionPanel
+                  suggestions={[item.suggestion]}
+                  onVote={(suggestionId: string, vote: 'approve' | 'reject', comment?: string) => {
+                    if (voteSuggestion && suggestionId && vote) {
+                      voteSuggestion({ suggestionId, vote, comment });
+                    }
+                  }}
+                  onApply={applySuggestion}
+                  getUserVote={(sugId) => {
+                    const vote = getUserVote(sugId);
+                    return vote ? { vote: vote.vote } : null;
+                  }}
+                  isVoting={isVoting}
+                  isApplying={isApplying}
+                />
+              </View>
+            ) : (
+              <Text style={styles.messageText}>{item.message}</Text>
+            )}
+
+            {isAISuggestion && (
+              <View style={styles.suggestionBadge}>
+                <Feather name="sparkles" size={12} color="#3B82F6" />
+                <Text style={styles.suggestionText}>AI Suggestion</Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -511,14 +564,7 @@ export default function CollaborationTab() {
           <FlatList
             data={chatMessages || []}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => renderMessage({ item: {
-              id: item.id,
-              user: (item as any).user_name || 'Anonymous',
-              avatar: (item as any).user_name?.substring(0, 2).toUpperCase() || 'AN',
-              message: item.message,
-              timestamp: format(new Date(item.created_at), 'h:mm a'),
-              type: 'message'
-            } })}
+            renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
             inverted={false}
           />
@@ -659,18 +705,44 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   messageContainer: {
-    flexDirection: 'row',
     marginBottom: 20,
   },
-  suggestionContainer: {
-    backgroundColor: '#FEF3C7',
-    padding: 12,
+  aiSuggestionMessage: {
+    backgroundColor: '#EFF6FF',
     borderRadius: 12,
-    marginHorizontal: -12,
+    padding: 12,
+    marginHorizontal: 4,
   },
-  avatar: {
-    fontSize: 32,
+  replyContainer: {
+    marginLeft: 30,
+  },
+  threadLine: {
+    position: 'absolute',
+    left: 20,
+    top: -20,
+    bottom: 30,
+    width: 2,
+    backgroundColor: '#E5E7EB',
+  },
+  messageInner: {
+    flexDirection: 'row',
+  },
+  avatarContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  aiAvatar: {
+    backgroundColor: '#DBEAFE',
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
   },
   avatarInitials: {
     fontSize: 14,
@@ -679,6 +751,24 @@ const styles = StyleSheet.create({
   },
   messageContent: {
     flex: 1,
+  },
+  aiUserName: {
+    color: '#3B82F6',
+    fontWeight: '700',
+  },
+  replyToContainer: {
+    backgroundColor: '#F3F4F6',
+    padding: 6,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  replyToText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  aiSuggestionContent: {
+    marginTop: 8,
   },
   messageHeader: {
     flexDirection: 'row',
