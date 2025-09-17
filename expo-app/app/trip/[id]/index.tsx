@@ -233,16 +233,7 @@ const SAMPLE_ITINERARY = {
   totalPlaces: 6,
 };
 
-const MARKER_COLORS = [
-  '#6B7280', // Gray 500
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-  '#6B7280', // Same gray for consistency
-];
+const MARKER_COLOR = '#3B82F6'; // Blue 500 for all markers
 
 interface PlaceCardProps {
   place: any;
@@ -261,8 +252,7 @@ const PlaceCard = ({
   tripId,
   dayIndex
 }: PlaceCardProps) => {
-  const markerColor = MARKER_COLORS[place.colorIndex % MARKER_COLORS.length];
-  const displayIndex = place.colorIndex + 1; // Use global colorIndex for numbering
+  const markerColor = MARKER_COLOR; // Use blue for all markers
   
   // State for card expansion
   const [isExpanded, setIsExpanded] = useState(false);
@@ -362,9 +352,7 @@ const PlaceCard = ({
       <Animated.View style={[styles.placeCard, animatedStyle, {overflow: 'visible'}]}>
         <TouchableOpacity onPress={toggleExpansion} activeOpacity={0.9} style={{overflow: 'visible'}}>
           <View style={styles.placeHeader}>
-            <View style={[styles.placeMarker, { backgroundColor: markerColor }]}>
-              <Text style={styles.placeMarkerText}>{displayIndex}</Text>
-            </View>
+            <View style={[styles.placeMarker, { backgroundColor: markerColor }]} />
             <View style={styles.placeInfo}>
               <Text style={styles.placeName}>{place.name}</Text>
               {!isExpanded && (
@@ -1196,22 +1184,10 @@ const styles = StyleSheet.create({
   },
   placeMarker: {
     position: 'absolute',
-    left: -50,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  placeMarkerText: {
-    color: 'white',
-    fontSize: 15,
-    fontWeight: '700',
+    left: -30,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   placeInfo: {
     flex: 1,

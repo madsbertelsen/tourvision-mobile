@@ -77,10 +77,11 @@ function ProtectedLayout() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inPublicGroup = segments[0] === '(public)';
     const isBranchingDemo = segments[0] === 'branching-demo';
 
-    if (!isAuthenticated && !inAuthGroup && !isBranchingDemo) {
-      // Redirect to login if not authenticated and not in auth group or branching demo
+    if (!isAuthenticated && !inAuthGroup && !inPublicGroup && !isBranchingDemo) {
+      // Redirect to login if not authenticated and not in auth group, public group, or branching demo
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       // Redirect to home if authenticated and in auth group
@@ -91,6 +92,7 @@ function ProtectedLayout() {
   return (
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(public)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
