@@ -104,6 +104,23 @@ export default function TripTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="document"
+        options={{
+          title: 'Document',
+          headerShown: true, // Show header with trip title
+          headerTitle: trip?.title || 'Loading...',
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="edit-3" size={22} color={focused ? '#3B82F6' : '#666'} />
+          ),
+          tabBarActiveTintColor: '#3B82F6',
+          tabBarInactiveTintColor: '#666',
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: focused => focused ? '600' : '400',
+          },
+        }}
+      />
+      <Tabs.Screen
         name="collaboration"
         options={{
           title: 'Chat',

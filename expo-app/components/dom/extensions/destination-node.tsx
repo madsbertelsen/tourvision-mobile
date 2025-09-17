@@ -3,7 +3,7 @@
 import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DollarSignIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { DESTINATION_COLORS } from '../../../../types/tiptap';
+import { DESTINATION_COLORS } from '../../../types/tiptap';
 
 export interface DestinationAttributes {
   destinationId: string;

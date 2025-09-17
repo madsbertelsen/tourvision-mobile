@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { formatUserDisplayName, getUserInitials } from '@/lib/auth/utils';
 import { useTrips } from '@/hooks/useTrips';
+import CreateTripModal from '@/components/CreateTripModal';
 import type { Tables } from '@/lib/database.types';
 
 interface TripCardProps {
@@ -106,7 +107,8 @@ const StatCard = ({ icon, value, label, trend, trendUp }: StatCardProps) => (
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { data: trips, isLoading, error } = useTrips();
+  const { data: trips, isLoading, error, refetch } = useTrips();
+  const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Helper function to extract destination count from document
   const getDestinationCount = (document: any): number => {
@@ -327,9 +329,18 @@ export default function DashboardScreen() {
         <View style={styles.tripsSection}>
           <View style={styles.tripsSectionHeader}>
             <Text style={styles.tripsSectionTitle}>Your Trips</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllLink}>View all →</Text>
-            </TouchableOpacity>
+            <View style={styles.tripsSectionActions}>
+              <TouchableOpacity
+                style={styles.headerCreateButton}
+                onPress={() => setShowCreateModal(true)}
+              >
+                <Feather name="plus" size={16} color="white" />
+                <Text style={styles.headerCreateButtonText}>New Trip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity>
+                <Text style={styles.viewAllLink}>View all →</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {isLoading ? (
@@ -403,6 +414,15 @@ export default function DashboardScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Create Trip Modal */}
+      <CreateTripModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={(tripId) => {
+          refetch();
+        }}
+      />
     </View>
   );
 }
@@ -567,8 +587,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
   },
+  tripsSectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   viewAllLink: {
     color: '#6366F1',
+    fontWeight: '500',
+  },
+  headerCreateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  headerCreateButtonText: {
+    color: 'white',
+    fontSize: 14,
     fontWeight: '500',
   },
   tripsScrollContent: {

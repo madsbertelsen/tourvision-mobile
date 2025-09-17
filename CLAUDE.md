@@ -276,3 +276,80 @@ git commit -m "feat: Description of changes"
 # Push to remote (if needed)
 git push origin main
 ```
+
+## Edge Functions Development
+
+### Starting Edge Functions
+```bash
+# Start Edge Functions with environment variables
+npx supabase functions serve --env-file ./supabase/.env.local
+
+# The function will be available at:
+# http://127.0.0.1:54321/functions/v1/process-chat-message
+```
+
+### Monitoring Edge Functions
+**Important Note:** Edge Functions are NOT visible in the local Supabase Studio dashboard. This is a known limitation of local development.
+
+#### Option 1: Terminal Logs (Primary Method)
+Edge Function logs appear directly in the terminal where `npx supabase functions serve` is running. This shows:
+- Incoming requests
+- Console.log outputs
+- Error messages
+- Function execution details
+
+#### Option 2: Monitoring Script
+```bash
+# Run the monitoring script
+./scripts/monitor-edge-function.sh
+
+# This provides an interactive menu to:
+# 1. Test the Edge Function directly
+# 2. View recent chat messages from database
+# 3. View recent AI suggestions
+# 4. Check function health
+```
+
+#### Option 3: Direct API Testing
+```bash
+# Test the Edge Function manually
+curl -X POST http://127.0.0.1:54321/functions/v1/process-chat-message \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU" \
+  -H "Content-Type: application/json" \
+  -d '{"message_id": "test-123", "trip_id": "77528bea-3f27-450b-9dce-11f1c18fce0e", "user_id": "test-user", "message": "Test message"}'
+```
+
+#### Option 4: Chrome DevTools Debugging
+The Edge Function inspector is available on port 8083 (configured in config.toml). You can attach Chrome DevTools for advanced debugging.
+
+### Environment Variables for Edge Functions
+Edit `supabase/.env.local` to configure API keys:
+```bash
+# Mistral API key for AI processing
+MISTRAL_API_KEY=your-actual-mistral-api-key
+
+# Optional: other API keys if needed
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+```
+
+### Edge Function Configuration
+The function is configured in `supabase/config.toml`:
+```toml
+[functions.process-chat-message]
+verify_jwt = false  # Skip JWT verification for webhook calls
+```
+
+### AI-Powered Chat Processing
+The `process-chat-message` Edge Function:
+1. Triggered automatically when messages are inserted into `trip_chat_messages` table
+2. Uses Mistral AI (mistral-small-latest model) to analyze conversations
+3. Creates AI suggestions when consensus is detected in chat
+4. Stores suggestions in `ai_suggestions` table for voting
+
+### Database Webhook Flow
+1. User sends message in chat → Inserted into `trip_chat_messages`
+2. Database trigger fires → Calls Edge Function via pg_net
+3. Edge Function processes → Analyzes with Mistral AI
+4. If consensus detected → Creates suggestion in `ai_suggestions`
+5. Real-time subscription → Updates UI with new suggestion

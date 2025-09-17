@@ -15,6 +15,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { format } from 'date-fns';
 import AlternativeDayModal from '@/components/AlternativeDayModal';
 import ProposalComparisonView from '@/components/ProposalComparisonView';
+import { AISuggestionPanel } from '@/components/AISuggestionPanel';
+import { useAIAssistant } from '@/hooks/useAIAssistant';
+import { useTripChat } from '@/hooks/useTripChat';
 
 interface Message {
   id: string;
@@ -183,10 +186,28 @@ const SAMPLE_ACTIVITIES: Activity[] = [
 
 export default function CollaborationTab() {
   const { id } = useLocalSearchParams();
+  const tripId = Array.isArray(id) ? id[0] : id;
   const [activeTab, setActiveTab] = useState<'proposals' | 'chat' | 'activity'>('proposals');
   const [message, setMessage] = useState('');
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [showAlternativeModal, setShowAlternativeModal] = useState(false);
+
+  // Integrate AI Assistant hook
+  const {
+    suggestions,
+    voteSuggestion,
+    applySuggestion,
+    getUserVote,
+    isVoting,
+    isApplying,
+  } = useAIAssistant(tripId || '');
+
+  // Integrate chat hook
+  const {
+    messages: chatMessages,
+    sendMessage: sendChatMessage,
+    isLoading: isChatLoading,
+  } = useTripChat(tripId || '');
   const [selectedDay, setSelectedDay] = useState<number>(1);
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -282,10 +303,9 @@ export default function CollaborationTab() {
     }
   };
 
-  const sendMessage = () => {
-    if (message.trim()) {
-      // In production, this would send to the backend
-      console.log('Sending message:', message);
+  const sendMessage = async () => {
+    if (message.trim() && sendChatMessage) {
+      await sendChatMessage(message);
       setMessage('');
     }
   };
@@ -344,6 +364,36 @@ export default function CollaborationTab() {
       {/* Content */}
       {activeTab === 'proposals' ? (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* AI Suggestions Panel */}
+          {suggestions && suggestions.length > 0 && (
+            <View style={styles.aiSuggestionsSection}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderLeft}>
+                  <Feather name="cpu" size={20} color="#3B82F6" />
+                  <Text style={styles.sectionHeaderTitle}>AI Suggestions</Text>
+                </View>
+                <Text style={styles.sectionHeaderSubtitle}>
+                  Based on your chat discussions
+                </Text>
+              </View>
+              <AISuggestionPanel
+                suggestions={suggestions}
+                onVote={(suggestionId: string, vote: 'approve' | 'reject', comment?: string) => {
+                  if (voteSuggestion && suggestionId && vote) {
+                    voteSuggestion({ suggestionId, vote, comment });
+                  }
+                }}
+                onApply={applySuggestion}
+                getUserVote={(sugId) => {
+                  const vote = getUserVote(sugId);
+                  return vote ? { vote: vote.vote } : null;
+                }}
+                isVoting={isVoting}
+                isApplying={isApplying}
+              />
+            </View>
+          )}
+
           {/* Add Proposal Button */}
           <TouchableOpacity
             style={styles.addProposalButton}
@@ -387,7 +437,7 @@ export default function CollaborationTab() {
                 {/* Proposer Info */}
                 <View style={styles.proposerInfo}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{proposal.proposedBy.avatar}</Text>
+                    <Text style={styles.avatarInitials}>{proposal.proposedBy.avatar}</Text>
                   </View>
                   <View>
                     <Text style={styles.proposerName}>{proposal.proposedBy.name}</Text>
@@ -459,9 +509,16 @@ export default function CollaborationTab() {
       ) : activeTab === 'chat' ? (
         <>
           <FlatList
-            data={SAMPLE_MESSAGES}
+            data={chatMessages || []}
             keyExtractor={(item) => item.id}
-            renderItem={renderMessage}
+            renderItem={({ item }) => renderMessage({ item: {
+              id: item.id,
+              user: (item as any).user_name || 'Anonymous',
+              avatar: (item as any).user_name?.substring(0, 2).toUpperCase() || 'AN',
+              message: item.message,
+              timestamp: format(new Date(item.created_at), 'h:mm a'),
+              type: 'message'
+            } })}
             contentContainerStyle={styles.messagesList}
             inverted={false}
           />
@@ -544,6 +601,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  aiSuggestionsSection: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sectionHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginLeft: 28,
+  },
   tabSelector: {
     flexDirection: 'row',
     backgroundColor: 'white',
@@ -588,6 +671,11 @@ const styles = StyleSheet.create({
   avatar: {
     fontSize: 32,
     marginRight: 12,
+  },
+  avatarInitials: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
   },
   messageContent: {
     flex: 1,

@@ -1,0 +1,2122 @@
+
+\restrict X6Q0PhgeqgmuqNkj5e1tkGgWscYxneFXrYdHi5mcBqARFhjvPDARqwVrm625FdQ
+
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+CREATE SCHEMA IF NOT EXISTS "public";
+
+
+ALTER SCHEMA "public" OWNER TO "pg_database_owner";
+
+
+COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE TYPE "public"."activity_type" AS ENUM (
+    'comment',
+    'suggestion',
+    'change'
+);
+
+
+ALTER TYPE "public"."activity_type" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."attendance_status" AS ENUM (
+    'confirmed',
+    'considering',
+    'declined',
+    'alternative'
+);
+
+
+ALTER TYPE "public"."attendance_status" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."member_role" AS ENUM (
+    'owner',
+    'member',
+    'viewer'
+);
+
+
+ALTER TYPE "public"."member_role" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."proposal_status" AS ENUM (
+    'pending',
+    'accepted',
+    'rejected',
+    'partially_merged'
+);
+
+
+ALTER TYPE "public"."proposal_status" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."accept_trip_invitation"("p_token" "text", "p_user_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  v_trip_id UUID;
+  v_invitation RECORD;
+BEGIN
+  -- Find valid invitation
+  SELECT * INTO v_invitation
+  FROM public.trip_invitations
+  WHERE token = p_token
+  AND expires_at > NOW()
+  AND (max_uses IS NULL OR uses_count < max_uses);
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Invalid or expired invitation token';
+  END IF;
+
+  v_trip_id := v_invitation.trip_id;
+
+  -- Add user as trip member
+  INSERT INTO public.trip_members (
+    trip_id,
+    user_id,
+    role,
+    invited_by,
+    invitation_accepted_at
+  ) VALUES (
+    v_trip_id,
+    p_user_id,
+    'member',
+    v_invitation.created_by,
+    NOW()
+  ) ON CONFLICT (trip_id, user_id)
+  DO UPDATE SET invitation_accepted_at = NOW();
+
+  -- Update invitation use count
+  UPDATE public.trip_invitations
+  SET uses_count = uses_count + 1
+  WHERE id = v_invitation.id;
+
+  -- Also add to trips.collaborators array for backward compatibility
+  UPDATE public.trips
+  SET collaborators = array_append(
+    COALESCE(collaborators, ARRAY[]::UUID[]),
+    p_user_id
+  )
+  WHERE id = v_trip_id
+  AND NOT (p_user_id = ANY(COALESCE(collaborators, ARRAY[]::UUID[])));
+
+  RETURN v_trip_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."accept_trip_invitation"("p_token" "text", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."can_user_modify_proposal"("proposal_uuid" "uuid", "user_uuid" "uuid") RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  is_owner BOOLEAN;
+  is_proposer BOOLEAN;
+  proposal_status proposal_status;
+BEGIN
+  SELECT 
+    t.created_by = user_uuid,
+    p.proposed_by = user_uuid,
+    p.status
+  INTO is_owner, is_proposer, proposal_status
+  FROM public.itinerary_proposals p
+  JOIN public.trips t ON t.id = p.trip_id
+  WHERE p.id = proposal_uuid;
+  
+  -- Owner can always modify
+  IF is_owner THEN
+    RETURN TRUE;
+  END IF;
+  
+  -- Proposer can modify if still pending
+  IF is_proposer AND proposal_status = 'pending' THEN
+    RETURN TRUE;
+  END IF;
+  
+  RETURN FALSE;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."can_user_modify_proposal"("proposal_uuid" "uuid", "user_uuid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_activity_notification"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  -- Create notifications for all collaborators except the author
+  INSERT INTO public.activity_notifications (user_id, trip_id, activity_id)
+  SELECT 
+    unnest(i.collaborators) as user_id,
+    NEW.trip_id,
+    NEW.id
+  FROM public.itineraries i
+  WHERE i.id = NEW.trip_id
+    AND unnest(i.collaborators) != NEW.user_id;
+  
+  -- Also notify the trip creator if they're not the author
+  INSERT INTO public.activity_notifications (user_id, trip_id, activity_id)
+  SELECT 
+    i.created_by,
+    NEW.trip_id,
+    NEW.id
+  FROM public.itineraries i
+  WHERE i.id = NEW.trip_id
+    AND i.created_by != NEW.user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM public.activity_notifications
+      WHERE user_id = i.created_by 
+        AND trip_id = NEW.trip_id 
+        AND activity_id = NEW.id
+    );
+  
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_activity_notification"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_destination_attendance"("p_trip_id" "uuid", "p_destination_id" "text") RETURNS TABLE("confirmed_count" bigint, "considering_count" bigint, "declined_count" bigint, "alternative_count" bigint, "attendees" "jsonb")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*) FILTER (WHERE ua.status = 'confirmed') as confirmed_count,
+    COUNT(*) FILTER (WHERE ua.status = 'considering') as considering_count,
+    COUNT(*) FILTER (WHERE ua.status = 'declined') as declined_count,
+    COUNT(*) FILTER (WHERE ua.status = 'alternative') as alternative_count,
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'user_id', ua.user_id,
+          'status', ua.status,
+          'notes', ua.notes,
+          'decided_at', ua.decided_at,
+          'profile', jsonb_build_object(
+            'id', p.id,
+            'username', p.username,
+            'avatar_url', p.avatar_url
+          )
+        ) ORDER BY ua.decided_at
+      ) FILTER (WHERE ua.user_id IS NOT NULL),
+      '[]'::jsonb
+    ) as attendees
+  FROM public.user_attendance ua
+  LEFT JOIN public.profiles p ON p.id = ua.user_id
+  WHERE ua.trip_id = p_trip_id
+  AND ua.destination_id = p_destination_id
+  GROUP BY ua.trip_id, ua.destination_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_destination_attendance"("p_trip_id" "uuid", "p_destination_id" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_proposal_stats"("proposal_uuid" "uuid") RETURNS TABLE("total_votes" bigint, "approve_votes" bigint, "reject_votes" bigint, "neutral_votes" bigint, "comment_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    COUNT(DISTINCT v.id) as total_votes,
+    COUNT(DISTINCT v.id) FILTER (WHERE v.vote_type = 'approve') as approve_votes,
+    COUNT(DISTINCT v.id) FILTER (WHERE v.vote_type = 'reject') as reject_votes,
+    COUNT(DISTINCT v.id) FILTER (WHERE v.vote_type = 'neutral') as neutral_votes,
+    COUNT(DISTINCT c.id) as comment_count
+  FROM public.itinerary_proposals p
+  LEFT JOIN public.proposal_votes v ON v.proposal_id = p.id
+  LEFT JOIN public.proposal_comments c ON c.proposal_id = p.id
+  WHERE p.id = proposal_uuid
+  GROUP BY p.id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_proposal_stats"("proposal_uuid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_trip_branches"("p_trip_id" "uuid") RETURNS TABLE("day_index" integer, "time_slot_start" time without time zone, "time_slot_end" time without time zone, "branches" "jsonb")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    pa.day_index,
+    pa.time_slot_start,
+    pa.time_slot_end,
+    jsonb_agg(
+      jsonb_build_object(
+        'destination_id',
+        CASE
+          WHEN idx = 1 THEN pa.original_destination_id
+          ELSE pa.alternative_destination_id
+        END,
+        'attendees', (
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'user_id', sa.user_id,
+              'profile', jsonb_build_object(
+                'username', p.username,
+                'avatar_url', p.avatar_url
+              )
+            )
+          )
+          FROM public.split_attendance sa
+          LEFT JOIN public.profiles p ON p.id = sa.user_id
+          WHERE sa.parallel_activity_id = pa.id
+          AND sa.chosen_destination_id = CASE
+            WHEN idx = 1 THEN pa.original_destination_id
+            ELSE pa.alternative_destination_id
+          END
+        )
+      )
+    ) as branches
+  FROM public.parallel_activities pa
+  CROSS JOIN generate_series(1, 2) idx
+  WHERE pa.trip_id = p_trip_id
+  GROUP BY pa.day_index, pa.time_slot_start, pa.time_slot_end
+  ORDER BY pa.day_index, pa.time_slot_start;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_trip_branches"("p_trip_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_unread_counts"("p_trip_id" "uuid") RETURNS TABLE("total_unread" bigint, "unread_comments" bigint, "unread_suggestions" bigint, "unread_changes" bigint, "unread_chat" bigint, "unread_threads" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    COUNT(*) FILTER (WHERE NOT is_read) as total_unread,
+    COUNT(*) FILTER (WHERE NOT is_read AND ta.type = 'comment') as unread_comments,
+    COUNT(*) FILTER (WHERE NOT is_read AND ta.type = 'suggestion') as unread_suggestions,
+    COUNT(*) FILTER (WHERE NOT is_read AND ta.type = 'change') as unread_changes,
+    COUNT(*) FILTER (WHERE NOT is_read AND chat_message_id IS NOT NULL) as unread_chat,
+    COUNT(*) FILTER (WHERE NOT is_read AND (thread_id IS NOT NULL OR thread_message_id IS NOT NULL)) as unread_threads
+  FROM public.activity_notifications n
+  LEFT JOIN public.trip_activities ta ON n.activity_id = ta.id
+  WHERE n.user_id = auth.uid() 
+    AND n.trip_id = p_trip_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_unread_counts"("p_trip_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, avatar_url)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'avatar_url'
+  );
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_updated_at"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."onboard_trip_member"("p_trip_id" "uuid", "p_user_id" "uuid", "p_default_status" "public"."attendance_status" DEFAULT 'considering'::"public"."attendance_status") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  v_destination RECORD;
+BEGIN
+  -- Mark member as onboarded
+  UPDATE public.trip_members
+  SET onboarding_completed = TRUE
+  WHERE trip_id = p_trip_id AND user_id = p_user_id;
+
+  -- Create attendance records for all existing destinations
+  -- Parse the itinerary document to extract all destination IDs
+  FOR v_destination IN
+    SELECT
+      (day->>'dayIndex')::INTEGER as day_index,
+      dest->>'id' as destination_id
+    FROM public.trips t,
+    jsonb_array_elements(t.itinerary_document->'days') day,
+    jsonb_array_elements(day->'destinations') dest
+    WHERE t.id = p_trip_id
+  LOOP
+    INSERT INTO public.user_attendance (
+      trip_id,
+      user_id,
+      destination_id,
+      day_index,
+      status
+    ) VALUES (
+      p_trip_id,
+      p_user_id,
+      v_destination.destination_id,
+      v_destination.day_index,
+      p_default_status
+    ) ON CONFLICT (trip_id, user_id, destination_id) DO NOTHING;
+  END LOOP;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."onboard_trip_member"("p_trip_id" "uuid", "p_user_id" "uuid", "p_default_status" "public"."attendance_status") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."activity_notifications" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "activity_id" "uuid",
+    "chat_message_id" "uuid",
+    "thread_id" "uuid",
+    "thread_message_id" "uuid",
+    "is_read" boolean DEFAULT false,
+    "read_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "at_least_one_reference" CHECK ((("activity_id" IS NOT NULL) OR ("chat_message_id" IS NOT NULL) OR ("thread_id" IS NOT NULL) OR ("thread_message_id" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."activity_notifications" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."activity_reactions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "activity_id" "uuid",
+    "chat_message_id" "uuid",
+    "thread_message_id" "uuid",
+    "emoji" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "exactly_one_reference" CHECK (((((("activity_id" IS NOT NULL))::integer + (("chat_message_id" IS NOT NULL))::integer) + (("thread_message_id" IS NOT NULL))::integer) = 1))
+);
+
+
+ALTER TABLE "public"."activity_reactions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."collaboration_sessions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "cursor_position" "jsonb",
+    "selection" "jsonb",
+    "is_active" boolean DEFAULT true,
+    "last_seen" timestamp with time zone DEFAULT "now"(),
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."collaboration_sessions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."itinerary_proposals" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "day_index" integer NOT NULL,
+    "proposed_by" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "original_document" "jsonb" NOT NULL,
+    "proposed_document" "jsonb" NOT NULL,
+    "status" "public"."proposal_status" DEFAULT 'pending'::"public"."proposal_status",
+    "merge_details" "jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "resolved_at" timestamp with time zone,
+    "resolved_by" "uuid",
+    CONSTRAINT "valid_day_index" CHECK (("day_index" >= 0))
+);
+
+
+ALTER TABLE "public"."itinerary_proposals" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."map_tiles" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "name" "text" NOT NULL,
+    "region" "text" NOT NULL,
+    "storage_path" "text" NOT NULL,
+    "bounds" "jsonb" NOT NULL,
+    "zoom_levels" "jsonb" NOT NULL,
+    "file_size" bigint,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."map_tiles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."parallel_activities" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "day_index" integer NOT NULL,
+    "time_slot_start" time without time zone NOT NULL,
+    "time_slot_end" time without time zone NOT NULL,
+    "original_destination_id" "text" NOT NULL,
+    "alternative_destination_id" "text" NOT NULL,
+    "created_by" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."parallel_activities" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."places" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "location" "jsonb" NOT NULL,
+    "address" "text",
+    "category" "text",
+    "images" "text"[] DEFAULT '{}'::"text"[],
+    "rating" numeric(2,1),
+    "google_place_id" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."places" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."profiles" (
+    "id" "uuid" NOT NULL,
+    "email" "text" NOT NULL,
+    "full_name" "text",
+    "avatar_url" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "username" "text"
+);
+
+
+ALTER TABLE "public"."profiles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."proposal_comments" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "proposal_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "comment" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."proposal_comments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."proposal_votes" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "proposal_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "vote_type" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "proposal_votes_vote_type_check" CHECK (("vote_type" = ANY (ARRAY['approve'::"text", 'reject'::"text", 'neutral'::"text"])))
+);
+
+
+ALTER TABLE "public"."proposal_votes" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."split_alternative_votes" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "alternative_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."split_alternative_votes" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."split_attendance" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "parallel_activity_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "chosen_destination_id" "text" NOT NULL
+);
+
+
+ALTER TABLE "public"."split_attendance" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."split_group_alternatives" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "split_id" "text" NOT NULL,
+    "group_id" "text" NOT NULL,
+    "suggested_by" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "route_document" "jsonb" NOT NULL,
+    "estimated_cost" numeric(10,2),
+    "estimated_duration" integer,
+    "status" "public"."proposal_status" DEFAULT 'pending'::"public"."proposal_status",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "resolved_at" timestamp with time zone,
+    "resolved_by" "uuid"
+);
+
+
+ALTER TABLE "public"."split_group_alternatives" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."thread_messages" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "thread_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "message" "text" NOT NULL,
+    "attachments" "jsonb" DEFAULT '[]'::"jsonb",
+    "is_edited" boolean DEFAULT false,
+    "edited_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."thread_messages" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_activities" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "type" "public"."activity_type" NOT NULL,
+    "content" "text" NOT NULL,
+    "location_context" "text",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "parent_id" "uuid",
+    "is_resolved" boolean DEFAULT false,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."trip_activities" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_chat_messages" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "message" "text" NOT NULL,
+    "attachments" "jsonb" DEFAULT '[]'::"jsonb",
+    "is_edited" boolean DEFAULT false,
+    "edited_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."trip_chat_messages" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_invitations" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "token" "text" DEFAULT "encode"("extensions"."gen_random_bytes"(32), 'hex'::"text") NOT NULL,
+    "created_by" "uuid" NOT NULL,
+    "expires_at" timestamp with time zone DEFAULT ("now"() + '7 days'::interval),
+    "max_uses" integer,
+    "uses_count" integer DEFAULT 0,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "valid_expiry" CHECK (("expires_at" > "created_at"))
+);
+
+
+ALTER TABLE "public"."trip_invitations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_members" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "role" "public"."member_role" DEFAULT 'member'::"public"."member_role",
+    "joined_at" timestamp with time zone DEFAULT "now"(),
+    "invitation_accepted_at" timestamp with time zone,
+    "invited_by" "uuid",
+    "onboarding_completed" boolean DEFAULT false,
+    "preferences" "jsonb" DEFAULT '{}'::"jsonb"
+);
+
+
+ALTER TABLE "public"."trip_members" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_places" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "place_id" "uuid" NOT NULL,
+    "order_index" integer NOT NULL,
+    "arrival_time" timestamp with time zone,
+    "departure_time" timestamp with time zone,
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."trip_places" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trip_threads" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "status" "text" DEFAULT 'open'::"text",
+    "priority" "text" DEFAULT 'normal'::"text",
+    "tags" "text"[] DEFAULT '{}'::"text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "trip_threads_priority_check" CHECK (("priority" = ANY (ARRAY['low'::"text", 'normal'::"text", 'high'::"text"]))),
+    CONSTRAINT "trip_threads_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'closed'::"text", 'resolved'::"text"])))
+);
+
+
+ALTER TABLE "public"."trip_threads" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."trips" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "itinerary_document" "jsonb" NOT NULL,
+    "created_by" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "is_public" boolean DEFAULT false,
+    "collaborators" "uuid"[] DEFAULT '{}'::"uuid"[]
+);
+
+
+ALTER TABLE "public"."trips" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_attendance" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "trip_id" "uuid" NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "destination_id" "text" NOT NULL,
+    "day_index" integer NOT NULL,
+    "status" "public"."attendance_status" DEFAULT 'considering'::"public"."attendance_status",
+    "notes" "text",
+    "decided_at" timestamp with time zone DEFAULT "now"(),
+    "alternative_id" "uuid",
+    CONSTRAINT "valid_day_index" CHECK (("day_index" >= 0))
+);
+
+
+ALTER TABLE "public"."user_attendance" OWNER TO "postgres";
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_user_id_activity_id_emoji_key" UNIQUE ("user_id", "activity_id", "emoji");
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_user_id_chat_message_id_emoji_key" UNIQUE ("user_id", "chat_message_id", "emoji");
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_user_id_thread_message_id_emoji_key" UNIQUE ("user_id", "thread_message_id", "emoji");
+
+
+
+ALTER TABLE ONLY "public"."collaboration_sessions"
+    ADD CONSTRAINT "collaboration_sessions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trips"
+    ADD CONSTRAINT "itineraries_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_places"
+    ADD CONSTRAINT "itinerary_places_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."itinerary_proposals"
+    ADD CONSTRAINT "itinerary_proposals_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."map_tiles"
+    ADD CONSTRAINT "map_tiles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."parallel_activities"
+    ADD CONSTRAINT "parallel_activities_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."places"
+    ADD CONSTRAINT "places_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_username_key" UNIQUE ("username");
+
+
+
+ALTER TABLE ONLY "public"."proposal_comments"
+    ADD CONSTRAINT "proposal_comments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."proposal_votes"
+    ADD CONSTRAINT "proposal_votes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."split_alternative_votes"
+    ADD CONSTRAINT "split_alternative_votes_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."split_attendance"
+    ADD CONSTRAINT "split_attendance_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."split_group_alternatives"
+    ADD CONSTRAINT "split_group_alternatives_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."thread_messages"
+    ADD CONSTRAINT "thread_messages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_activities"
+    ADD CONSTRAINT "trip_activities_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_chat_messages"
+    ADD CONSTRAINT "trip_chat_messages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_invitations"
+    ADD CONSTRAINT "trip_invitations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_invitations"
+    ADD CONSTRAINT "trip_invitations_token_key" UNIQUE ("token");
+
+
+
+ALTER TABLE ONLY "public"."trip_members"
+    ADD CONSTRAINT "trip_members_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_places"
+    ADD CONSTRAINT "trip_places_trip_id_place_id_order_index_key" UNIQUE ("trip_id", "place_id", "order_index");
+
+
+
+ALTER TABLE ONLY "public"."trip_threads"
+    ADD CONSTRAINT "trip_threads_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."parallel_activities"
+    ADD CONSTRAINT "unique_parallel" UNIQUE ("trip_id", "day_index", "original_destination_id", "alternative_destination_id");
+
+
+
+ALTER TABLE ONLY "public"."split_attendance"
+    ADD CONSTRAINT "unique_split_choice" UNIQUE ("parallel_activity_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."trip_members"
+    ADD CONSTRAINT "unique_trip_member" UNIQUE ("trip_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."split_alternative_votes"
+    ADD CONSTRAINT "unique_user_alternative_vote" UNIQUE ("alternative_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."user_attendance"
+    ADD CONSTRAINT "unique_user_destination" UNIQUE ("trip_id", "user_id", "destination_id");
+
+
+
+ALTER TABLE ONLY "public"."proposal_votes"
+    ADD CONSTRAINT "unique_user_vote" UNIQUE ("proposal_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."user_attendance"
+    ADD CONSTRAINT "user_attendance_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "idx_activity_notifications_is_read" ON "public"."activity_notifications" USING "btree" ("is_read");
+
+
+
+CREATE INDEX "idx_activity_notifications_trip_id" ON "public"."activity_notifications" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_activity_notifications_user_id" ON "public"."activity_notifications" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_activity_reactions_activity_id" ON "public"."activity_reactions" USING "btree" ("activity_id");
+
+
+
+CREATE INDEX "idx_activity_reactions_chat_message_id" ON "public"."activity_reactions" USING "btree" ("chat_message_id");
+
+
+
+CREATE INDEX "idx_activity_reactions_thread_message_id" ON "public"."activity_reactions" USING "btree" ("thread_message_id");
+
+
+
+CREATE INDEX "idx_activity_reactions_user_id" ON "public"."activity_reactions" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_collaboration_sessions_trip_id" ON "public"."collaboration_sessions" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_collaboration_sessions_user_id" ON "public"."collaboration_sessions" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_itineraries_collaborators" ON "public"."trips" USING "gin" ("collaborators");
+
+
+
+CREATE INDEX "idx_itineraries_created_by" ON "public"."trips" USING "btree" ("created_by");
+
+
+
+CREATE INDEX "idx_itineraries_is_public" ON "public"."trips" USING "btree" ("is_public");
+
+
+
+CREATE INDEX "idx_itinerary_places_place_id" ON "public"."trip_places" USING "btree" ("place_id");
+
+
+
+CREATE INDEX "idx_parallel_activities_trip_id" ON "public"."parallel_activities" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_places_google_place_id" ON "public"."places" USING "btree" ("google_place_id");
+
+
+
+CREATE INDEX "idx_proposal_comments_proposal_id" ON "public"."proposal_comments" USING "btree" ("proposal_id");
+
+
+
+CREATE INDEX "idx_proposal_votes_proposal_id" ON "public"."proposal_votes" USING "btree" ("proposal_id");
+
+
+
+CREATE INDEX "idx_proposals_proposed_by" ON "public"."itinerary_proposals" USING "btree" ("proposed_by");
+
+
+
+CREATE INDEX "idx_proposals_status" ON "public"."itinerary_proposals" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_proposals_trip_id" ON "public"."itinerary_proposals" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_split_alternative_votes_alternative_id" ON "public"."split_alternative_votes" USING "btree" ("alternative_id");
+
+
+
+CREATE INDEX "idx_split_alternatives_split_id" ON "public"."split_group_alternatives" USING "btree" ("split_id");
+
+
+
+CREATE INDEX "idx_split_alternatives_trip_id" ON "public"."split_group_alternatives" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_thread_messages_created_at" ON "public"."thread_messages" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_thread_messages_thread_id" ON "public"."thread_messages" USING "btree" ("thread_id");
+
+
+
+CREATE INDEX "idx_thread_messages_user_id" ON "public"."thread_messages" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_trip_activities_created_at" ON "public"."trip_activities" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_trip_activities_parent_id" ON "public"."trip_activities" USING "btree" ("parent_id");
+
+
+
+CREATE INDEX "idx_trip_activities_trip_id" ON "public"."trip_activities" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_trip_activities_type" ON "public"."trip_activities" USING "btree" ("type");
+
+
+
+CREATE INDEX "idx_trip_activities_user_id" ON "public"."trip_activities" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_trip_chat_messages_created_at" ON "public"."trip_chat_messages" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "idx_trip_chat_messages_trip_id" ON "public"."trip_chat_messages" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_trip_chat_messages_user_id" ON "public"."trip_chat_messages" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_trip_invitations_expires_at" ON "public"."trip_invitations" USING "btree" ("expires_at");
+
+
+
+CREATE INDEX "idx_trip_invitations_token" ON "public"."trip_invitations" USING "btree" ("token");
+
+
+
+CREATE INDEX "idx_trip_members_trip_id" ON "public"."trip_members" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_trip_members_user_id" ON "public"."trip_members" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_trip_places_place_id" ON "public"."trip_places" USING "btree" ("place_id");
+
+
+
+CREATE INDEX "idx_trip_places_trip_id" ON "public"."trip_places" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_trip_threads_status" ON "public"."trip_threads" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_trip_threads_trip_id" ON "public"."trip_threads" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_trip_threads_user_id" ON "public"."trip_threads" USING "btree" ("user_id");
+
+
+
+CREATE INDEX "idx_trips_collaborators" ON "public"."trips" USING "gin" ("collaborators");
+
+
+
+CREATE INDEX "idx_trips_created_by" ON "public"."trips" USING "btree" ("created_by");
+
+
+
+CREATE INDEX "idx_trips_is_public" ON "public"."trips" USING "btree" ("is_public");
+
+
+
+CREATE INDEX "idx_user_attendance_destination_id" ON "public"."user_attendance" USING "btree" ("destination_id");
+
+
+
+CREATE INDEX "idx_user_attendance_status" ON "public"."user_attendance" USING "btree" ("status");
+
+
+
+CREATE INDEX "idx_user_attendance_trip_id" ON "public"."user_attendance" USING "btree" ("trip_id");
+
+
+
+CREATE INDEX "idx_user_attendance_user_id" ON "public"."user_attendance" USING "btree" ("user_id");
+
+
+
+CREATE OR REPLACE TRIGGER "create_activity_notification_trigger" AFTER INSERT ON "public"."trip_activities" FOR EACH ROW EXECUTE FUNCTION "public"."create_activity_notification"();
+
+
+
+CREATE OR REPLACE TRIGGER "handle_trips_updated_at" BEFORE UPDATE ON "public"."trips" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_itineraries_updated_at" BEFORE UPDATE ON "public"."trips" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_map_tiles_updated_at" BEFORE UPDATE ON "public"."map_tiles" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_places_updated_at" BEFORE UPDATE ON "public"."places" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_profiles_updated_at" BEFORE UPDATE ON "public"."profiles" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_proposal_comments_updated_at" BEFORE UPDATE ON "public"."proposal_comments" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_trip_activities_updated_at" BEFORE UPDATE ON "public"."trip_activities" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "update_trip_threads_updated_at" BEFORE UPDATE ON "public"."trip_threads" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_activity_id_fkey" FOREIGN KEY ("activity_id") REFERENCES "public"."trip_activities"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_chat_message_id_fkey" FOREIGN KEY ("chat_message_id") REFERENCES "public"."trip_chat_messages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_thread_id_fkey" FOREIGN KEY ("thread_id") REFERENCES "public"."trip_threads"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_thread_message_id_fkey" FOREIGN KEY ("thread_message_id") REFERENCES "public"."thread_messages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_notifications"
+    ADD CONSTRAINT "activity_notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_activity_id_fkey" FOREIGN KEY ("activity_id") REFERENCES "public"."trip_activities"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_chat_message_id_fkey" FOREIGN KEY ("chat_message_id") REFERENCES "public"."trip_chat_messages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_thread_message_id_fkey" FOREIGN KEY ("thread_message_id") REFERENCES "public"."thread_messages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."activity_reactions"
+    ADD CONSTRAINT "activity_reactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."collaboration_sessions"
+    ADD CONSTRAINT "collaboration_sessions_itinerary_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."collaboration_sessions"
+    ADD CONSTRAINT "collaboration_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trips"
+    ADD CONSTRAINT "itineraries_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_places"
+    ADD CONSTRAINT "itinerary_places_itinerary_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_places"
+    ADD CONSTRAINT "itinerary_places_place_id_fkey" FOREIGN KEY ("place_id") REFERENCES "public"."places"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."itinerary_proposals"
+    ADD CONSTRAINT "itinerary_proposals_proposed_by_fkey" FOREIGN KEY ("proposed_by") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."itinerary_proposals"
+    ADD CONSTRAINT "itinerary_proposals_resolved_by_fkey" FOREIGN KEY ("resolved_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."itinerary_proposals"
+    ADD CONSTRAINT "itinerary_proposals_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."parallel_activities"
+    ADD CONSTRAINT "parallel_activities_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."parallel_activities"
+    ADD CONSTRAINT "parallel_activities_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."profiles"
+    ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."proposal_comments"
+    ADD CONSTRAINT "proposal_comments_proposal_id_fkey" FOREIGN KEY ("proposal_id") REFERENCES "public"."itinerary_proposals"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."proposal_comments"
+    ADD CONSTRAINT "proposal_comments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."proposal_votes"
+    ADD CONSTRAINT "proposal_votes_proposal_id_fkey" FOREIGN KEY ("proposal_id") REFERENCES "public"."itinerary_proposals"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."proposal_votes"
+    ADD CONSTRAINT "proposal_votes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_alternative_votes"
+    ADD CONSTRAINT "split_alternative_votes_alternative_id_fkey" FOREIGN KEY ("alternative_id") REFERENCES "public"."split_group_alternatives"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_alternative_votes"
+    ADD CONSTRAINT "split_alternative_votes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_attendance"
+    ADD CONSTRAINT "split_attendance_parallel_activity_id_fkey" FOREIGN KEY ("parallel_activity_id") REFERENCES "public"."parallel_activities"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_attendance"
+    ADD CONSTRAINT "split_attendance_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_group_alternatives"
+    ADD CONSTRAINT "split_group_alternatives_resolved_by_fkey" FOREIGN KEY ("resolved_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."split_group_alternatives"
+    ADD CONSTRAINT "split_group_alternatives_suggested_by_fkey" FOREIGN KEY ("suggested_by") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."split_group_alternatives"
+    ADD CONSTRAINT "split_group_alternatives_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."thread_messages"
+    ADD CONSTRAINT "thread_messages_thread_id_fkey" FOREIGN KEY ("thread_id") REFERENCES "public"."trip_threads"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."thread_messages"
+    ADD CONSTRAINT "thread_messages_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_activities"
+    ADD CONSTRAINT "trip_activities_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."trip_activities"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_activities"
+    ADD CONSTRAINT "trip_activities_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_activities"
+    ADD CONSTRAINT "trip_activities_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_chat_messages"
+    ADD CONSTRAINT "trip_chat_messages_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_chat_messages"
+    ADD CONSTRAINT "trip_chat_messages_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_invitations"
+    ADD CONSTRAINT "trip_invitations_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_invitations"
+    ADD CONSTRAINT "trip_invitations_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_members"
+    ADD CONSTRAINT "trip_members_invited_by_fkey" FOREIGN KEY ("invited_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."trip_members"
+    ADD CONSTRAINT "trip_members_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_members"
+    ADD CONSTRAINT "trip_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_threads"
+    ADD CONSTRAINT "trip_threads_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."trip_threads"
+    ADD CONSTRAINT "trip_threads_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_attendance"
+    ADD CONSTRAINT "user_attendance_trip_id_fkey" FOREIGN KEY ("trip_id") REFERENCES "public"."trips"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."user_attendance"
+    ADD CONSTRAINT "user_attendance_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+CREATE POLICY "Add own reactions" ON "public"."activity_reactions" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Anyone can view trip members" ON "public"."trip_members" FOR SELECT USING (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Anyone can view valid invitations by token" ON "public"."trip_invitations" FOR SELECT USING (("expires_at" > "now"()));
+
+
+
+CREATE POLICY "Authenticated users can create places" ON "public"."places" FOR INSERT WITH CHECK (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Authenticated users can update places" ON "public"."places" FOR UPDATE USING (("auth"."uid"() IS NOT NULL));
+
+
+
+CREATE POLICY "Collaborators can add comments" ON "public"."proposal_comments" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM ("public"."itinerary_proposals" "p"
+     JOIN "public"."trips" "t" ON (("t"."id" = "p"."trip_id")))
+  WHERE (("p"."id" = "proposal_comments"."proposal_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators"))))))));
+
+
+
+CREATE POLICY "Collaborators can create proposals" ON "public"."itinerary_proposals" FOR INSERT WITH CHECK ((("auth"."uid"() = "proposed_by") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "itinerary_proposals"."trip_id") AND ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can manage collaboration sessions" ON "public"."collaboration_sessions" USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "collaboration_sessions"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can suggest alternatives" ON "public"."split_group_alternatives" FOR INSERT WITH CHECK ((("auth"."uid"() = "suggested_by") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "split_group_alternatives"."trip_id") AND ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can update trips" ON "public"."trips" FOR UPDATE USING (("auth"."uid"() = ANY ("collaborators"))) WITH CHECK (("auth"."uid"() = ANY ("collaborators")));
+
+
+
+CREATE POLICY "Collaborators can view comments" ON "public"."proposal_comments" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."itinerary_proposals" "p"
+     JOIN "public"."trips" "t" ON (("t"."id" = "p"."trip_id")))
+  WHERE (("p"."id" = "proposal_comments"."proposal_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can view proposals for their trips" ON "public"."itinerary_proposals" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "itinerary_proposals"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can view split alternatives" ON "public"."split_group_alternatives" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "split_group_alternatives"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can view votes" ON "public"."proposal_votes" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."itinerary_proposals" "p"
+     JOIN "public"."trips" "t" ON (("t"."id" = "p"."trip_id")))
+  WHERE (("p"."id" = "proposal_votes"."proposal_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators")))))));
+
+
+
+CREATE POLICY "Collaborators can vote" ON "public"."proposal_votes" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM ("public"."itinerary_proposals" "p"
+     JOIN "public"."trips" "t" ON (("t"."id" = "p"."trip_id")))
+  WHERE (("p"."id" = "proposal_votes"."proposal_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators"))))))));
+
+
+
+CREATE POLICY "Create activities for accessible trips" ON "public"."trip_activities" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_activities"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators"))))))));
+
+
+
+CREATE POLICY "Create notifications for others" ON "public"."activity_notifications" FOR INSERT WITH CHECK (("auth"."uid"() <> "user_id"));
+
+
+
+CREATE POLICY "Create threads in accessible trips" ON "public"."trip_threads" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_threads"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators"))))))));
+
+
+
+CREATE POLICY "Delete own activities" ON "public"."trip_activities" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Delete own messages" ON "public"."trip_chat_messages" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Delete own notifications" ON "public"."activity_notifications" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Delete own thread messages" ON "public"."thread_messages" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Delete own threads" ON "public"."trip_threads" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Edit own messages" ON "public"."trip_chat_messages" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Edit own thread messages" ON "public"."thread_messages" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Group members can view votes" ON "public"."split_alternative_votes" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."split_group_alternatives" "a"
+     JOIN "public"."trips" "t" ON (("t"."id" = "a"."trip_id")))
+  WHERE (("a"."id" = "split_alternative_votes"."alternative_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators")))))));
+
+
+
+CREATE POLICY "Group members can vote" ON "public"."split_alternative_votes" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM ("public"."split_group_alternatives" "a"
+     JOIN "public"."trips" "t" ON (("t"."id" = "a"."trip_id")))
+  WHERE (("a"."id" = "split_alternative_votes"."alternative_id") AND (("auth"."uid"() = "t"."created_by") OR ("auth"."uid"() = ANY ("t"."collaborators"))))))));
+
+
+
+CREATE POLICY "Itinerary places viewable with itinerary access" ON "public"."trip_places" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_places"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Map tiles are viewable by everyone" ON "public"."map_tiles" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Members can create parallel activities" ON "public"."parallel_activities" FOR INSERT WITH CHECK ((("auth"."uid"() = "created_by") AND (EXISTS ( SELECT 1
+   FROM "public"."trip_members"
+  WHERE (("trip_members"."trip_id" = "parallel_activities"."trip_id") AND ("trip_members"."user_id" = "auth"."uid"()))))));
+
+
+
+CREATE POLICY "Members can view parallel activities" ON "public"."parallel_activities" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trip_members"
+  WHERE (("trip_members"."trip_id" = "parallel_activities"."trip_id") AND ("trip_members"."user_id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "Members can view split attendance" ON "public"."split_attendance" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."parallel_activities" "pa"
+     JOIN "public"."trip_members" "tm" ON (("tm"."trip_id" = "pa"."trip_id")))
+  WHERE (("pa"."id" = "split_attendance"."parallel_activity_id") AND ("tm"."user_id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "Owners can manage members" ON "public"."trip_members" USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_members"."trip_id") AND ("trips"."created_by" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "Places are viewable by everyone" ON "public"."places" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Post in accessible threads" ON "public"."thread_messages" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM ("public"."trip_threads" "t"
+     JOIN "public"."trips" "i" ON (("t"."trip_id" = "i"."id")))
+  WHERE (("t"."id" = "thread_messages"."thread_id") AND (("auth"."uid"() = "i"."created_by") OR ("auth"."uid"() = ANY ("i"."collaborators"))))))));
+
+
+
+CREATE POLICY "Proposers can update their pending proposals" ON "public"."itinerary_proposals" FOR UPDATE USING ((("auth"."uid"() = "proposed_by") AND ("status" = 'pending'::"public"."proposal_status"))) WITH CHECK (("auth"."uid"() = "proposed_by"));
+
+
+
+CREATE POLICY "Public itineraries are viewable by everyone" ON "public"."trips" FOR SELECT USING ((("is_public" = true) OR ("auth"."uid"() = "created_by") OR ("auth"."uid"() = ANY ("collaborators"))));
+
+
+
+CREATE POLICY "Public profiles are viewable by everyone" ON "public"."profiles" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Remove own reactions" ON "public"."activity_reactions" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Send chat in accessible trips" ON "public"."trip_chat_messages" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_chat_messages"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators"))))))));
+
+
+
+CREATE POLICY "Suggesters can update pending alternatives" ON "public"."split_group_alternatives" FOR UPDATE USING ((("auth"."uid"() = "suggested_by") AND ("status" = 'pending'::"public"."proposal_status"))) WITH CHECK (("auth"."uid"() = "suggested_by"));
+
+
+
+CREATE POLICY "Trip owners can manage invitations" ON "public"."trip_invitations" USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_invitations"."trip_id") AND ("trips"."created_by" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "Trip owners can resolve proposals" ON "public"."itinerary_proposals" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "itinerary_proposals"."trip_id") AND ("auth"."uid"() = "trips"."created_by")))));
+
+
+
+CREATE POLICY "Update own activities" ON "public"."trip_activities" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Update own notifications" ON "public"."activity_notifications" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Update own threads" ON "public"."trip_threads" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can change their vote" ON "public"."proposal_votes" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can create collaboration sessions for their trips" ON "public"."collaboration_sessions" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can create itineraries" ON "public"."trips" FOR INSERT WITH CHECK (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can create their own trips" ON "public"."trips" FOR INSERT WITH CHECK (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can delete own itineraries" ON "public"."trips" FOR DELETE USING (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can delete own messages" ON "public"."trip_chat_messages" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own attendance" ON "public"."user_attendance" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own comments" ON "public"."proposal_comments" FOR DELETE USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can delete their own trips" ON "public"."trips" FOR DELETE USING (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can edit own messages" ON "public"."trip_chat_messages" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can manage own collaboration sessions" ON "public"."collaboration_sessions" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can manage places in own itineraries" ON "public"."trip_places" USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_places"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Users can manage their own attendance" ON "public"."user_attendance" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can manage their split choices" ON "public"."split_attendance" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can manage trip places for their trips" ON "public"."trip_places" USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_places"."trip_id") AND (("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Users can send messages" ON "public"."trip_chat_messages" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") AND (EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_chat_messages"."trip_id") AND (("trips"."created_by" = "auth"."uid"()) OR ("auth"."uid"() = ANY ("trips"."collaborators"))))))));
+
+
+
+CREATE POLICY "Users can update own itineraries" ON "public"."trips" FOR UPDATE USING ((("auth"."uid"() = "created_by") OR ("auth"."uid"() = ANY ("collaborators"))));
+
+
+
+CREATE POLICY "Users can update own profile" ON "public"."profiles" FOR UPDATE USING (("auth"."uid"() = "id"));
+
+
+
+CREATE POLICY "Users can update their own attendance" ON "public"."user_attendance" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own collaboration sessions" ON "public"."collaboration_sessions" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own comments" ON "public"."proposal_comments" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Users can update their own trips" ON "public"."trips" FOR UPDATE USING (("auth"."uid"() = "created_by")) WITH CHECK (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can view all attendance" ON "public"."user_attendance" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Users can view collaboration sessions for accessible trips" ON "public"."collaboration_sessions" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "collaboration_sessions"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Users can view public trips" ON "public"."trips" FOR SELECT USING (("is_public" = true));
+
+
+
+CREATE POLICY "Users can view their own trips" ON "public"."trips" FOR SELECT USING (("auth"."uid"() = "created_by"));
+
+
+
+CREATE POLICY "Users can view trip messages" ON "public"."trip_chat_messages" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_chat_messages"."trip_id") AND (("trips"."created_by" = "auth"."uid"()) OR ("trips"."is_public" = true) OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Users can view trip places for accessible trips" ON "public"."trip_places" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_places"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "Users can view trips they collaborate on" ON "public"."trips" FOR SELECT USING (("auth"."uid"() = ANY ("collaborators")));
+
+
+
+CREATE POLICY "Users update own membership" ON "public"."trip_members" FOR UPDATE USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "View activities for accessible trips" ON "public"."trip_activities" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_activities"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "View chat for accessible trips" ON "public"."trip_chat_messages" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_chat_messages"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+CREATE POLICY "View own notifications" ON "public"."activity_notifications" FOR SELECT USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "View reactions on accessible content" ON "public"."activity_reactions" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "View thread messages for accessible threads" ON "public"."thread_messages" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."trip_threads" "t"
+     JOIN "public"."trips" "i" ON (("t"."trip_id" = "i"."id")))
+  WHERE (("t"."id" = "thread_messages"."thread_id") AND (("i"."is_public" = true) OR ("auth"."uid"() = "i"."created_by") OR ("auth"."uid"() = ANY ("i"."collaborators")))))));
+
+
+
+CREATE POLICY "View threads for accessible trips" ON "public"."trip_threads" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."trips"
+  WHERE (("trips"."id" = "trip_threads"."trip_id") AND (("trips"."is_public" = true) OR ("auth"."uid"() = "trips"."created_by") OR ("auth"."uid"() = ANY ("trips"."collaborators")))))));
+
+
+
+ALTER TABLE "public"."activity_notifications" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."activity_reactions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."collaboration_sessions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."itinerary_proposals" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."map_tiles" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."parallel_activities" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."places" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."proposal_comments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."proposal_votes" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."split_alternative_votes" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."split_attendance" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."split_group_alternatives" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."thread_messages" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_activities" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_chat_messages" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_invitations" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_members" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_places" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trip_threads" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."trips" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_attendance" ENABLE ROW LEVEL SECURITY;
+
+
+GRANT USAGE ON SCHEMA "public" TO "postgres";
+GRANT USAGE ON SCHEMA "public" TO "anon";
+GRANT USAGE ON SCHEMA "public" TO "authenticated";
+GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."accept_trip_invitation"("p_token" "text", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."accept_trip_invitation"("p_token" "text", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."accept_trip_invitation"("p_token" "text", "p_user_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."can_user_modify_proposal"("proposal_uuid" "uuid", "user_uuid" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."can_user_modify_proposal"("proposal_uuid" "uuid", "user_uuid" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."can_user_modify_proposal"("proposal_uuid" "uuid", "user_uuid" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."create_activity_notification"() TO "anon";
+GRANT ALL ON FUNCTION "public"."create_activity_notification"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_activity_notification"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_destination_attendance"("p_trip_id" "uuid", "p_destination_id" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_destination_attendance"("p_trip_id" "uuid", "p_destination_id" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_destination_attendance"("p_trip_id" "uuid", "p_destination_id" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_proposal_stats"("proposal_uuid" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_proposal_stats"("proposal_uuid" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_proposal_stats"("proposal_uuid" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_trip_branches"("p_trip_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_trip_branches"("p_trip_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_trip_branches"("p_trip_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_unread_counts"("p_trip_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_unread_counts"("p_trip_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_unread_counts"("p_trip_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."onboard_trip_member"("p_trip_id" "uuid", "p_user_id" "uuid", "p_default_status" "public"."attendance_status") TO "anon";
+GRANT ALL ON FUNCTION "public"."onboard_trip_member"("p_trip_id" "uuid", "p_user_id" "uuid", "p_default_status" "public"."attendance_status") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."onboard_trip_member"("p_trip_id" "uuid", "p_user_id" "uuid", "p_default_status" "public"."attendance_status") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."activity_notifications" TO "anon";
+GRANT ALL ON TABLE "public"."activity_notifications" TO "authenticated";
+GRANT ALL ON TABLE "public"."activity_notifications" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."activity_reactions" TO "anon";
+GRANT ALL ON TABLE "public"."activity_reactions" TO "authenticated";
+GRANT ALL ON TABLE "public"."activity_reactions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."collaboration_sessions" TO "anon";
+GRANT ALL ON TABLE "public"."collaboration_sessions" TO "authenticated";
+GRANT ALL ON TABLE "public"."collaboration_sessions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."itinerary_proposals" TO "anon";
+GRANT ALL ON TABLE "public"."itinerary_proposals" TO "authenticated";
+GRANT ALL ON TABLE "public"."itinerary_proposals" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."map_tiles" TO "anon";
+GRANT ALL ON TABLE "public"."map_tiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."map_tiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."parallel_activities" TO "anon";
+GRANT ALL ON TABLE "public"."parallel_activities" TO "authenticated";
+GRANT ALL ON TABLE "public"."parallel_activities" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."places" TO "anon";
+GRANT ALL ON TABLE "public"."places" TO "authenticated";
+GRANT ALL ON TABLE "public"."places" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."profiles" TO "anon";
+GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."proposal_comments" TO "anon";
+GRANT ALL ON TABLE "public"."proposal_comments" TO "authenticated";
+GRANT ALL ON TABLE "public"."proposal_comments" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."proposal_votes" TO "anon";
+GRANT ALL ON TABLE "public"."proposal_votes" TO "authenticated";
+GRANT ALL ON TABLE "public"."proposal_votes" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."split_alternative_votes" TO "anon";
+GRANT ALL ON TABLE "public"."split_alternative_votes" TO "authenticated";
+GRANT ALL ON TABLE "public"."split_alternative_votes" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."split_attendance" TO "anon";
+GRANT ALL ON TABLE "public"."split_attendance" TO "authenticated";
+GRANT ALL ON TABLE "public"."split_attendance" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."split_group_alternatives" TO "anon";
+GRANT ALL ON TABLE "public"."split_group_alternatives" TO "authenticated";
+GRANT ALL ON TABLE "public"."split_group_alternatives" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."thread_messages" TO "anon";
+GRANT ALL ON TABLE "public"."thread_messages" TO "authenticated";
+GRANT ALL ON TABLE "public"."thread_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_activities" TO "anon";
+GRANT ALL ON TABLE "public"."trip_activities" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_activities" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_chat_messages" TO "anon";
+GRANT ALL ON TABLE "public"."trip_chat_messages" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_chat_messages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_invitations" TO "anon";
+GRANT ALL ON TABLE "public"."trip_invitations" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_invitations" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_members" TO "anon";
+GRANT ALL ON TABLE "public"."trip_members" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_members" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_places" TO "anon";
+GRANT ALL ON TABLE "public"."trip_places" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_places" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trip_threads" TO "anon";
+GRANT ALL ON TABLE "public"."trip_threads" TO "authenticated";
+GRANT ALL ON TABLE "public"."trip_threads" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."trips" TO "anon";
+GRANT ALL ON TABLE "public"."trips" TO "authenticated";
+GRANT ALL ON TABLE "public"."trips" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_attendance" TO "anon";
+GRANT ALL ON TABLE "public"."user_attendance" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_attendance" TO "service_role";
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
+
+
+
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
+
+
+
+
+
+
+\unrestrict X6Q0PhgeqgmuqNkj5e1tkGgWscYxneFXrYdHi5mcBqARFhjvPDARqwVrm625FdQ
+
+RESET ALL;
