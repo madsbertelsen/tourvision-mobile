@@ -2,6 +2,7 @@
 
 import React, { useEffect, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { JSONContent } from '@tiptap/react';
@@ -22,9 +23,9 @@ interface TipTapEditorProps {
   placeholder?: string;
 }
 
-export function TipTapEditor({ 
-  content = '', 
-  onChange, 
+export function TipTapEditor({
+  content = '',
+  onChange,
   editable = true,
   placeholder = 'Start writing your itinerary...'
 }: TipTapEditorProps) {
@@ -194,6 +195,179 @@ export function TipTapEditor({
 
   return (
     <div className="tiptap-editor" style={{ width: '100%', height: '100%' }}>
+      {editor && editable && (
+        <BubbleMenu editor={editor}>
+          <div
+            style={{
+              display: 'flex',
+              gap: '4px',
+              padding: '4px',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            <button
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={editor.isActive('bold') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('bold') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Bold (Cmd+B)"
+            >
+              B
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={editor.isActive('italic') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('italic') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                fontStyle: 'italic',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Italic (Cmd+I)"
+            >
+              I
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              className={editor.isActive('strike') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('strike') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                textDecoration: editor.isActive('strike') ? 'line-through' : 'none',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Strikethrough"
+            >
+              S
+            </button>
+            <div style={{ width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.3)', margin: '4px' }} />
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('heading', { level: 1 }) ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Heading 1"
+            >
+              H1
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('heading', { level: 2 }) ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Heading 2"
+            >
+              H2
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('heading', { level: 3 }) ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Heading 3"
+            >
+              H3
+            </button>
+            <div style={{ width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.3)', margin: '4px' }} />
+            <button
+              onClick={() => {
+                const previousUrl = editor.getAttributes('link').href;
+                const url = window.prompt('URL', previousUrl);
+                if (url === null) return;
+                if (url === '') {
+                  editor.chain().focus().extendMarkRange('link').unsetLink().run();
+                  return;
+                }
+                editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+              }}
+              className={editor.isActive('link') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('link') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Add/Edit Link"
+            >
+              🔗
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className={editor.isActive('bulletList') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('bulletList') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Bullet List"
+            >
+              •
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              className={editor.isActive('orderedList') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('orderedList') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Numbered List"
+            >
+              1.
+            </button>
+          </div>
+        </BubbleMenu>
+      )}
       {editable && (
         <div className="toolbar" style={{
           display: 'flex',
@@ -361,6 +535,22 @@ export function TipTapEditor({
         className="prose prose-sm max-w-none"
       />
       <style>{`
+        .tippy-box {
+          background-color: rgba(0, 0, 0, 0.9) !important;
+          border-radius: 8px !important;
+        }
+        .bubble-menu {
+          z-index: 999999 !important;
+          position: absolute !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+        .bubble-menu button {
+          transition: background-color 0.2s;
+        }
+        .bubble-menu button:hover {
+          background-color: rgba(255, 255, 255, 0.3) !important;
+        }
         .ProseMirror {
           outline: none;
           min-height: 300px;

@@ -1,7 +1,8 @@
 'use dom';
 
-import React, { useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { JSONContent } from '@tiptap/react';
@@ -11,8 +12,10 @@ import {
   DayNode,
   TransportationNode,
   GroupSplitNode,
-  TipNode
+  TipNode,
+  LocationMark
 } from './extensions';
+import { LocationSearch } from './LocationSearch';
 import './itinerary-editor-styles.css';
 
 interface ItineraryEditorProps {
@@ -31,6 +34,9 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
   },
   ref
 ) => {
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -48,6 +54,7 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
         },
       }),
       DiffVisualization,
+      LocationMark,
       DestinationNode,
       DayNode,
       TransportationNode,
@@ -106,7 +113,153 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
 
   return (
     <div className="itinerary-editor-wrapper">
-      <style jsx>{`
+      {editor && editable && (
+        <BubbleMenu
+          editor={editor}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: '4px',
+              padding: '4px',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            <button
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={editor.isActive('bold') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('bold') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Bold (Cmd+B)"
+            >
+              B
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={editor.isActive('italic') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('italic') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                fontStyle: 'italic',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Italic (Cmd+I)"
+            >
+              I
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              className={editor.isActive('strike') ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('strike') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                textDecoration: editor.isActive('strike') ? 'line-through' : 'none',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Strikethrough"
+            >
+              S
+            </button>
+            <div style={{ width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.3)', margin: '4px' }} />
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('heading', { level: 1 }) ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Heading 1"
+            >
+              H1
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('heading', { level: 2 }) ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Heading 2"
+            >
+              H2
+            </button>
+            <div style={{ width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.3)', margin: '4px' }} />
+            <button
+              onClick={() => {
+                const { from, to } = editor.state.selection;
+                const text = editor.state.doc.textBetween(from, to, ' ');
+                setSelectedText(text);
+                setShowLocationSearch(true);
+              }}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: editor.isActive('location') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Add Location"
+            >
+              📍
+            </button>
+          </div>
+        </BubbleMenu>
+      )}
+      {showLocationSearch && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 999999,
+            }}
+            onClick={() => setShowLocationSearch(false)}
+          />
+          <LocationSearch
+            initialQuery={selectedText}
+            onSelect={(location) => {
+              editor.chain().focus().setLocation(location).run();
+              setShowLocationSearch(false);
+            }}
+            onClose={() => setShowLocationSearch(false)}
+          />
+        </>
+      )}
+      <style>{`
         .itinerary-editor-wrapper {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
@@ -117,6 +270,7 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
           font-size: 16px;
           line-height: 1.6;
           color: #111827;
+          padding: 0 32px;
         }
 
         .itinerary-document-editor h1 {
@@ -303,6 +457,15 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
           .destination-node {
             page-break-inside: avoid;
           }
+        }
+
+        /* Bubble Menu Styles */
+        .tippy-box {
+          background-color: transparent !important;
+        }
+
+        .tippy-content {
+          padding: 0 !important;
         }
       `}</style>
 

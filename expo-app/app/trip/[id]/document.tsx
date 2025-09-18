@@ -16,8 +16,8 @@ import { ProposalInline } from '@/components/ProposalInline';
 export default function TripDocumentView() {
   const { id } = useLocalSearchParams();
   const { data: trip, isLoading, error, refetch } = useTrip(id as string);
-  // Document is now read-only - AI handles all edits based on chat discussions
-  const isEditing = false;
+  // Enable editing in the document
+  const isEditing = true;
   const [isSaving, setIsSaving] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const responsive = useResponsive();
@@ -245,11 +245,11 @@ export default function TripDocumentView() {
           {/* Divider */}
           <View style={styles.documentDivider} />
 
-          {/* TipTap Editor - Read Only (AI handles edits) */}
+          {/* TipTap Editor - Now editable with bubble menu */}
           <ItineraryDocumentEditor
             ref={editorRef}
             trip={trip}
-            editable={false}
+            editable={isEditing}
             onSave={handleSave}
           />
         </View>
