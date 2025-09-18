@@ -15,8 +15,15 @@ export interface Proposal {
   description?: string;
   current_content?: any;
   proposed_content?: any;  // Now optional since we use operations
-  proposal_operations?: any;  // Diff operations
+  proposal_operations?: any;  // Diff operations or ProseMirror operation details
   diff_decorations?: any;  // Decoration positions for visualization
+  transaction_steps?: any[];  // ProseMirror transaction steps
+  inverse_steps?: any[];  // For undo functionality
+  affected_range?: { from: number; to: number };  // Range affected by changes
+  transaction_metadata?: {  // AI metadata for the transaction
+    confidence?: number;
+    aiReasoning?: string;
+  };
   chat_context?: string[];
   ai_reasoning?: string;
   status: 'pending' | 'approved' | 'rejected' | 'applied';

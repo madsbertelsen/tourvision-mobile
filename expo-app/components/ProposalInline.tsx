@@ -77,10 +77,6 @@ export function ProposalInline({
             <Feather name={getTypeIcon() as any} size={16} color={getTypeColor()} />
           </View>
           <View style={styles.titleSection}>
-            <View style={styles.titleRow}>
-              <Feather name="cpu" size={14} color="#3B82F6" />
-              <Text style={styles.titlePrefix}>**Arrive in {proposal.title}**</Text>
-            </View>
             <Text style={styles.title}>{proposal.title || 'Change Request'}</Text>
           </View>
         </View>
@@ -95,48 +91,10 @@ export function ProposalInline({
       <View style={styles.content}>
         <Text style={styles.description}>{proposal.description || 'AI generated change request'}</Text>
 
-        {/* Quick info */}
-        {!isExpanded && (
-          <View style={styles.quickInfo}>
-            {proposal.enriched_data?.why_visit && (
-              <Text style={styles.quickInfoText} numberOfLines={2}>
-                <Text style={styles.quickInfoLabel}>Why Visit: </Text>
-                {proposal.enriched_data.why_visit}
-              </Text>
-            )}
-
-            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
-              <Text style={styles.quickInfoText} numberOfLines={1}>
-                <Text style={styles.quickInfoLabel}>Quick Facts: </Text>
-                {proposal.enriched_data.quick_facts[0]}
-              </Text>
-            )}
-          </View>
-        )}
 
         {/* Expanded details */}
         {isExpanded && (
           <View style={styles.expandedContent}>
-            {/* Quick Facts */}
-            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Quick Facts:</Text>
-                {proposal.enriched_data.quick_facts.map((fact, index) => (
-                  <Text key={index} style={styles.factItem}>• {fact}</Text>
-                ))}
-              </View>
-            )}
-
-            {/* Highlights */}
-            {proposal.enriched_data?.highlights && proposal.enriched_data.highlights.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Highlights:</Text>
-                {proposal.enriched_data.highlights.map((highlight, index) => (
-                  <Text key={index} style={styles.factItem}>• {highlight}</Text>
-                ))}
-              </View>
-            )}
-
             {/* Practical Info */}
             {proposal.practical_info && (
               <View style={styles.practicalInfo}>

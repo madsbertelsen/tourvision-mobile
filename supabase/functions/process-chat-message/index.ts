@@ -65,15 +65,17 @@ serve(async (req) => {
 
     const mistral = createMistral({ apiKey: mistralKey })
 
-    // Schema for AI response - simplified
+    // Schema for AI response - enhanced with document operations
     const responseSchema = z.object({
-      response_type: z.enum(['proposal', 'information', 'greeting', 'clarification']),
+      response_type: z.enum(['proposal', 'information', 'greeting', 'clarification', 'document_operation']),
       should_create_proposal: z.boolean(),
+      is_document_edit: z.boolean().optional(),
       proposal_type: z.enum(['add', 'modify', 'remove', 'reorganize']).optional(),
       title: z.string(),
       description: z.string(),
       message_response: z.string(),
       proposed_content: z.any().optional(),
+      document_prompt: z.string().optional(), // For document operations
       enriched_data: z.object({
         quick_facts: z.array(z.string()).optional(),
         highlights: z.array(z.string()).optional(),
@@ -92,16 +94,31 @@ serve(async (req) => {
 CORE PRINCIPLE: Always be helpful and create proposals for any travel-related content.
 
 Response Types:
-1. proposal - Create when user mentions ANY destination, activity, or travel plan
-2. information - When user asks questions about existing plans
-3. greeting - For greetings, but still offer to help plan
-4. clarification - When you need more information
+1. proposal - Create when user mentions ANY destination, activity, or travel plan to ADD NEW content
+2. document_operation - When user asks to EDIT, MODIFY, REMOVE, or REORGANIZE existing content
+3. information - When user asks questions about existing plans
+4. greeting - For greetings, but still offer to help plan
+5. clarification - When you need more information
+
+DOCUMENT OPERATIONS:
+Set is_document_edit to true and response_type to 'document_operation' when user says things like:
+- "Add a section about [topic]"
+- "Remove day 3"
+- "Change the hotel to..."
+- "Update the description of..."
+- "Insert ... after/before ..."
+- "Move ... to ..."
+- "Delete the part about..."
+- "Edit the section on..."
+- "Reorganize the days"
+
+For document operations, set document_prompt to describe EXACTLY what change to make.
 
 IMPORTANT RULES:
 - Set should_create_proposal=true for ANY actionable travel content
 - Be proactive - if someone mentions a place, create a proposal to add it
 - Don't wait for consensus or agreement - single user suggestions are valid
-- Always provide enriched data when creating proposals about places
+- Keep proposals simple and focused on the user's request
 
 Examples:
 - "I want to fly to Copenhagen" → Create proposal (type: add) for Copenhagen trip
@@ -112,8 +129,8 @@ Examples:
 
 For proposals, always include:
 - Clear title (e.g., "Visit Copenhagen", "Fly to Copenhagen", "Museum Tour")
-- Helpful description with details
-- Enriched data with practical information when relevant`,
+- Brief description of the change
+- Do NOT include enriched data like quick facts, highlights, or why visit`,
       prompt: `User message: "${message}"
 
 Recent conversation (newest first):
@@ -134,34 +151,108 @@ Don't wait for group consensus - this is for single users planning their trips.`
     let aiMessageText = object.message_response
     let metadata: any = { type: 'ai_response' }
     let proposalCreated = false
+    let transactionData: any = null
+
+    // Check if this is a document operation that should be processed with ProseMirror
+    if (object.is_document_edit && object.document_prompt && document) {
+      console.log('[Info] Processing document operation with ProseMirror')
+
+      try {
+        // Call the process-document-with-ai Edge Function
+        const documentOperationResponse = await fetch('http://host.docker.internal:54321/functions/v1/process-document-with-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
+          },
+          body: JSON.stringify({
+            document: document,
+            prompt: object.document_prompt
+          })
+        })
+
+        if (documentOperationResponse.ok) {
+          const result = await documentOperationResponse.json()
+
+          // Store the ProseMirror transaction data
+          if (result.success && result.operation) {
+            console.log('[Info] Document operation successful, storing transaction data')
+
+            // Override the should_create_proposal flag to ensure we create one
+            object.should_create_proposal = true
+            if (!object.proposal_type) {
+              object.proposal_type = result.operation.operation === 'delete' ? 'remove' : 'modify'
+            }
+
+            // Store transaction data for proposal
+            transactionData = result
+
+            // Update the AI message to reflect the operation
+            aiMessageText = `🤖 **${object.title}**\n\n${object.description}\n\n✨ I've prepared a document edit for you. The changes will ${result.operation.operation} content ${result.operation.target_id ? `at "${result.operation.target_id}"` : ''}.\n\n💡 *Review the changes above and vote to apply them.*`
+          }
+        } else {
+          console.error('[Error] Document operation failed:', await documentOperationResponse.text())
+        }
+      } catch (error) {
+        console.error('[Error] Failed to call process-document-with-ai:', error)
+      }
+    }
 
     // Create proposal if needed
     if (object.should_create_proposal && object.proposal_type) {
       // Validate message_id is a valid UUID before using it as source_message_id
       const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message_id)
 
-      // Generate diff operations and decorations
+      // If we have transaction data from ProseMirror, use that. Otherwise, generate diff operations
+      let proposalData: any
       const currentDoc = document || { type: 'doc', content: [] }
-      const { proposedDoc, operations, decorations } = createMinimalProposedContent(
-        currentDoc,
-        object
-      )
 
-      const proposalData: any = {
-        trip_id,
-        created_by: AI_USER_ID,
-        proposal_type: object.proposal_type,
-        title: object.title,
-        description: object.description,
-        current_content: currentDoc,
-        proposed_content: proposedDoc,
-        proposal_operations: operations,  // Store diff operations
-        diff_decorations: decorations,    // Store decoration positions
-        chat_context: messageTexts.slice(0, 5),
-        ai_reasoning: `User suggested: "${message}"`,
-        status: 'pending',
-        required_approvals: 1,
-        enriched_data: object.enriched_data,
+      if (transactionData) {
+        // Use ProseMirror transaction data
+        proposalData = {
+          trip_id,
+          created_by: AI_USER_ID,
+          proposal_type: object.proposal_type,
+          title: object.title,
+          description: object.description,
+          current_content: currentDoc,
+          proposed_content: transactionData.modifiedDocument,
+          proposal_operations: transactionData.operation,  // Store the operation details
+          diff_decorations: transactionData.diffDecorations,  // Store decoration positions
+          transaction_steps: transactionData.transactionSteps,  // ProseMirror steps
+          inverse_steps: transactionData.inverseSteps,  // For undo
+          affected_range: transactionData.affectedRange,  // Range affected by changes
+          transaction_metadata: transactionData.metadata,  // AI confidence, reasoning
+          chat_context: messageTexts.slice(0, 5),
+          ai_reasoning: transactionData.metadata?.aiReasoning || `User suggested: "${message}"`,
+          status: 'pending',
+          required_approvals: 1,
+          enriched_data: object.enriched_data,
+        }
+      } else {
+        // Fall back to original diff generation
+        const currentDoc = document || { type: 'doc', content: [] }
+        const { proposedDoc, operations, decorations } = createMinimalProposedContent(
+          currentDoc,
+          object
+        )
+
+        proposalData = {
+          trip_id,
+          created_by: AI_USER_ID,
+          proposal_type: object.proposal_type,
+          title: object.title,
+          description: object.description,
+          current_content: currentDoc,
+          proposed_content: proposedDoc,
+          proposal_operations: operations,  // Store diff operations
+          diff_decorations: decorations,    // Store decoration positions
+          chat_context: messageTexts.slice(0, 5),
+          ai_reasoning: `User suggested: "${message}"`,
+          status: 'pending',
+          required_approvals: 1,
+          enriched_data: object.enriched_data,
+        }
       }
 
       // Only add source_message_id if it's a valid UUID

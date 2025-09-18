@@ -73,8 +73,19 @@ serve(async (req) => {
 
     let updatedDocument = trip.itinerary_document || { type: 'doc', content: [] }
 
-    // 3. Apply the diff operations to create the final document
-    if (proposal.proposal_operations && Array.isArray(proposal.proposal_operations)) {
+    // 3. Apply the transaction or diff operations to create the final document
+    if (proposal.transaction_steps) {
+      // New ProseMirror transaction approach
+      console.log('[Info] Applying ProseMirror transaction steps')
+
+      // The proposed_content should contain the already transformed document from process-document-with-ai
+      if (proposal.proposed_content) {
+        updatedDocument = proposal.proposed_content
+      } else {
+        throw new Error('No proposed_content found with transaction steps')
+      }
+    } else if (proposal.proposal_operations && Array.isArray(proposal.proposal_operations)) {
+      // Legacy diff operations approach
       console.log('[Info] Applying diff operations:', proposal.proposal_operations.length)
 
       // Apply operations to document

@@ -130,138 +130,63 @@ export function ProposalPanel({
         {/* Expanded Content */}
         {isExpanded && (
           <View style={styles.expandedContent}>
-            {/* Quick Facts */}
-            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
-              <View style={styles.enrichedSection}>
-                <Text style={styles.sectionTitle}>Quick Facts</Text>
-                {proposal.enriched_data.quick_facts.map((fact, index) => (
-                  <View key={index} style={styles.factItem}>
-                    <Text style={styles.bulletPoint}>•</Text>
-                    <Text style={styles.factText}>{fact}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
 
-            {/* Why Visit */}
-            {proposal.enriched_data?.why_visit && (
-              <View style={styles.enrichedSection}>
-                <Text style={styles.sectionTitle}>Why Visit</Text>
-                <Text style={styles.enrichedText}>{proposal.enriched_data.why_visit}</Text>
-              </View>
-            )}
 
-            {/* Highlights */}
-            {proposal.enriched_data?.highlights && proposal.enriched_data.highlights.length > 0 && (
-              <View style={styles.enrichedSection}>
-                <Text style={styles.sectionTitle}>Highlights</Text>
-                {proposal.enriched_data.highlights.map((highlight, index) => (
-                  <View key={index} style={styles.factItem}>
-                    <Feather name="star" size={12} color="#F59E0B" />
-                    <Text style={styles.factText}>{highlight}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            {/* Document Changes Visualization */}
+            {(proposal.transaction_steps || proposal.proposal_operations) && (
+              <View style={styles.changesSection}>
+                <Text style={styles.sectionTitle}>Document Changes</Text>
 
-            {/* Practical Info */}
-            {proposal.practical_info && (
-              <View style={styles.practicalSection}>
-                <Text style={styles.sectionTitle}>Practical Information</Text>
-                <View style={styles.infoGrid}>
-                  {proposal.practical_info.duration && (
-                    <View style={styles.infoItem}>
-                      <Feather name="clock" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{proposal.practical_info.duration}</Text>
+                {/* Show operation type and target */}
+                {proposal.proposal_operations && (
+                  <View style={styles.operationInfo}>
+                    <View style={[styles.operationBadge, { backgroundColor: getTypeColor() + '20' }]}>
+                      <Text style={[styles.operationText, { color: getTypeColor() }]}>
+                        {proposal.proposal_operations.operation?.toUpperCase() || proposal.proposal_type.toUpperCase()}
+                      </Text>
                     </View>
-                  )}
-                  {proposal.practical_info.best_time && (
-                    <View style={styles.infoItem}>
-                      <Feather name="sun" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{proposal.practical_info.best_time}</Text>
-                    </View>
-                  )}
-                  {proposal.practical_info.admission?.adults && (
-                    <View style={styles.infoItem}>
-                      <Feather name="dollar-sign" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{proposal.practical_info.admission.adults}</Text>
-                    </View>
-                  )}
-                  {proposal.practical_info.opening_hours && (
-                    <View style={styles.infoItem}>
-                      <Feather name="calendar" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{proposal.practical_info.opening_hours}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Location Details */}
-                {proposal.practical_info.location_details && (
-                  <View style={styles.locationSection}>
-                    {proposal.practical_info.location_details.address && (
-                      <View style={styles.infoItem}>
-                        <Feather name="map-pin" size={14} color="#6B7280" />
-                        <Text style={styles.infoText}>{proposal.practical_info.location_details.address}</Text>
-                      </View>
-                    )}
-                    {proposal.practical_info.location_details.transport_options && (
-                      <View style={styles.transportSection}>
-                        <Text style={styles.miniTitle}>Getting There:</Text>
-                        {proposal.practical_info.location_details.transport_options.map((option, index) => (
-                          <Text key={index} style={styles.transportOption}>• {option}</Text>
-                        ))}
-                      </View>
+                    {proposal.proposal_operations.target_id && (
+                      <Text style={styles.targetText}>
+                        Target: {proposal.proposal_operations.target_id}
+                      </Text>
                     )}
                   </View>
                 )}
 
-                {/* Accessibility */}
-                {proposal.practical_info.accessibility && (
-                  <View style={styles.accessibilitySection}>
-                    {proposal.practical_info.accessibility.wheelchair && (
-                      <View style={styles.infoItem}>
-                        <Feather name="info" size={14} color="#6B7280" />
-                        <Text style={styles.infoText}>{proposal.practical_info.accessibility.wheelchair}</Text>
-                      </View>
-                    )}
-                    {proposal.practical_info.accessibility.facilities && proposal.practical_info.accessibility.facilities.length > 0 && (
-                      <View style={styles.facilitiesRow}>
-                        {proposal.practical_info.accessibility.facilities.map((facility, index) => (
-                          <View key={index} style={styles.facilityChip}>
-                            <Text style={styles.facilityText}>{facility}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+                {/* Show affected range if available */}
+                {proposal.affected_range && (
+                  <View style={styles.rangeInfo}>
+                    <Feather name="edit-2" size={12} color="#6B7280" />
+                    <Text style={styles.rangeText}>
+                      Affects positions {proposal.affected_range.from} to {proposal.affected_range.to}
+                    </Text>
                   </View>
                 )}
-              </View>
-            )}
 
-            {/* External Resources */}
-            {proposal.external_resources && (
-              <View style={styles.resourcesSection}>
-                <Text style={styles.sectionTitle}>Learn More</Text>
-                <View style={styles.linksRow}>
-                  {proposal.external_resources.official_website && (
-                    <TouchableOpacity style={styles.linkButton}>
-                      <Feather name="globe" size={14} color="#3B82F6" />
-                      <Text style={styles.linkText}>Official Site</Text>
-                    </TouchableOpacity>
-                  )}
-                  {proposal.external_resources.wikipedia_url && (
-                    <TouchableOpacity style={styles.linkButton}>
-                      <Feather name="book" size={14} color="#3B82F6" />
-                      <Text style={styles.linkText}>Wikipedia</Text>
-                    </TouchableOpacity>
-                  )}
-                  {proposal.external_resources.booking_link && (
-                    <TouchableOpacity style={styles.linkButton}>
-                      <Feather name="shopping-bag" size={14} color="#3B82F6" />
-                      <Text style={styles.linkText}>Book Now</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {/* Show transaction metadata if available */}
+                {proposal.transaction_metadata?.confidence && (
+                  <View style={styles.confidenceInfo}>
+                    <Text style={styles.confidenceLabel}>AI Confidence:</Text>
+                    <View style={styles.confidenceBar}>
+                      <View
+                        style={[
+                          styles.confidenceProgress,
+                          { width: `${proposal.transaction_metadata.confidence * 100}%` }
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.confidenceValue}>
+                      {Math.round(proposal.transaction_metadata.confidence * 100)}%
+                    </Text>
+                  </View>
+                )}
+
+                {/* Show number of steps */}
+                {proposal.transaction_steps && (
+                  <Text style={styles.stepsInfo}>
+                    {proposal.transaction_steps.length} transaction step{proposal.transaction_steps.length !== 1 ? 's' : ''} will be applied
+                  </Text>
+                )}
               </View>
             )}
 
@@ -814,5 +739,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#3B82F6',
     fontWeight: '500',
+  },
+  // Document changes visualization styles
+  changesSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  operationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  operationBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  operationText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  targetText: {
+    fontSize: 13,
+    color: '#6B7280',
+    flex: 1,
+  },
+  rangeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  rangeText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  confidenceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  confidenceLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  confidenceBar: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+  },
+  confidenceProgress: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 3,
+  },
+  confidenceValue: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  stepsInfo: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 });
