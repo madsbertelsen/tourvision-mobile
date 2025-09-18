@@ -11,6 +11,7 @@ import { useTripChat } from '@/hooks/useTripChat';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { AISuggestionPanel } from '@/components/AISuggestionPanel';
+import { AISuggestionInline } from '@/components/AISuggestionInline';
 
 export default function TripDocumentView() {
   const { id } = useLocalSearchParams();
@@ -281,23 +282,51 @@ export default function TripDocumentView() {
                 {messages && messages.length > 0 ? (
                   messages.map((msg) => {
                     const isOwnMessage = msg.user_id === user?.id;
-                    const userColor = isOwnMessage ? '#3B82F6' : '#8B5CF6';
+                    const isAISuggestion = msg.metadata?.type === 'ai_suggestion' || msg.user?.email === 'ai@tourvision.app';
+                    const userColor = isAISuggestion ? '#8B5CF6' : (isOwnMessage ? '#3B82F6' : '#8B5CF6');
 
                     return (
                       <View key={msg.id} style={styles.messageItem}>
                         <View style={[styles.messageAvatar, { backgroundColor: userColor }]}>
                           <Text style={styles.messageInitial}>
-                            {getUserInitials(msg.user?.full_name, msg.user?.email)}
+                            {isAISuggestion ? 'AI' : getUserInitials(msg.user?.full_name, msg.user?.email)}
                           </Text>
                         </View>
                         <View style={styles.messageContent}>
                           <View style={styles.messageHeader}>
                             <Text style={styles.messageAuthor}>
-                              {isOwnMessage ? 'You' : msg.user?.full_name || msg.user?.email?.split('@')[0] || 'Unknown'}
+                              {isAISuggestion ? 'AI Assistant' : (isOwnMessage ? 'You' : msg.user?.full_name || msg.user?.email?.split('@')[0] || 'Unknown')}
                             </Text>
                             <Text style={styles.messageTime}>{formatMessageTime(msg.created_at)}</Text>
                           </View>
-                          <Text style={styles.messageText}>{msg.message}</Text>
+                          {isAISuggestion ? (
+                            <AISuggestionInline
+                              suggestion={msg.suggestion || {
+                                id: msg.id,
+                                title: 'AI Suggestion',
+                                description: msg.message,
+                                suggestion_type: 'add',
+                                status: 'pending',
+                                approval_count: 0,
+                                required_approvals: 3,
+                              }}
+                              onVote={(suggestionId: string, vote: 'approve' | 'reject', comment?: string) => {
+                                console.log('Vote called from document view:', suggestionId, vote);
+                                if (voteSuggestion && suggestionId && vote) {
+                                  voteSuggestion({ suggestionId, vote, comment });
+                                }
+                              }}
+                              onApply={applySuggestion}
+                              getUserVote={(sugId: string) => {
+                                const vote = getUserVote(sugId);
+                                return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;
+                              }}
+                              isVoting={isVoting}
+                              isApplying={isApplying}
+                            />
+                          ) : (
+                            <Text style={styles.messageText}>{msg.message}</Text>
+                          )}
                         </View>
                       </View>
                     );
