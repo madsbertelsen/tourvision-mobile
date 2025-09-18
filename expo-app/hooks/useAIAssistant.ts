@@ -14,7 +14,9 @@ export interface Proposal {
   title: string;
   description?: string;
   current_content?: any;
-  proposed_content: any;
+  proposed_content?: any;  // Now optional since we use operations
+  proposal_operations?: any;  // Diff operations
+  diff_decorations?: any;  // Decoration positions for visualization
   chat_context?: string[];
   ai_reasoning?: string;
   status: 'pending' | 'approved' | 'rejected' | 'applied';
@@ -22,8 +24,8 @@ export interface Proposal {
   applied_at?: string;
   rejected_at?: string;
   rejection_reason?: string;
-  approval_count: number;
-  rejection_count: number;
+  approval_count?: number;  // Calculated from votes, not stored in DB
+  rejection_count?: number;  // Calculated from votes, not stored in DB
   required_approvals: number;
   // Enriched data fields
   enriched_data?: {
@@ -188,6 +190,33 @@ export function useAIAssistant(tripId: string) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch votes for all proposals to calculate counts
+      if (data && data.length > 0) {
+        const proposalIds = data.map(p => p.id);
+        const { data: votesData, error: votesError } = await supabase
+          .from('proposal_votes')
+          .select('*')
+          .in('proposal_id', proposalIds);
+
+        if (votesError) throw votesError;
+
+        // Calculate approval and rejection counts for each proposal
+        const proposalsWithCounts = data.map(proposal => {
+          const proposalVotes = votesData?.filter(v => v.proposal_id === proposal.id) || [];
+          const approvalCount = proposalVotes.filter(v => v.vote_type === 'approve').length;
+          const rejectionCount = proposalVotes.filter(v => v.vote_type === 'reject').length;
+
+          return {
+            ...proposal,
+            approval_count: approvalCount,
+            rejection_count: rejectionCount
+          };
+        });
+
+        return proposalsWithCounts as Proposal[];
+      }
+
       return data as Proposal[];
     },
     enabled: !!tripId,
@@ -312,26 +341,25 @@ export function useAIAssistant(tripId: string) {
       const proposal = proposals?.find(s => s.id === proposalId);
       if (!proposal) throw new Error('Proposal not found');
 
-      // Update the trip document
-      const { error: updateError } = await supabase
-        .from('trips')
-        .update({ itinerary_document: proposal.proposed_content })
-        .eq('id', tripId);
+      // Call the apply-proposal Edge Function to handle diff operations
+      const response = await fetch('http://localhost:54321/functions/v1/apply-proposal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ proposalId })
+      });
 
-      if (updateError) throw updateError;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to apply proposal');
+      }
 
-      // Mark proposal as applied
-      const { error: proposalError } = await supabase
-        .from('proposals')
-        .update({
-          status: 'applied',
-          applied_at: new Date().toISOString(),
-        })
-        .eq('id', proposalId);
+      const result = await response.json();
+      console.log('Apply proposal result:', result);
 
-      if (proposalError) throw proposalError;
-
-      return proposal;
+      return result;
     },
     onSuccess: () => {
       // Refresh everything

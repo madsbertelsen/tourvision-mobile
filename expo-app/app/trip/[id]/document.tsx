@@ -23,6 +23,10 @@ export default function TripDocumentView() {
   const responsive = useResponsive();
   const { user } = useAuth();
 
+  // State for tracking active diff preview
+  const [activeDiffProposalId, setActiveDiffProposalId] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
+
   // Chat functionality
   const { messages, sendMessage, isSending } = useTripChat(id as string);
   const chatScrollRef = useRef<ScrollView>(null);
@@ -127,6 +131,34 @@ export default function TripDocumentView() {
     return 'Just now';
   };
 
+  // Handle diff preview
+  const handlePreviewDiff = useCallback((proposalId: string) => {
+    console.log('Document - handlePreviewDiff called for:', proposalId);
+    const proposal = proposals?.find(p => p.id === proposalId);
+    console.log('Document - Found proposal:', !!proposal);
+    console.log('Document - Proposal has diff_decorations:', !!proposal?.diff_decorations);
+    console.log('Document - EditorRef current:', !!editorRef.current);
+    console.log('Document - EditorRef has setDiffDecorations:', !!editorRef.current?.setDiffDecorations);
+
+    if (!proposal) return;
+
+    if (activeDiffProposalId === proposalId) {
+      // Toggle off if clicking the same proposal
+      console.log('Document - Clearing diff decorations');
+      setActiveDiffProposalId(null);
+      if (editorRef.current?.clearDiffDecorations) {
+        editorRef.current.clearDiffDecorations();
+      }
+    } else {
+      // Show diff for this proposal
+      console.log('Document - Setting diff decorations:', proposal.diff_decorations);
+      setActiveDiffProposalId(proposalId);
+      if (editorRef.current?.setDiffDecorations && proposal.diff_decorations) {
+        editorRef.current.setDiffDecorations(proposal.diff_decorations);
+      }
+    }
+  }, [activeDiffProposalId, proposals]);
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -215,6 +247,7 @@ export default function TripDocumentView() {
 
           {/* TipTap Editor - Read Only (AI handles edits) */}
           <ItineraryDocumentEditor
+            ref={editorRef}
             trip={trip}
             editable={false}
             onSave={handleSave}
@@ -324,6 +357,8 @@ export default function TripDocumentView() {
                                 }
                               }}
                               onApply={applyProposal}
+                              onPreviewDiff={handlePreviewDiff}
+                              isDiffActive={activeDiffProposalId === (msg.metadata?.proposal_id || msg.metadata?.suggestion_id)}
                               getUserVote={(sugId: string) => {
                                 const vote = getUserVote(sugId);
                                 return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;

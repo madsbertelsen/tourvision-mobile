@@ -233,6 +233,43 @@ The `supabase/seed.sql` file creates:
 
 **Important:** The seed uses a hardcoded bcrypt hash for "TestPassword123!" that works reliably.
 
+### Querying Local Database
+
+When Supabase is running locally via Docker, you can query the PostgreSQL database directly:
+
+```bash
+# Basic query syntax
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "YOUR_SQL_QUERY"
+
+# Examples:
+
+# List all trips
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT id, title FROM trips;"
+
+# Check a specific trip's document
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT itinerary_document FROM trips WHERE id = '28d7e539-4ed0-4f0f-9818-852b3474cfbc';"
+
+# Pretty print JSON columns
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT jsonb_pretty(itinerary_document) FROM trips WHERE title = 'sg';"
+
+# Check proposals with diff decorations
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT id, title, status, jsonb_array_length(diff_decorations) as num_decorations FROM proposals WHERE trip_id = '28d7e539-4ed0-4f0f-9818-852b3474cfbc';"
+
+# Check AI suggestions
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT * FROM ai_suggestions ORDER BY created_at DESC LIMIT 5;"
+
+# List all tables
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "\dt"
+
+# Describe a table structure
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "\d proposals"
+
+# Update data (be careful!)
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDATE proposals SET diff_decorations = '[{\"from\": 1, \"to\": 1, \"type\": \"addition\", \"content\": \"Your content\"}]' WHERE id = 'some-uuid';"
+```
+
+**Note:** The container name `supabase_db_tourvision-mobile` is based on your project folder name. The database is always `postgres` and the user is `postgres` with no password needed when accessing via Docker exec.
+
 ### Prototype Reference
 The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the itinerary document structure stored in the `trips.itinerary_document` column.
 

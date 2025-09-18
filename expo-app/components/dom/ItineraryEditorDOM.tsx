@@ -1,10 +1,11 @@
 'use dom';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { JSONContent } from '@tiptap/react';
+import { DiffVisualization } from './tiptap-diff-extension';
 import {
   DestinationNode,
   DayNode,
@@ -21,12 +22,15 @@ interface ItineraryEditorProps {
   placeholder?: string;
 }
 
-export default function ItineraryEditorDOM({
-  content = '',
-  onChange,
-  editable = true,
-  placeholder = 'Start planning your itinerary...'
-}: ItineraryEditorProps) {
+const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
+  {
+    content = '',
+    onChange,
+    editable = true,
+    placeholder = 'Start planning your itinerary...'
+  },
+  ref
+) => {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -43,6 +47,7 @@ export default function ItineraryEditorDOM({
           class: 'text-blue-500 underline hover:text-blue-600',
         },
       }),
+      DiffVisualization,
       DestinationNode,
       DayNode,
       TransportationNode,
@@ -74,6 +79,26 @@ export default function ItineraryEditorDOM({
       editor.setEditable(editable);
     }
   }, [editable, editor]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    setDiffDecorations: (decorations: any[]) => {
+      console.log('ItineraryEditorDOM - setDiffDecorations called with:', decorations);
+      if (editor && decorations) {
+        const result = editor.commands.setDiffDecorations(decorations);
+        console.log('ItineraryEditorDOM - setDiffDecorations result:', result);
+      } else {
+        console.log('ItineraryEditorDOM - Missing editor or decorations', { editor: !!editor, decorations: !!decorations });
+      }
+    },
+    clearDiffDecorations: () => {
+      console.log('ItineraryEditorDOM - clearDiffDecorations called');
+      if (editor) {
+        const result = editor.commands.clearDiffDecorations();
+        console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
+      }
+    },
+  }), [editor]);
 
   if (!editor) {
     return null;
@@ -287,4 +312,8 @@ export default function ItineraryEditorDOM({
       />
     </div>
   );
-}
+});
+
+ItineraryEditorDOM.displayName = 'ItineraryEditorDOM';
+
+export default ItineraryEditorDOM;

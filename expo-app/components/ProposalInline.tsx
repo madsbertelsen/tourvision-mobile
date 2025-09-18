@@ -13,22 +13,26 @@ interface ProposalInlineProps {
   proposal: Proposal;
   onVote: (proposalId: string, vote: 'approve' | 'reject', comment?: string) => void;
   onApply?: (proposalId: string) => void;
+  onPreviewDiff?: (proposalId: string) => void;
   getUserVote: (proposalId: string) => { vote_type: 'approve' | 'reject' } | null;
   isVoting?: boolean;
   isApplying?: boolean;
+  isDiffActive?: boolean;
 }
 
 export function ProposalInline({
   proposal,
   onVote,
   onApply,
+  onPreviewDiff,
   getUserVote,
   isVoting = false,
   isApplying = false,
+  isDiffActive = false,
 }: ProposalInlineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const userVote = getUserVote(proposal.id);
-  const canApply = proposal.status === 'approved' && !isApplying && onApply;
+  const canApply = proposal.status === 'approved' && !proposal.applied_at && !isApplying && onApply;
 
   const getTypeIcon = () => {
     switch (proposal.request_type) {
@@ -182,20 +186,44 @@ export function ProposalInline({
           </Text>
         </View>
 
-        {/* Action buttons - always visible if not already voted */}
-        <View style={styles.actions}>
-          {userVote ? (
-            <View style={styles.votedStatus}>
-              <Feather
-                name={userVote.vote_type === 'approve' ? 'check-circle' : 'x-circle'}
-                size={16}
-                color={userVote.vote_type === 'approve' ? '#10B981' : '#EF4444'}
-              />
-              <Text style={styles.votedText}>
-                You {userVote.vote_type === 'approve' ? 'accepted' : 'rejected'} this
-              </Text>
-            </View>
-          ) : (
+        {/* Diff Preview Button */}
+        {proposal.diff_decorations && onPreviewDiff && (
+          <TouchableOpacity
+            style={[
+              styles.diffButton,
+              isDiffActive && styles.diffButtonActive
+            ]}
+            onPress={() => onPreviewDiff(proposal.id)}
+          >
+            <Feather
+              name="eye"
+              size={14}
+              color={isDiffActive ? '#3B82F6' : '#6B7280'}
+            />
+            <Text style={[
+              styles.diffButtonText,
+              isDiffActive && styles.diffButtonTextActive
+            ]}>
+              {isDiffActive ? 'Hide Changes' : 'Show Changes in Document'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Action buttons - only show if not applied */}
+        {!proposal.applied_at && (
+          <View style={styles.actions}>
+            {userVote ? (
+              <View style={styles.votedStatus}>
+                <Feather
+                  name={userVote.vote_type === 'approve' ? 'check-circle' : 'x-circle'}
+                  size={16}
+                  color={userVote.vote_type === 'approve' ? '#10B981' : '#EF4444'}
+                />
+                <Text style={styles.votedText}>
+                  You {userVote.vote_type === 'approve' ? 'accepted' : 'rejected'} this
+                </Text>
+              </View>
+            ) : (
             <>
               <TouchableOpacity
                 style={[styles.actionButton, styles.acceptButton]}
@@ -233,7 +261,8 @@ export function ProposalInline({
               </TouchableOpacity>
             </>
           )}
-        </View>
+          </View>
+        )}
 
         {/* Apply button for approved suggestions */}
         {canApply && (
@@ -254,7 +283,7 @@ export function ProposalInline({
         )}
 
         {/* Status badge for applied suggestions */}
-        {proposal.status === 'applied' && (
+        {(proposal.status === 'applied' || proposal.applied_at) && (
           <View style={styles.appliedBadge}>
             <Feather name="check-circle" size={14} color="#10B981" />
             <Text style={styles.appliedText}>Applied</Text>
@@ -481,5 +510,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  diffButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 8,
+  },
+  diffButtonActive: {
+    backgroundColor: '#EBF5FF',
+    borderColor: '#3B82F6',
+  },
+  diffButtonText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  diffButtonTextActive: {
+    color: '#3B82F6',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { JSONContent } from '@tiptap/react';
 import ItineraryEditorDOM from './dom/ItineraryEditorDOM';
@@ -10,12 +10,17 @@ interface ItineraryDocumentEditorProps {
   onSave?: (content: JSONContent) => void;
 }
 
-export function ItineraryDocumentEditor({
-  trip,
-  editable = false,
-  onSave,
-}: ItineraryDocumentEditorProps) {
+export interface ItineraryDocumentEditorRef {
+  setDiffDecorations: (decorations: any[]) => void;
+  clearDiffDecorations: () => void;
+}
+
+export const ItineraryDocumentEditor = forwardRef<
+  ItineraryDocumentEditorRef,
+  ItineraryDocumentEditorProps
+>(({ trip, editable = false, onSave }, ref) => {
   const [content, setContent] = useState<JSONContent | null>(null);
+  const editorDomRef = useRef<any>(null);
 
   // Convert trip data to TipTap document format
   useEffect(() => {
@@ -37,6 +42,20 @@ export function ItineraryDocumentEditor({
     }
   }, [onSave]);
 
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    setDiffDecorations: (decorations: any[]) => {
+      if (editorDomRef.current?.setDiffDecorations) {
+        editorDomRef.current.setDiffDecorations(decorations);
+      }
+    },
+    clearDiffDecorations: () => {
+      if (editorDomRef.current?.clearDiffDecorations) {
+        editorDomRef.current.clearDiffDecorations();
+      }
+    },
+  }), []);
+
   if (!content) {
     return null;
   }
@@ -44,6 +63,7 @@ export function ItineraryDocumentEditor({
   return (
     <View style={styles.container}>
       <ItineraryEditorDOM
+        ref={editorDomRef}
         content={content}
         onChange={handleContentChange}
         editable={editable}
@@ -57,7 +77,9 @@ export function ItineraryDocumentEditor({
       />
     </View>
   );
-}
+});
+
+ItineraryDocumentEditor.displayName = 'ItineraryDocumentEditor';
 
 // Helper function to convert trip data to TipTap document format
 function convertTripToTipTap(trip: Tables<'trips'>): JSONContent {

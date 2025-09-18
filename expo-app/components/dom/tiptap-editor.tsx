@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { JSONContent } from '@tiptap/react';
+import { DiffVisualization } from './tiptap-diff-extension';
 // Temporarily disabled custom node types
 // import {
 //   DestinationNode,
@@ -40,6 +41,7 @@ export function TipTapEditor({
           class: 'text-blue-500 underline',
         },
       }),
+      DiffVisualization,
       // Temporarily disabled custom node types
       // DestinationNode,
       // DayNode,

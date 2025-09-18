@@ -1,8 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createMistral } from 'https://esm.sh/@ai-sdk/mistral@1.0.7'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { generateObject } from 'https://esm.sh/ai@4.0.20'
-import { createMistral } from 'https://esm.sh/@ai-sdk/mistral@1.0.7'
 import { z } from 'https://esm.sh/zod@3.21.4'
+import { createMinimalProposedContent } from './diff-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -139,14 +140,23 @@ Don't wait for group consensus - this is for single users planning their trips.`
       // Validate message_id is a valid UUID before using it as source_message_id
       const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message_id)
 
+      // Generate diff operations and decorations
+      const currentDoc = document || { type: 'doc', content: [] }
+      const { proposedDoc, operations, decorations } = createMinimalProposedContent(
+        currentDoc,
+        object
+      )
+
       const proposalData: any = {
         trip_id,
         created_by: AI_USER_ID,
         proposal_type: object.proposal_type,
         title: object.title,
         description: object.description,
-        current_content: document,
-        proposed_content: createProposedContent(document, object),
+        current_content: currentDoc,
+        proposed_content: proposedDoc,
+        proposal_operations: operations,  // Store diff operations
+        diff_decorations: decorations,    // Store decoration positions
         chat_context: messageTexts.slice(0, 5),
         ai_reasoning: `User suggested: "${message}"`,
         status: 'pending',
@@ -240,56 +250,6 @@ Don't wait for group consensus - this is for single users planning their trips.`
   }
 })
 
-// Helper function to create proposed content
-function createProposedContent(document: any, aiResponse: any): any {
-  const newDoc = document ? JSON.parse(JSON.stringify(document)) : { type: 'doc', content: [] }
-
-  if (!newDoc.content || !Array.isArray(newDoc.content)) {
-    newDoc.content = []
-  }
-
-  // Add a simple section for the proposal
-  const newSection = {
-    type: 'section',
-    attrs: { id: `section-${Date.now()}` },
-    content: [
-      {
-        type: 'heading',
-        attrs: { level: 2 },
-        content: [{ type: 'text', text: aiResponse.title }]
-      },
-      {
-        type: 'paragraph',
-        content: [{ type: 'text', text: aiResponse.description }]
-      }
-    ]
-  }
-
-  // Add enriched data as a list if available
-  if (aiResponse.enriched_data?.quick_facts?.length) {
-    newSection.content.push({
-      type: 'bulletList',
-      content: aiResponse.enriched_data.quick_facts.map((fact: string) => ({
-        type: 'listItem',
-        content: [{
-          type: 'paragraph',
-          content: [{ type: 'text', text: fact }]
-        }]
-      }))
-    })
-  }
-
-  // Add the new section to the document
-  if (aiResponse.proposal_type === 'add') {
-    newDoc.content.push(newSection)
-  } else if (aiResponse.proposal_type === 'modify' || aiResponse.proposal_type === 'remove') {
-    // For modify/remove, we'd need more complex logic
-    // For now, just add a note about the change
-    newDoc.content.push(newSection)
-  }
-
-  return newDoc
-}
 
 // Simple response for when AI is not available
 async function createSimpleResponse(supabase: any, trip_id: string, message_id: string, message: string) {
