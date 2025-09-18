@@ -5,13 +5,14 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import { JSONContent } from '@tiptap/react';
-import { 
-  DestinationNode,
-  DayNode,
-  TransportationNode,
-  GroupSplitNode,
-  TipNode
-} from './extensions';
+// Temporarily disabled custom node types
+// import {
+//   DestinationNode,
+//   DayNode,
+//   TransportationNode,
+//   GroupSplitNode,
+//   TipNode
+// } from './extensions';
 
 interface TipTapEditorProps {
   content?: JSONContent | string;
@@ -39,11 +40,12 @@ export function TipTapEditor({
           class: 'text-blue-500 underline',
         },
       }),
-      DestinationNode,
-      DayNode,
-      TransportationNode,
-      GroupSplitNode,
-      TipNode,
+      // Temporarily disabled custom node types
+      // DestinationNode,
+      // DayNode,
+      // TransportationNode,
+      // GroupSplitNode,
+      // TipNode,
     ],
     content,
     editable,

@@ -9,9 +9,21 @@ CREATE TABLE IF NOT EXISTS public.trip_chat_messages (
   is_edited BOOLEAN DEFAULT FALSE,
 
   -- Optional fields for rich messages
-  attachments JSONB,
-  reply_to UUID REFERENCES public.trip_chat_messages(id) ON DELETE SET NULL
+  attachments JSONB
 );
+
+-- Add reply_to column if it doesn't exist (for migration compatibility)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'trip_chat_messages'
+    AND column_name = 'reply_to'
+  ) THEN
+    ALTER TABLE public.trip_chat_messages
+    ADD COLUMN reply_to UUID REFERENCES public.trip_chat_messages(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_trip_chat_messages_trip_id ON public.trip_chat_messages(trip_id);

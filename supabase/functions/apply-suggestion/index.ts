@@ -80,13 +80,20 @@ serve(async (req) => {
     }
 
     // Get the AI config to check required approvals
-    const { data: config } = await supabase
+    // Default to the value from the suggestion itself
+    let requiredApprovals = suggestion.required_approvals || 1
+
+    // Only try to fetch config if we need to override the default
+    const { data: aiConfig } = await supabase
       .from('ai_agent_config')
       .select('required_approvals')
       .eq('trip_id', suggestion.trip_id)
-      .single()
+      .maybeSingle()
 
-    const requiredApprovals = config?.required_approvals || suggestion.required_approvals || 1
+    // Use the config value if it exists
+    if (aiConfig?.required_approvals) {
+      requiredApprovals = aiConfig.required_approvals
+    }
 
     console.log('Required approvals:', requiredApprovals, 'Current approvals:', approvalCount)
     console.log('Suggestion status before processing:', suggestion.status)

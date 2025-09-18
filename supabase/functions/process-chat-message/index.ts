@@ -130,6 +130,7 @@ serve(async (req) => {
       // Create a chat message from the AI agent as a reply to the triggering message
       const aiMessageText = formatAISuggestionMessage(suggestion)
 
+      // Use service role client for AI agent operations
       const { data: aiChatMessage, error: chatError } = await supabase
         .from('trip_chat_messages')
         .insert({
@@ -147,7 +148,13 @@ serve(async (req) => {
         .single()
 
       if (chatError) {
-        console.error('Failed to create AI chat message:', chatError)
+        console.error('Failed to create AI chat message:', JSON.stringify(chatError, null, 2))
+        console.error('Chat message details:', {
+          trip_id,
+          user_id: AI_AGENT_USER_ID,
+          message_length: aiMessageText.length,
+          reply_to: message_id,
+        })
         // Don't throw here - the suggestion was created successfully
       } else {
         console.log('Created AI chat message:', aiChatMessage)
@@ -234,6 +241,7 @@ async function analyzeWithAI(
         description: z.string().optional().describe('Detailed description of the change'),
         proposed_content: z.any().optional().describe('The proposed new document structure'),
         ai_reasoning: z.string().optional().describe('Explanation of why this change was suggested'),
+        has_timing: z.boolean().optional().describe('Whether specific timing is mentioned'),
         // Enriched data fields
         enriched_data: z.object({
           quick_facts: z.array(z.string()).optional().describe('Key facts about the place or activity'),
@@ -276,53 +284,100 @@ async function analyzeWithAI(
 ${config.custom_instructions || ''}
 
 Your role is to:
-1. Analyze conversations for clear decisions or suggestions about trip planning
-2. When specific places, attractions, or activities are mentioned, provide comprehensive information to help the team make informed decisions
-3. Include practical details that travelers need (costs, hours, duration, accessibility)
-4. Explain why something is worth visiting and what makes it special
-5. Consider the context of the trip and suggest how it fits into the overall itinerary
+1. Recognize ALL trip planning decisions and agreements
+2. Understand various types of decisions: destinations, meeting points, activities, meals, accommodation
+3. Detect when the team has agreed on something concrete
+4. Create appropriate document entries for different decision types
 
-Look for:
-- Specific destinations or activities being suggested or agreed upon
-- Times and schedules being set
-- Accommodations being chosen
-- Transportation being planned
-- Activities being added, modified, or removed
+Common patterns to recognize:
+DESTINATIONS & ACTIVITIES:
+- "We want to visit [place]" → Add to wishes/itinerary
+- "Let's go to [place]" → Add to wishes/itinerary
+- "Should we see [place]?" → Consider for discussion
 
-When a specific place or attraction is mentioned (like "Kronborg Castle", "Sagrada Familia", etc.):
-- Provide educational context so all team members understand what it is
-- Include practical information for planning (opening hours, costs, duration)
-- Explain its significance and why it might be worth visiting
-- Suggest optimal timing and any booking requirements
-- Consider accessibility and facilities available
+LOGISTICS & PLANNING:
+- "We've agreed to meet at [place] at [time]" → Add meeting point to itinerary
+- "Let's meet at [place]" → Add meeting arrangement
+- "We should stay at [hotel]" → Add accommodation
+- "Dinner at [restaurant]" → Add meal plan
+- "Take the train at [time]" → Add transportation
 
-Only create suggestions when there's a clear request or consensus from participants.`,
+TIMING DECISIONS:
+- "We have agreed to..." → Something has been decided
+- "Let's do X at [time]" → Scheduled activity
+- "Meet at [time]" → Time-specific arrangement
+
+When creating suggestions:
+- For logistics: Use simple, clear titles (e.g., "Meet at Copenhagen Central Station")
+- For activities: Use the place/activity name
+- Include timing if specified
+- Mark as decision if there's clear agreement or consensus`,
           prompt: `Recent messages (newest first):
 ${messages.map((m, i) => `${i + 1}. "${m.message}"`).join('\n')}
 
 Current document structure:
 ${JSON.stringify(document, null, 2).slice(0, 1000)}
 
-Analyze the conversation:
-1. Is there a specific place, attraction, or activity being discussed?
-2. If yes, provide comprehensive information about it to help the team make an informed decision
-3. Include practical details like location, cost, duration, and best time to visit
-4. Explain what makes it special or worth visiting
-5. Should this trigger a document change? If yes, what specific change with rich context?
+Analyze the latest message for ANY trip planning decision:
 
-For any specific places mentioned, act as a knowledgeable guide providing context that helps team members who might not be familiar with the suggestion.`,
+1. MEETING ARRANGEMENTS:
+   - "agreed to meet at [place] at [time]" → Create suggestion
+   - "meet at [place]" → Create suggestion
+   - Look for words: meet, meeting, gather, rendezvous
+
+2. DESTINATIONS & ATTRACTIONS:
+   - Any mention of visiting places
+   - Tourist attractions, museums, restaurants, etc.
+
+3. LOGISTICS:
+   - Transportation arrangements
+   - Accommodation decisions
+   - Meal plans
+
+4. TIMING:
+   - If specific time mentioned → has_timing = true
+   - Include in itinerary section with time
+
+For meeting arrangements:
+- Title: Generate the EXACT text to display (e.g., "Meet at Copenhagen Central Station")
+- Do NOT add "Visit" to meeting arrangements
+- For places without action verbs, add "Visit" (e.g., "Visit Kronborg Castle")
+
+Examples of good titles:
+- "Meet at Copenhagen Central Station" (has action verb)
+- "Check in at Hotel Nordic" (has action verb)
+- "Dinner at Restaurant Noma" (descriptive enough)
+- "Visit Kronborg Castle" (needs action verb)
+- "Visit Louisiana Museum" (needs action verb)
+
+IMPORTANT:
+- The title will be used as-is in the document
+- Create suggestions for concrete decisions only
+- Set has_timing: true if specific time is mentioned`,
           temperature: config.temperature || 0.7,
         })
 
         console.log('Mistral AI SDK response:', object)
 
         if (object.should_suggest && object.suggestion_type) {
+          // Always use modifyDocument to ensure proper structure
+          // The AI's proposed_content is often malformed, so we'll build it properly
+          const proposedDoc = modifyDocument(document, {
+            type: object.suggestion_type,
+            title: object.title,
+            description: object.description,
+            content: object.description || object.title,
+            enriched_data: object.enriched_data,
+            practical_info: object.practical_info,
+            has_timing: object.has_timing,
+          })
+
           return {
             suggestion_type: object.suggestion_type,
             title: object.title || `${object.suggestion_type} suggestion`,
             description: object.description,
             current_content: document,
-            proposed_content: object.proposed_content || modifyDocument(document, object),
+            proposed_content: proposedDoc,
             chat_context: messageTexts.slice(0, 5),
             ai_reasoning: object.ai_reasoning || 'Based on team discussion',
             required_approvals: config.required_approvals || 1,
@@ -434,24 +489,246 @@ function formatAISuggestionMessage(suggestion: any): string {
 
 // Helper function to modify document
 function modifyDocument(document: any, change: any): any {
-  // Clone the document
-  const newDoc = JSON.parse(JSON.stringify(document || { type: 'doc', content: [] }))
+  // Start with existing document or create new one
+  const newDoc = document ? JSON.parse(JSON.stringify(document)) : { type: 'doc', content: [] }
 
-  // Ensure content array exists
-  if (!newDoc.content) {
+  // Ensure proper document structure
+  if (!newDoc.type) newDoc.type = 'doc'
+  if (!newDoc.content || !Array.isArray(newDoc.content)) {
     newDoc.content = []
   }
 
-  // Add a placeholder for the suggested change
-  // In production, this would intelligently modify the document structure
-  newDoc.content.push({
-    type: 'paragraph',
-    content: [{
-      type: 'text',
-      text: `[AI Suggested ${change.type || 'Change'}: ${change.content || change.title || 'New content'}]`,
-      marks: [{ type: 'bold' }]
-    }]
-  })
+  // Initialize document with sections if empty
+  if (newDoc.content.length === 0) {
+    // Main title
+    newDoc.content.push({
+      type: 'heading',
+      attrs: { level: 1 },
+      content: [{
+        type: 'text',
+        text: 'Trip Plan'
+      }]
+    })
+
+    // Wishes & Ideas section
+    newDoc.content.push({
+      type: 'heading',
+      attrs: { level: 2 },
+      content: [{
+        type: 'text',
+        text: 'Wishes & Ideas'
+      }]
+    })
+
+    // Empty paragraph for wishes section
+    newDoc.content.push({
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: 'Things we want to do (not yet scheduled):',
+        marks: [{ type: 'italic' }]
+      }]
+    })
+
+    // Itinerary section
+    newDoc.content.push({
+      type: 'heading',
+      attrs: { level: 2 },
+      content: [{
+        type: 'text',
+        text: 'Itinerary'
+      }]
+    })
+  }
+
+  // Check if suggestion includes timing information
+  const hasSpecificTiming = change.has_timing ||
+    (change.description && /\b(day \d+|morning|afternoon|evening|\d{1,2}:\d{2}|\d{1,2}(am|pm))\b/i.test(change.description))
+
+  if (change.type === 'add') {
+    const placeName = change.title || 'New Destination'
+
+    if (!hasSpecificTiming) {
+      // Add to Wishes & Ideas section
+      let wishesSection = -1
+      let itinerarySection = -1
+
+      // Find section indices
+      newDoc.content.forEach((node: any, index: number) => {
+        if (node.type === 'heading' && node.attrs?.level === 2) {
+          const text = node.content?.[0]?.text
+          if (text === 'Wishes & Ideas') wishesSection = index
+          if (text === 'Itinerary') itinerarySection = index
+        }
+      })
+
+      // Ensure wishes section exists
+      if (wishesSection === -1) {
+        // Insert before itinerary if it exists, otherwise at end
+        const insertIndex = itinerarySection > -1 ? itinerarySection : newDoc.content.length
+
+        newDoc.content.splice(insertIndex, 0, {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{
+            type: 'text',
+            text: 'Wishes & Ideas'
+          }]
+        })
+        wishesSection = insertIndex
+        if (itinerarySection > -1) itinerarySection++
+      }
+
+      // Find or create bullet list after wishes heading
+      let bulletListIndex = -1
+      for (let i = wishesSection + 1; i < newDoc.content.length && i < wishesSection + 3; i++) {
+        if (newDoc.content[i].type === 'bulletList') {
+          bulletListIndex = i
+          break
+        }
+      }
+
+      if (bulletListIndex === -1) {
+        // Create new bullet list
+        const insertAt = Math.min(wishesSection + 2,
+          itinerarySection > -1 ? itinerarySection : newDoc.content.length)
+
+        newDoc.content.splice(insertAt, 0, {
+          type: 'bulletList',
+          content: []
+        })
+        bulletListIndex = insertAt
+      }
+
+      // Add wish as bullet point - use title as-is
+      newDoc.content[bulletListIndex].content.push({
+        type: 'listItem',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'text',
+            text: wishText
+          }]
+        }]
+      })
+
+    } else {
+      // Add to Itinerary section with timing
+      let itinerarySection = -1
+
+      // Find itinerary section
+      newDoc.content.forEach((node: any, index: number) => {
+        if (node.type === 'heading' && node.attrs?.level === 2 &&
+            node.content?.[0]?.text === 'Itinerary') {
+          itinerarySection = index
+        }
+      })
+
+      // Ensure itinerary section exists
+      if (itinerarySection === -1) {
+        newDoc.content.push({
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{
+            type: 'text',
+            text: 'Itinerary'
+          }]
+        })
+        itinerarySection = newDoc.content.length - 1
+      }
+
+      // Extract day/time if available
+      let dayMatch = change.description?.match(/day (\d+)/i)
+      let timeMatch = change.description?.match(/(\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i)
+
+      const dayText = dayMatch ? `Day ${dayMatch[1]}` : 'Day 1'
+      const timeText = timeMatch ? timeMatch[0] : ''
+
+      // Find or create day heading
+      let dayHeadingIndex = -1
+      for (let i = itinerarySection + 1; i < newDoc.content.length; i++) {
+        const node = newDoc.content[i]
+        if (node.type === 'heading' && node.attrs?.level === 3 &&
+            node.content?.[0]?.text === dayText) {
+          dayHeadingIndex = i
+          break
+        }
+        // Stop if we hit another h2
+        if (node.type === 'heading' && node.attrs?.level === 2) break
+      }
+
+      if (dayHeadingIndex === -1) {
+        // Add day heading after itinerary
+        newDoc.content.splice(itinerarySection + 1, 0, {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{
+            type: 'text',
+            text: dayText
+          }]
+        })
+        dayHeadingIndex = itinerarySection + 1
+      }
+
+      // Use the title as-is - the AI should have generated the exact text
+      const itemText = timeText ? `${timeText} - ${placeName}` : placeName
+
+      // Find or create bullet list for this day
+      let dayBulletListIndex = -1
+      for (let i = dayHeadingIndex + 1; i < newDoc.content.length; i++) {
+        if (newDoc.content[i].type === 'bulletList') {
+          dayBulletListIndex = i
+          break
+        }
+        // Stop if we hit another heading
+        if (newDoc.content[i].type === 'heading') break
+      }
+
+      if (dayBulletListIndex === -1) {
+        // Create bullet list after day heading
+        newDoc.content.splice(dayHeadingIndex + 1, 0, {
+          type: 'bulletList',
+          content: []
+        })
+        dayBulletListIndex = dayHeadingIndex + 1
+      }
+
+      // Add to bullet list
+      newDoc.content[dayBulletListIndex].content.push({
+        type: 'listItem',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'text',
+            text: itemText
+          }]
+        }]
+      })
+    }
+
+  } else if (change.type === 'modify') {
+    // Handle modifications
+    const modifyText = change.description || change.title || 'item'
+    newDoc.content.push({
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: `Modified: ${modifyText}`,
+        marks: [{ type: 'italic' }]
+      }]
+    })
+  } else if (change.type === 'remove') {
+    // Handle removals
+    const removeText = change.description || change.title || 'item'
+    newDoc.content.push({
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: `Removed: ${removeText}`,
+        marks: [{ type: 'strike' }]
+      }]
+    })
+  }
 
   return newDoc
 }
