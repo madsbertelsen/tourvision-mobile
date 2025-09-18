@@ -10,8 +10,8 @@ import { JSONContent } from '@tiptap/react';
 import { useTripChat } from '@/hooks/useTripChat';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
-import { AISuggestionPanel } from '@/components/AISuggestionPanel';
-import { AISuggestionInline } from '@/components/AISuggestionInline';
+import { ProposalPanel } from '@/components/ProposalPanel';
+import { ProposalInline } from '@/components/ProposalInline';
 
 export default function TripDocumentView() {
   const { id } = useLocalSearchParams();
@@ -29,10 +29,10 @@ export default function TripDocumentView() {
 
   // AI Assistant
   const {
-    pendingSuggestions,
-    suggestions,
-    voteSuggestion,
-    applySuggestion,
+    pendingProposals,
+    proposals,
+    voteProposal,
+    applyProposal,
     getUserVote,
     isVoting,
     isApplying,
@@ -242,9 +242,9 @@ export default function TripDocumentView() {
                 >
                   <Feather name="cpu" size={16} color={activeTab === 'suggestions' ? '#3B82F6' : '#6B7280'} />
                   <Text style={[styles.tabButtonText, activeTab === 'suggestions' && styles.tabButtonTextActive]}>AI</Text>
-                  {pendingSuggestions?.length > 0 && (
+                  {pendingProposals?.length > 0 && (
                     <View style={styles.tabBadge}>
-                      <Text style={styles.tabBadgeText}>{pendingSuggestions.length}</Text>
+                      <Text style={styles.tabBadgeText}>{pendingProposals.length}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -300,23 +300,23 @@ export default function TripDocumentView() {
                             <Text style={styles.messageTime}>{formatMessageTime(msg.created_at)}</Text>
                           </View>
                           {isAISuggestion ? (
-                            <AISuggestionInline
-                              suggestion={msg.suggestion || {
+                            <ProposalInline
+                              proposal={msg.proposal || {
                                 id: msg.id,
                                 title: 'AI Suggestion',
                                 description: msg.message,
-                                suggestion_type: 'add',
+                                proposal_type: 'add',
                                 status: 'pending',
                                 approval_count: 0,
                                 required_approvals: 3,
                               }}
-                              onVote={(suggestionId: string, vote: 'approve' | 'reject', comment?: string) => {
-                                console.log('Vote called from document view:', suggestionId, vote);
-                                if (voteSuggestion && suggestionId && vote) {
-                                  voteSuggestion({ suggestionId, vote, comment });
+                              onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
+                                console.log('Vote called from document view:', proposalId, vote);
+                                if (voteProposal && proposalId && vote) {
+                                  voteProposal({ proposalId, vote, comment });
                                 }
                               }}
-                              onApply={applySuggestion}
+                              onApply={applyProposal}
                               getUserVote={(sugId: string) => {
                                 const vote = getUserVote(sugId);
                                 return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;
@@ -389,15 +389,15 @@ export default function TripDocumentView() {
               </>
             ) : (
               /* AI Suggestions Tab */
-              <View style={styles.suggestionsContainer}>
-                <AISuggestionPanel
-                  suggestions={suggestions || []}
-                  onVote={(suggestionId: string, vote: 'approve' | 'reject', comment?: string) => {
-                    if (voteSuggestion) {
-                      voteSuggestion({ suggestionId, vote, comment });
+              <View style={styles.proposalsContainer}>
+                <ProposalPanel
+                  proposals={proposals || []}
+                  onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
+                    if (voteProposal) {
+                      voteProposal({ proposalId, vote, comment });
                     }
                   }}
-                  onApply={applySuggestion}
+                  onApply={applyProposal}
                   getUserVote={(sugId: string) => {
                     const vote = getUserVote(sugId);
                     return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;

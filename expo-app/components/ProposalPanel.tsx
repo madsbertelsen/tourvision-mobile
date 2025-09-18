@@ -9,53 +9,53 @@ import {
   TextInput,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { AISuggestion } from '@/hooks/useAIAssistant';
+import { Proposal } from '@/hooks/useAIAssistant';
 import { useAuth } from '@/lib/supabase/auth-context';
 
-interface AISuggestionPanelProps {
-  suggestions: AISuggestion[];
-  onVote: (suggestionId: string, vote: 'approve' | 'reject', comment?: string) => void;
-  onApply: (suggestionId: string) => void;
-  getUserVote: (suggestionId: string) => { vote: 'approve' | 'reject' } | null;
+interface ProposalPanelProps {
+  proposals: Proposal[];
+  onVote: (proposalId: string, vote: 'approve' | 'reject', comment?: string) => void;
+  onApply: (proposalId: string) => void;
+  getUserVote: (proposalId: string) => { vote: 'approve' | 'reject' } | null;
   isVoting?: boolean;
   isApplying?: boolean;
 }
 
-export function AISuggestionPanel({
-  suggestions,
+export function ProposalPanel({
+  proposals,
   onVote,
   onApply,
   getUserVote,
   isVoting = false,
   isApplying = false,
-}: AISuggestionPanelProps) {
+}: ProposalPanelProps) {
   const { user } = useAuth();
-  const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null);
+  const [expandedProposal, setExpandedProposal] = useState<string | null>(null);
   const [voteComments, setVoteComments] = useState<Record<string, string>>({});
 
 
-  // Ensure suggestions is always an array
-  const validSuggestions = Array.isArray(suggestions) ? suggestions : [];
+  // Ensure proposals is always an array
+  const validProposals = Array.isArray(proposals) ? proposals : [];
 
-  const pendingSuggestions = validSuggestions.filter(s => s && s.status === 'pending');
-  const approvedSuggestions = validSuggestions.filter(s => s && s.status === 'approved');
-  const appliedSuggestions = validSuggestions.filter(s => s && s.status === 'applied');
+  const pendingProposals = validProposals.filter(s => s && s.status === 'pending');
+  const approvedProposals = validProposals.filter(s => s && s.status === 'approved');
+  const appliedProposals = validProposals.filter(s => s && s.status === 'applied');
 
-  const renderSuggestionCard = (suggestionItem: AISuggestion) => {
+  const renderProposalCard = (proposalItem: Proposal) => {
     // Create a local copy to avoid closure issues
-    const suggestion = { ...suggestionItem };
+    const proposal = { ...proposalItem };
 
-    if (!suggestion || !suggestion.id) {
-      console.error('Invalid suggestion object:', suggestion);
+    if (!proposal || !proposal.id) {
+      console.error('Invalid proposal object:', proposal);
       return null;
     }
 
-    const userVote = getUserVote(suggestion.id);
-    const isExpanded = expandedSuggestion === suggestion.id;
-    const canApply = suggestion.status === 'approved' && !isApplying;
+    const userVote = getUserVote(proposal.id);
+    const isExpanded = expandedProposal === proposal.id;
+    const canApply = proposal.status === 'approved' && !isApplying;
 
     const getTypeIcon = () => {
-      switch (suggestion.suggestion_type) {
+      switch (proposal.proposal_type) {
         case 'add':
           return 'plus-circle';
         case 'modify':
@@ -70,7 +70,7 @@ export function AISuggestionPanel({
     };
 
     const getTypeColor = () => {
-      switch (suggestion.suggestion_type) {
+      switch (proposal.proposal_type) {
         case 'add':
           return '#10B981';
         case 'modify':
@@ -85,21 +85,21 @@ export function AISuggestionPanel({
     };
 
     return (
-      <View key={suggestion.id} style={styles.suggestionCard}>
+      <View key={proposal.id} style={styles.proposalCard}>
         {/* Header */}
         <TouchableOpacity
-          style={styles.suggestionHeader}
-          onPress={() => setExpandedSuggestion(isExpanded ? null : suggestion.id)}
+          style={styles.proposalHeader}
+          onPress={() => setExpandedProposal(isExpanded ? null : proposal.id)}
         >
-          <View style={styles.suggestionHeaderLeft}>
+          <View style={styles.proposalHeaderLeft}>
             <View style={[styles.typeIcon, { backgroundColor: getTypeColor() + '20' }]}>
               <Feather name={getTypeIcon() as any} size={18} color={getTypeColor()} />
             </View>
-            <View style={styles.suggestionInfo}>
-              <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
-              {suggestion.description && (
-                <Text style={styles.suggestionDescription} numberOfLines={isExpanded ? 0 : 1}>
-                  {suggestion.description}
+            <View style={styles.proposalInfo}>
+              <Text style={styles.proposalTitle}>{proposal.title}</Text>
+              {proposal.description && (
+                <Text style={styles.proposalDescription} numberOfLines={isExpanded ? 0 : 1}>
+                  {proposal.description}
                 </Text>
               )}
             </View>
@@ -118,12 +118,12 @@ export function AISuggestionPanel({
               style={[
                 styles.voteProgress,
                 styles.approveBar,
-                { width: `${(suggestion.approval_count / suggestion.required_approvals) * 100}%` }
+                { width: `${(proposal.approval_count / proposal.required_approvals) * 100}%` }
               ]}
             />
           </View>
           <Text style={styles.voteText}>
-            {suggestion.approval_count} / {suggestion.required_approvals} approvals
+            {proposal.approval_count} / {proposal.required_approvals} approvals
           </Text>
         </View>
 
@@ -131,10 +131,10 @@ export function AISuggestionPanel({
         {isExpanded && (
           <View style={styles.expandedContent}>
             {/* Quick Facts */}
-            {suggestion.enriched_data?.quick_facts && suggestion.enriched_data.quick_facts.length > 0 && (
+            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
               <View style={styles.enrichedSection}>
                 <Text style={styles.sectionTitle}>Quick Facts</Text>
-                {suggestion.enriched_data.quick_facts.map((fact, index) => (
+                {proposal.enriched_data.quick_facts.map((fact, index) => (
                   <View key={index} style={styles.factItem}>
                     <Text style={styles.bulletPoint}>•</Text>
                     <Text style={styles.factText}>{fact}</Text>
@@ -144,18 +144,18 @@ export function AISuggestionPanel({
             )}
 
             {/* Why Visit */}
-            {suggestion.enriched_data?.why_visit && (
+            {proposal.enriched_data?.why_visit && (
               <View style={styles.enrichedSection}>
                 <Text style={styles.sectionTitle}>Why Visit</Text>
-                <Text style={styles.enrichedText}>{suggestion.enriched_data.why_visit}</Text>
+                <Text style={styles.enrichedText}>{proposal.enriched_data.why_visit}</Text>
               </View>
             )}
 
             {/* Highlights */}
-            {suggestion.enriched_data?.highlights && suggestion.enriched_data.highlights.length > 0 && (
+            {proposal.enriched_data?.highlights && proposal.enriched_data.highlights.length > 0 && (
               <View style={styles.enrichedSection}>
                 <Text style={styles.sectionTitle}>Highlights</Text>
-                {suggestion.enriched_data.highlights.map((highlight, index) => (
+                {proposal.enriched_data.highlights.map((highlight, index) => (
                   <View key={index} style={styles.factItem}>
                     <Feather name="star" size={12} color="#F59E0B" />
                     <Text style={styles.factText}>{highlight}</Text>
@@ -165,49 +165,49 @@ export function AISuggestionPanel({
             )}
 
             {/* Practical Info */}
-            {suggestion.practical_info && (
+            {proposal.practical_info && (
               <View style={styles.practicalSection}>
                 <Text style={styles.sectionTitle}>Practical Information</Text>
                 <View style={styles.infoGrid}>
-                  {suggestion.practical_info.duration && (
+                  {proposal.practical_info.duration && (
                     <View style={styles.infoItem}>
                       <Feather name="clock" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{suggestion.practical_info.duration}</Text>
+                      <Text style={styles.infoText}>{proposal.practical_info.duration}</Text>
                     </View>
                   )}
-                  {suggestion.practical_info.best_time && (
+                  {proposal.practical_info.best_time && (
                     <View style={styles.infoItem}>
                       <Feather name="sun" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{suggestion.practical_info.best_time}</Text>
+                      <Text style={styles.infoText}>{proposal.practical_info.best_time}</Text>
                     </View>
                   )}
-                  {suggestion.practical_info.admission?.adults && (
+                  {proposal.practical_info.admission?.adults && (
                     <View style={styles.infoItem}>
                       <Feather name="dollar-sign" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{suggestion.practical_info.admission.adults}</Text>
+                      <Text style={styles.infoText}>{proposal.practical_info.admission.adults}</Text>
                     </View>
                   )}
-                  {suggestion.practical_info.opening_hours && (
+                  {proposal.practical_info.opening_hours && (
                     <View style={styles.infoItem}>
                       <Feather name="calendar" size={14} color="#6B7280" />
-                      <Text style={styles.infoText}>{suggestion.practical_info.opening_hours}</Text>
+                      <Text style={styles.infoText}>{proposal.practical_info.opening_hours}</Text>
                     </View>
                   )}
                 </View>
 
                 {/* Location Details */}
-                {suggestion.practical_info.location_details && (
+                {proposal.practical_info.location_details && (
                   <View style={styles.locationSection}>
-                    {suggestion.practical_info.location_details.address && (
+                    {proposal.practical_info.location_details.address && (
                       <View style={styles.infoItem}>
                         <Feather name="map-pin" size={14} color="#6B7280" />
-                        <Text style={styles.infoText}>{suggestion.practical_info.location_details.address}</Text>
+                        <Text style={styles.infoText}>{proposal.practical_info.location_details.address}</Text>
                       </View>
                     )}
-                    {suggestion.practical_info.location_details.transport_options && (
+                    {proposal.practical_info.location_details.transport_options && (
                       <View style={styles.transportSection}>
                         <Text style={styles.miniTitle}>Getting There:</Text>
-                        {suggestion.practical_info.location_details.transport_options.map((option, index) => (
+                        {proposal.practical_info.location_details.transport_options.map((option, index) => (
                           <Text key={index} style={styles.transportOption}>• {option}</Text>
                         ))}
                       </View>
@@ -216,17 +216,17 @@ export function AISuggestionPanel({
                 )}
 
                 {/* Accessibility */}
-                {suggestion.practical_info.accessibility && (
+                {proposal.practical_info.accessibility && (
                   <View style={styles.accessibilitySection}>
-                    {suggestion.practical_info.accessibility.wheelchair && (
+                    {proposal.practical_info.accessibility.wheelchair && (
                       <View style={styles.infoItem}>
                         <Feather name="info" size={14} color="#6B7280" />
-                        <Text style={styles.infoText}>{suggestion.practical_info.accessibility.wheelchair}</Text>
+                        <Text style={styles.infoText}>{proposal.practical_info.accessibility.wheelchair}</Text>
                       </View>
                     )}
-                    {suggestion.practical_info.accessibility.facilities && suggestion.practical_info.accessibility.facilities.length > 0 && (
+                    {proposal.practical_info.accessibility.facilities && proposal.practical_info.accessibility.facilities.length > 0 && (
                       <View style={styles.facilitiesRow}>
-                        {suggestion.practical_info.accessibility.facilities.map((facility, index) => (
+                        {proposal.practical_info.accessibility.facilities.map((facility, index) => (
                           <View key={index} style={styles.facilityChip}>
                             <Text style={styles.facilityText}>{facility}</Text>
                           </View>
@@ -239,23 +239,23 @@ export function AISuggestionPanel({
             )}
 
             {/* External Resources */}
-            {suggestion.external_resources && (
+            {proposal.external_resources && (
               <View style={styles.resourcesSection}>
                 <Text style={styles.sectionTitle}>Learn More</Text>
                 <View style={styles.linksRow}>
-                  {suggestion.external_resources.official_website && (
+                  {proposal.external_resources.official_website && (
                     <TouchableOpacity style={styles.linkButton}>
                       <Feather name="globe" size={14} color="#3B82F6" />
                       <Text style={styles.linkText}>Official Site</Text>
                     </TouchableOpacity>
                   )}
-                  {suggestion.external_resources.wikipedia_url && (
+                  {proposal.external_resources.wikipedia_url && (
                     <TouchableOpacity style={styles.linkButton}>
                       <Feather name="book" size={14} color="#3B82F6" />
                       <Text style={styles.linkText}>Wikipedia</Text>
                     </TouchableOpacity>
                   )}
-                  {suggestion.external_resources.booking_link && (
+                  {proposal.external_resources.booking_link && (
                     <TouchableOpacity style={styles.linkButton}>
                       <Feather name="shopping-bag" size={14} color="#3B82F6" />
                       <Text style={styles.linkText}>Book Now</Text>
@@ -266,19 +266,19 @@ export function AISuggestionPanel({
             )}
 
             {/* AI Reasoning */}
-            {suggestion.ai_reasoning && (
+            {proposal.ai_reasoning && (
               <View style={styles.reasoningSection}>
                 <Text style={styles.sectionTitle}>AI Analysis</Text>
-                <Text style={styles.reasoningText}>{suggestion.ai_reasoning}</Text>
+                <Text style={styles.reasoningText}>{proposal.ai_reasoning}</Text>
               </View>
             )}
 
             {/* Chat Context */}
-            {suggestion.chat_context && suggestion.chat_context.length > 0 && (
+            {proposal.chat_context && proposal.chat_context.length > 0 && (
               <View style={styles.contextSection}>
                 <Text style={styles.sectionTitle}>Based on Discussion</Text>
                 <ScrollView style={styles.contextScroll} horizontal showsHorizontalScrollIndicator={false}>
-                  {suggestion.chat_context.slice(0, 3).map((msg, index) => (
+                  {proposal.chat_context.slice(0, 3).map((msg, index) => (
                     <View key={index} style={styles.contextBubble}>
                       <Text style={styles.contextText} numberOfLines={2}>
                         "{msg}"
@@ -290,7 +290,7 @@ export function AISuggestionPanel({
             )}
 
             {/* Voting Actions */}
-            {suggestion.status === 'pending' && (
+            {proposal.status === 'pending' && (
               <View style={styles.votingSection}>
                 {userVote ? (
                   <View style={styles.votedStatus}>
@@ -300,7 +300,7 @@ export function AISuggestionPanel({
                       color={userVote.vote === 'approve' ? '#10B981' : '#EF4444'}
                     />
                     <Text style={styles.votedText}>
-                      You {userVote.vote === 'approve' ? 'approved' : 'rejected'} this suggestion
+                      You {userVote.vote === 'approve' ? 'approved' : 'rejected'} this proposal
                     </Text>
                   </View>
                 ) : (
@@ -310,13 +310,13 @@ export function AISuggestionPanel({
                         style={[styles.voteButton, styles.approveButton]}
                         onPress={() => {
                           console.log('Approve button clicked');
-                          console.log('suggestion object:', suggestion);
-                          console.log('suggestion.id:', suggestion?.id);
-                          if (!suggestion?.id) {
-                            console.error('suggestion.id is undefined!', suggestion);
+                          console.log('proposal object:', proposal);
+                          console.log('proposal.id:', proposal?.id);
+                          if (!proposal?.id) {
+                            console.error('proposal.id is undefined!', proposal);
                             return;
                           }
-                          onVote(suggestion.id, 'approve', voteComments[suggestion.id]);
+                          onVote(proposal.id, 'approve', voteComments[proposal.id]);
                         }}
                         disabled={isVoting}
                       >
@@ -325,7 +325,7 @@ export function AISuggestionPanel({
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.voteButton, styles.rejectButton]}
-                        onPress={() => onVote(suggestion.id, 'reject', voteComments[suggestion.id])}
+                        onPress={() => onVote(proposal.id, 'reject', voteComments[proposal.id])}
                         disabled={isVoting}
                       >
                         <Feather name="x" size={18} color="white" />
@@ -335,9 +335,9 @@ export function AISuggestionPanel({
                     <TextInput
                       style={styles.commentInput}
                       placeholder="Add a comment (optional)"
-                      value={voteComments[suggestion.id] || ''}
+                      value={voteComments[proposal.id] || ''}
                       onChangeText={(text) =>
-                        setVoteComments({ ...voteComments, [suggestion.id]: text })
+                        setVoteComments({ ...voteComments, [proposal.id]: text })
                       }
                       multiline
                     />
@@ -346,11 +346,11 @@ export function AISuggestionPanel({
               </View>
             )}
 
-            {/* Apply Button for Approved Suggestions */}
+            {/* Apply Button for Approved Proposals */}
             {canApply && (
               <TouchableOpacity
                 style={styles.applyButton}
-                onPress={() => onApply(suggestion.id)}
+                onPress={() => onApply(proposal.id)}
               >
                 <Feather name="check-square" size={18} color="white" />
                 <Text style={styles.applyButtonText}>Apply to Document</Text>
@@ -362,11 +362,11 @@ export function AISuggestionPanel({
     );
   };
 
-  if (validSuggestions.length === 0) {
+  if (validProposals.length === 0) {
     return (
       <View style={styles.emptyState}>
         <Feather name="cpu" size={32} color="#9CA3AF" />
-        <Text style={styles.emptyTitle}>No AI Suggestions Yet</Text>
+        <Text style={styles.emptyTitle}>No AI Proposals Yet</Text>
         <Text style={styles.emptyText}>
           The AI will analyze your chat discussions and suggest document changes
         </Text>
@@ -376,49 +376,49 @@ export function AISuggestionPanel({
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Pending Suggestions */}
-      {pendingSuggestions.length > 0 && (
+      {/* Pending Proposals */}
+      {pendingProposals.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>Pending Review</Text>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{pendingSuggestions.length}</Text>
+              <Text style={styles.badgeText}>{pendingProposals.length}</Text>
             </View>
           </View>
-          {pendingSuggestions.map((suggestion) => (
-            <React.Fragment key={suggestion.id}>
-              {renderSuggestionCard(suggestion)}
+          {pendingProposals.map((proposal) => (
+            <React.Fragment key={proposal.id}>
+              {renderProposalCard(proposal)}
             </React.Fragment>
           ))}
         </View>
       )}
 
-      {/* Approved Suggestions */}
-      {approvedSuggestions.length > 0 && (
+      {/* Approved Proposals */}
+      {approvedProposals.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>Ready to Apply</Text>
             <View style={[styles.badge, styles.approvedBadge]}>
-              <Text style={styles.badgeText}>{approvedSuggestions.length}</Text>
+              <Text style={styles.badgeText}>{approvedProposals.length}</Text>
             </View>
           </View>
-          {approvedSuggestions.map(renderSuggestionCard)}
+          {approvedProposals.map(renderProposalCard)}
         </View>
       )}
 
-      {/* Applied Suggestions */}
-      {appliedSuggestions.length > 0 && (
+      {/* Applied Proposals */}
+      {appliedProposals.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>Applied</Text>
             <Feather name="check-circle" size={16} color="#10B981" />
           </View>
           <View style={styles.appliedList}>
-            {appliedSuggestions.slice(0, 3).map((suggestion) => (
-              <View key={suggestion.id} style={styles.appliedItem}>
+            {appliedProposals.slice(0, 3).map((proposal) => (
+              <View key={proposal.id} style={styles.appliedItem}>
                 <Feather name="check" size={14} color="#10B981" />
                 <Text style={styles.appliedText} numberOfLines={1}>
-                  {suggestion.title}
+                  {proposal.title}
                 </Text>
               </View>
             ))}
@@ -431,7 +431,7 @@ export function AISuggestionPanel({
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color="#3B82F6" />
           <Text style={styles.loadingText}>
-            {isVoting ? 'Submitting vote...' : 'Applying suggestion...'}
+            {isVoting ? 'Submitting vote...' : 'Applying proposal...'}
           </Text>
         </View>
       )}
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  suggestionCard: {
+  proposalCard: {
     backgroundColor: 'white',
     marginHorizontal: 12,
     marginVertical: 4,
@@ -504,13 +504,13 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
-  suggestionHeader: {
+  proposalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
   },
-  suggestionHeaderLeft: {
+  proposalHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     flex: 1,
@@ -523,16 +523,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  suggestionInfo: {
+  proposalInfo: {
     flex: 1,
   },
-  suggestionTitle: {
+  proposalTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 2,
   },
-  suggestionDescription: {
+  proposalDescription: {
     fontSize: 13,
     color: '#6B7280',
     lineHeight: 18,

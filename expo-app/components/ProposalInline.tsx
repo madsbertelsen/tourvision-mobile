@@ -7,31 +7,31 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { AISuggestion } from '@/hooks/useAIAssistant';
+import { Proposal } from '@/hooks/useAIAssistant';
 
-interface AISuggestionInlineProps {
-  suggestion: AISuggestion;
-  onVote: (suggestionId: string, vote: 'approve' | 'reject', comment?: string) => void;
-  onApply?: (suggestionId: string) => void;
-  getUserVote: (suggestionId: string) => { vote: 'approve' | 'reject' } | null;
+interface ProposalInlineProps {
+  proposal: Proposal;
+  onVote: (proposalId: string, vote: 'approve' | 'reject', comment?: string) => void;
+  onApply?: (proposalId: string) => void;
+  getUserVote: (proposalId: string) => { vote: 'approve' | 'reject' } | null;
   isVoting?: boolean;
   isApplying?: boolean;
 }
 
-export function AISuggestionInline({
-  suggestion,
+export function ProposalInline({
+  proposal,
   onVote,
   onApply,
   getUserVote,
   isVoting = false,
   isApplying = false,
-}: AISuggestionInlineProps) {
+}: ProposalInlineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const userVote = getUserVote(suggestion.id);
-  const canApply = suggestion.status === 'approved' && !isApplying && onApply;
+  const userVote = getUserVote(proposal.id);
+  const canApply = proposal.status === 'approved' && !isApplying && onApply;
 
   const getTypeIcon = () => {
-    switch (suggestion.suggestion_type) {
+    switch (proposal.request_type) {
       case 'add':
         return 'plus-circle';
       case 'modify':
@@ -46,7 +46,7 @@ export function AISuggestionInline({
   };
 
   const getTypeColor = () => {
-    switch (suggestion.suggestion_type) {
+    switch (proposal.request_type) {
       case 'add':
         return '#10B981';
       case 'modify':
@@ -75,9 +75,9 @@ export function AISuggestionInline({
           <View style={styles.titleSection}>
             <View style={styles.titleRow}>
               <Feather name="cpu" size={14} color="#3B82F6" />
-              <Text style={styles.titlePrefix}>**Arrive in {suggestion.title}**</Text>
+              <Text style={styles.titlePrefix}>**Arrive in {proposal.title}**</Text>
             </View>
-            <Text style={styles.title}>{suggestion.title || 'Suggestion'}</Text>
+            <Text style={styles.title}>{proposal.title || 'Change Request'}</Text>
           </View>
         </View>
         <Feather
@@ -89,22 +89,22 @@ export function AISuggestionInline({
 
       {/* Main content */}
       <View style={styles.content}>
-        <Text style={styles.description}>{suggestion.description || 'AI generated suggestion'}</Text>
+        <Text style={styles.description}>{proposal.description || 'AI generated change request'}</Text>
 
         {/* Quick info */}
         {!isExpanded && (
           <View style={styles.quickInfo}>
-            {suggestion.enriched_data?.why_visit && (
+            {proposal.enriched_data?.why_visit && (
               <Text style={styles.quickInfoText} numberOfLines={2}>
                 <Text style={styles.quickInfoLabel}>Why Visit: </Text>
-                {suggestion.enriched_data.why_visit}
+                {proposal.enriched_data.why_visit}
               </Text>
             )}
 
-            {suggestion.enriched_data?.quick_facts && suggestion.enriched_data.quick_facts.length > 0 && (
+            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
               <Text style={styles.quickInfoText} numberOfLines={1}>
                 <Text style={styles.quickInfoLabel}>Quick Facts: </Text>
-                {suggestion.enriched_data.quick_facts[0]}
+                {proposal.enriched_data.quick_facts[0]}
               </Text>
             )}
           </View>
@@ -114,52 +114,52 @@ export function AISuggestionInline({
         {isExpanded && (
           <View style={styles.expandedContent}>
             {/* Quick Facts */}
-            {suggestion.enriched_data?.quick_facts && suggestion.enriched_data.quick_facts.length > 0 && (
+            {proposal.enriched_data?.quick_facts && proposal.enriched_data.quick_facts.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Quick Facts:</Text>
-                {suggestion.enriched_data.quick_facts.map((fact, index) => (
+                {proposal.enriched_data.quick_facts.map((fact, index) => (
                   <Text key={index} style={styles.factItem}>• {fact}</Text>
                 ))}
               </View>
             )}
 
             {/* Highlights */}
-            {suggestion.enriched_data?.highlights && suggestion.enriched_data.highlights.length > 0 && (
+            {proposal.enriched_data?.highlights && proposal.enriched_data.highlights.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Highlights:</Text>
-                {suggestion.enriched_data.highlights.map((highlight, index) => (
+                {proposal.enriched_data.highlights.map((highlight, index) => (
                   <Text key={index} style={styles.factItem}>• {highlight}</Text>
                 ))}
               </View>
             )}
 
             {/* Practical Info */}
-            {suggestion.practical_info && (
+            {proposal.practical_info && (
               <View style={styles.practicalInfo}>
                 <View style={styles.infoRow}>
-                  {suggestion.practical_info.duration && (
+                  {proposal.practical_info.duration && (
                     <View style={styles.infoItem}>
                       <Feather name="clock" size={12} color="#6B7280" />
-                      <Text style={styles.infoText}>Duration: {suggestion.practical_info.duration}</Text>
+                      <Text style={styles.infoText}>Duration: {proposal.practical_info.duration}</Text>
                     </View>
                   )}
-                  {suggestion.practical_info.best_time && (
+                  {proposal.practical_info.best_time && (
                     <View style={styles.infoItem}>
                       <Feather name="sun" size={12} color="#6B7280" />
-                      <Text style={styles.infoText}>Best Time: {suggestion.practical_info.best_time}</Text>
+                      <Text style={styles.infoText}>Best Time: {proposal.practical_info.best_time}</Text>
                     </View>
                   )}
                 </View>
-                {suggestion.practical_info.admission?.adults && (
+                {proposal.practical_info.admission?.adults && (
                   <View style={styles.infoItem}>
                     <Feather name="users" size={12} color="#6B7280" />
-                    <Text style={styles.infoText}>Admission: {suggestion.practical_info.admission.adults}</Text>
+                    <Text style={styles.infoText}>Admission: {proposal.practical_info.admission.adults}</Text>
                   </View>
                 )}
-                {suggestion.practical_info.opening_hours && (
+                {proposal.practical_info.opening_hours && (
                   <View style={styles.infoItem}>
                     <Feather name="clock" size={12} color="#6B7280" />
-                    <Text style={styles.infoText}>Hours: {suggestion.practical_info.opening_hours}</Text>
+                    <Text style={styles.infoText}>Hours: {proposal.practical_info.opening_hours}</Text>
                   </View>
                 )}
               </View>
@@ -173,12 +173,12 @@ export function AISuggestionInline({
             <View
               style={[
                 styles.progressFill,
-                { width: `${((suggestion.approval_count || 0) / (suggestion.required_approvals || 3)) * 100}%` }
+                { width: `${((proposal.approval_count || 0) / (proposal.required_approvals || 3)) * 100}%` }
               ]}
             />
           </View>
           <Text style={styles.progressText}>
-            {suggestion.approval_count || 0}/{suggestion.required_approvals || 3} approvals
+            {proposal.approval_count || 0}/{proposal.required_approvals || 3} approvals
           </Text>
         </View>
 
@@ -200,8 +200,8 @@ export function AISuggestionInline({
               <TouchableOpacity
                 style={[styles.actionButton, styles.acceptButton]}
                 onPress={() => {
-                  console.log('Accept pressed for suggestion:', suggestion.id);
-                  onVote(suggestion.id, 'approve');
+                  console.log('Accept pressed for proposal:', proposal.id);
+                  onVote(proposal.id, 'approve');
                 }}
                 disabled={isVoting}
               >
@@ -217,8 +217,8 @@ export function AISuggestionInline({
               <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
                 onPress={() => {
-                  console.log('Reject pressed for suggestion:', suggestion.id);
-                  onVote(suggestion.id, 'reject');
+                  console.log('Reject pressed for proposal:', proposal.id);
+                  onVote(proposal.id, 'reject');
                 }}
                 disabled={isVoting}
               >
@@ -239,7 +239,7 @@ export function AISuggestionInline({
         {canApply && (
           <TouchableOpacity
             style={styles.applyButton}
-            onPress={() => onApply!(suggestion.id)}
+            onPress={() => onApply!(proposal.id)}
             disabled={isApplying}
           >
             {isApplying ? (
@@ -254,7 +254,7 @@ export function AISuggestionInline({
         )}
 
         {/* Status badge for applied suggestions */}
-        {suggestion.status === 'applied' && (
+        {proposal.status === 'applied' && (
           <View style={styles.appliedBadge}>
             <Feather name="check-circle" size={14} color="#10B981" />
             <Text style={styles.appliedText}>Applied</Text>
@@ -268,7 +268,7 @@ export function AISuggestionInline({
         onPress={() => setIsExpanded(!isExpanded)}
       >
         <Text style={styles.footerText}>
-          {isExpanded ? 'Show less' : 'Click to view full suggestion details and vote'}
+          {isExpanded ? 'Show less' : 'Click to view full proposal details and vote'}
         </Text>
       </TouchableOpacity>
     </View>
