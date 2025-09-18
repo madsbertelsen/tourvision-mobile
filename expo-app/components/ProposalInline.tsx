@@ -13,7 +13,7 @@ interface ProposalInlineProps {
   proposal: Proposal;
   onVote: (proposalId: string, vote: 'approve' | 'reject', comment?: string) => void;
   onApply?: (proposalId: string) => void;
-  getUserVote: (proposalId: string) => { vote: 'approve' | 'reject' } | null;
+  getUserVote: (proposalId: string) => { vote_type: 'approve' | 'reject' } | null;
   isVoting?: boolean;
   isApplying?: boolean;
 }
@@ -187,12 +187,12 @@ export function ProposalInline({
           {userVote ? (
             <View style={styles.votedStatus}>
               <Feather
-                name={userVote.vote === 'approve' ? 'check-circle' : 'x-circle'}
+                name={userVote.vote_type === 'approve' ? 'check-circle' : 'x-circle'}
                 size={16}
-                color={userVote.vote === 'approve' ? '#10B981' : '#EF4444'}
+                color={userVote.vote_type === 'approve' ? '#10B981' : '#EF4444'}
               />
               <Text style={styles.votedText}>
-                You {userVote.vote === 'approve' ? 'accepted' : 'rejected'} this
+                You {userVote.vote_type === 'approve' ? 'accepted' : 'rejected'} this
               </Text>
             </View>
           ) : (

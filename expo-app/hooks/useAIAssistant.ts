@@ -63,7 +63,7 @@ export interface ProposalVote {
   id: string;
   proposal_id: string;
   user_id: string;
-  vote: 'approve' | 'reject';
+  vote_type: 'approve' | 'reject';
   comment?: string;
   created_at: string;
 }
@@ -238,8 +238,7 @@ export function useAIAssistant(tripId: string) {
       const insertData = {
         proposal_id: proposalId,
         user_id: user.id,
-        vote,
-        comment: comment || null,
+        vote_type: vote,
       };
 
       console.log('insertData being sent to Supabase:', insertData);
@@ -250,7 +249,7 @@ export function useAIAssistant(tripId: string) {
         .select('id')
         .eq('proposal_id', proposalId)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       let data, error;
 
@@ -258,7 +257,7 @@ export function useAIAssistant(tripId: string) {
         // Update existing vote
         const result = await supabase
           .from('proposal_votes')
-          .update({ vote, comment: comment || null })
+          .update({ vote_type: vote })
           .eq('id', existingVote.id)
           .select()
           .single();

@@ -1,734 +1,321 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createMistral } from 'https://esm.sh/@ai-sdk/mistral@0.0.22'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { generateObject } from 'https://esm.sh/ai@3.2.0'
-import { z } from 'https://esm.sh/zod@3.23.8'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
+import { generateObject } from 'https://esm.sh/ai@4.0.20'
+import { createMistral } from 'https://esm.sh/@ai-sdk/mistral@1.0.7'
+import { z } from 'https://esm.sh/zod@3.21.4'
 
-// Define types
-interface ChatMessage {
-  id: string
-  trip_id: string
-  user_id: string
-  message: string
-  created_at: string
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface AISuggestion {
-  suggestion_type: 'add' | 'modify' | 'remove' | 'reorganize'
-  title: string
-  description?: string
-  current_content?: any
-  proposed_content: any
-  chat_context: string[]
-  ai_reasoning: string
-  required_approvals: number
-}
+const AI_USER_ID = '00000000-0000-0000-0000-000000000001'
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
-    // Parse request body
-    const { message_id, trip_id, user_id, message } = await req.json()
+    const { message_id, trip_id, message, user_id } = await req.json()
+    console.log('[Info] Processing chat message:', { message_id, trip_id, message })
 
-    console.log('Processing chat message:', { message_id, trip_id, message })
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    // Skip processing if this is an AI message
+    if (user_id === AI_USER_ID) {
+      console.log('[Info] Skipping AI message')
+      return new Response(JSON.stringify({ processed: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
-    // Get AI agent config for this trip
-    const { data: aiConfig } = await supabase
-      .from('ai_agent_config')
-      .select('*')
-      .eq('trip_id', trip_id)
+    // Get trip details and recent messages for context
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('*, trip_members(user_id)')
+      .eq('id', trip_id)
       .single()
 
-    // Use default config if none exists
-    const config = aiConfig || {
-      auto_suggest: true,
-      suggestion_threshold: 2,
-      required_approvals: 1,
-      model_provider: 'mistral',
-      model_name: 'mistral-small-latest',
-      temperature: 0.7,
-      custom_instructions: null,
-    }
-
-    // Skip if auto-suggest is disabled
-    if (!config.auto_suggest) {
-      return new Response(
-        JSON.stringify({ success: true, message: 'Auto-suggest disabled' }),
-        { headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Get recent messages for context
-    const { data: recentMessages, error: messagesError } = await supabase
+    const { data: messages } = await supabase
       .from('trip_chat_messages')
-      .select('*')
+      .select('*, user:profiles!user_id(*)')
       .eq('trip_id', trip_id)
       .order('created_at', { ascending: false })
       .limit(10)
 
-    if (messagesError) {
-      throw new Error(`Failed to fetch messages: ${messagesError.message}`)
-    }
+    const messageTexts = messages?.map(m => m.message) || []
+    const document = trip?.itinerary_document || { type: 'doc', content: [{ type: 'paragraph' }] }
 
-    // Check if we have enough messages to analyze (based on threshold)
-    if (!recentMessages || recentMessages.length < config.suggestion_threshold) {
+    // ALWAYS analyze and respond using AI
+    const mistralKey = Deno.env.get('MISTRAL_API_KEY')
+    if (!mistralKey) {
+      console.error('[Error] MISTRAL_API_KEY not configured')
+      // Still create a response even without AI
+      await createSimpleResponse(supabase, trip_id, message_id, message)
       return new Response(
-        JSON.stringify({ success: true, message: 'Not enough messages for analysis' }),
-        { headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, processed: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get current trip document
-    const { data: trip, error: tripError } = await supabase
-      .from('trips')
-      .select('itinerary_document')
-      .eq('id', trip_id)
+    const mistral = createMistral({ apiKey: mistralKey })
+
+    // Schema for AI response - simplified
+    const responseSchema = z.object({
+      response_type: z.enum(['proposal', 'information', 'greeting', 'clarification']),
+      should_create_proposal: z.boolean(),
+      proposal_type: z.enum(['add', 'modify', 'remove', 'reorganize']).optional(),
+      title: z.string(),
+      description: z.string(),
+      message_response: z.string(),
+      proposed_content: z.any().optional(),
+      enriched_data: z.object({
+        quick_facts: z.array(z.string()).optional(),
+        highlights: z.array(z.string()).optional(),
+        why_visit: z.string().optional(),
+        practical_info: z.any().optional(),
+      }).optional(),
+    })
+
+    console.log('[Info] Analyzing with Mistral AI')
+
+    const { object } = await generateObject({
+      model: mistral('mistral-small-latest'),
+      schema: responseSchema,
+      system: `You are a helpful and proactive travel planning assistant. ALWAYS respond helpfully to every message.
+
+CORE PRINCIPLE: Always be helpful and create proposals for any travel-related content.
+
+Response Types:
+1. proposal - Create when user mentions ANY destination, activity, or travel plan
+2. information - When user asks questions about existing plans
+3. greeting - For greetings, but still offer to help plan
+4. clarification - When you need more information
+
+IMPORTANT RULES:
+- Set should_create_proposal=true for ANY actionable travel content
+- Be proactive - if someone mentions a place, create a proposal to add it
+- Don't wait for consensus or agreement - single user suggestions are valid
+- Always provide enriched data when creating proposals about places
+
+Examples:
+- "I want to fly to Copenhagen" → Create proposal (type: add) for Copenhagen trip
+- "Let's visit the Louvre" → Create proposal (type: add) for Louvre visit
+- "Hello" → Greeting + "What destinations are you considering for your trip?"
+- "What time does it open?" → Information response about opening hours
+- "Add museum visit" → Create proposal (type: add) for museum visits
+
+For proposals, always include:
+- Clear title (e.g., "Visit Copenhagen", "Fly to Copenhagen", "Museum Tour")
+- Helpful description with details
+- Enriched data with practical information when relevant`,
+      prompt: `User message: "${message}"
+
+Recent conversation (newest first):
+${messageTexts.slice(0, 5).map((m, i) => `${i + 1}. ${m}`).join('\n')}
+
+Current trip document summary:
+${JSON.stringify(document, null, 2).slice(0, 500)}
+
+Analyze this message and create an appropriate response.
+Remember: Be proactive! If they mention ANY destination or activity, create a proposal for it.
+Don't wait for group consensus - this is for single users planning their trips.`,
+      temperature: 0.7,
+    })
+
+    console.log('[Info] AI response:', object)
+
+    // Create AI response
+    let aiMessageText = object.message_response
+    let metadata: any = { type: 'ai_response' }
+    let proposalCreated = false
+
+    // Create proposal if needed
+    if (object.should_create_proposal && object.proposal_type) {
+      // Validate message_id is a valid UUID before using it as source_message_id
+      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message_id)
+
+      const proposalData: any = {
+        trip_id,
+        created_by: AI_USER_ID,
+        proposal_type: object.proposal_type,
+        title: object.title,
+        description: object.description,
+        current_content: document,
+        proposed_content: createProposedContent(document, object),
+        chat_context: messageTexts.slice(0, 5),
+        ai_reasoning: `User suggested: "${message}"`,
+        status: 'pending',
+        required_approvals: 1,
+        enriched_data: object.enriched_data,
+      }
+
+      // Only add source_message_id if it's a valid UUID
+      if (isValidUUID) {
+        proposalData.source_message_id = message_id
+      }
+
+      const { data: proposal, error } = await supabase
+        .from('proposals')
+        .insert(proposalData)
+        .select()
+        .single()
+
+      if (!error && proposal) {
+        console.log('[Info] Created proposal:', proposal.id)
+        proposalCreated = true
+
+        // Format message with proposal details
+        aiMessageText = `🤖 **${object.title}**\n\n${object.description}`
+
+        if (object.enriched_data?.quick_facts?.length) {
+          aiMessageText += '\n\n**Quick Facts:**\n' +
+            object.enriched_data.quick_facts.map(f => `• ${f}`).join('\n')
+        }
+
+        if (object.enriched_data?.highlights?.length) {
+          aiMessageText += '\n\n**Highlights:**\n' +
+            object.enriched_data.highlights.map(h => `• ${h}`).join('\n')
+        }
+
+        if (object.enriched_data?.why_visit) {
+          aiMessageText += `\n\n**Why Visit:** ${object.enriched_data.why_visit}`
+        }
+
+        aiMessageText += '\n\n💡 *View proposal details above to vote*'
+
+        metadata = {
+          type: 'ai_proposal',
+          proposal_id: proposal.id,
+          proposal_type: object.proposal_type,
+        }
+      } else if (error) {
+        console.error('[Error] Failed to create proposal:', error)
+      }
+    }
+
+    // Always create an AI message response
+    // Include reply_to in metadata since the column doesn't exist in the table
+    const aiMessageMetadata = {
+      ...metadata,
+      reply_to: message_id
+    }
+
+    const { data: aiMessage, error: msgError } = await supabase
+      .from('trip_chat_messages')
+      .insert({
+        trip_id,
+        user_id: AI_USER_ID,
+        message: aiMessageText,
+        metadata: aiMessageMetadata,
+      })
+      .select()
       .single()
 
-    if (tripError) {
-      throw new Error(`Failed to fetch trip: ${tripError.message}`)
-    }
-
-    // Analyze messages with AI
-    const suggestion = await analyzeWithAI(
-      recentMessages as ChatMessage[],
-      trip.itinerary_document,
-      message,
-      config
-    )
-
-    console.log('Suggestion:', suggestion)
-
-    if (suggestion) {
-      // Get AI agent user ID (using a fixed service account ID)
-      const AI_AGENT_USER_ID = '00000000-0000-0000-0000-000000000001'
-
-      // Create AI suggestion in database with source message reference
-      const { data: createdSuggestion, error: suggestionError } = await supabase
-        .from('ai_suggestions')
-        .insert({
-          trip_id,
-          created_by: AI_AGENT_USER_ID,
-          source_message_id: message_id, // Link to the message that triggered this suggestion
-          ...suggestion,
-          required_approvals: config.required_approvals,
-        })
-        .select()
-        .single()
-
-      if (suggestionError) {
-        console.error('Failed to create suggestion:', suggestionError)
-        throw new Error(`Failed to create suggestion: ${suggestionError.message}`)
-      }
-
-      console.log('Created suggestion:', createdSuggestion)
-
-      // Create a chat message from the AI agent as a reply to the triggering message
-      const aiMessageText = formatAISuggestionMessage(suggestion)
-
-      // Use service role client for AI agent operations
-      const { data: aiChatMessage, error: chatError } = await supabase
-        .from('trip_chat_messages')
-        .insert({
-          trip_id,
-          user_id: AI_AGENT_USER_ID,
-          message: aiMessageText,
-          reply_to: message_id, // Thread this as a reply to the original message
-          metadata: {
-            type: 'ai_suggestion',
-            suggestion_id: createdSuggestion.id,
-            suggestion_type: suggestion.suggestion_type,
-          },
-        })
-        .select()
-        .single()
-
-      if (chatError) {
-        console.error('Failed to create AI chat message:', JSON.stringify(chatError, null, 2))
-        console.error('Chat message details:', {
-          trip_id,
-          user_id: AI_AGENT_USER_ID,
-          message_length: aiMessageText.length,
-          reply_to: message_id,
-        })
-        // Don't throw here - the suggestion was created successfully
-      } else {
-        console.log('Created AI chat message:', aiChatMessage)
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          suggestion_created: true,
-          suggestion_id: createdSuggestion.id
-        }),
-        { headers: { 'Content-Type': 'application/json' } }
-      )
+    if (msgError) {
+      console.error('[Error] Failed to create AI message:', msgError)
+    } else {
+      console.log('[Info] Created AI response message:', aiMessage?.id)
     }
 
     return new Response(
-      JSON.stringify({ success: true, suggestion_created: false }),
-      { headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: true,
+        processed: true,
+        ai_message: aiMessage,
+        proposal_created: proposalCreated
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
   } catch (error) {
-    console.error('Error processing chat message:', error)
+    console.error('[Error] Processing failed:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
 
-async function analyzeWithAI(
-  messages: ChatMessage[],
-  document: any,
-  newMessage: string,
-  config: any
-): Promise<AISuggestion | null> {
-  try {
-    console.log('Analyzing with AI')
-    // Prepare message context
-    const messageTexts = messages.map(m => m.message)
-    const combinedText = messageTexts.join(' ').toLowerCase()
-
-    // Pattern matching for travel planning decisions
-    const patterns = [
-      { regex: /let's add (.+?) at (\d+(?::\d+)?(?:am|pm)?)/i, type: 'add' as const },
-      { regex: /we should (?:stay|book|reserve) (?:at )?(.+)/i, type: 'add' as const },
-      { regex: /add (.+?) to (?:the )?(?:itinerary|trip|day \d+)/i, type: 'add' as const },
-      { regex: /remove (.+?) from/i, type: 'remove' as const },
-      { regex: /(?:change|update|modify) (.+?) to (.+)/i, type: 'modify' as const },
-      { regex: /instead of (.+?), (?:let's|we should) (.+)/i, type: 'modify' as const },
-      { regex: /move (.+?) to (?:day \d+|morning|afternoon|evening)/i, type: 'reorganize' as const },
-    ]
-
-    // Check for consensus indicators
-    const consensusIndicators = [
-      /(?:yes|yeah|sure|agreed|sounds good|perfect|let's do it|great idea)/i,
-      /(?:i agree|good idea|that works|works for me)/i,
-      /(?:\+1|👍|✅)/,
-    ]
-
-    // Check if there's consensus in recent messages
-    const hasConsensus = messages.slice(0, 3).some(msg =>
-      consensusIndicators.some(indicator => indicator.test(msg.message))
-    )
-
-    // If using Mistral API with Vercel AI SDK
-    const mistralKey = Deno.env.get('MISTRAL_API_KEY')
-
-    if (mistralKey && config.model_provider === 'mistral') {
-      console.log('Making Mistral API call using Vercel AI SDK')
-
-      // Initialize Mistral provider
-      const mistral = createMistral({
-        apiKey: mistralKey,
-      })
-
-      // Define the schema for the suggestion with enriched data
-      const suggestionSchema = z.object({
-        should_suggest: z.boolean().describe('Whether a suggestion should be created'),
-        suggestion_type: z.enum(['add', 'modify', 'remove', 'reorganize']).optional().describe('Type of change to make'),
-        title: z.string().optional().describe('Short title for the suggestion'),
-        description: z.string().optional().describe('Detailed description of the change'),
-        proposed_content: z.any().optional().describe('The proposed new document structure'),
-        ai_reasoning: z.string().optional().describe('Explanation of why this change was suggested'),
-        has_timing: z.boolean().optional().describe('Whether specific timing is mentioned'),
-        // Enriched data fields
-        enriched_data: z.object({
-          quick_facts: z.array(z.string()).optional().describe('Key facts about the place or activity'),
-          highlights: z.array(z.string()).optional().describe('Main attractions or features'),
-          why_visit: z.string().optional().describe('Compelling reasons to visit'),
-          best_for: z.array(z.string()).optional().describe('Types of travelers who would enjoy this'),
-          historical_context: z.string().optional().describe('Historical significance if applicable'),
-        }).optional().describe('Rich contextual information about the suggestion'),
-        practical_info: z.object({
-          duration: z.string().optional().describe('Typical visit duration'),
-          best_time: z.string().optional().describe('Best time to visit'),
-          admission: z.object({
-            adults: z.string().optional(),
-            children: z.string().optional(),
-            notes: z.string().optional()
-          }).optional().describe('Admission costs'),
-          opening_hours: z.string().optional().describe('Operating hours'),
-          location_details: z.object({
-            address: z.string().optional(),
-            distance_from_city: z.string().optional(),
-            transport_options: z.array(z.string()).optional()
-          }).optional(),
-          accessibility: z.object({
-            wheelchair: z.string().optional(),
-            facilities: z.array(z.string()).optional()
-          }).optional()
-        }).optional().describe('Practical travel information'),
-        external_resources: z.object({
-          official_website: z.string().optional(),
-          wikipedia_url: z.string().optional(),
-          booking_link: z.string().optional()
-        }).optional().describe('External links for more information')
-      })
-
-      try {
-        const { object } = await generateObject({
-          model: mistral(config.model_name || 'mistral-small-latest'),
-          schema: suggestionSchema,
-          system: `You are a knowledgeable travel planning assistant analyzing chat messages for actionable trip planning decisions.
-${config.custom_instructions || ''}
-
-Your role is to:
-1. Recognize ALL trip planning decisions and agreements
-2. Understand various types of decisions: destinations, meeting points, activities, meals, accommodation
-3. Detect when the team has agreed on something concrete
-4. Create appropriate document entries for different decision types
-
-Common patterns to recognize:
-DESTINATIONS & ACTIVITIES:
-- "We want to visit [place]" → Add to wishes/itinerary
-- "Let's go to [place]" → Add to wishes/itinerary
-- "Should we see [place]?" → Consider for discussion
-
-LOGISTICS & PLANNING:
-- "We've agreed to meet at [place] at [time]" → Add meeting point to itinerary
-- "Let's meet at [place]" → Add meeting arrangement
-- "We should stay at [hotel]" → Add accommodation
-- "Dinner at [restaurant]" → Add meal plan
-- "Take the train at [time]" → Add transportation
-
-TIMING DECISIONS:
-- "We have agreed to..." → Something has been decided
-- "Let's do X at [time]" → Scheduled activity
-- "Meet at [time]" → Time-specific arrangement
-
-When creating suggestions:
-- For logistics: Use simple, clear titles (e.g., "Meet at Copenhagen Central Station")
-- For activities: Use the place/activity name
-- Include timing if specified
-- Mark as decision if there's clear agreement or consensus`,
-          prompt: `Recent messages (newest first):
-${messages.map((m, i) => `${i + 1}. "${m.message}"`).join('\n')}
-
-Current document structure:
-${JSON.stringify(document, null, 2).slice(0, 1000)}
-
-Analyze the latest message for ANY trip planning decision:
-
-1. MEETING ARRANGEMENTS:
-   - "agreed to meet at [place] at [time]" → Create suggestion
-   - "meet at [place]" → Create suggestion
-   - Look for words: meet, meeting, gather, rendezvous
-
-2. DESTINATIONS & ATTRACTIONS:
-   - Any mention of visiting places
-   - Tourist attractions, museums, restaurants, etc.
-
-3. LOGISTICS:
-   - Transportation arrangements
-   - Accommodation decisions
-   - Meal plans
-
-4. TIMING:
-   - If specific time mentioned → has_timing = true
-   - Include in itinerary section with time
-
-For meeting arrangements:
-- Title: Generate the EXACT text to display (e.g., "Meet at Copenhagen Central Station")
-- Do NOT add "Visit" to meeting arrangements
-- For places without action verbs, add "Visit" (e.g., "Visit Kronborg Castle")
-
-Examples of good titles:
-- "Meet at Copenhagen Central Station" (has action verb)
-- "Check in at Hotel Nordic" (has action verb)
-- "Dinner at Restaurant Noma" (descriptive enough)
-- "Visit Kronborg Castle" (needs action verb)
-- "Visit Louisiana Museum" (needs action verb)
-
-IMPORTANT:
-- The title will be used as-is in the document
-- Create suggestions for concrete decisions only
-- Set has_timing: true if specific time is mentioned`,
-          temperature: config.temperature || 0.7,
-        })
-
-        console.log('Mistral AI SDK response:', object)
-
-        if (object.should_suggest && object.suggestion_type) {
-          // Always use modifyDocument to ensure proper structure
-          // The AI's proposed_content is often malformed, so we'll build it properly
-          const proposedDoc = modifyDocument(document, {
-            type: object.suggestion_type,
-            title: object.title,
-            description: object.description,
-            content: object.description || object.title,
-            enriched_data: object.enriched_data,
-            practical_info: object.practical_info,
-            has_timing: object.has_timing,
-          })
-
-          return {
-            suggestion_type: object.suggestion_type,
-            title: object.title || `${object.suggestion_type} suggestion`,
-            description: object.description,
-            current_content: document,
-            proposed_content: proposedDoc,
-            chat_context: messageTexts.slice(0, 5),
-            ai_reasoning: object.ai_reasoning || 'Based on team discussion',
-            required_approvals: config.required_approvals || 1,
-            // Include enriched data fields
-            enriched_data: object.enriched_data || null,
-            practical_info: object.practical_info || null,
-            external_resources: object.external_resources || null,
-          }
-        }
-      } catch (error) {
-        console.error('Error calling Mistral via AI SDK:', error)
-        return null
-      }
-    } else {
-      // Fallback to pattern matching if no API key
-      for (const pattern of patterns) {
-        const match = combinedText.match(pattern.regex)
-        if (match && hasConsensus) {
-          // Create a simple suggestion based on pattern matching
-          const suggestionTitle = match[1] ?
-            `${pattern.type === 'add' ? 'Add' : pattern.type === 'modify' ? 'Modify' : pattern.type === 'remove' ? 'Remove' : 'Reorganize'}: ${match[1]}` :
-            `${pattern.type} suggestion`
-
-          return {
-            suggestion_type: pattern.type,
-            title: suggestionTitle,
-            description: `Based on the team discussion: "${match[0]}"`,
-            current_content: document,
-            proposed_content: modifyDocument(document, {
-              type: pattern.type,
-              content: match[0]
-            }),
-            chat_context: messageTexts.slice(0, 5),
-            ai_reasoning: `The team discussed and agreed on this change. Multiple participants showed consensus.`,
-            required_approvals: config.required_approvals || 1,
-          }
-        }
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error('AI analysis error:', error)
-    return null
-  }
-}
-
-// Helper function to format AI suggestion as a chat message
-function formatAISuggestionMessage(suggestion: any): string {
-  let message = `🤖 **${suggestion.title}**\n\n`
-
-  if (suggestion.description) {
-    message += `${suggestion.description}\n\n`
-  }
-
-  // Add enriched data if available
-  if (suggestion.enriched_data) {
-    const data = suggestion.enriched_data
-
-    if (data.why_visit) {
-      message += `**Why Visit:** ${data.why_visit}\n\n`
-    }
-
-    if (data.quick_facts && data.quick_facts.length > 0) {
-      message += `**Quick Facts:**\n`
-      data.quick_facts.forEach((fact: string) => {
-        message += `• ${fact}\n`
-      })
-      message += `\n`
-    }
-
-    if (data.highlights && data.highlights.length > 0) {
-      message += `**Highlights:**\n`
-      data.highlights.forEach((highlight: string) => {
-        message += `• ${highlight}\n`
-      })
-      message += `\n`
-    }
-  }
-
-  // Add practical info if available
-  if (suggestion.practical_info) {
-    const info = suggestion.practical_info
-
-    if (info.duration) {
-      message += `⏱ **Duration:** ${info.duration}\n`
-    }
-
-    if (info.best_time) {
-      message += `📅 **Best Time:** ${info.best_time}\n`
-    }
-
-    if (info.admission) {
-      message += `💰 **Admission:** `
-      if (info.admission.adults) message += `Adults: ${info.admission.adults}`
-      if (info.admission.children) message += `, Children: ${info.admission.children}`
-      message += `\n`
-    }
-
-    if (info.opening_hours) {
-      message += `🕒 **Hours:** ${info.opening_hours}\n`
-    }
-  }
-
-  message += `\n💡 *Click to view full suggestion details and vote*`
-
-  return message
-}
-
-// Helper function to modify document
-function modifyDocument(document: any, change: any): any {
-  // Start with existing document or create new one
+// Helper function to create proposed content
+function createProposedContent(document: any, aiResponse: any): any {
   const newDoc = document ? JSON.parse(JSON.stringify(document)) : { type: 'doc', content: [] }
 
-  // Ensure proper document structure
-  if (!newDoc.type) newDoc.type = 'doc'
   if (!newDoc.content || !Array.isArray(newDoc.content)) {
     newDoc.content = []
   }
 
-  // Initialize document with sections if empty
-  if (newDoc.content.length === 0) {
-    // Main title
-    newDoc.content.push({
-      type: 'heading',
-      attrs: { level: 1 },
-      content: [{
-        type: 'text',
-        text: 'Trip Plan'
-      }]
-    })
+  // Add a simple section for the proposal
+  const newSection = {
+    type: 'section',
+    attrs: { id: `section-${Date.now()}` },
+    content: [
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: aiResponse.title }]
+      },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: aiResponse.description }]
+      }
+    ]
+  }
 
-    // Wishes & Ideas section
-    newDoc.content.push({
-      type: 'heading',
-      attrs: { level: 2 },
-      content: [{
-        type: 'text',
-        text: 'Wishes & Ideas'
-      }]
-    })
-
-    // Empty paragraph for wishes section
-    newDoc.content.push({
-      type: 'paragraph',
-      content: [{
-        type: 'text',
-        text: 'Things we want to do (not yet scheduled):',
-        marks: [{ type: 'italic' }]
-      }]
-    })
-
-    // Itinerary section
-    newDoc.content.push({
-      type: 'heading',
-      attrs: { level: 2 },
-      content: [{
-        type: 'text',
-        text: 'Itinerary'
-      }]
+  // Add enriched data as a list if available
+  if (aiResponse.enriched_data?.quick_facts?.length) {
+    newSection.content.push({
+      type: 'bulletList',
+      content: aiResponse.enriched_data.quick_facts.map((fact: string) => ({
+        type: 'listItem',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'text', text: fact }]
+        }]
+      }))
     })
   }
 
-  // Check if suggestion includes timing information
-  const hasSpecificTiming = change.has_timing ||
-    (change.description && /\b(day \d+|morning|afternoon|evening|\d{1,2}:\d{2}|\d{1,2}(am|pm))\b/i.test(change.description))
-
-  if (change.type === 'add') {
-    const placeName = change.title || 'New Destination'
-
-    if (!hasSpecificTiming) {
-      // Add to Wishes & Ideas section
-      let wishesSection = -1
-      let itinerarySection = -1
-
-      // Find section indices
-      newDoc.content.forEach((node: any, index: number) => {
-        if (node.type === 'heading' && node.attrs?.level === 2) {
-          const text = node.content?.[0]?.text
-          if (text === 'Wishes & Ideas') wishesSection = index
-          if (text === 'Itinerary') itinerarySection = index
-        }
-      })
-
-      // Ensure wishes section exists
-      if (wishesSection === -1) {
-        // Insert before itinerary if it exists, otherwise at end
-        const insertIndex = itinerarySection > -1 ? itinerarySection : newDoc.content.length
-
-        newDoc.content.splice(insertIndex, 0, {
-          type: 'heading',
-          attrs: { level: 2 },
-          content: [{
-            type: 'text',
-            text: 'Wishes & Ideas'
-          }]
-        })
-        wishesSection = insertIndex
-        if (itinerarySection > -1) itinerarySection++
-      }
-
-      // Find or create bullet list after wishes heading
-      let bulletListIndex = -1
-      for (let i = wishesSection + 1; i < newDoc.content.length && i < wishesSection + 3; i++) {
-        if (newDoc.content[i].type === 'bulletList') {
-          bulletListIndex = i
-          break
-        }
-      }
-
-      if (bulletListIndex === -1) {
-        // Create new bullet list
-        const insertAt = Math.min(wishesSection + 2,
-          itinerarySection > -1 ? itinerarySection : newDoc.content.length)
-
-        newDoc.content.splice(insertAt, 0, {
-          type: 'bulletList',
-          content: []
-        })
-        bulletListIndex = insertAt
-      }
-
-      // Add wish as bullet point - use title as-is
-      newDoc.content[bulletListIndex].content.push({
-        type: 'listItem',
-        content: [{
-          type: 'paragraph',
-          content: [{
-            type: 'text',
-            text: wishText
-          }]
-        }]
-      })
-
-    } else {
-      // Add to Itinerary section with timing
-      let itinerarySection = -1
-
-      // Find itinerary section
-      newDoc.content.forEach((node: any, index: number) => {
-        if (node.type === 'heading' && node.attrs?.level === 2 &&
-            node.content?.[0]?.text === 'Itinerary') {
-          itinerarySection = index
-        }
-      })
-
-      // Ensure itinerary section exists
-      if (itinerarySection === -1) {
-        newDoc.content.push({
-          type: 'heading',
-          attrs: { level: 2 },
-          content: [{
-            type: 'text',
-            text: 'Itinerary'
-          }]
-        })
-        itinerarySection = newDoc.content.length - 1
-      }
-
-      // Extract day/time if available
-      let dayMatch = change.description?.match(/day (\d+)/i)
-      let timeMatch = change.description?.match(/(\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i)
-
-      const dayText = dayMatch ? `Day ${dayMatch[1]}` : 'Day 1'
-      const timeText = timeMatch ? timeMatch[0] : ''
-
-      // Find or create day heading
-      let dayHeadingIndex = -1
-      for (let i = itinerarySection + 1; i < newDoc.content.length; i++) {
-        const node = newDoc.content[i]
-        if (node.type === 'heading' && node.attrs?.level === 3 &&
-            node.content?.[0]?.text === dayText) {
-          dayHeadingIndex = i
-          break
-        }
-        // Stop if we hit another h2
-        if (node.type === 'heading' && node.attrs?.level === 2) break
-      }
-
-      if (dayHeadingIndex === -1) {
-        // Add day heading after itinerary
-        newDoc.content.splice(itinerarySection + 1, 0, {
-          type: 'heading',
-          attrs: { level: 3 },
-          content: [{
-            type: 'text',
-            text: dayText
-          }]
-        })
-        dayHeadingIndex = itinerarySection + 1
-      }
-
-      // Use the title as-is - the AI should have generated the exact text
-      const itemText = timeText ? `${timeText} - ${placeName}` : placeName
-
-      // Find or create bullet list for this day
-      let dayBulletListIndex = -1
-      for (let i = dayHeadingIndex + 1; i < newDoc.content.length; i++) {
-        if (newDoc.content[i].type === 'bulletList') {
-          dayBulletListIndex = i
-          break
-        }
-        // Stop if we hit another heading
-        if (newDoc.content[i].type === 'heading') break
-      }
-
-      if (dayBulletListIndex === -1) {
-        // Create bullet list after day heading
-        newDoc.content.splice(dayHeadingIndex + 1, 0, {
-          type: 'bulletList',
-          content: []
-        })
-        dayBulletListIndex = dayHeadingIndex + 1
-      }
-
-      // Add to bullet list
-      newDoc.content[dayBulletListIndex].content.push({
-        type: 'listItem',
-        content: [{
-          type: 'paragraph',
-          content: [{
-            type: 'text',
-            text: itemText
-          }]
-        }]
-      })
-    }
-
-  } else if (change.type === 'modify') {
-    // Handle modifications
-    const modifyText = change.description || change.title || 'item'
-    newDoc.content.push({
-      type: 'paragraph',
-      content: [{
-        type: 'text',
-        text: `Modified: ${modifyText}`,
-        marks: [{ type: 'italic' }]
-      }]
-    })
-  } else if (change.type === 'remove') {
-    // Handle removals
-    const removeText = change.description || change.title || 'item'
-    newDoc.content.push({
-      type: 'paragraph',
-      content: [{
-        type: 'text',
-        text: `Removed: ${removeText}`,
-        marks: [{ type: 'strike' }]
-      }]
-    })
+  // Add the new section to the document
+  if (aiResponse.proposal_type === 'add') {
+    newDoc.content.push(newSection)
+  } else if (aiResponse.proposal_type === 'modify' || aiResponse.proposal_type === 'remove') {
+    // For modify/remove, we'd need more complex logic
+    // For now, just add a note about the change
+    newDoc.content.push(newSection)
   }
 
   return newDoc
+}
+
+// Simple response for when AI is not available
+async function createSimpleResponse(supabase: any, trip_id: string, message_id: string, message: string) {
+  const responses: { [key: string]: string } = {
+    'hello': "Hi! I'm here to help plan your trip. What destinations are you interested in?",
+    'hi': "Hello! Ready to plan an amazing trip. Where would you like to go?",
+    'help': "I can help you plan your trip! Just tell me about places you'd like to visit or activities you want to do.",
+  }
+
+  const lowerMessage = message.toLowerCase()
+  let responseText = responses[lowerMessage]
+
+  if (!responseText) {
+    if (lowerMessage.includes('visit') || lowerMessage.includes('go to') || lowerMessage.includes('fly')) {
+      responseText = "That sounds interesting! I'll make a note of that for your trip."
+    } else {
+      responseText = "I understand. Tell me more about what you'd like to do on your trip!"
+    }
+  }
+
+  await supabase
+    .from('trip_chat_messages')
+    .insert({
+      trip_id,
+      user_id: AI_USER_ID,
+      message: responseText,
+      metadata: { type: 'ai_response', reply_to: message_id }
+    })
 }

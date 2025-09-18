@@ -353,3 +353,33 @@ The `process-chat-message` Edge Function:
 3. Edge Function processes → Analyzes with Mistral AI
 4. If consensus detected → Creates suggestion in `ai_suggestions`
 5. Real-time subscription → Updates UI with new suggestion
+
+## Debugging with Supabase MCP
+
+### Important: Use MCP Tools for Database Debugging
+The Supabase MCP (Model Context Protocol) server is configured and available for debugging database-related issues. **Always use these tools when debugging** instead of guessing about database state:
+
+- Query tables directly to verify data exists
+- Check table schemas and column types
+- Inspect foreign key relationships
+- Review Row Level Security policies
+- Understand trigger functions and their behavior
+- Verify data before and after operations
+
+### Available MCP Commands
+The MCP tools allow direct database queries through natural language:
+- "Show me the schema of the proposals table"
+- "List all trips for user X"
+- "Check if proposal_votes table has the comment column"
+- "Show the relationship between trips and places"
+- "What RLS policies exist for trip_chat_messages?"
+
+### When to Use MCP Tools
+- **Before debugging errors**: Check if expected data exists
+- **Schema issues**: Verify column names and types match your code
+- **Permission errors**: Review RLS policies for the table
+- **Foreign key errors**: Inspect relationships between tables
+- **Migration issues**: Confirm table structure after migrations
+- **Data validation**: Ensure seed data loaded correctly
+
+Using MCP tools provides accurate, real-time database information and significantly speeds up debugging compared to trial-and-error approaches.

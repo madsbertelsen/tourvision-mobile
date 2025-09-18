@@ -282,7 +282,7 @@ export default function TripDocumentView() {
                 {messages && messages.length > 0 ? (
                   messages.map((msg) => {
                     const isOwnMessage = msg.user_id === user?.id;
-                    const isAISuggestion = msg.metadata?.type === 'ai_suggestion' || msg.user?.email === 'ai@tourvision.app';
+                    const isAISuggestion = msg.metadata?.type === 'ai_proposal' || msg.metadata?.type === 'ai_suggestion' || msg.user?.email === 'ai@tourvision.app';
                     const userColor = isAISuggestion ? '#8B5CF6' : (isOwnMessage ? '#3B82F6' : '#8B5CF6');
 
                     return (
@@ -301,15 +301,22 @@ export default function TripDocumentView() {
                           </View>
                           {isAISuggestion ? (
                             <ProposalInline
-                              proposal={msg.proposal || {
-                                id: msg.id,
-                                title: 'AI Suggestion',
-                                description: msg.message,
-                                proposal_type: 'add',
-                                status: 'pending',
-                                approval_count: 0,
-                                required_approvals: 3,
-                              }}
+                              proposal={(() => {
+                                // Find the actual proposal from the proposals array using the proposal_id from metadata
+                                const proposalId = msg.metadata?.proposal_id || msg.metadata?.suggestion_id;
+                                const actualProposal = proposalId ? proposals?.find(p => p.id === proposalId) : null;
+
+                                // Return the actual proposal if found, otherwise create a fallback
+                                return actualProposal || {
+                                  id: proposalId || msg.id,
+                                  title: 'Proposal',
+                                  description: msg.message,
+                                  proposal_type: 'add',
+                                  status: 'pending',
+                                  approval_count: 0,
+                                  required_approvals: 3,
+                                };
+                              })()}
                               onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
                                 console.log('Vote called from document view:', proposalId, vote);
                                 if (voteProposal && proposalId && vote) {
