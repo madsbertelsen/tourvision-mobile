@@ -1,1077 +1,651 @@
-import CollaborationPanel from '@/components/CollaborationPanel';
-import MapView from '@/components/dom/MapViewDOM.tsx';
-import TransportationCard, { TransportationData } from '@/components/TransportationCard';
-import TransportationEditModal from '@/components/TransportationEditModal';
-import TripMemberList from '@/components/TripMemberList';
-import AttendanceSelector from '@/components/AttendanceSelector';
-import BranchingIndicator from '@/components/BranchingIndicator';
-import { useAttendance } from '@/hooks/useAttendance';
+import { DocumentMapWrapper } from '@/components/DocumentMapWrapper';
+import { ItineraryDocumentEditor } from '@/components/ItineraryDocumentEditor';
+import { ProposalInline } from '@/components/ProposalInline';
+import { ProposalPanel } from '@/components/ProposalPanel';
+import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { useResponsive } from '@/hooks/useResponsive';
+import { useTripChat } from '@/hooks/useTripChat';
 import { useTrip } from '@/hooks/useTrips';
+import { useAuth } from '@/lib/supabase/auth-context';
 import { supabase } from '@/lib/supabase/client';
-import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming
-} from 'react-native-reanimated';
-import type { Tables } from '@/lib/database.types';
+import { Feather } from '@expo/vector-icons';
+import { JSONContent } from '@tiptap/react';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-// Helper function to parse trip document into structured data
-const parseTripDocument = (trip: Tables<'trips'>) => {
-  const doc = trip.itinerary_document as any;
-  if (!doc?.content) return null;
-
-  const days: any[] = [];
-  let currentDay: any = null;
-  let currentDayIndex = 0;
-  let placeIndex = 0;
-  let globalPlaceIndex = 0; // Track place index across all days for unique colors
-
-  // Process flattened structure where all nodes are at the same level
-  doc.content.forEach((node: any) => {
-    if (node.type === 'dayTransition' || node.type === 'dayNode') {
-      // Save the previous day if it exists
-      if (currentDay) {
-        days.push(currentDay);
-      }
-
-      // Start a new day
-      const dayDate = node.attrs?.date ? new Date(node.attrs.date) : new Date();
-      currentDay = {
-        day: currentDayIndex + 1,
-        title: node.attrs?.title || `Day ${currentDayIndex + 1}`,
-        date: dayDate.toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        }),
-        places: [],
-        transportations: [],
-        totalCost: 'Free',
-        totalPlaces: 0,
-      };
-      currentDayIndex++;
-      placeIndex = 0; // Reset local place index for each day
-
-    } else if (node.type === 'destinationNode' && currentDay) {
-      // Add destination to current day
-      const destId = node.attrs?.destinationId || `${currentDayIndex - 1}-${placeIndex}`;
-      currentDay.places.push({
-        id: `place-${currentDayIndex - 1}-${placeIndex}`,
-        destinationId: destId,
-        name: node.attrs?.name || 'Unknown Place',
-        time: node.attrs?.duration || '2 hours',
-        period: placeIndex === 0 ? 'Morning' : placeIndex === 1 ? 'Afternoon' : 'Evening',
-        description: node.attrs?.description || '',
-        lat: node.attrs?.coordinates?.lat || 0,
-        lng: node.attrs?.coordinates?.lng || 0,
-        colorIndex: globalPlaceIndex, // Use global index for unique colors
-        cost: node.attrs?.cost || 'Free',
-      });
-      placeIndex++;
-      globalPlaceIndex++; // Increment global index
-
-    } else if (node.type === 'transportationNode' && currentDay) {
-      // Add transportation to current day
-      currentDay.transportations.push({
-        transportId: node.attrs?.transportId,
-        mode: node.attrs?.mode || 'walking',
-        fromDestination: node.attrs?.fromDestination,
-        toDestination: node.attrs?.toDestination,
-        duration: node.attrs?.duration || '5 min',
-        distance: node.attrs?.distance,
-        cost: node.attrs?.cost?.amount,
-        route: node.attrs?.route,
-        routeUrl: node.attrs?.routeUrl,
-        routeGeometry: node.attrs?.routeGeometry,
-      });
-    }
-  });
-
-  // Don't forget to add the last day
-  if (currentDay) {
-    days.push(currentDay);
-  }
-
-  // Update total costs and places for each day
-  days.forEach(day => {
-    day.totalPlaces = day.places.length;
-    day.totalCost = day.places.length > 0 ? '€' + (day.places.length * 15) + '.00' : 'Free';
-  });
-
-  // Calculate date range
-  const startDate = days[0]?.date || new Date().toISOString();
-  const endDate = days[days.length - 1]?.date || new Date().toISOString();
-
-  return {
-    id: trip.id,
-    title: trip.title,
-    description: trip.description || '',
-    dateRange: {
-      start: startDate,
-      end: endDate,
-    },
-    days,
-    totalCost: '€' + (days.reduce((sum, day) => sum + day.places.length * 15, 0)) + '.00',
-    totalPlaces: days.reduce((sum, day) => sum + day.places.length, 0),
-  };
-};
-
-// Sample fallback data
-const SAMPLE_ITINERARY = {
-  id: 'paris-adventure',
-  title: 'Paris Adventure - 5 days',
-  description: '5 days exploring the City of Light',
-  dateRange: {
-    start: '2025-09-13',
-    end: '2025-09-17',
-  },
-  days: [
-    {
-      day: 1,
-      title: 'Historic Paris',
-      date: 'September 13, 2025',
-      places: [
-        {
-          id: 'eiffel-tower',
-          name: 'Eiffel Tower',
-          time: '9:00 AM - 11:00 AM',
-          period: 'Morning',
-          description: 'Iconic iron lattice tower',
-          lat: 48.8584,
-          lng: 2.2945,
-          colorIndex: 0,
-          cost: '€28.30',
-        },
-        {
-          id: 'arc-triomphe',
-          name: 'Arc de Triomphe',
-          time: '2:00 PM - 3:30 PM',
-          period: 'Afternoon',
-          description: 'Triumphal arch honoring those who fought for France',
-          lat: 48.8738,
-          lng: 2.2950,
-          colorIndex: 1,
-          cost: '€13.00',
-        },
-        {
-          id: 'seine-cruise',
-          name: 'Seine River Cruise',
-          time: '6:00 PM - 8:00 PM',
-          period: 'Evening',
-          description: 'Scenic boat tour along Paris\'s famous river',
-          lat: 48.8606,
-          lng: 2.3376,
-          colorIndex: 2,
-          cost: '€15.00',
-        },
-      ],
-      totalCost: '€56.30',
-      totalPlaces: 3,
-    },
-    {
-      day: 2,
-      title: 'Art & Culture',
-      date: 'September 14, 2025',
-      places: [
-        {
-          id: 'louvre',
-          name: 'Louvre Museum',
-          time: '9:00 AM - 1:00 PM',
-          period: 'Morning',
-          description: 'World\'s largest art museum',
-          lat: 48.8606,
-          lng: 2.3376,
-          colorIndex: 0,
-          cost: '€17.00',
-        },
-        {
-          id: 'orsay',
-          name: 'Musée d\'Orsay',
-          time: '2:30 PM - 5:00 PM',
-          period: 'Afternoon',
-          description: 'Impressionist and post-impressionist masterpieces',
-          lat: 48.8600,
-          lng: 2.3266,
-          colorIndex: 1,
-          cost: '€16.00',
-        },
-        {
-          id: 'latin-quarter',
-          name: 'Latin Quarter',
-          time: '6:00 PM - 9:00 PM',
-          period: 'Evening',
-          description: 'Historic student quarter with cafés and bookshops',
-          lat: 48.8513,
-          lng: 2.3459,
-          colorIndex: 2,
-          cost: 'Free',
-        },
-      ],
-      totalCost: '€33.00',
-      totalPlaces: 3,
-    },
-  ],
-  totalCost: '€89.30',
-  totalPlaces: 6,
-};
-
-const MARKER_COLOR = '#3B82F6'; // Blue 500 for all markers
-
-interface PlaceCardProps {
-  place: any;
-  index: number;
-  onDragEnd?: (fromIndex: number, toIndex: number) => void;
-  totalItems: number;
-  tripId: string;
-  dayIndex: number;
-}
-
-const PlaceCard = ({
-  place,
-  index,
-  onDragEnd,
-  totalItems,
-  tripId,
-  dayIndex
-}: PlaceCardProps) => {
-  const markerColor = MARKER_COLOR; // Use blue for all markers
-  
-  // State for card expansion
-  const [isExpanded, setIsExpanded] = useState(false);
-  
-  // Shared values for animations
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-  const isDragging = useSharedValue(false);
-  const startY = useSharedValue(0);
-  
-  // Animation values for expansion
-  const contentHeight = useSharedValue(0);
-  const chevronRotation = useSharedValue(0);
-  
-  // Calculate card height (approximate)
-  const CARD_HEIGHT = 120;
-  
-  // Toggle expansion
-  const toggleExpansion = () => {
-    setIsExpanded(!isExpanded);
-    contentHeight.value = withSpring(isExpanded ? 0 : 150);
-    chevronRotation.value = withSpring(isExpanded ? 0 : 180);
-  };
-  
-  const handleDragEnd = useCallback((fromIdx: number, toIdx: number) => {
-    if (onDragEnd) {
-      onDragEnd(fromIdx, toIdx);
-    }
-  }, [onDragEnd]);
-  
-  // Create composed gesture
-  const gesture = Gesture.Pan()
-    .onBegin(() => {
-      'worklet';
-      isDragging.value = true;
-      scale.value = withSpring(1.05);
-      opacity.value = withTiming(0.9);
-      startY.value = translateY.value;
-    })
-    .onUpdate((event) => {
-      'worklet';
-      translateY.value = startY.value + event.translationY;
-      translateX.value = event.translationX * 0.1; // Slight horizontal movement
-    })
-    .onEnd(() => {
-      'worklet';
-      const currentY = translateY.value;
-      const cardMovement = currentY / CARD_HEIGHT;
-      const roundedMovement = Math.round(cardMovement);
-      
-      // Calculate new index
-      let newIndex = index + roundedMovement;
-      newIndex = Math.max(0, Math.min(totalItems - 1, newIndex));
-      
-      if (newIndex !== index) {
-        runOnJS(handleDragEnd)(index, newIndex);
-      }
-      
-      // Reset animations
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
-      scale.value = withSpring(1);
-      opacity.value = withTiming(1);
-      isDragging.value = false;
-    });
-  
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-      ],
-      opacity: opacity.value,
-      zIndex: isDragging.value ? 1000 : 0,
-    };
-  });
-  
-  const expandedContentStyle = useAnimatedStyle(() => {
-    return {
-      maxHeight: contentHeight.value,
-      opacity: contentHeight.value / 150,
-      overflow: 'hidden',
-    };
-  });
-  
-  const chevronStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ rotate: `${chevronRotation.value}deg` }],
-    };
-  });
-  
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.placeCard, animatedStyle, {overflow: 'visible'}]}>
-        <TouchableOpacity onPress={toggleExpansion} activeOpacity={0.9} style={{overflow: 'visible'}}>
-          <View style={styles.placeHeader}>
-            <View style={[styles.placeMarker, { backgroundColor: markerColor }]} />
-            <View style={styles.placeInfo}>
-              <Text style={styles.placeName}>{place.name}</Text>
-              {!isExpanded && (
-                <Text style={styles.placeDescriptionCompact} numberOfLines={1}>
-                  {place.description}
-                </Text>
-              )}
-            </View>
-            <Animated.View style={[styles.expandIndicator, chevronStyle]}>
-              <Feather name="chevron-down" size={18} color="#9CA3AF" />
-            </Animated.View>
-          </View>
-        </TouchableOpacity>
-        
-        <Animated.View style={[expandedContentStyle, {overflow: 'visible'}]}>
-          <View style={styles.expandedContent}>
-            <Text style={styles.placeDescription}>{place.description}</Text>
-            <View style={styles.placeDetails}>
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <Feather name="clock" size={13} color="#6B7280" />
-                </View>
-                <Text style={styles.detailText}>{place.time}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <MaterialIcons name="attach-money" size={13} color="#6B7280" />
-                </View>
-                <Text style={[styles.detailText, styles.detailCost]}>{place.cost}</Text>
-              </View>
-              {place.period && (
-                <View style={styles.detailRow}>
-                  <View style={styles.detailIcon}>
-                    <Feather name="sun" size={13} color="#6B7280" />
-                  </View>
-                  <Text style={styles.detailText}>{place.period}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Attendance Selector */}
-            <View style={styles.attendanceSection}>
-              <AttendanceSelector
-                tripId={tripId}
-                destinationId={place.destinationId}
-                destinationName={place.name}
-                dayIndex={dayIndex}
-                compact={true}
-              />
-            </View>
-
-          </View>
-        </Animated.View>
-      </Animated.View>
-    </GestureDetector>
-  );
-};
-
-const DaySection = ({ day, tripId, onPlacesReorder, onTransportationEdit }: any) => {
-  const [places, setPlaces] = useState(day.places);
-  const [transportations, setTransportations] = useState(day.transportations || []);
-  const [transportationModal, setTransportationModal] = useState<{
-    visible: boolean;
-    fromIndex: number;
-    toIndex: number;
-    data?: TransportationData;
-  }>({ visible: false, fromIndex: 0, toIndex: 1 });
-  
-  // Sync local state when day props change
-  useEffect(() => {
-    setPlaces(day.places);
-  }, [day.places]);
-  
-  useEffect(() => {
-    setTransportations(day.transportations || []);
-  }, [day.transportations]);
-  
-  const handleDragEnd = useCallback((fromIndex: number, toIndex: number) => {
-    const newPlaces = [...places];
-    const [movedItem] = newPlaces.splice(fromIndex, 1);
-    newPlaces.splice(toIndex, 0, movedItem);
-    
-    // Update colorIndex based on new position
-    const updatedPlaces = newPlaces.map((place, idx) => ({
-      ...place,
-      colorIndex: idx
-    }));
-    
-    setPlaces(updatedPlaces);
-    if (onPlacesReorder) {
-      onPlacesReorder(day.day - 1, updatedPlaces);
-    }
-  }, [places, day.day, onPlacesReorder]);
-  
-  const handleTransportationSave = (transportation: TransportationData) => {
-    const fromPlace = places[transportationModal.fromIndex];
-    const toPlace = places[transportationModal.toIndex];
-    if (fromPlace && toPlace) {
-      // Update local transportations state immediately
-      const newTransport = {
-        transportId: `transport-${fromPlace.destinationId}-${toPlace.destinationId}`,
-        mode: transportation.mode,
-        fromDestination: fromPlace.destinationId,
-        toDestination: toPlace.destinationId,
-        duration: transportation.duration,
-        distance: transportation.distance,
-        cost: transportation.cost,
-        route: transportation.route,
-        routeUrl: transportation.routeUrl,
-        routeGeometry: transportation.routeGeometry,
-      };
-      
-      setTransportations(prev => {
-        const updated = [...prev];
-        const existingIndex = updated.findIndex((t: any) => 
-          t.fromDestination === fromPlace.destinationId && 
-          t.toDestination === toPlace.destinationId
-        );
-        
-        if (existingIndex >= 0) {
-          updated[existingIndex] = newTransport;
-        } else {
-          updated.push(newTransport);
-        }
-        return updated;
-      });
-      
-      // Also update parent component
-      if (onTransportationEdit) {
-        onTransportationEdit(
-          day.day - 1,
-          fromPlace.destinationId,
-          toPlace.destinationId,
-          transportation
-        );
-      }
-    }
-  };
-
-  const getTransportation = (fromIndex: number, toIndex: number) => {
-    const fromPlace = places[fromIndex];
-    const toPlace = places[toIndex];
-    if (!fromPlace || !toPlace) return undefined;
-    
-    // Check local transportations state first, then fall back to day.transportations
-    const transport = transportations.find((t: any) => 
-      t.fromDestination === fromPlace.destinationId && 
-      t.toDestination === toPlace.destinationId
-    ) || day.transportations?.find((t: any) => 
-      t.fromDestination === fromPlace.destinationId && 
-      t.toDestination === toPlace.destinationId
-    );
-    
-    if (transport) {
-      console.log('getTransportation returning transport with geometry:', {
-        mode: transport.mode,
-        hasGeometry: !!transport.routeGeometry,
-        geometryLength: transport.routeGeometry?.coordinates?.length
-      });
-      return {
-        mode: transport.mode,
-        duration: transport.duration,
-        distance: transport.distance,
-        cost: transport.cost,
-        route: transport.route,
-        routeUrl: transport.routeUrl,
-        routeGeometry: transport.routeGeometry,
-      } as TransportationData;
-    }
-    
-    return undefined;
-  };
-
-  const renderItem = ({ item, index }: { item: any; index: number }) => {
-    const nextPlace = places[index + 1];
-    const currentPlace = item;
-
-    // Debug logging
-    console.log('Rendering item:', {
-      index,
-      currentPlace: currentPlace?.name,
-      currentDestinationId: currentPlace?.destinationId,
-      nextPlace: nextPlace?.name,
-      nextDestinationId: nextPlace?.destinationId,
-      dayNumber: day.day,
-    });
-
-    // Show alternative after Hotel Casa Fuster (index 1) before Gothic Quarter
-    // Simplified condition for debugging
-    const showAlternative = index === 1 && day.day === 1;
-
-    console.log('Show alternative?', showAlternative);
-
-    return (
-      <>
-        <PlaceCard
-          place={item}
-          index={index}
-          onDragEnd={handleDragEnd}
-          totalItems={places.length}
-          tripId={tripId}
-          dayIndex={day.day - 1}
-        />
-        {/* Show branching after Hotel Casa Fuster before Gothic Quarter */}
-        {showAlternative && (
-          <BranchingIndicator
-            tripId={tripId}
-            currentDestinationId={currentPlace?.destinationId || ''}
-            nextDestinationId={nextPlace?.destinationId || ''}
-            dayIndex={0}
-          />
-        )}
-        {index < places.length - 1 && (
-          <TransportationCard
-            transportation={getTransportation(index, index + 1)}
-            onPress={() => setTransportationModal({
-              visible: true,
-              fromIndex: index,
-              toIndex: index + 1,
-              data: getTransportation(index, index + 1),
-            })}
-            fromLocation={{
-              lat: places[index].lat,
-              lng: places[index].lng,
-              name: places[index].name,
-            }}
-            toLocation={{
-              lat: places[index + 1].lat,
-              lng: places[index + 1].lng,
-              name: places[index + 1].name,
-            }}
-          />
-        )}
-      </>
-    );
-  };
-
-  return (
-    <View style={styles.daySection}>
-      <View style={styles.stickyDayHeader}>
-        <Text style={styles.dayTitle}>{day.title}</Text>
-        <Text style={styles.dayDate}>{day.date}</Text>
-      </View>
-      
-      <FlatList
-        data={places}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        scrollEnabled={false}
-      />
-      
-      <TransportationEditModal
-        visible={transportationModal.visible}
-        onClose={() => setTransportationModal({ ...transportationModal, visible: false })}
-        onSave={handleTransportationSave}
-        initialData={transportationModal.data}
-        fromPlace={places[transportationModal.fromIndex]?.name || ''}
-        toPlace={places[transportationModal.toIndex]?.name || ''}
-        fromLocation={places[transportationModal.fromIndex] ? {
-          lat: places[transportationModal.fromIndex].lat,
-          lng: places[transportationModal.fromIndex].lng,
-        } : undefined}
-        toLocation={places[transportationModal.toIndex] ? {
-          lat: places[transportationModal.toIndex].lat,
-          lng: places[transportationModal.toIndex].lng,
-        } : undefined}
-      />
-    </View>
-  );
-};
-
-export default function TripDetail() {
+export default function TripDocumentView() {
   const { id } = useLocalSearchParams();
-  const router = useRouter();
+  const { data: trip, isLoading, error, refetch } = useTrip(id as string);
+  // Enable editing in the document
+  const isEditing = true;
+  const [isSaving, setIsSaving] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
   const responsive = useResponsive();
-  const queryClient = useQueryClient();
-  const { data: tripData, isLoading, error } = useTrip(id as string);
-  const [trip, setTrip] = useState<any>(null);
-  const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
-  const [showPersonalView, setShowPersonalView] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
+  const { user } = useAuth();
 
-  // Use attendance hook
+  // State for tracking active diff preview
+  const [activeDiffProposalId, setActiveDiffProposalId] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
+
+  // Chat functionality
+  const { messages, sendMessage, isSending } = useTripChat(id as string);
+  const chatScrollRef = useRef<ScrollView>(null);
+
+  // Selected text for context
+  const [selectedTextContext, setSelectedTextContext] = useState<string>('');
+
+  // AI Assistant
   const {
-    members,
-    myAttendance,
-    getMyStatus,
-    loading: attendanceLoading
-  } = useAttendance(id as string);
-  
-  useEffect(() => {
-    if (tripData) {
-      const parsedTrip = parseTripDocument(tripData);
-      if (parsedTrip) {
-        setTrip(parsedTrip);
-      } else {
-        // Fallback to sample data if parsing fails
-        setTrip(SAMPLE_ITINERARY);
-      }
-    } else if (!isLoading && !error) {
-      // If no trip and not loading, use sample data
-      setTrip(SAMPLE_ITINERARY);
-    }
-  }, [tripData, isLoading, error]);
-  
-  // Handle reordering of places within a day
-  const handlePlacesReorder = useCallback(async (dayIndex: number, newPlaces: any[]) => {
-    if (!tripData || !trip) return;
-    
-    // Update local state immediately for responsive UI
-    setTrip(prevTrip => {
-      const newTrip = { ...prevTrip };
-      newTrip.days = [...prevTrip.days];
-      newTrip.days[dayIndex] = {
-        ...prevTrip.days[dayIndex],
-        places: newPlaces
-      };
-      return newTrip;
-    });
-    
-    // Reconstruct the document with the new order
-    const doc = tripData.itinerary_document as any;
-    if (!doc?.content) return;
-    
-    // Create a new document with updated places
-    const newContent = [...doc.content];
-    let currentDayIdx = 0;
-    
-    for (let i = 0; i < newContent.length; i++) {
-      if (newContent[i].type === 'dayNode') {
-        if (currentDayIdx === dayIndex) {
-          // Update this day's destinations
-          const dayNode = { ...newContent[i] };
-          const newDayContent = [];
-          
-          // Reconstruct the day's content with reordered places
-          for (const place of newPlaces) {
-            newDayContent.push({
-              type: 'destinationNode',
-              attrs: {
-                destinationId: place.destinationId, // Preserve the destinationId!
-                name: place.name,
-                description: place.description,
-                duration: place.time,
-                cost: place.cost,
-                coordinates: {
-                  lat: place.lat,
-                  lng: place.lng
-                }
-              }
-            });
-          }
-          
-          dayNode.content = newDayContent;
-          newContent[i] = dayNode;
-          break;
-        }
-        currentDayIdx++;
-      }
-    }
-    
-    const updatedDocument = {
-      ...doc,
-      content: newContent
-    };
-    
-    // Save to database
-    try {
-      const { error } = await supabase
-        .from('trips')
-        .update({ itinerary_document: updatedDocument })
-        .eq('id', tripData.id);
-        
-      if (error) {
-        console.error('Failed to save reordered itinerary:', error);
-        // Could show an error toast here
-      } else {
-        // Invalidate the cache for this specific trip
-        queryClient.invalidateQueries({ queryKey: ['trip', id] });
-        // Also invalidate the trips list cache to ensure consistency
-        queryClient.invalidateQueries({ queryKey: ['trips'] });
-      }
-    } catch (err) {
-      console.error('Error saving reordered itinerary:', err);
-    }
-  }, [tripData, trip, queryClient, id]);
-  
-  // Handle transportation edit
-  const handleTransportationEdit = useCallback(async (
-    dayIndex: number,
-    fromDestinationId: string,
-    toDestinationId: string,
-    transportation: TransportationData
-  ) => {
-    if (!tripData || !trip) return;
-    
-    console.log('handleTransportationEdit called with:', {
-      dayIndex,
-      fromDestinationId,
-      toDestinationId,
-      transportation,
-      hasGeometry: !!transportation.routeGeometry
-    });
-    
-    // Update local state immediately
-    setTrip(prevTrip => {
-      const newTrip = { ...prevTrip };
-      newTrip.days = [...prevTrip.days];
-      const day = { ...newTrip.days[dayIndex] };
-      
-      // Update or add transportation
-      if (!day.transportations) {
-        day.transportations = [];
-      }
-      
-      const existingIndex = day.transportations.findIndex((t: any) => 
-        t.fromDestination === fromDestinationId && t.toDestination === toDestinationId
-      );
-      
-      const transportData = {
-        transportId: `transport-${fromDestinationId}-${toDestinationId}`,
-        mode: transportation.mode,
-        fromDestination: fromDestinationId,
-        toDestination: toDestinationId,
-        duration: transportation.duration,
-        distance: transportation.distance,
-        cost: transportation.cost,
-        route: transportation.route,
-        routeUrl: transportation.routeUrl,
-        routeGeometry: transportation.routeGeometry,
-      };
-      
-      console.log('Transport data to save:', transportData);
-      
-      if (existingIndex >= 0) {
-        day.transportations[existingIndex] = transportData;
-      } else {
-        day.transportations.push(transportData);
-      }
-      
-      newTrip.days[dayIndex] = day;
-      return newTrip;
-    });
-    
-    // Save to database
-    const doc = tripData.itinerary_document as any;
-    if (!doc?.content) return;
-    
-    const newContent = [...doc.content];
-    let currentDayIdx = 0;
-    
-    for (let i = 0; i < newContent.length; i++) {
-      if (newContent[i].type === 'dayNode') {
-        if (currentDayIdx === dayIndex) {
-          const dayNode = { ...newContent[i] };
-          const newDayContent = [];
-          
-          // Rebuild day content with transportation nodes
-          const places = trip.days[dayIndex].places;
-          for (let j = 0; j < places.length; j++) {
-            const place = places[j];
-            
-            // Add destination node
-            newDayContent.push({
-              type: 'destinationNode',
-              attrs: {
-                destinationId: place.destinationId,
-                name: place.name,
-                description: place.description,
-                duration: place.time,
-                cost: place.cost,
-                coordinates: {
-                  lat: place.lat,
-                  lng: place.lng
-                }
-              }
-            });
-            
-            // Add transportation node if not last place
-            if (j < places.length - 1) {
-              const nextPlace = places[j + 1];
-              const transport = trip.days[dayIndex].transportations?.find((t: any) => 
-                t.fromDestination === place.destinationId && 
-                t.toDestination === nextPlace.destinationId
+    pendingProposals,
+    proposals,
+    voteProposal,
+    applyProposal,
+    getUserVote,
+    isVoting,
+    isApplying,
+  } = useAIAssistant(id as string);
+
+  // Collaboration panel tabs
+  const [activeTab, setActiveTab] = useState<'chat' | 'suggestions'>('chat');
+
+  // Map view state
+  const [showMap, setShowMap] = useState(true);
+  const [documentLocations, setDocumentLocations] = useState<Array<{
+    latitude: number;
+    longitude: number;
+    placeName: string;
+    address?: string;
+  }>>([]);
+
+  console.log('Document View - Trip ID:', id);
+  console.log('Document View - Trip Data:', trip);
+  console.log('Document View - Loading:', isLoading);
+  console.log('Document View - Error:', error);
+
+  // Extract locations from document content
+  const extractLocationsFromDocument = useCallback((content: JSONContent) => {
+    const locations: Array<{
+      latitude: number;
+      longitude: number;
+      placeName: string;
+      address?: string;
+    }> = [];
+
+    const traverse = (node: any) => {
+      // Check for location marks
+      if (node.marks) {
+        node.marks.forEach((mark: any) => {
+          if (mark.type === 'location' && mark.attrs) {
+            const { latitude, longitude, placeName, address } = mark.attrs;
+            if (latitude && longitude && placeName) {
+              // Check if location already exists
+              const exists = locations.some(
+                loc => loc.latitude === latitude && loc.longitude === longitude
               );
-              
-              if (transport) {
-                newDayContent.push({
-                  type: 'transportationNode',
-                  attrs: {
-                    transportId: transport.transportId,
-                    mode: transport.mode,
-                    fromDestination: transport.fromDestination,
-                    toDestination: transport.toDestination,
-                    duration: transport.duration,
-                    distance: transport.distance,
-                    cost: transport.cost ? {
-                      amount: transport.cost,
-                      currency: 'USD'
-                    } : undefined,
-                    route: transport.route,
-                    routeUrl: transport.routeUrl,
-                    routeGeometry: transport.routeGeometry,
-                  }
-                });
+              if (!exists) {
+                locations.push({ latitude, longitude, placeName, address });
               }
             }
           }
-          
-          dayNode.content = newDayContent;
-          newContent[i] = dayNode;
-          break;
-        }
-        currentDayIdx++;
+        });
       }
-    }
-    
-    const updatedDocument = {
-      ...doc,
-      content: newContent
+
+      // Traverse children
+      if (node.content) {
+        node.content.forEach(traverse);
+      }
     };
-    
-    try {
-      const { error } = await supabase
-        .from('trips')
-        .update({ itinerary_document: updatedDocument })
-        .eq('id', tripData.id);
-        
-      if (error) {
-        console.error('Failed to save transportation:', error);
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['trip', id] });
-      }
-    } catch (err) {
-      console.error('Error saving transportation:', err);
+
+    if (content && content.content) {
+      content.content.forEach(traverse);
     }
-  }, [tripData, trip, queryClient, id]);
 
-  // Get all locations for the map
-  const allLocations = useMemo(() => {
-    if (!trip?.days) return [];
-    return trip.days.flatMap((day) =>
-      day.places.map((place) => ({
-        id: place.id,
-        name: place.name,
-        lat: place.lat,
-        lng: place.lng,
-        description: `${place.period} • ${place.time}`,
-        colorIndex: place.colorIndex,
-      }))
-    );
-  }, [trip]);
+    return locations;
+  }, []);
 
-  // Get all transportation routes for the map
-  const allTransportationRoutes = useMemo(() => {
-    if (!trip?.days) return [];
-    
-    const routes = [];
-    for (const day of trip.days) {
-      console.log('Processing day:', day.day, 'transportations:', day.transportations);
-      if (day.transportations && day.places) {
-        for (const transport of day.transportations) {
-          console.log('Processing transport:', transport);
-          // Find the from and to places
-          const fromPlace = day.places.find(p => p.destinationId === transport.fromDestination);
-          const toPlace = day.places.find(p => p.destinationId === transport.toDestination);
-          
-          console.log('Found places:', { fromPlace, toPlace, hasGeometry: !!transport.routeGeometry });
-          
-          if (fromPlace && toPlace && transport.routeGeometry) {
-            // Get color based on transport mode
-            const modeColors = {
-              walking: '#10B981',
-              metro: '#EF4444',
-              bus: '#3B82F6',
-              taxi: '#F59E0B',
-              uber: '#000000',
-              bike: '#8B5CF6',
-              car: '#6B7280',
-              train: '#059669',
-            };
-            
-            const route = {
-              id: transport.transportId,
-              mode: transport.mode,
-              geometry: transport.routeGeometry,
-              color: modeColors[transport.mode] || '#6366F1',
-              fromPlace: fromPlace.name,
-              toPlace: toPlace.name,
-              duration: transport.duration,
-            };
-            console.log('Adding route:', route);
-            routes.push(route);
-          }
+  // Auto-save functionality with debouncing
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+
+  const handleSave = useCallback(async (content: JSONContent) => {
+    // Extract locations when document changes
+    const locations = extractLocationsFromDocument(content);
+    setDocumentLocations(locations);
+    // Clear any existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Set a new timeout to save after 1 second of inactivity
+    saveTimeoutRef.current = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        const { error: saveError } = await supabase
+          .from('trips')
+          .update({ itinerary_document: content })
+          .eq('id', id);
+
+        if (saveError) {
+          console.error('Error saving document:', saveError);
+        } else {
+          console.log('Document saved successfully');
+        }
+      } catch (err) {
+        console.error('Error saving document:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1000); // Save after 1 second of no changes
+  }, [id, extractLocationsFromDocument]);
+
+  // Extract locations from initial document content
+  useEffect(() => {
+    if (trip?.itinerary_document) {
+      const locations = extractLocationsFromDocument(trip.itinerary_document as JSONContent);
+      setDocumentLocations(locations);
+    }
+  }, [trip?.itinerary_document, extractLocationsFromDocument]);
+
+  // Listen for messages from the editor
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'open-chat-with-context') {
+        const selectedText = event.data.text;
+        if (selectedText) {
+          // Set the selected text as context
+          setSelectedTextContext(selectedText);
+          // Switch to chat tab
+          setActiveTab('chat');
+          // Pre-fill the chat input with a prompt
+          setChatMessage(`What can you tell me about: "${selectedText}"?`);
+          // Focus on the chat input
+          setTimeout(() => {
+            const chatInput = document.querySelector('[placeholder="Type a message..."]') as HTMLTextAreaElement;
+            if (chatInput) {
+              chatInput.focus();
+            }
+          }, 100);
         }
       }
-    }
-    console.log('Total routes collected:', routes.length, routes);
-    return routes;
-  }, [trip]);
+    };
 
-  const filteredDays = useMemo(() => {
-    if (!trip?.days) return [];
-    return trip.days;
-  }, [trip]);
-  
-  // Early returns after all hooks
+    if (Platform.OS === 'web') {
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle sending messages
+  const handleSendMessage = useCallback(() => {
+    if (chatMessage.trim() && !isSending) {
+      let messageToSend = chatMessage.trim();
+
+      // If there's selected text context, add it to the message
+      if (selectedTextContext) {
+        messageToSend = `Regarding this text: "${selectedTextContext}"\n\n${messageToSend}`;
+        setSelectedTextContext(''); // Clear context after sending
+      }
+
+      sendMessage(messageToSend);
+      setChatMessage('');
+      // AI processing now happens server-side automatically via database webhook
+    }
+  }, [chatMessage, sendMessage, isSending, selectedTextContext]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatScrollRef.current && messages?.length) {
+      setTimeout(() => {
+        chatScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages?.length]);
+
+  // Helper to get user initials
+  const getUserInitials = (name?: string | null, email?: string) => {
+    if (name) {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return email?.slice(0, 2).toUpperCase() || '??';
+  };
+
+  // Format time
+  const formatMessageTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const mins = Math.floor(diff / (1000 * 60));
+    if (mins > 0) return `${mins} min${mins > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  };
+
+  // Handle diff preview
+  const handlePreviewDiff = useCallback((proposalId: string) => {
+    console.log('\n=== Document - handlePreviewDiff START ===');
+    console.log('Document - proposalId:', proposalId);
+    console.log('Document - proposals available:', proposals?.length || 0);
+
+    const proposal = proposals?.find(p => p.id === proposalId);
+    console.log('Document - Found proposal:', !!proposal);
+
+    if (!proposal) {
+      console.log('Document - ERROR: Proposal not found!');
+      return;
+    }
+
+    if (!editorRef.current) {
+      console.log('Document - ERROR: EditorRef not available!');
+      return;
+    }
+
+    if (!trip?.itinerary_document) {
+      console.log('Document - ERROR: No itinerary document available!');
+      return;
+    }
+
+    if (activeDiffProposalId === proposalId) {
+      // Toggle off if clicking the same proposal
+      console.log('Document - CLEARING diff decorations (toggle off)');
+      setActiveDiffProposalId(null);
+
+      // Clear decorations
+      if (editorRef.current?.clearDiffDecorations) {
+        console.log('Document - Calling clearDiffDecorations()');
+        editorRef.current.clearDiffDecorations();
+      }
+
+      // IMPORTANT: Restore original content if it was changed
+      if (editorRef.current?.restoreOriginalContent) {
+        console.log('Document - Restoring original content');
+        editorRef.current.restoreOriginalContent();
+      }
+    } else {
+      // Show diff for this proposal
+      console.log('Document - Showing diff for proposal');
+      setActiveDiffProposalId(proposalId);
+
+      // DO NOT change the document content - just show decorations
+      // The document should remain unchanged until the proposal is accepted
+      console.log('Document - Using decoration-only approach (no content change)');
+
+      // We need to show where content WOULD be added without actually adding it
+      // For now, create a simple decoration at the end
+      const docSize = trip.itinerary_document ? calculateDocumentSize(trip.itinerary_document) : 100;
+      const simpleDecorations = [{
+        from: Math.max(1, docSize - 10),
+        to: Math.max(1, docSize - 1),
+        type: 'addition' as const,
+        content: `[Preview] ${proposal.title}: ${proposal.description}`
+      }];
+
+      if (editorRef.current?.setDiffDecorations) {
+        console.log('Document - Setting simple decorations for preview');
+        editorRef.current.setDiffDecorations(simpleDecorations);
+      }
+    }
+  }, [activeDiffProposalId, proposals, trip]);
+
+  // Helper function to calculate document size
+  const calculateDocumentSize = (doc: JSONContent): number => {
+    if (!doc) return 2;
+    let size = 2;
+    if (doc.content && Array.isArray(doc.content)) {
+      for (const node of doc.content) {
+        size += calculateNodeSize(node);
+      }
+    }
+    return size;
+  };
+
+  const calculateNodeSize = (node: any): number => {
+    if (!node) return 0;
+    if (node.type === 'text') return node.text?.length || 0;
+    let size = 2;
+    if (node.content && Array.isArray(node.content)) {
+      for (const child of node.content) {
+        size += calculateNodeSize(child);
+      }
+    }
+    return size;
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading trip...</Text>
+        <Text style={styles.loadingText}>Loading document...</Text>
       </View>
     );
   }
-  
+
   if (error || !trip) {
     return (
       <View style={styles.errorContainer}>
-        <Feather name="alert-circle" size={48} color="#EF4444" />
-        <Text style={styles.errorText}>Failed to load trip</Text>
-        <Text style={styles.errorSubtext}>Please try again later</Text>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
+        <Feather name="file-text" size={48} color="#9CA3AF" />
+        <Text style={styles.errorText}>Unable to load trip document</Text>
+        {error && <Text style={styles.errorSubtext}>{error.message || 'Failed to load trip'}</Text>}
+        {!trip && !error && <Text style={styles.errorSubtext}>Trip not found (ID: {id})</Text>}
       </View>
     );
   }
 
-  // Desktop: Show side-by-side layout
-  if (!responsive.isMobile) {
-    return (
-      <View style={styles.desktopContainer}>
-        <View style={styles.desktopItinerary}>
-          <ScrollView style={styles.textContent}>
-            {filteredDays.map((day) => (
-              <DaySection
-                key={day.day}
-                day={day}
-                tripId={id as string}
-                onPlacesReorder={handlePlacesReorder}
-                onTransportationEdit={handleTransportationEdit}
-              />
-            ))}
-          </ScrollView>
-        </View>
-        
-        <View style={styles.desktopMap}>
-          <Suspense fallback={<ActivityIndicator size="large" color="#3B82F6" />}>
-            <MapView 
-              locations={allLocations}
-              transportationRoutes={allTransportationRoutes}
-              style={{ width: '100%', height: '100%' }}
-            />
-          </Suspense>
-        </View>
-        
-        {/* Collaboration Panel */}
-        <CollaborationPanel 
-          isOpen={isCollaborationOpen}
-          onClose={() => setIsCollaborationOpen(false)}
-        />
-      </View>
-    );
-  }
-
-  // Mobile: Show itinerary only (map is in separate tab)
   return (
     <View style={styles.container}>
-      {/* Member List and View Toggle */}
-      <View style={styles.headerControls}>
-        <TripMemberList
-          tripId={id as string}
-          compact={true}
-          onMemberPress={() => setShowMembers(true)}
-        />
-
-        <View style={styles.viewToggle}>
+      {/* Main Content Area */}
+      <View style={styles.mainContent}>
+        {/* Document Section */}
+        <View style={[styles.documentSection, responsive.isDesktop && styles.documentSectionDesktop]}>
+          {/* Document Toolbar */}
+          <View style={styles.toolbar}>
+        <View style={styles.toolbarLeft}>
+          <View style={styles.toolButton}>
+            <Feather name="cpu" size={18} color="#8B5CF6" />
+            <Text style={styles.toolButtonText}>AI-Assisted Document</Text>
+          </View>
           <TouchableOpacity
-            style={[styles.viewToggleButton, !showPersonalView && styles.viewToggleActive]}
-            onPress={() => setShowPersonalView(false)}
+            style={[styles.toolButton, showMap && styles.toolButtonActive]}
+            onPress={() => setShowMap(!showMap)}
           >
-            <Ionicons name="people" size={16} color={!showPersonalView ? '#3B82F6' : '#6B7280'} />
-            <Text style={[styles.viewToggleText, !showPersonalView && styles.viewToggleTextActive]}>
-              Everyone
-            </Text>
+            <Feather name="map" size={18} color={showMap ? "#3B82F6" : "#6B7280"} />
+            <Text style={[styles.toolButtonText, showMap && styles.toolButtonTextActive]}>Map View</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewToggleButton, showPersonalView && styles.viewToggleActive]}
-            onPress={() => setShowPersonalView(true)}
-          >
-            <Ionicons name="person" size={16} color={showPersonalView ? '#3B82F6' : '#6B7280'} />
-            <Text style={[styles.viewToggleText, showPersonalView && styles.viewToggleTextActive]}>
-              My View
-            </Text>
+        </View>
+
+        <View style={styles.toolbarRight}>
+          {isSaving && (
+            <View style={styles.savingIndicator}>
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text style={styles.savingText}>Saving...</Text>
+            </View>
+          )}
+          <TouchableOpacity style={styles.toolButton}>
+            <Feather name="share-2" size={18} color="#6B7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.toolButton}>
+            <Feather name="download" size={18} color="#6B7280" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={styles.textContent}>
-        {filteredDays.map((day) => (
-          <DaySection
-            key={day.day}
-            day={day}
-            tripId={id as string}
-            onPlacesReorder={handlePlacesReorder}
-            onTransportationEdit={handleTransportationEdit}
+      {/* Document Content Area */}
+      <ScrollView
+        style={styles.documentScrollView}
+        contentContainerStyle={styles.documentScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[
+          styles.documentPaper,
+          responsive.isDesktop && styles.documentPaperDesktop
+        ]}>
+          {/* Document Title */}
+          <View style={styles.documentHeader}>
+            <Text style={styles.documentTitle}>{trip.title}</Text>
+            {trip.description && (
+              <Text style={styles.documentSubtitle}>{trip.description}</Text>
+            )}
+            <View style={styles.documentMeta}>
+              <View style={styles.metaItem}>
+                <Feather name="calendar" size={14} color="#6B7280" />
+                <Text style={styles.metaText}>
+                  {trip.start_date ? new Date(trip.start_date).toLocaleDateString() : 'Not set'}
+                  {trip.end_date && ` - ${new Date(trip.end_date).toLocaleDateString()}`}
+                </Text>
+              </View>
+              <View style={styles.metaItem}>
+                <Feather name="users" size={14} color="#6B7280" />
+                <Text style={styles.metaText}>3 travelers</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.documentDivider} />
+
+          {/* Map View */}
+          {showMap && documentLocations.length > 0 && (
+            <View style={styles.mapContainer}>
+              <DocumentMapWrapper
+                locations={documentLocations}
+                height={300}
+              />
+            </View>
+          )}
+
+          {/* TipTap Editor - Now editable with bubble menu */}
+          <ItineraryDocumentEditor
+            ref={editorRef}
+            trip={trip}
+            editable={isEditing}
+            onSave={handleSave}
           />
-        ))}
+        </View>
       </ScrollView>
-      
-      {/* Collaboration Panel */}
-      <CollaborationPanel 
-        isOpen={isCollaborationOpen}
-        onClose={() => setIsCollaborationOpen(false)}
-      />
+        </View>
+
+        {/* Collaboration Panel - Desktop Only */}
+        {responsive.isDesktop && (
+          <View style={styles.collaborationPanel}>
+            <View style={styles.collaborationHeader}>
+              <Text style={styles.collaborationTitle}>Collaboration</Text>
+              <View style={styles.collaborationTabs}>
+                <TouchableOpacity
+                  style={[styles.tabButton, activeTab === 'chat' && styles.tabButtonActive]}
+                  onPress={() => setActiveTab('chat')}
+                >
+                  <Feather name="message-circle" size={16} color={activeTab === 'chat' ? '#3B82F6' : '#6B7280'} />
+                  <Text style={[styles.tabButtonText, activeTab === 'chat' && styles.tabButtonTextActive]}>Chat</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tabButton, activeTab === 'suggestions' && styles.tabButtonActive]}
+                  onPress={() => setActiveTab('suggestions')}
+                >
+                  <Feather name="cpu" size={16} color={activeTab === 'suggestions' ? '#3B82F6' : '#6B7280'} />
+                  <Text style={[styles.tabButtonText, activeTab === 'suggestions' && styles.tabButtonTextActive]}>AI</Text>
+                  {pendingProposals?.length > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{pendingProposals.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Active Collaborators */}
+            <View style={styles.collaborationSection}>
+              <Text style={styles.sectionTitle}>Active Now</Text>
+              <View style={styles.collaboratorsList}>
+                <View style={styles.collaboratorItem}>
+                  <View style={[styles.collaboratorAvatar, { backgroundColor: '#3B82F6' }]}>
+                    <Text style={styles.collaboratorInitial}>M</Text>
+                  </View>
+                  <View style={styles.collaboratorInfo}>
+                    <Text style={styles.collaboratorName}>You</Text>
+                    <Text style={styles.collaboratorStatus}>Editing</Text>
+                  </View>
+                  <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+                </View>
+              </View>
+            </View>
+
+            {/* Tab Content */}
+            {activeTab === 'chat' ? (
+              <>
+                {/* Chat Messages */}
+                <View style={[styles.collaborationSection, { flex: 1 }]}>
+              <Text style={styles.sectionTitle}>Chat</Text>
+              <ScrollView
+                ref={chatScrollRef}
+                style={styles.messagesContainer}
+                showsVerticalScrollIndicator={false}
+              >
+                {messages && messages.length > 0 ? (
+                  messages.map((msg) => {
+                    const isOwnMessage = msg.user_id === user?.id;
+                    const isAISuggestion = msg.metadata?.type === 'ai_proposal' || msg.metadata?.type === 'ai_suggestion' || msg.user?.email === 'ai@tourvision.app';
+                    const userColor = isAISuggestion ? '#8B5CF6' : (isOwnMessage ? '#3B82F6' : '#8B5CF6');
+
+                    return (
+                      <View key={msg.id} style={styles.messageItem}>
+                        <View style={[styles.messageAvatar, { backgroundColor: userColor }]}>
+                          <Text style={styles.messageInitial}>
+                            {isAISuggestion ? 'AI' : getUserInitials(msg.user?.full_name, msg.user?.email)}
+                          </Text>
+                        </View>
+                        <View style={styles.messageContent}>
+                          <View style={styles.messageHeader}>
+                            <Text style={styles.messageAuthor}>
+                              {isAISuggestion ? 'AI Assistant' : (isOwnMessage ? 'You' : msg.user?.full_name || msg.user?.email?.split('@')[0] || 'Unknown')}
+                            </Text>
+                            <Text style={styles.messageTime}>{formatMessageTime(msg.created_at)}</Text>
+                          </View>
+                          {isAISuggestion ? (
+                            <ProposalInline
+                              proposal={(() => {
+                                // Find the actual proposal from the proposals array using the proposal_id from metadata
+                                const proposalId = msg.metadata?.proposal_id || msg.metadata?.suggestion_id;
+                                const actualProposal = proposalId ? proposals?.find(p => p.id === proposalId) : null;
+
+                                // Return the actual proposal if found, otherwise create a fallback
+                                return actualProposal || {
+                                  id: proposalId || msg.id,
+                                  title: 'Proposal',
+                                  description: msg.message,
+                                  proposal_type: 'add',
+                                  status: 'pending',
+                                  approval_count: 0,
+                                  required_approvals: 3,
+                                };
+                              })()}
+                              onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
+                                console.log('Vote called from document view:', proposalId, vote);
+                                if (voteProposal && proposalId && vote) {
+                                  voteProposal({ proposalId, vote, comment });
+                                }
+                              }}
+                              onApply={applyProposal}
+                              onPreviewDiff={handlePreviewDiff}
+                              isDiffActive={activeDiffProposalId === (msg.metadata?.proposal_id || msg.metadata?.suggestion_id)}
+                              getUserVote={(sugId: string) => {
+                                const vote = getUserVote(sugId);
+                                return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;
+                              }}
+                              isVoting={isVoting}
+                              isApplying={isApplying}
+                            />
+                          ) : (
+                            <Text style={styles.messageText}>{msg.message}</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.noMessagesText}>No messages yet. Start a conversation!</Text>
+                )}
+              </ScrollView>
+            </View>
+
+            {/* Activity Feed */}
+            <View style={styles.collaborationSection}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <ScrollView style={styles.activityContainer}>
+                <View style={styles.activityItem}>
+                  <Feather name="edit-3" size={14} color="#6B7280" />
+                  <Text style={styles.activityText}>
+                    <Text style={styles.activityAuthor}>Sarah</Text> edited the itinerary
+                  </Text>
+                  <Text style={styles.activityTime}>5 min ago</Text>
+                </View>
+                <View style={styles.activityItem}>
+                  <Feather name="message-circle" size={14} color="#6B7280" />
+                  <Text style={styles.activityText}>
+                    <Text style={styles.activityAuthor}>Tom</Text> added a comment
+                  </Text>
+                  <Text style={styles.activityTime}>1 hour ago</Text>
+                </View>
+              </ScrollView>
+            </View>
+
+                {/* Chat Input */}
+                <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.chatInputContainer}
+            >
+              {selectedTextContext && (
+                <View style={styles.contextIndicator}>
+                  <Text style={styles.contextLabel}>Context:</Text>
+                  <Text style={styles.contextText} numberOfLines={1}>
+                    "{selectedTextContext}"
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedTextContext('')}
+                    style={styles.clearContextButton}
+                  >
+                    <Feather name="x" size={14} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TextInput
+                style={styles.chatInput}
+                placeholder="Type a message..."
+                placeholderTextColor="#9CA3AF"
+                value={chatMessage}
+                onChangeText={setChatMessage}
+                multiline
+                onSubmitEditing={handleSendMessage}
+                returnKeyType="send"
+                editable={!isSending}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!chatMessage.trim() || isSending) && styles.sendButtonDisabled]}
+                onPress={handleSendMessage}
+                disabled={!chatMessage.trim() || isSending}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Feather name="send" size={18} color="white" />
+                )}
+              </TouchableOpacity>
+                </KeyboardAvoidingView>
+              </>
+            ) : (
+              /* AI Suggestions Tab */
+              <View style={styles.proposalsContainer}>
+                <ProposalPanel
+                  proposals={proposals || []}
+                  onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
+                    if (voteProposal) {
+                      voteProposal({ proposalId, vote, comment });
+                    }
+                  }}
+                  onApply={applyProposal}
+                  getUserVote={(sugId: string) => {
+                    const vote = getUserVote(sugId);
+                    return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;
+                  }}
+                  isVoting={isVoting}
+                  isApplying={isApplying}
+                />
+              </View>
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -1079,327 +653,486 @@ export default function TripDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  desktopContainer: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  desktopItinerary: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  desktopMap: {
-    flex: 1,
-    backgroundColor: '#E5E5E5',
-  },
-  textContent: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  daySection: {
-    marginBottom: 10,
-  },
-  stickyDayHeader: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    position: Platform.OS === 'web' ? 'sticky' : 'relative',
-    top: 0,
-    zIndex: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  dayTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  dayDate: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  daySummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  summaryText: {
-    fontSize: 14,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  summaryDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#9CA3AF',
-    marginHorizontal: 12,
-  },
-  placeCard: {
-    backgroundColor: 'white',
-    marginLeft: 70,
-    marginRight: 16,
-    marginVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  placeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    paddingLeft: 20,
-    position: 'relative',
-  },
-  placeMarker: {
-    position: 'absolute',
-    left: -30,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  placeInfo: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  placeName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-    letterSpacing: -0.1,
-  },
-  placeMetadata: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  placeTime: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  metaSeparator: {
-    marginHorizontal: 8,
-    color: '#999',
-  },
-  placeCost: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  placeDescription: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  placeDescriptionCompact: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  dragIndicator: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    marginTop: -10,
-  },
-  expandIndicator: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-  },
-  expandedContent: {
-    paddingTop: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  placeDetails: {
-    marginTop: 14,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  detailText: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  detailCost: {
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  dayFooter: {
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  dayStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dayStatText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
-  },
-  proTipCard: {
-    backgroundColor: '#FEF3C7',
-    margin: 20,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  proTipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  proTipTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#92400E',
-    marginLeft: 8,
-  },
-  proTipText: {
-    fontSize: 14,
-    color: '#78350F',
-    lineHeight: 20,
+    backgroundColor: '#F3F4F6',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F3F4F6',
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 20,
+    backgroundColor: '#F3F4F6',
   },
   errorText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#EF4444',
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 1,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      },
+    }),
+  },
+  toolbarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toolbarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toolbarDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 4,
+  },
+  toolButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  toolButtonActive: {
+    backgroundColor: '#EBF5FF',
+  },
+  toolButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  toolButtonTextActive: {
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  documentScrollView: {
+    flex: 1,
+  },
+  documentScrollContent: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  documentPaper: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      },
+    }),
+  },
+  documentPaperDesktop: {
+    maxWidth: 800,
+    marginHorizontal: 'auto',
+    width: '100%',
+  },
+  documentHeader: {
+    padding: 32,
+    paddingBottom: 24,
+  },
+  documentTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  documentSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+    lineHeight: 24,
+  },
+  documentMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 20,
+    marginTop: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  documentDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 32,
+    marginBottom: 24,
   },
   errorSubtext: {
-    marginTop: 8,
     fontSize: 14,
-    color: '#666',
+    color: '#9CA3AF',
+    marginTop: 8,
+    textAlign: 'center',
   },
-  backButton: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
+  savingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EBF5FF',
+    borderRadius: 6,
+    marginRight: 12,
   },
-  backButtonText: {
+  savingText: {
+    fontSize: 13,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  mainContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  documentSection: {
+    flex: 1,
+  },
+  documentSectionDesktop: {
+    maxWidth: 900,
+  },
+  collaborationPanel: {
+    width: 360,
+    backgroundColor: 'white',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    flexDirection: 'column',
+  },
+  collaborationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  collaborationTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  collaborationButton: {
+    padding: 8,
+  },
+  collaborationSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  collaboratorsList: {
+    gap: 12,
+  },
+  collaboratorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  collaboratorAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collaboratorInitial: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
   },
-  attendanceSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  headerControls: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 4,
-    marginTop: 12,
-  },
-  viewToggleButton: {
+  collaboratorInfo: {
     flex: 1,
+  },
+  collaboratorName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  collaboratorStatus: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  commentsContainer: {
+    maxHeight: 200,
+  },
+  commentItem: {
     flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  commentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  commentInitial: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  commentContent: {
+    flex: 1,
+  },
+  commentAuthor: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  commentText: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  commentTime: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  activityContainer: {
+    maxHeight: 150,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+  },
+  activityText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  activityAuthor: {
+    fontWeight: '600',
+    color: '#111827',
+  },
+  activityTime: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  chatInputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 8,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+  },
+  chatInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 20,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    gap: 6,
-  },
-  viewToggleActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  viewToggleText: {
     fontSize: 14,
+    maxHeight: 100,
+  },
+  sendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  messagesContainer: {
+    flex: 1,
+    paddingBottom: 10,
+  },
+  messageItem: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageInitial: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  messageContent: {
+    flex: 1,
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  messageAuthor: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  messageText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  messageTime: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  noMessagesText: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginTop: 20,
+    fontStyle: 'italic',
+  },
+  collaborationTabs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  tabButtonActive: {
+    backgroundColor: '#EBF5FF',
+  },
+  tabButtonText: {
+    fontSize: 13,
     fontWeight: '500',
     color: '#6B7280',
   },
-  viewToggleTextActive: {
+  tabButtonTextActive: {
     color: '#3B82F6',
+  },
+  tabBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    marginLeft: 4,
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'white',
+  },
+  suggestionsContainer: {
+    flex: 1,
+  },
+  processingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9D5FF',
+  },
+  processingText: {
+    fontSize: 13,
+    color: '#7C3AED',
+  },
+  mapContainer: {
+    marginHorizontal: 32,
+    marginBottom: 24,
+  },
+  contextIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderRadius: 8,
+    marginHorizontal: 8,
+  },
+  contextLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  contextText: {
+    fontSize: 12,
+    color: '#374151',
+    flex: 1,
+    fontStyle: 'italic',
+  },
+  clearContextButton: {
+    padding: 4,
   },
 });

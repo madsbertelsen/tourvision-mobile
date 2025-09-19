@@ -20,11 +20,11 @@ This is a monorepo with two main applications:
 - Web platform support
 
 ### 🚧 In Progress
-- Trip detail views (`/trip/[id]`)
-- TipTap editor integration
-- Map view with destinations
-- Collaboration features
-- Native iOS/Android support
+- Trip detail views (`/trip/[id]`) - Mostly complete with document editor
+- TipTap editor integration - Working with custom nodes and diff preview
+- Map view with destinations - Functional with Mapbox
+- Collaboration features - Chat and AI proposals working
+- Native iOS/Android support - Web platform fully functional
 
 ### 📝 Known Limitations
 - DOM components (TipTap, Maps) only work on web currently
@@ -223,6 +223,10 @@ For local development:
 #### Test users don't persist after DB reset
 - **Solution:** Use the seed.sql format from working project (full column specification)
 
+#### Diff Preview Not Showing
+- **Cause:** Content already exists in document (duplicate proposal) or positions out of bounds
+- **Solution:** System now dynamically recalculates positions and handles empty documents
+
 ### Database Seeding
 
 The `supabase/seed.sql` file creates:
@@ -313,6 +317,128 @@ git commit -m "feat: Description of changes"
 # Push to remote (if needed)
 git push origin main
 ```
+
+## Diff Preview System
+
+### Overview
+The diff preview system shows proposed changes from AI suggestions before they're applied to the document. This allows users to visualize exactly what will be added, modified, or removed.
+
+### How It Works
+
+1. **AI Proposals**: When users discuss trip changes in chat, the AI creates proposals
+2. **Preview Changes**: Click "Show Changes in Document" to see what will be added
+3. **Visual Indicators**:
+   - Green highlighting/background for additions
+   - Strike-through for deletions
+   - Yellow highlighting for modifications
+4. **Accept/Reject**: Users can then accept or reject the proposed changes
+
+### Implementation Details
+
+#### Core Components
+
+**Diff Visualization Extension** (`/components/dom/tiptap-diff-extension.tsx`):
+- ProseMirror extension for rendering diff decorations
+- Handles inline decorations for existing content
+- Creates widget decorations for new content in empty documents
+
+**Recalculation Utility** (`/utils/recalculate-diff-decorations.ts`):
+- Dynamically recalculates decoration positions based on current document
+- Handles document evolution between proposal creation and viewing
+- Special handling for empty/minimal documents
+
+**Proposal System**:
+- Proposals store `diff_decorations` with positions and content
+- `proposed_content` contains the full document after changes
+- `current_content` snapshot at time of proposal creation
+
+### Testing Diff Preview
+
+#### Manual Testing Steps
+
+1. **Setup**:
+   ```bash
+   npx supabase db reset --local
+   npx expo start --web --port 8082
+   ```
+
+2. **Login**:
+   - Email: `test@example.com`
+   - Password: `TestPassword123!`
+
+3. **Test with Existing Document**:
+   - Open "Barcelona Adventure" trip
+   - Go to Document tab
+   - In chat, suggest: "Add visit to Sagrada Familia"
+   - Click "Show Changes in Document" when AI responds
+   - Verify green highlighting appears
+
+4. **Test with Empty Document**:
+   - Create new trip
+   - Go to Document tab (should be empty)
+   - Suggest: "Let's start with visiting Madrid"
+   - Verify preview appears even in empty document
+
+#### Automated Testing with Playwright
+
+```javascript
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({ headless: false });
+  const page = await browser.newPage();
+
+  // Navigate and login
+  await page.goto('http://localhost:8082');
+  await page.fill('input[type="email"]', 'test@example.com');
+  await page.fill('input[type="password"]', 'TestPassword123!');
+  await page.click('button:has-text("Sign in")');
+
+  // Open trip document
+  await page.waitForSelector('text=Barcelona Adventure');
+  await page.click('text=Barcelona Adventure');
+  await page.click('text=Document');
+
+  // Trigger AI proposal
+  await page.fill('input[placeholder*="message"]', 'Add Sagrada Familia visit');
+  await page.press('input[placeholder*="message"]', 'Enter');
+
+  // Test diff preview
+  await page.waitForSelector('text=Show Changes in Document', { timeout: 10000 });
+  await page.click('text=Show Changes in Document');
+
+  // Verify diff appears
+  const diffVisible = await page.locator('.diff-addition-preview').isVisible();
+  console.log('Diff preview visible:', diffVisible);
+
+  // Take screenshot
+  await page.screenshot({ path: 'diff-preview.png' });
+
+  await browser.close();
+})();
+```
+
+### Troubleshooting
+
+#### Preview Not Appearing
+
+1. **Check Console Logs**:
+   - Look for "DiffVisualization Plugin" messages
+   - Verify decoration positions are within document bounds
+   - Check if proposed content differs from current
+
+2. **Verify Proposal Data**:
+   ```sql
+   -- Check if proposal has diff decorations
+   SELECT id, title, diff_decorations
+   FROM proposals
+   WHERE trip_id = 'YOUR_TRIP_ID';
+   ```
+
+3. **Common Issues**:
+   - Content already exists (duplicate proposal)
+   - Document changed since proposal creation
+   - Empty document special case not handled
 
 ## Edge Functions Development
 
