@@ -102,6 +102,21 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
         console.log('ItineraryEditorDOM - Processing clear-diff-decorations message');
         const result = editor.chain().focus().clearDiffDecorations().run();
         console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
+      } else if (event.data?.type === 'show-proposed-content' && editor) {
+        console.log('ItineraryEditorDOM - Processing show-proposed-content message');
+        const { proposedContent, currentContent } = event.data;
+
+        // Temporarily show the proposed content with inline diff highlighting
+        if (proposedContent) {
+          // Set the content to the proposed version
+          editor.commands.setContent(proposedContent);
+
+          // Calculate and apply inline decorations for additions
+          const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
+          if (decorations.length > 0) {
+            editor.chain().focus().setDiffDecorations(decorations).run();
+          }
+        }
       }
     };
 
@@ -127,6 +142,19 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
         // Use the chain to ensure command is available
         const result = editor.chain().focus().clearDiffDecorations().run();
         console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
+      }
+    },
+    showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => {
+      console.log('ItineraryEditorDOM - showProposedContent called');
+      if (editor && proposedContent) {
+        // Set the proposed content
+        editor.commands.setContent(proposedContent);
+
+        // Calculate and apply inline decorations
+        const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
+        if (decorations.length > 0) {
+          editor.chain().focus().setDiffDecorations(decorations).run();
+        }
       }
     },
   }), [editor]);
@@ -529,5 +557,82 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
 });
 
 ItineraryEditorDOM.displayName = 'ItineraryEditorDOM';
+
+/**
+ * Calculate inline diff decorations by comparing current and proposed content
+ */
+function calculateInlineDiffDecorations(currentContent: any, proposedContent: any): any[] {
+  const decorations: any[] = [];
+
+  if (!currentContent || !proposedContent) {
+    return decorations;
+  }
+
+  const currentNodes = currentContent.content || [];
+  const proposedNodes = proposedContent.content || [];
+
+  // Track position in the proposed document
+  let pos = 1; // Start after doc opening
+
+  // Helper to calculate node size
+  const calculateNodeSize = (node: any): number => {
+    if (!node) return 0;
+    if (node.type === 'text') return node.text?.length || 0;
+
+    let size = 2; // Node markers
+    if (node.content && Array.isArray(node.content)) {
+      for (const child of node.content) {
+        size += calculateNodeSize(child);
+      }
+    }
+    return size;
+  };
+
+  // Compare nodes and find additions
+  for (let i = 0; i < proposedNodes.length; i++) {
+    const proposedNode = proposedNodes[i];
+    const currentNode = i < currentNodes.length ? currentNodes[i] : null;
+
+    const nodeSize = calculateNodeSize(proposedNode);
+
+    // Check if this is a new node (doesn't exist in current)
+    if (!currentNode || i >= currentNodes.length) {
+      // This is an addition - mark the entire node range
+      decorations.push({
+        from: pos,
+        to: pos + nodeSize,
+        type: 'addition',
+        content: extractTextFromNode(proposedNode)
+      });
+    } else if (JSON.stringify(currentNode) !== JSON.stringify(proposedNode)) {
+      // This is a modification
+      decorations.push({
+        from: pos,
+        to: pos + nodeSize,
+        type: 'modification',
+        content: extractTextFromNode(proposedNode)
+      });
+    }
+
+    pos += nodeSize;
+  }
+
+  console.log('calculateInlineDiffDecorations - Generated decorations:', decorations);
+  return decorations;
+}
+
+/**
+ * Extract text content from a node
+ */
+function extractTextFromNode(node: any): string {
+  if (!node) return '';
+  if (node.type === 'text') return node.text || '';
+
+  if (node.content && Array.isArray(node.content)) {
+    return node.content.map((child: any) => extractTextFromNode(child)).join('');
+  }
+
+  return '';
+}
 
 export default ItineraryEditorDOM;

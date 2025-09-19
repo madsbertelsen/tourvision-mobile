@@ -270,25 +270,25 @@ export default function TripDocumentView() {
       }
     } else {
       // Show diff for this proposal
-      console.log('Document - RECALCULATING diff decorations for current document');
-
-      // Recalculate decorations based on the CURRENT document
-      const recalculatedDecorations = recalculateDiffDecorations(
-        trip.itinerary_document as JSONContent,
-        proposal
-      );
-
-      console.log('Document - Recalculated decorations:', recalculatedDecorations);
+      console.log('Document - Showing diff for proposal');
       setActiveDiffProposalId(proposalId);
 
-      if (editorRef.current?.setDiffDecorations && recalculatedDecorations.length > 0) {
-        console.log('Document - Calling setDiffDecorations() with', recalculatedDecorations.length, 'recalculated decorations');
-        editorRef.current.setDiffDecorations(recalculatedDecorations);
+      // For now, we'll show the proposed document with highlighting
+      // This is a temporary solution until we implement proper inline diff
+      if (editorRef.current?.showProposedContent && proposal.proposed_content) {
+        console.log('Document - Showing proposed content with diff highlighting');
+        editorRef.current.showProposedContent(proposal.proposed_content, trip.itinerary_document);
       } else {
-        console.log('Document - ERROR: Cannot set diff decorations!', {
-          hasMethod: !!editorRef.current?.setDiffDecorations,
-          hasDecorations: recalculatedDecorations.length > 0
-        });
+        // Fallback to simple decorations
+        console.log('Document - Using simple decoration approach');
+        const recalculatedDecorations = recalculateDiffDecorations(
+          trip.itinerary_document as JSONContent,
+          proposal
+        );
+
+        if (editorRef.current?.setDiffDecorations && recalculatedDecorations.length > 0) {
+          editorRef.current.setDiffDecorations(recalculatedDecorations);
+        }
       }
     }
     console.log('=== Document - handlePreviewDiff END ===\n');

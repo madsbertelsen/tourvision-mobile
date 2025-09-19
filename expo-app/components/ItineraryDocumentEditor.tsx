@@ -13,6 +13,7 @@ interface ItineraryDocumentEditorProps {
 export interface ItineraryDocumentEditorRef {
   setDiffDecorations: (decorations: any[]) => void;
   clearDiffDecorations: () => void;
+  showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => void;
 }
 
 interface ItineraryDocumentEditorInternalProps extends ItineraryDocumentEditorProps {
@@ -122,6 +123,31 @@ export const ItineraryDocumentEditor = forwardRef<
         editorDomRef.current.clearDiffDecorations();
       } else {
         console.log('ItineraryDocumentEditor - editorDomRef.current.clearDiffDecorations not available');
+      }
+    },
+    showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => {
+      console.log('ItineraryDocumentEditor - showProposedContent called');
+
+      // Send message to DOM component to show proposed content with inline highlighting
+      if (Platform.OS === 'web' && window.frames.length > 0) {
+        const frames = window.frames;
+        for (let i = 0; i < frames.length; i++) {
+          try {
+            frames[i].postMessage({
+              type: 'show-proposed-content',
+              proposedContent: proposedContent,
+              currentContent: currentContent
+            }, '*');
+            console.log('ItineraryDocumentEditor - Sent show-proposed-content message');
+          } catch (e) {
+            console.error('Failed to send show-proposed-content message', e);
+          }
+        }
+      }
+
+      // Direct ref call if available
+      if (editorDomRef.current?.showProposedContent) {
+        editorDomRef.current.showProposedContent(proposedContent, currentContent);
       }
     },
   }), []);

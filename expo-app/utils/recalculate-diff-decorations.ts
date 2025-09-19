@@ -24,7 +24,7 @@ export function recalculateDiffDecorations(
   console.log('recalculateDiffDecorations - Current document size:', docSize);
 
   // If we have the original proposed content, we can be more precise
-  if (proposal.proposed_content && proposal.current_content) {
+  if (proposal.proposed_content) {
     // This proposal has both old and new content, so we can compute a real diff
     return computeContentDiff(currentDocument, proposal.proposed_content, proposal);
   }
@@ -88,16 +88,46 @@ function computeContentDiff(
   const proposedContent = proposedDoc.content || [];
 
   if (proposedContent.length > currentContent.length) {
-    // Content is being added - extract the actual new content
-    const position = Math.max(1, docSize - 1);
+    // Content is being added - we need to find where in the proposed doc
+    // the new content is and calculate its range
+
+    // Find the new nodes
+    const newNodeIndices: number[] = [];
+    for (let i = currentContent.length; i < proposedContent.length; i++) {
+      newNodeIndices.push(i);
+    }
+
+    // Calculate the positions of these new nodes in the proposed document
+    let position = 0;
+    // Account for doc node
+    position += 1;
+
+    // Calculate position up to where new content starts
+    for (let i = 0; i < currentContent.length && i < proposedContent.length; i++) {
+      position += calculateNodeSize(proposedContent[i]);
+    }
+
+    // Now calculate the range of the new content
+    const startPos = position;
+    let endPos = startPos;
+
+    for (const idx of newNodeIndices) {
+      if (idx < proposedContent.length) {
+        endPos += calculateNodeSize(proposedContent[idx]);
+      }
+    }
+
+    // Extract text for display
     const newContent = extractNewContent(currentDoc, proposedDoc);
 
     decorations.push({
-      from: position,
-      to: position,
+      from: startPos,
+      to: endPos,
       type: 'addition',
-      content: newContent
-    });
+      content: newContent,
+      isNewContent: true,  // Flag to indicate this is entirely new content
+      proposedNodes: newNodeIndices.map(i => proposedContent[i])  // Store the actual nodes
+    } as any);
   } else if (proposedContent.length < currentContent.length) {
     // Content is being removed
     decorations.push({
