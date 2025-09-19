@@ -106,16 +106,26 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
         console.log('ItineraryEditorDOM - Processing show-proposed-content message');
         const { proposedContent, currentContent } = event.data;
 
+        // Store original content for restoration
+        if (!editorRef.current) {
+          editorRef.current = { originalContent: editor.getJSON() };
+        }
+
         // Temporarily show the proposed content with inline diff highlighting
         if (proposedContent) {
+          console.log('ItineraryEditorDOM - Setting proposed content');
           // Set the content to the proposed version
           editor.commands.setContent(proposedContent);
 
           // Calculate and apply inline decorations for additions
-          const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
-          if (decorations.length > 0) {
-            editor.chain().focus().setDiffDecorations(decorations).run();
-          }
+          setTimeout(() => {
+            const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
+            console.log('ItineraryEditorDOM - Calculated decorations:', decorations);
+            if (decorations.length > 0) {
+              const result = editor.chain().focus().setDiffDecorations(decorations).run();
+              console.log('ItineraryEditorDOM - Applied decorations result:', result);
+            }
+          }, 100); // Small delay to ensure content is set first
         }
       }
     };

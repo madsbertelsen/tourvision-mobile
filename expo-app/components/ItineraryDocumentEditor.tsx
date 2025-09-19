@@ -14,6 +14,7 @@ export interface ItineraryDocumentEditorRef {
   setDiffDecorations: (decorations: any[]) => void;
   clearDiffDecorations: () => void;
   showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => void;
+  restoreOriginalContent: () => void;
 }
 
 interface ItineraryDocumentEditorInternalProps extends ItineraryDocumentEditorProps {
@@ -148,6 +149,28 @@ export const ItineraryDocumentEditor = forwardRef<
       // Direct ref call if available
       if (editorDomRef.current?.showProposedContent) {
         editorDomRef.current.showProposedContent(proposedContent, currentContent);
+      }
+    },
+    restoreOriginalContent: () => {
+      console.log('ItineraryDocumentEditor - restoreOriginalContent called');
+
+      // Send message to DOM component
+      if (Platform.OS === 'web' && window.frames.length > 0) {
+        const frames = window.frames;
+        for (let i = 0; i < frames.length; i++) {
+          try {
+            frames[i].postMessage({
+              type: 'restore-original-content'
+            }, '*');
+          } catch (e) {
+            console.error('Failed to send restore-original-content message', e);
+          }
+        }
+      }
+
+      // Direct ref call if available
+      if (editorDomRef.current?.restoreOriginalContent) {
+        editorDomRef.current.restoreOriginalContent();
       }
     },
   }), []);

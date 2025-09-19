@@ -262,37 +262,67 @@ export default function TripDocumentView() {
       // Toggle off if clicking the same proposal
       console.log('Document - CLEARING diff decorations (toggle off)');
       setActiveDiffProposalId(null);
+
+      // Clear decorations
       if (editorRef.current?.clearDiffDecorations) {
         console.log('Document - Calling clearDiffDecorations()');
         editorRef.current.clearDiffDecorations();
-      } else {
-        console.log('Document - ERROR: clearDiffDecorations method not available!');
+      }
+
+      // IMPORTANT: Restore original content if it was changed
+      if (editorRef.current?.restoreOriginalContent) {
+        console.log('Document - Restoring original content');
+        editorRef.current.restoreOriginalContent();
       }
     } else {
       // Show diff for this proposal
       console.log('Document - Showing diff for proposal');
       setActiveDiffProposalId(proposalId);
 
-      // For now, we'll show the proposed document with highlighting
-      // This is a temporary solution until we implement proper inline diff
-      if (editorRef.current?.showProposedContent && proposal.proposed_content) {
-        console.log('Document - Showing proposed content with diff highlighting');
-        editorRef.current.showProposedContent(proposal.proposed_content, trip.itinerary_document);
-      } else {
-        // Fallback to simple decorations
-        console.log('Document - Using simple decoration approach');
-        const recalculatedDecorations = recalculateDiffDecorations(
-          trip.itinerary_document as JSONContent,
-          proposal
-        );
+      // DO NOT change the document content - just show decorations
+      // The document should remain unchanged until the proposal is accepted
+      console.log('Document - Using decoration-only approach (no content change)');
 
-        if (editorRef.current?.setDiffDecorations && recalculatedDecorations.length > 0) {
-          editorRef.current.setDiffDecorations(recalculatedDecorations);
-        }
+      // We need to show where content WOULD be added without actually adding it
+      // For now, create a simple decoration at the end
+      const docSize = trip.itinerary_document ? calculateDocumentSize(trip.itinerary_document) : 100;
+      const simpleDecorations = [{
+        from: Math.max(1, docSize - 10),
+        to: Math.max(1, docSize - 1),
+        type: 'addition' as const,
+        content: `[Preview] ${proposal.title}: ${proposal.description}`
+      }];
+
+      if (editorRef.current?.setDiffDecorations) {
+        console.log('Document - Setting simple decorations for preview');
+        editorRef.current.setDiffDecorations(simpleDecorations);
       }
     }
-    console.log('=== Document - handlePreviewDiff END ===\n');
   }, [activeDiffProposalId, proposals, trip]);
+
+  // Helper function to calculate document size
+  const calculateDocumentSize = (doc: JSONContent): number => {
+    if (!doc) return 2;
+    let size = 2;
+    if (doc.content && Array.isArray(doc.content)) {
+      for (const node of doc.content) {
+        size += calculateNodeSize(node);
+      }
+    }
+    return size;
+  };
+
+  const calculateNodeSize = (node: any): number => {
+    if (!node) return 0;
+    if (node.type === 'text') return node.text?.length || 0;
+    let size = 2;
+    if (node.content && Array.isArray(node.content)) {
+      for (const child of node.content) {
+        size += calculateNodeSize(child);
+      }
+    }
+    return size;
+  };
 
   if (isLoading) {
     return (
