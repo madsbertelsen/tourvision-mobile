@@ -16,6 +16,8 @@ export function recalculateDiffDecorations(
   proposal: any
 ): DiffDecoration[] {
   console.log('recalculateDiffDecorations - Starting recalculation');
+  console.log('recalculateDiffDecorations - Proposal type:', proposal.proposal_type || proposal.request_type);
+  console.log('recalculateDiffDecorations - Has proposed_content:', !!proposal.proposed_content);
 
   // Calculate the actual size of the current document
   const docSize = calculateDocumentSize(currentDocument);
@@ -33,11 +35,17 @@ export function recalculateDiffDecorations(
     // Place it at the end of the current document
     const position = Math.max(1, docSize - 1);
 
+    // Extract the actual content that will be added from proposed_content if available
+    let contentToShow = proposal.title + ': ' + proposal.description;
+    if (proposal.proposed_content) {
+      contentToShow = extractNewContent(currentDocument, proposal.proposed_content);
+    }
+
     return [{
       from: position,
       to: position,
       type: 'addition',
-      content: proposal.title + ': ' + proposal.description
+      content: contentToShow
     }];
   }
 
@@ -75,22 +83,20 @@ function computeContentDiff(
   // Get the document size
   const docSize = calculateDocumentSize(currentDoc);
 
-  // For now, create a simple decoration showing where changes will occur
-  // In a real implementation, this would do a proper diff
-
   // Check if content is being added (proposed doc is longer)
-  const proposedSize = calculateDocumentSize(proposedDoc);
   const currentContent = currentDoc.content || [];
   const proposedContent = proposedDoc.content || [];
 
   if (proposedContent.length > currentContent.length) {
-    // Content is being added - show at the end of current document
+    // Content is being added - extract the actual new content
     const position = Math.max(1, docSize - 1);
+    const newContent = extractNewContent(currentDoc, proposedDoc);
+
     decorations.push({
       from: position,
       to: position,
       type: 'addition',
-      content: proposal.title + ': ' + proposal.description
+      content: newContent
     });
   } else if (proposedContent.length < currentContent.length) {
     // Content is being removed
@@ -101,16 +107,93 @@ function computeContentDiff(
       content: 'Removing: ' + proposal.description
     });
   } else {
-    // Content is being modified
+    // Content is being modified - show the actual changes
+    const modifiedContent = extractModifiedContent(currentDoc, proposedDoc);
     decorations.push({
       from: 1,
       to: Math.max(1, docSize - 1),
       type: 'modification',
-      content: proposal.title + ': ' + proposal.description
+      content: modifiedContent || (proposal.title + ': ' + proposal.description)
     });
   }
 
   return decorations;
+}
+
+/**
+ * Extracts the actual new content being added
+ */
+function extractNewContent(currentDoc: JSONContent, proposedDoc: JSONContent): string {
+  const currentContent = currentDoc.content || [];
+  const proposedContent = proposedDoc.content || [];
+
+  // Find the new nodes that don't exist in current
+  const newNodes: any[] = [];
+
+  // Simple approach: get nodes that are in proposed but not in current
+  // (comparing by index for now)
+  for (let i = currentContent.length; i < proposedContent.length; i++) {
+    newNodes.push(proposedContent[i]);
+  }
+
+  // Extract text from the new nodes
+  const textParts: string[] = [];
+  for (const node of newNodes) {
+    const text = extractTextFromNode(node);
+    if (text) {
+      textParts.push(text);
+    }
+  }
+
+  return textParts.join('\n\n') || 'New content';
+}
+
+/**
+ * Extracts modified content for comparison
+ */
+function extractModifiedContent(currentDoc: JSONContent, proposedDoc: JSONContent): string {
+  // For now, just extract all text from proposed that's different
+  const proposedText = extractTextFromNode(proposedDoc);
+  const currentText = extractTextFromNode(currentDoc);
+
+  if (proposedText !== currentText) {
+    // Find the difference (simplified)
+    const proposedLines = proposedText.split('\n');
+    const currentLines = currentText.split('\n');
+
+    // Find new lines
+    const newLines = proposedLines.filter(line => !currentLines.includes(line));
+
+    if (newLines.length > 0) {
+      return newLines.join('\n');
+    }
+  }
+
+  return proposedText;
+}
+
+/**
+ * Recursively extracts text from a node
+ */
+function extractTextFromNode(node: any): string {
+  if (!node) return '';
+
+  if (node.type === 'text') {
+    return node.text || '';
+  }
+
+  if (node.content && Array.isArray(node.content)) {
+    const textParts: string[] = [];
+    for (const child of node.content) {
+      const childText = extractTextFromNode(child);
+      if (childText) {
+        textParts.push(childText);
+      }
+    }
+    return textParts.join('');
+  }
+
+  return '';
 }
 
 /**
