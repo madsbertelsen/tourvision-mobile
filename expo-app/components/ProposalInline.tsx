@@ -34,6 +34,16 @@ export function ProposalInline({
   const userVote = getUserVote(proposal.id);
   const canApply = proposal.status === 'approved' && !proposal.applied_at && !isApplying && onApply;
 
+  // Debug logging
+  console.log('ProposalInline - Rendering proposal:', {
+    id: proposal.id,
+    title: proposal.title,
+    hasDiffDecorations: !!proposal.diff_decorations,
+    diffDecorationsLength: proposal.diff_decorations?.length || 0,
+    hasOnPreviewDiff: !!onPreviewDiff,
+    isDiffActive
+  });
+
   const getTypeIcon = () => {
     switch (proposal.request_type) {
       case 'add':
@@ -151,7 +161,11 @@ export function ProposalInline({
               styles.diffButton,
               isDiffActive && styles.diffButtonActive
             ]}
-            onPress={() => onPreviewDiff(proposal.id)}
+            onPress={() => {
+              console.log('ProposalInline - Show Changes button clicked for proposal:', proposal.id);
+              console.log('ProposalInline - Calling onPreviewDiff with decorations:', proposal.diff_decorations);
+              onPreviewDiff(proposal.id);
+            }}
           >
             <Feather
               name="eye"

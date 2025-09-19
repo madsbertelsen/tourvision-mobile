@@ -15,6 +15,10 @@ export interface ItineraryDocumentEditorRef {
   clearDiffDecorations: () => void;
 }
 
+interface ItineraryDocumentEditorInternalProps extends ItineraryDocumentEditorProps {
+  onChatWithSelection?: (text: string) => void;
+}
+
 export const ItineraryDocumentEditor = forwardRef<
   ItineraryDocumentEditorRef,
   ItineraryDocumentEditorProps
@@ -42,16 +46,82 @@ export const ItineraryDocumentEditor = forwardRef<
     }
   }, [onSave]);
 
+  // Listen for messages from DOM component
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'chat-with-selection') {
+        // Trigger chat with selected text
+        const selectedText = event.data.text;
+        if (selectedText && window.parent !== window) {
+          // Forward to the parent document view
+          window.parent.postMessage({
+            type: 'open-chat-with-context',
+            text: selectedText
+          }, '*');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     setDiffDecorations: (decorations: any[]) => {
+      console.log('ItineraryDocumentEditor - setDiffDecorations called with:', decorations);
+      console.log('ItineraryDocumentEditor - editorDomRef.current:', editorDomRef.current);
+
+      // For DOM components, we need to use message passing
+      if (Platform.OS === 'web' && window.frames.length > 0) {
+        // Send message to the DOM component iframe
+        const frames = window.frames;
+        for (let i = 0; i < frames.length; i++) {
+          try {
+            frames[i].postMessage({
+              type: 'set-diff-decorations',
+              decorations: decorations
+            }, '*');
+            console.log('ItineraryDocumentEditor - Sent set-diff-decorations message to frame', i);
+          } catch (e) {
+            console.error('ItineraryDocumentEditor - Failed to send message to frame', i, e);
+          }
+        }
+      }
+
+      // Also try direct ref if available
       if (editorDomRef.current?.setDiffDecorations) {
+        console.log('ItineraryDocumentEditor - Calling editorDomRef.current.setDiffDecorations');
         editorDomRef.current.setDiffDecorations(decorations);
+      } else {
+        console.log('ItineraryDocumentEditor - editorDomRef.current.setDiffDecorations not available');
       }
     },
     clearDiffDecorations: () => {
+      console.log('ItineraryDocumentEditor - clearDiffDecorations called');
+
+      // For DOM components, we need to use message passing
+      if (Platform.OS === 'web' && window.frames.length > 0) {
+        // Send message to the DOM component iframe
+        const frames = window.frames;
+        for (let i = 0; i < frames.length; i++) {
+          try {
+            frames[i].postMessage({
+              type: 'clear-diff-decorations'
+            }, '*');
+            console.log('ItineraryDocumentEditor - Sent clear-diff-decorations message to frame', i);
+          } catch (e) {
+            console.error('ItineraryDocumentEditor - Failed to send message to frame', i, e);
+          }
+        }
+      }
+
+      // Also try direct ref if available
       if (editorDomRef.current?.clearDiffDecorations) {
+        console.log('ItineraryDocumentEditor - Calling editorDomRef.current.clearDiffDecorations');
         editorDomRef.current.clearDiffDecorations();
+      } else {
+        console.log('ItineraryDocumentEditor - editorDomRef.current.clearDiffDecorations not available');
       }
     },
   }), []);

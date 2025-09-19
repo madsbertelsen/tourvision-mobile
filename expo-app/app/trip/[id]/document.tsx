@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity
 import { useLocalSearchParams } from 'expo-router';
 import { useTrip } from '@/hooks/useTrips';
 import { ItineraryDocumentEditor } from '@/components/ItineraryDocumentEditor';
+import { DocumentMapWrapper } from '@/components/DocumentMapWrapper';
 import { Feather } from '@expo/vector-icons';
 import { useResponsive } from '@/hooks/useResponsive';
 import { supabase } from '@/lib/supabase/client';
@@ -31,6 +32,9 @@ export default function TripDocumentView() {
   const { messages, sendMessage, isSending } = useTripChat(id as string);
   const chatScrollRef = useRef<ScrollView>(null);
 
+  // Selected text for context
+  const [selectedTextContext, setSelectedTextContext] = useState<string>('');
+
   // AI Assistant
   const {
     pendingProposals,
@@ -45,15 +49,68 @@ export default function TripDocumentView() {
   // Collaboration panel tabs
   const [activeTab, setActiveTab] = useState<'chat' | 'suggestions'>('chat');
 
+  // Map view state
+  const [showMap, setShowMap] = useState(true);
+  const [documentLocations, setDocumentLocations] = useState<Array<{
+    latitude: number;
+    longitude: number;
+    placeName: string;
+    address?: string;
+  }>>([]);
+
   console.log('Document View - Trip ID:', id);
   console.log('Document View - Trip Data:', trip);
   console.log('Document View - Loading:', isLoading);
   console.log('Document View - Error:', error);
 
+  // Extract locations from document content
+  const extractLocationsFromDocument = useCallback((content: JSONContent) => {
+    const locations: Array<{
+      latitude: number;
+      longitude: number;
+      placeName: string;
+      address?: string;
+    }> = [];
+
+    const traverse = (node: any) => {
+      // Check for location marks
+      if (node.marks) {
+        node.marks.forEach((mark: any) => {
+          if (mark.type === 'location' && mark.attrs) {
+            const { latitude, longitude, placeName, address } = mark.attrs;
+            if (latitude && longitude && placeName) {
+              // Check if location already exists
+              const exists = locations.some(
+                loc => loc.latitude === latitude && loc.longitude === longitude
+              );
+              if (!exists) {
+                locations.push({ latitude, longitude, placeName, address });
+              }
+            }
+          }
+        });
+      }
+
+      // Traverse children
+      if (node.content) {
+        node.content.forEach(traverse);
+      }
+    };
+
+    if (content && content.content) {
+      content.content.forEach(traverse);
+    }
+
+    return locations;
+  }, []);
+
   // Auto-save functionality with debouncing
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   const handleSave = useCallback(async (content: JSONContent) => {
+    // Extract locations when document changes
+    const locations = extractLocationsFromDocument(content);
+    setDocumentLocations(locations);
     // Clear any existing timeout
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -79,7 +136,44 @@ export default function TripDocumentView() {
         setIsSaving(false);
       }
     }, 1000); // Save after 1 second of no changes
-  }, [id]);
+  }, [id, extractLocationsFromDocument]);
+
+  // Extract locations from initial document content
+  useEffect(() => {
+    if (trip?.itinerary_document) {
+      const locations = extractLocationsFromDocument(trip.itinerary_document as JSONContent);
+      setDocumentLocations(locations);
+    }
+  }, [trip?.itinerary_document, extractLocationsFromDocument]);
+
+  // Listen for messages from the editor
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'open-chat-with-context') {
+        const selectedText = event.data.text;
+        if (selectedText) {
+          // Set the selected text as context
+          setSelectedTextContext(selectedText);
+          // Switch to chat tab
+          setActiveTab('chat');
+          // Pre-fill the chat input with a prompt
+          setChatMessage(`What can you tell me about: "${selectedText}"?`);
+          // Focus on the chat input
+          setTimeout(() => {
+            const chatInput = document.querySelector('[placeholder="Type a message..."]') as HTMLTextAreaElement;
+            if (chatInput) {
+              chatInput.focus();
+            }
+          }, 100);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -93,11 +187,19 @@ export default function TripDocumentView() {
   // Handle sending messages
   const handleSendMessage = useCallback(() => {
     if (chatMessage.trim() && !isSending) {
-      sendMessage(chatMessage.trim());
+      let messageToSend = chatMessage.trim();
+
+      // If there's selected text context, add it to the message
+      if (selectedTextContext) {
+        messageToSend = `Regarding this text: "${selectedTextContext}"\n\n${messageToSend}`;
+        setSelectedTextContext(''); // Clear context after sending
+      }
+
+      sendMessage(messageToSend);
       setChatMessage('');
       // AI processing now happens server-side automatically via database webhook
     }
-  }, [chatMessage, sendMessage, isSending]);
+  }, [chatMessage, sendMessage, isSending, selectedTextContext]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -133,30 +235,67 @@ export default function TripDocumentView() {
 
   // Handle diff preview
   const handlePreviewDiff = useCallback((proposalId: string) => {
-    console.log('Document - handlePreviewDiff called for:', proposalId);
+    console.log('\n=== Document - handlePreviewDiff START ===');
+    console.log('Document - proposalId:', proposalId);
+    console.log('Document - proposals available:', proposals?.length || 0);
+
     const proposal = proposals?.find(p => p.id === proposalId);
     console.log('Document - Found proposal:', !!proposal);
-    console.log('Document - Proposal has diff_decorations:', !!proposal?.diff_decorations);
-    console.log('Document - EditorRef current:', !!editorRef.current);
-    console.log('Document - EditorRef has setDiffDecorations:', !!editorRef.current?.setDiffDecorations);
 
-    if (!proposal) return;
+    if (proposal) {
+      console.log('Document - Proposal details:', {
+        id: proposal.id,
+        title: proposal.title,
+        hasDiffDecorations: !!proposal.diff_decorations,
+        diffDecorationsLength: proposal.diff_decorations?.length || 0,
+        diffDecorations: proposal.diff_decorations
+      });
+    }
+
+    console.log('Document - EditorRef current:', !!editorRef.current);
+    console.log('Document - EditorRef methods:', {
+      hasSetDiffDecorations: !!editorRef.current?.setDiffDecorations,
+      hasClearDiffDecorations: !!editorRef.current?.clearDiffDecorations
+    });
+    console.log('Document - Current activeDiffProposalId:', activeDiffProposalId);
+
+    if (!proposal) {
+      console.log('Document - ERROR: Proposal not found!');
+      return;
+    }
+
+    if (!editorRef.current) {
+      console.log('Document - ERROR: EditorRef not available!');
+      return;
+    }
 
     if (activeDiffProposalId === proposalId) {
       // Toggle off if clicking the same proposal
-      console.log('Document - Clearing diff decorations');
+      console.log('Document - CLEARING diff decorations (toggle off)');
       setActiveDiffProposalId(null);
       if (editorRef.current?.clearDiffDecorations) {
+        console.log('Document - Calling clearDiffDecorations()');
         editorRef.current.clearDiffDecorations();
+      } else {
+        console.log('Document - ERROR: clearDiffDecorations method not available!');
       }
     } else {
       // Show diff for this proposal
-      console.log('Document - Setting diff decorations:', proposal.diff_decorations);
+      console.log('Document - SETTING diff decorations');
+      console.log('Document - Decorations to set:', JSON.stringify(proposal.diff_decorations, null, 2));
       setActiveDiffProposalId(proposalId);
+
       if (editorRef.current?.setDiffDecorations && proposal.diff_decorations) {
+        console.log('Document - Calling setDiffDecorations() with', proposal.diff_decorations.length, 'decorations');
         editorRef.current.setDiffDecorations(proposal.diff_decorations);
+      } else {
+        console.log('Document - ERROR: Cannot set diff decorations!', {
+          hasMethod: !!editorRef.current?.setDiffDecorations,
+          hasDecorations: !!proposal.diff_decorations
+        });
       }
     }
+    console.log('=== Document - handlePreviewDiff END ===\n');
   }, [activeDiffProposalId, proposals]);
 
   if (isLoading) {
@@ -192,7 +331,13 @@ export default function TripDocumentView() {
             <Feather name="cpu" size={18} color="#8B5CF6" />
             <Text style={styles.toolButtonText}>AI-Assisted Document</Text>
           </View>
-
+          <TouchableOpacity
+            style={[styles.toolButton, showMap && styles.toolButtonActive]}
+            onPress={() => setShowMap(!showMap)}
+          >
+            <Feather name="map" size={18} color={showMap ? "#3B82F6" : "#6B7280"} />
+            <Text style={[styles.toolButtonText, showMap && styles.toolButtonTextActive]}>Map View</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.toolbarRight}>
@@ -244,6 +389,16 @@ export default function TripDocumentView() {
 
           {/* Divider */}
           <View style={styles.documentDivider} />
+
+          {/* Map View */}
+          {showMap && documentLocations.length > 0 && (
+            <View style={styles.mapContainer}>
+              <DocumentMapWrapper
+                locations={documentLocations}
+                height={300}
+              />
+            </View>
+          )}
 
           {/* TipTap Editor - Now editable with bubble menu */}
           <ItineraryDocumentEditor
@@ -405,6 +560,20 @@ export default function TripDocumentView() {
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               style={styles.chatInputContainer}
             >
+              {selectedTextContext && (
+                <View style={styles.contextIndicator}>
+                  <Text style={styles.contextLabel}>Context:</Text>
+                  <Text style={styles.contextText} numberOfLines={1}>
+                    "{selectedTextContext}"
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedTextContext('')}
+                    style={styles.clearContextButton}
+                  >
+                    <Feather name="x" size={14} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+              )}
               <TextInput
                 style={styles.chatInput}
                 placeholder="Type a message..."
@@ -911,5 +1080,34 @@ const styles = StyleSheet.create({
   processingText: {
     fontSize: 13,
     color: '#7C3AED',
+  },
+  mapContainer: {
+    marginHorizontal: 32,
+    marginBottom: 24,
+  },
+  contextIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+    borderRadius: 8,
+    marginHorizontal: 8,
+  },
+  contextLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  contextText: {
+    fontSize: 12,
+    color: '#374151',
+    flex: 1,
+    fontStyle: 'italic',
+  },
+  clearContextButton: {
+    padding: 4,
   },
 });

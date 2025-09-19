@@ -36,6 +36,8 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
 ) => {
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [selectedTextForChat, setSelectedTextForChat] = useState('');
+  const [showChatWithSelection, setShowChatWithSelection] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -87,12 +89,33 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
     }
   }, [editable, editor]);
 
+  // Listen for diff decoration messages from parent
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      console.log('ItineraryEditorDOM - Received message:', event.data?.type);
+
+      if (event.data?.type === 'set-diff-decorations' && editor) {
+        console.log('ItineraryEditorDOM - Processing set-diff-decorations message with:', event.data.decorations);
+        const result = editor.chain().focus().setDiffDecorations(event.data.decorations).run();
+        console.log('ItineraryEditorDOM - setDiffDecorations result:', result);
+      } else if (event.data?.type === 'clear-diff-decorations' && editor) {
+        console.log('ItineraryEditorDOM - Processing clear-diff-decorations message');
+        const result = editor.chain().focus().clearDiffDecorations().run();
+        console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [editor]);
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     setDiffDecorations: (decorations: any[]) => {
       console.log('ItineraryEditorDOM - setDiffDecorations called with:', decorations);
       if (editor && decorations) {
-        const result = editor.commands.setDiffDecorations(decorations);
+        // Use the chain to ensure command is available
+        const result = editor.chain().focus().setDiffDecorations(decorations).run();
         console.log('ItineraryEditorDOM - setDiffDecorations result:', result);
       } else {
         console.log('ItineraryEditorDOM - Missing editor or decorations', { editor: !!editor, decorations: !!decorations });
@@ -101,7 +124,8 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
     clearDiffDecorations: () => {
       console.log('ItineraryEditorDOM - clearDiffDecorations called');
       if (editor) {
-        const result = editor.commands.clearDiffDecorations();
+        // Use the chain to ensure command is available
+        const result = editor.chain().focus().clearDiffDecorations().run();
         console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
       }
     },
@@ -231,6 +255,33 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
               title="Add Location"
             >
               📍
+            </button>
+            <button
+              onClick={() => {
+                const { from, to } = editor.state.selection;
+                const text = editor.state.doc.textBetween(from, to, ' ');
+                setSelectedTextForChat(text);
+                setShowChatWithSelection(true);
+                // Send message to parent component
+                if (window.parent !== window) {
+                  window.parent.postMessage({
+                    type: 'chat-with-selection',
+                    text: text
+                  }, '*');
+                }
+              }}
+              style={{
+                padding: '4px 8px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+              title="Ask AI about this"
+            >
+              💬
             </button>
           </div>
         </BubbleMenu>

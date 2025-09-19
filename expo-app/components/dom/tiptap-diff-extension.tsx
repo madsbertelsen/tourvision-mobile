@@ -4,6 +4,17 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 
+// Extend the Commands interface to include our custom commands
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    diffVisualization: {
+      setDiffDecorations: (decorations: DiffDecoration[]) => ReturnType;
+      clearDiffDecorations: () => ReturnType;
+      toggleDiffView: () => ReturnType;
+    };
+  }
+}
+
 export interface DiffDecoration {
   from: number;
   to: number;

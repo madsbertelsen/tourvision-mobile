@@ -93,11 +93,17 @@ serve(async (req) => {
 
 CORE PRINCIPLE: Always be helpful and create proposals for any travel-related content.
 
+IMPORTANT: When creating proposals that mention specific locations (cities, landmarks, hotels, etc.),
+mark them as location-aware content so they can be displayed on maps and linked to coordinates.
+
 Response Types:
 1. proposal - Create when user mentions ANY destination, activity, or travel plan to ADD NEW content
 2. document_operation - When user asks to EDIT, MODIFY, REMOVE, or REORGANIZE existing content
 3. information - When user asks questions about existing plans
 4. greeting - For greetings, but still offer to help plan
+
+When mentioning locations like "Copenhagen", "Paris", "Eiffel Tower", etc., ensure they are properly marked
+for geolocation features. Include location names in titles and descriptions naturally.
 5. clarification - When you need more information
 
 DOCUMENT OPERATIONS:

@@ -1,5 +1,75 @@
 // Simplified diff utilities for Edge Function (Deno-compatible)
 
+// Known place names that should be marked as locations
+const KNOWN_PLACES = [
+  'Copenhagen', 'Paris', 'London', 'Berlin', 'Rome', 'Barcelona',
+  'Amsterdam', 'Vienna', 'Prague', 'Stockholm', 'Oslo', 'Helsinki',
+  'Tokyo', 'Kyoto', 'Bangkok', 'Singapore', 'Dubai', 'New York',
+  'San Francisco', 'Los Angeles', 'Chicago', 'Boston', 'Miami'
+];
+
+/**
+ * Check if text contains a known place name
+ */
+function shouldAddLocationMark(text: string): boolean {
+  return KNOWN_PLACES.some(place =>
+    text.toLowerCase().includes(place.toLowerCase())
+  );
+}
+
+/**
+ * Extract location data from text (simplified version)
+ * In production, this would call a geocoding service
+ */
+function extractLocationDataFromText(text: string): any {
+  // Find the first known place in the text
+  const foundPlace = KNOWN_PLACES.find(place =>
+    text.toLowerCase().includes(place.toLowerCase())
+  );
+
+  if (!foundPlace) {
+    return null;
+  }
+
+  // Simplified coordinates - in production, use geocoding API
+  const coordinates: Record<string, [number, number]> = {
+    'copenhagen': [12.5683, 55.6761],
+    'paris': [2.3522, 48.8566],
+    'london': [-0.1276, 51.5074],
+    'berlin': [13.4050, 52.5200],
+    'rome': [12.4964, 41.9028],
+    'barcelona': [2.1734, 41.3851],
+    'amsterdam': [4.9041, 52.3676],
+    'vienna': [16.3738, 48.2082],
+    'prague': [14.4378, 50.0755],
+    'stockholm': [18.0686, 59.3293],
+    'oslo': [10.7522, 59.9139],
+    'helsinki': [24.9384, 60.1695],
+    'tokyo': [139.6503, 35.6762],
+    'kyoto': [135.7681, 35.0116],
+    'bangkok': [100.5018, 13.7563],
+    'singapore': [103.8198, 1.3521],
+    'dubai': [55.2708, 25.2048],
+    'new york': [-74.0060, 40.7128],
+    'san francisco': [-122.4194, 37.7749],
+    'los angeles': [-118.2437, 34.0522],
+    'chicago': [-87.6298, 41.8781],
+    'boston': [-71.0589, 42.3601],
+    'miami': [-80.1918, 25.7617]
+  };
+
+  const key = foundPlace.toLowerCase();
+  const [longitude, latitude] = coordinates[key] || [0, 0];
+
+  return {
+    latitude,
+    longitude,
+    placeName: foundPlace,
+    placeId: `place-${key}`,
+    address: foundPlace
+  };
+}
+
 export interface DiffOperation {
   type: 'insert' | 'delete' | 'replace';
   path: number[];
@@ -96,16 +166,31 @@ export function createMinimalProposedContent(
   const operations: DiffOperation[] = [];
   const decorations: DiffDecoration[] = [];
 
+  // Helper function to create text node with location marks if needed
+  const createTextWithMarks = (text: string, locationData?: any) => {
+    const textNode: any = { type: 'text', text };
+
+    // Check if we should add location marks (if text contains place names)
+    if (locationData || shouldAddLocationMark(text)) {
+      textNode.marks = [{
+        type: 'location',
+        attrs: locationData || extractLocationDataFromText(text)
+      }];
+    }
+
+    return textNode;
+  };
+
   // Create the new content to add
   const newContent = {
     type: 'heading',
     attrs: { level: 2 },
-    content: [{ type: 'text', text: aiSuggestion.title || 'New Section' }]
+    content: [createTextWithMarks(aiSuggestion.title || 'New Section', aiSuggestion.locationData)]
   };
 
   const descContent = {
     type: 'paragraph',
-    content: [{ type: 'text', text: aiSuggestion.description || '' }]
+    content: [createTextWithMarks(aiSuggestion.description || '', aiSuggestion.descriptionLocationData)]
   };
 
   // Add operations for the new content
