@@ -23,6 +23,18 @@ export function recalculateDiffDecorations(
   const docSize = calculateDocumentSize(currentDocument);
   console.log('recalculateDiffDecorations - Current document size:', docSize);
 
+  // For empty or minimal documents, always show where content will be added
+  if (!currentDocument?.content || currentDocument.content.length === 0 ||
+      (currentDocument.content.length === 1 && !currentDocument.content[0].content)) {
+    console.log('recalculateDiffDecorations - Empty document, showing addition placeholder');
+    return [{
+      from: 1,
+      to: 1,
+      type: 'addition',
+      content: extractContentText(proposal)
+    }];
+  }
+
   // If we have the original proposed content, we can be more precise
   if (proposal.proposed_content) {
     // This proposal has both old and new content, so we can compute a real diff
@@ -224,6 +236,31 @@ function extractTextFromNode(node: any): string {
   }
 
   return '';
+}
+
+/**
+ * Extract readable content text from a proposal
+ */
+function extractContentText(proposal: any): string {
+  // If we have proposed_content, extract text from it
+  if (proposal.proposed_content) {
+    const proposedNodes = proposal.proposed_content.content || [];
+    const currentNodes = proposal.current_content?.content || [];
+
+    // Find new nodes
+    const newTexts: string[] = [];
+    for (let i = currentNodes.length; i < proposedNodes.length; i++) {
+      const text = extractTextFromNode(proposedNodes[i]);
+      if (text) newTexts.push(text);
+    }
+
+    if (newTexts.length > 0) {
+      return newTexts.join('\n\n');
+    }
+  }
+
+  // Fallback to title and description
+  return `${proposal.title}\n${proposal.description}`;
 }
 
 /**
