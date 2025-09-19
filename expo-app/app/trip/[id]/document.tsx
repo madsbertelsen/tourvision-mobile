@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/supabase/auth-context';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { ProposalPanel } from '@/components/ProposalPanel';
 import { ProposalInline } from '@/components/ProposalInline';
+import { recalculateDiffDecorations } from '@/utils/recalculate-diff-decorations';
 
 export default function TripDocumentView() {
   const { id } = useLocalSearchParams();
@@ -242,23 +243,6 @@ export default function TripDocumentView() {
     const proposal = proposals?.find(p => p.id === proposalId);
     console.log('Document - Found proposal:', !!proposal);
 
-    if (proposal) {
-      console.log('Document - Proposal details:', {
-        id: proposal.id,
-        title: proposal.title,
-        hasDiffDecorations: !!proposal.diff_decorations,
-        diffDecorationsLength: proposal.diff_decorations?.length || 0,
-        diffDecorations: proposal.diff_decorations
-      });
-    }
-
-    console.log('Document - EditorRef current:', !!editorRef.current);
-    console.log('Document - EditorRef methods:', {
-      hasSetDiffDecorations: !!editorRef.current?.setDiffDecorations,
-      hasClearDiffDecorations: !!editorRef.current?.clearDiffDecorations
-    });
-    console.log('Document - Current activeDiffProposalId:', activeDiffProposalId);
-
     if (!proposal) {
       console.log('Document - ERROR: Proposal not found!');
       return;
@@ -266,6 +250,11 @@ export default function TripDocumentView() {
 
     if (!editorRef.current) {
       console.log('Document - ERROR: EditorRef not available!');
+      return;
+    }
+
+    if (!trip?.itinerary_document) {
+      console.log('Document - ERROR: No itinerary document available!');
       return;
     }
 
@@ -281,22 +270,29 @@ export default function TripDocumentView() {
       }
     } else {
       // Show diff for this proposal
-      console.log('Document - SETTING diff decorations');
-      console.log('Document - Decorations to set:', JSON.stringify(proposal.diff_decorations, null, 2));
+      console.log('Document - RECALCULATING diff decorations for current document');
+
+      // Recalculate decorations based on the CURRENT document
+      const recalculatedDecorations = recalculateDiffDecorations(
+        trip.itinerary_document as JSONContent,
+        proposal
+      );
+
+      console.log('Document - Recalculated decorations:', recalculatedDecorations);
       setActiveDiffProposalId(proposalId);
 
-      if (editorRef.current?.setDiffDecorations && proposal.diff_decorations) {
-        console.log('Document - Calling setDiffDecorations() with', proposal.diff_decorations.length, 'decorations');
-        editorRef.current.setDiffDecorations(proposal.diff_decorations);
+      if (editorRef.current?.setDiffDecorations && recalculatedDecorations.length > 0) {
+        console.log('Document - Calling setDiffDecorations() with', recalculatedDecorations.length, 'recalculated decorations');
+        editorRef.current.setDiffDecorations(recalculatedDecorations);
       } else {
         console.log('Document - ERROR: Cannot set diff decorations!', {
           hasMethod: !!editorRef.current?.setDiffDecorations,
-          hasDecorations: !!proposal.diff_decorations
+          hasDecorations: recalculatedDecorations.length > 0
         });
       }
     }
     console.log('=== Document - handlePreviewDiff END ===\n');
-  }, [activeDiffProposalId, proposals]);
+  }, [activeDiffProposalId, proposals, trip]);
 
   if (isLoading) {
     return (

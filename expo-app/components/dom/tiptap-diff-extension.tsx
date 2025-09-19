@@ -62,10 +62,10 @@ export const DiffVisualization = Extension.create({
 
                 console.log('DiffVisualization Plugin - Adjusted positions:', { from: safeFrom, to: safeTo, docSize });
 
-                // Special handling for empty documents where we want to show "content to be added"
-                if (from === 1 && to === 1 && docSize <= 2) {
-                  // Show a widget decoration at the end of the document for proposed additions
-                  console.log('DiffVisualization Plugin - Adding widget for empty doc addition');
+                // Special handling for additions at the end of document or empty documents
+                if (safeFrom === safeTo && (type === 'addition' || (from === 1 && to === 1 && docSize <= 2))) {
+                  // Show a widget decoration for proposed additions
+                  console.log('DiffVisualization Plugin - Adding widget for addition at position', safeFrom);
                   const widget = document.createElement('div');
                   widget.className = 'diff-addition-preview';
                   widget.style.cssText =
@@ -78,8 +78,9 @@ export const DiffVisualization = Extension.create({
                     'font-style: italic;';
                   widget.textContent = '✨ Proposed addition: ' + (content || 'New content');
 
+                  // Place widget at the safe position
                   decorations.push(
-                    Decoration.widget(1, widget, { side: 1 })
+                    Decoration.widget(safeFrom, widget, { side: 1 })
                   );
                 } else if (safeTo > safeFrom) {
                   // Regular inline decorations for existing content
