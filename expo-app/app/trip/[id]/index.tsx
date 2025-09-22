@@ -7,6 +7,8 @@ import { useTripChat } from '@/hooks/useTripChat';
 import { useTrip } from '@/hooks/useTrips';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { supabase } from '@/lib/supabase/client';
+import { useDocumentProposal } from '@/hooks/useDocumentProposal';
+import { prosemirrorToHTML, htmlToProsemirror } from '@/utils/prosemirror-html';
 import { Feather } from '@expo/vector-icons';
 import { JSONContent } from '@tiptap/react';
 import { useLocalSearchParams } from 'expo-router';
@@ -44,6 +46,9 @@ export default function TripDocumentView() {
     isVoting,
     isApplying,
   } = useAIAssistant(id as string);
+
+  // Document proposal generation
+  const { generateProposal, saveProposalToDatabase, isGenerating: isGeneratingProposal } = useDocumentProposal();
 
   // Collaboration panel tabs
   const [activeTab, setActiveTab] = useState<'chat' | 'suggestions'>('chat');
@@ -183,8 +188,29 @@ export default function TripDocumentView() {
     };
   }, []);
 
+  // Check if message is requesting a document change
+  const isDocumentChangeRequest = (message: string): boolean => {
+    const changePatterns = [
+      /add\s+(.*?)\s+to\s+/i,
+      /let'?s add/i,
+      /add a visit to/i,
+      /include\s+(.*?)\s+in/i,
+      /remove\s+(.*?)\s+from/i,
+      /change\s+(.*?)\s+to/i,
+      /replace\s+(.*?)\s+with/i,
+      /update\s+(.*?)\s+section/i,
+      /modify\s+/i,
+      /insert\s+/i,
+      /delete\s+/i,
+      /move\s+(.*?)\s+to/i,
+      /reorganize\s+/i
+    ];
+
+    return changePatterns.some(pattern => pattern.test(message));
+  };
+
   // Handle sending messages
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback(async () => {
     if (chatMessage.trim() && !isSending) {
       let messageToSend = chatMessage.trim();
 
@@ -194,11 +220,37 @@ export default function TripDocumentView() {
         setSelectedTextContext(''); // Clear context after sending
       }
 
-      sendMessage(messageToSend);
+      // Send the message first
+      const sentMessage = await sendMessage(messageToSend);
       setChatMessage('');
-      // AI processing now happens server-side automatically via database webhook
+
+      // Check if this is a document change request
+      if (isDocumentChangeRequest(messageToSend) && trip?.itinerary_document) {
+        try {
+          // Convert current document to HTML
+          const currentHtml = prosemirrorToHTML(trip.itinerary_document as JSONContent);
+
+          // Generate proposal using the new Edge Function
+          const proposalResult = await generateProposal(currentHtml, messageToSend);
+
+          if (proposalResult && proposalResult.success && user) {
+            // Save the proposal to the database
+            await saveProposalToDatabase(
+              id as string,
+              user.id,
+              sentMessage?.id || null,
+              proposalResult,
+              currentHtml
+            );
+
+            console.log('[TripDocument] Proposal generated and saved successfully');
+          }
+        } catch (err) {
+          console.error('[TripDocument] Error generating proposal:', err);
+        }
+      }
     }
-  }, [chatMessage, sendMessage, isSending, selectedTextContext]);
+  }, [chatMessage, sendMessage, isSending, selectedTextContext, trip, generateProposal, saveProposalToDatabase, user, id]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -262,39 +314,48 @@ export default function TripDocumentView() {
       console.log('Document - CLEARING diff decorations (toggle off)');
       setActiveDiffProposalId(null);
 
-      // Check if we need to revert transaction steps
-      if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
-        // Revert the transaction steps if they were applied
-        if (editorRef.current?.revertTransactionSteps) {
-          console.log('Document - Reverting transaction steps');
-          editorRef.current.revertTransactionSteps();
-        }
-      } else {
-        // Fall back to clearing decorations for older proposals
-        if (editorRef.current?.clearDiffDecorations) {
-          console.log('Document - Calling clearDiffDecorations()');
-          editorRef.current.clearDiffDecorations();
-        }
-
-        // IMPORTANT: Restore original content if it was changed
-        if (editorRef.current?.restoreOriginalContent) {
-          console.log('Document - Restoring original content');
-          editorRef.current.restoreOriginalContent();
-        }
+      // Restore original content
+      if (editorRef.current?.restoreOriginalContent) {
+        console.log('Document - Restoring original content');
+        editorRef.current.restoreOriginalContent();
+      } else if (editorRef.current?.clearDiffDecorations) {
+        console.log('Document - Calling clearDiffDecorations()');
+        editorRef.current.clearDiffDecorations();
       }
     } else {
       // Show diff for this proposal
       console.log('Document - Showing diff for proposal');
       setActiveDiffProposalId(proposalId);
 
-      // Check if we have transaction steps - this is the preferred method
-      if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
+      // Check if we have HTML-based proposal
+      if (proposal.proposed_content?.html) {
+        console.log('Document - Using HTML-based proposal');
+
+        // Convert the modified HTML back to ProseMirror format
+        const modifiedDoc = htmlToProsemirror(proposal.proposed_content.html);
+
+        // Show the proposed content with the current content for comparison
+        if (editorRef.current?.showProposedContent) {
+          editorRef.current.showProposedContent(
+            modifiedDoc,
+            trip.itinerary_document as JSONContent
+          );
+        }
+
+        // If we have diff decorations with element IDs, use them
+        if (proposal.diff_decorations && Array.isArray(proposal.diff_decorations)) {
+          console.log('Document - Setting diff decorations from HTML changes');
+          if (editorRef.current?.setDiffDecorations) {
+            editorRef.current.setDiffDecorations(proposal.diff_decorations);
+          }
+        }
+      } else if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
+        // Legacy transaction steps method
         console.log('Document - Using transaction steps from proposal:', proposal.transaction_steps);
 
         if (editorRef.current?.applyTransactionSteps) {
           // Apply the actual transaction steps to transform the document
-          // Get inverse steps from operation_metadata if available
-          const inverseSteps = proposal.operation_metadata?.inverseSteps || proposal.inverse_steps;
+          const inverseSteps = proposal.inverse_steps;
           const success = editorRef.current.applyTransactionSteps(
             proposal.transaction_steps,
             inverseSteps
