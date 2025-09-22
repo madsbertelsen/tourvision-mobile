@@ -227,7 +227,38 @@ For local development:
 - **Cause:** Content already exists in document (duplicate proposal) or positions out of bounds
 - **Solution:** System now dynamically recalculates positions and handles empty documents
 
-### Database Seeding
+### Database Management
+
+#### IMPORTANT: Never Directly Mutate Database
+- **NEVER use INSERT, UPDATE, or DELETE statements directly** on the database
+- The database should only be modified through:
+  1. **Application code** (via Supabase client)
+  2. **Edge Functions** (for AI processing)
+  3. **Migrations** (for schema changes)
+  4. **Seed data** (only for initial setup)
+
+#### Querying Database (READ-ONLY)
+For debugging and inspection only:
+```bash
+# SELECT queries only - never INSERT/UPDATE/DELETE
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT * FROM table_name;"
+```
+
+#### Structural Changes
+For schema or structural changes:
+- **Create migrations** in `/supabase/migrations/` directory
+- Use naming convention: `YYYYMMDD_description.sql`
+- Example: `20250120_add_location_data.sql`
+- Run migrations: `npx supabase db push --local`
+
+#### Testing Features
+To test features that require data:
+1. Use the application UI to create data naturally
+2. Trigger Edge Functions via the app's chat/AI features
+3. Use the Supabase client in test scripts
+4. NEVER directly INSERT/UPDATE test data into the database
+
+#### Database Seeding
 
 The `supabase/seed.sql` file creates:
 - Test users with bcrypt-hashed passwords

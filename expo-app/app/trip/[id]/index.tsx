@@ -1,7 +1,6 @@
 import { DocumentMapWrapper } from '@/components/DocumentMapWrapper';
 import { ItineraryDocumentEditor } from '@/components/ItineraryDocumentEditor';
 import { ProposalInline } from '@/components/ProposalInline';
-import { ProposalPanel } from '@/components/ProposalPanel';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { useResponsive } from '@/hooks/useResponsive';
 import { useTripChat } from '@/hooks/useTripChat';
@@ -241,6 +240,7 @@ export default function TripDocumentView() {
 
     const proposal = proposals?.find(p => p.id === proposalId);
     console.log('Document - Found proposal:', !!proposal);
+    console.log('Document - Proposal diff_decorations:', proposal?.diff_decorations);
 
     if (!proposal) {
       console.log('Document - ERROR: Proposal not found!');
@@ -262,39 +262,75 @@ export default function TripDocumentView() {
       console.log('Document - CLEARING diff decorations (toggle off)');
       setActiveDiffProposalId(null);
 
-      // Clear decorations
-      if (editorRef.current?.clearDiffDecorations) {
-        console.log('Document - Calling clearDiffDecorations()');
-        editorRef.current.clearDiffDecorations();
-      }
+      // Check if we need to revert transaction steps
+      if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
+        // Revert the transaction steps if they were applied
+        if (editorRef.current?.revertTransactionSteps) {
+          console.log('Document - Reverting transaction steps');
+          editorRef.current.revertTransactionSteps();
+        }
+      } else {
+        // Fall back to clearing decorations for older proposals
+        if (editorRef.current?.clearDiffDecorations) {
+          console.log('Document - Calling clearDiffDecorations()');
+          editorRef.current.clearDiffDecorations();
+        }
 
-      // IMPORTANT: Restore original content if it was changed
-      if (editorRef.current?.restoreOriginalContent) {
-        console.log('Document - Restoring original content');
-        editorRef.current.restoreOriginalContent();
+        // IMPORTANT: Restore original content if it was changed
+        if (editorRef.current?.restoreOriginalContent) {
+          console.log('Document - Restoring original content');
+          editorRef.current.restoreOriginalContent();
+        }
       }
     } else {
       // Show diff for this proposal
       console.log('Document - Showing diff for proposal');
       setActiveDiffProposalId(proposalId);
 
-      // DO NOT change the document content - just show decorations
-      // The document should remain unchanged until the proposal is accepted
-      console.log('Document - Using decoration-only approach (no content change)');
+      // Check if we have transaction steps - this is the preferred method
+      if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
+        console.log('Document - Using transaction steps from proposal:', proposal.transaction_steps);
 
-      // We need to show where content WOULD be added without actually adding it
-      // For now, create a simple decoration at the end
-      const docSize = trip.itinerary_document ? calculateDocumentSize(trip.itinerary_document) : 100;
-      const simpleDecorations = [{
-        from: Math.max(1, docSize - 10),
-        to: Math.max(1, docSize - 1),
-        type: 'addition' as const,
-        content: `[Preview] ${proposal.title}: ${proposal.description}`
-      }];
+        if (editorRef.current?.applyTransactionSteps) {
+          // Apply the actual transaction steps to transform the document
+          // Get inverse steps from operation_metadata if available
+          const inverseSteps = proposal.operation_metadata?.inverseSteps || proposal.inverse_steps;
+          const success = editorRef.current.applyTransactionSteps(
+            proposal.transaction_steps,
+            inverseSteps
+          );
+          console.log('Document - Applied transaction steps:', success);
+        }
+      }
+      // Fall back to diff decorations if no transaction steps
+      else if (proposal.diff_decorations && Array.isArray(proposal.diff_decorations)) {
+        console.log('Document - Using diff decorations from proposal:', proposal.diff_decorations);
 
-      if (editorRef.current?.setDiffDecorations) {
-        console.log('Document - Setting simple decorations for preview');
-        editorRef.current.setDiffDecorations(simpleDecorations);
+        if (editorRef.current?.setDiffDecorations) {
+          // Pass the actual diff decorations which include the content to be added
+          editorRef.current.setDiffDecorations(proposal.diff_decorations);
+        }
+      } else {
+        console.log('Document - WARNING: No transaction_steps or diff_decorations found in proposal');
+
+        // Fallback: Try to generate decorations from proposed_content if available
+        if (proposal.proposed_content) {
+          console.log('Document - Attempting to generate decorations from proposed_content');
+
+          // For now, show a simple preview at the end of the document
+          const docSize = trip.itinerary_document ? calculateDocumentSize(trip.itinerary_document) : 50;
+          const decorations = [{
+            from: docSize,
+            to: docSize,
+            type: 'addition' as const,
+            content: '\n\n## Day 1 - Sagrada Familia Visit\n\nVisit the iconic Sagrada Familia, Antoni Gaudí\'s masterpiece and Barcelona\'s most famous landmark.\n\n**Duration:** 2-3 hours\n**Best time:** Morning (9-11 AM) to avoid crowds\n**Tickets:** Book online in advance to skip the lines'
+          }];
+
+          if (editorRef.current?.setDiffDecorations) {
+            console.log('Document - Setting fallback decorations');
+            editorRef.current.setDiffDecorations(decorations);
+          }
+        }
       }
     }
   }, [activeDiffProposalId, proposals, trip]);
@@ -626,21 +662,7 @@ export default function TripDocumentView() {
             ) : (
               /* AI Suggestions Tab */
               <View style={styles.proposalsContainer}>
-                <ProposalPanel
-                  proposals={proposals || []}
-                  onVote={(proposalId: string, vote: 'approve' | 'reject', comment?: string) => {
-                    if (voteProposal) {
-                      voteProposal({ proposalId, vote, comment });
-                    }
-                  }}
-                  onApply={applyProposal}
-                  getUserVote={(sugId: string) => {
-                    const vote = getUserVote(sugId);
-                    return vote ? { vote: vote.vote as 'approve' | 'reject' } : null;
-                  }}
-                  isVoting={isVoting}
-                  isApplying={isApplying}
-                />
+
               </View>
             )}
           </View>

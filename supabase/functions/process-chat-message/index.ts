@@ -226,9 +226,11 @@ Don't wait for group consensus - this is for single users planning their trips.`
           proposal_operations: transactionData.operation,  // Store the operation details
           diff_decorations: transactionData.diffDecorations,  // Store decoration positions
           transaction_steps: transactionData.transactionSteps,  // ProseMirror steps
-          inverse_steps: transactionData.inverseSteps,  // For undo
-          affected_range: transactionData.affectedRange,  // Range affected by changes
-          transaction_metadata: transactionData.metadata,  // AI confidence, reasoning
+          operation_metadata: {  // Store additional metadata in existing column
+            inverseSteps: transactionData.inverseSteps,
+            affectedRange: transactionData.affectedRange,
+            aiMetadata: transactionData.metadata
+          },
           chat_context: messageTexts.slice(0, 5),
           ai_reasoning: transactionData.metadata?.aiReasoning || `User suggested: "${message}"`,
           status: 'pending',
@@ -238,7 +240,7 @@ Don't wait for group consensus - this is for single users planning their trips.`
       } else {
         // Fall back to original diff generation
         const currentDoc = document || { type: 'doc', content: [] }
-        const { proposedDoc, operations, decorations } = createMinimalProposedContent(
+        const { proposedDoc, operations, decorations, transactionSteps, inverseSteps } = createMinimalProposedContent(
           currentDoc,
           object
         )
@@ -253,6 +255,10 @@ Don't wait for group consensus - this is for single users planning their trips.`
           proposed_content: proposedDoc,
           proposal_operations: operations,  // Store diff operations
           diff_decorations: decorations,    // Store decoration positions
+          transaction_steps: transactionSteps,  // ProseMirror transaction steps
+          operation_metadata: {  // Store inverse steps in metadata
+            inverseSteps: inverseSteps
+          },
           chat_context: messageTexts.slice(0, 5),
           ai_reasoning: `User suggested: "${message}"`,
           status: 'pending',

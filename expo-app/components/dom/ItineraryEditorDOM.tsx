@@ -38,6 +38,7 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
   const [selectedText, setSelectedText] = useState('');
   const [selectedTextForChat, setSelectedTextForChat] = useState('');
   const [showChatWithSelection, setShowChatWithSelection] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -71,7 +72,8 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
       },
     },
     onUpdate: ({ editor }) => {
-      if (onChange) {
+      // Don't trigger onChange during preview mode
+      if (onChange && !isPreviewMode) {
         onChange(editor.getJSON());
       }
     },
@@ -153,6 +155,26 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
         const result = editor.chain().focus().clearDiffDecorations().run();
         console.log('ItineraryEditorDOM - clearDiffDecorations result:', result);
       }
+    },
+    applyTransactionSteps: (steps: any[], inverseSteps?: any[]) => {
+      console.log('ItineraryEditorDOM - applyTransactionSteps called with:', steps);
+      if (editor && steps) {
+        setIsPreviewMode(true); // Enter preview mode
+        const result = editor.chain().focus().applyTransactionSteps(steps, inverseSteps).run();
+        console.log('ItineraryEditorDOM - applyTransactionSteps result:', result);
+        return result;
+      }
+      return false;
+    },
+    revertTransactionSteps: () => {
+      console.log('ItineraryEditorDOM - revertTransactionSteps called');
+      if (editor) {
+        const result = editor.chain().focus().revertTransactionSteps().run();
+        console.log('ItineraryEditorDOM - revertTransactionSteps result:', result);
+        setIsPreviewMode(false); // Exit preview mode
+        return result;
+      }
+      return false;
     },
     showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => {
       console.log('ItineraryEditorDOM - showProposedContent called');

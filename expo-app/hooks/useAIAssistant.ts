@@ -186,21 +186,58 @@ export function useAIAssistant(tripId: string) {
     enabled: !!tripId,
   });
 
-  // Fetch pending proposals
+  // Fetch pending proposals and AI suggestions
   const { data: proposals, isLoading: proposalsLoading } = useQuery({
     queryKey: ['ai-proposals', tripId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch from proposals table
+      const { data: proposalsData, error: proposalsError } = await supabase
         .from('proposals')
         .select('*')
         .eq('trip_id', tripId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (proposalsError) throw proposalsError;
+
+      // Also fetch from ai_suggestions table and convert to proposal format
+      const { data: suggestionsData, error: suggestionsError } = await supabase
+        .from('ai_suggestions')
+        .select('*')
+        .eq('trip_id', tripId)
+        .order('created_at', { ascending: false });
+
+      if (suggestionsError && suggestionsError.code !== 'PGRST116') { // Ignore if table doesn't exist
+        console.warn('Could not fetch ai_suggestions:', suggestionsError);
+      }
+
+      // Convert AI suggestions to proposal format if they exist
+      const suggestionsAsProposals = suggestionsData?.map(suggestion => ({
+        id: suggestion.id,
+        trip_id: suggestion.trip_id,
+        created_by: suggestion.created_by || 'ai',
+        created_at: suggestion.created_at,
+        proposal_type: suggestion.suggestion_type || 'add',
+        title: suggestion.title || 'AI Suggestion',
+        description: suggestion.description || suggestion.suggestion_text,
+        current_content: suggestion.context?.current_document,
+        proposed_content: suggestion.proposed_changes?.proposed_content,
+        diff_decorations: suggestion.proposed_changes?.diff_decorations,
+        status: suggestion.status || 'pending',
+        required_approvals: 1,
+        approval_count: 0,
+        rejection_count: 0,
+      })) || [];
+
+      // Combine both sources
+      const allProposals = [...(proposalsData || []), ...suggestionsAsProposals];
+
+      if (allProposals.length === 0) {
+        return [];
+      }
 
       // Fetch votes for all proposals to calculate counts
-      if (data && data.length > 0) {
-        const proposalIds = data.map(p => p.id);
+      if (allProposals.length > 0) {
+        const proposalIds = allProposals.map(p => p.id);
         const { data: votesData, error: votesError } = await supabase
           .from('proposal_votes')
           .select('*')
@@ -209,7 +246,7 @@ export function useAIAssistant(tripId: string) {
         if (votesError) throw votesError;
 
         // Calculate approval and rejection counts for each proposal
-        const proposalsWithCounts = data.map(proposal => {
+        const proposalsWithCounts = allProposals.map(proposal => {
           const proposalVotes = votesData?.filter(v => v.proposal_id === proposal.id) || [];
           const approvalCount = proposalVotes.filter(v => v.vote_type === 'approve').length;
           const rejectionCount = proposalVotes.filter(v => v.vote_type === 'reject').length;
@@ -224,7 +261,7 @@ export function useAIAssistant(tripId: string) {
         return proposalsWithCounts as Proposal[];
       }
 
-      return data as Proposal[];
+      return allProposals as Proposal[];
     },
     enabled: !!tripId,
   });
@@ -397,7 +434,7 @@ export function useAIAssistant(tripId: string) {
     },
   });
 
-  // Set up real-time subscription for new proposals
+  // Set up real-time subscription for new proposals and AI suggestions
   useEffect(() => {
     if (!tripId || !user) return;
 
@@ -412,6 +449,20 @@ export function useAIAssistant(tripId: string) {
           filter: `trip_id=eq.${tripId}`,
         },
         () => {
+          console.log('Proposals table changed - refreshing proposals');
+          queryClient.invalidateQueries({ queryKey: ['ai-proposals', tripId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ai_suggestions',
+          filter: `trip_id=eq.${tripId}`,
+        },
+        () => {
+          console.log('AI suggestions table changed - refreshing proposals');
           queryClient.invalidateQueries({ queryKey: ['ai-proposals', tripId] });
         }
       )

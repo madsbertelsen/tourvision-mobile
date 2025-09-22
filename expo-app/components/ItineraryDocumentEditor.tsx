@@ -126,6 +126,28 @@ export const ItineraryDocumentEditor = forwardRef<
         console.log('ItineraryDocumentEditor - editorDomRef.current.clearDiffDecorations not available');
       }
     },
+    applyTransactionSteps: (steps: any[], inverseSteps?: any[]) => {
+      console.log('ItineraryDocumentEditor - applyTransactionSteps called');
+
+      if (editorDomRef.current?.applyTransactionSteps) {
+        console.log('ItineraryDocumentEditor - Calling editorDomRef.current.applyTransactionSteps');
+        return editorDomRef.current.applyTransactionSteps(steps, inverseSteps);
+      } else {
+        console.log('ItineraryDocumentEditor - editorDomRef.current.applyTransactionSteps not available');
+        return false;
+      }
+    },
+    revertTransactionSteps: () => {
+      console.log('ItineraryDocumentEditor - revertTransactionSteps called');
+
+      if (editorDomRef.current?.revertTransactionSteps) {
+        console.log('ItineraryDocumentEditor - Calling editorDomRef.current.revertTransactionSteps');
+        return editorDomRef.current.revertTransactionSteps();
+      } else {
+        console.log('ItineraryDocumentEditor - editorDomRef.current.revertTransactionSteps not available');
+        return false;
+      }
+    },
     showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => {
       console.log('ItineraryDocumentEditor - showProposedContent called');
 
