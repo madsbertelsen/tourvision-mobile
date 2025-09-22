@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { JSONContent } from '@tiptap/react';
-import ItineraryEditorDOM from './dom/ItineraryEditorDOM';
+import ProseMirrorEditorDOM from './dom/ProseMirrorEditorDOM';
 import type { Tables } from '@/lib/database.types';
 
 interface ItineraryDocumentEditorProps {
@@ -203,18 +203,12 @@ export const ItineraryDocumentEditor = forwardRef<
 
   return (
     <View style={styles.container}>
-      <ItineraryEditorDOM
+      <ProseMirrorEditorDOM
         ref={editorDomRef}
         content={content}
         onChange={handleContentChange}
         editable={editable}
-        dom={{
-          style: {
-            width: '100%',
-            minHeight: 600,
-            padding: '32px',
-          },
-        }}
+        placeholder="Start writing your itinerary..."
       />
     </View>
   );
