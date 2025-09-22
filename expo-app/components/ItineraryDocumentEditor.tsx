@@ -1,12 +1,8 @@
 import React, { useEffect, useState, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { JSONContent } from '@tiptap/react';
+import ProseMirrorEditorDOM from './dom/ProseMirrorEditorDOM';
 import type { Tables } from '@/lib/database.types';
-
-// Expo DOM components need to be imported as default export
-const ProseMirrorEditorDOM = Platform.OS === 'web'
-  ? React.lazy(() => import('./dom/ProseMirrorEditorDOM'))
-  : null;
 
 interface ItineraryDocumentEditorProps {
   trip: Tables<'trips'>;
@@ -205,34 +201,15 @@ export const ItineraryDocumentEditor = forwardRef<
     return null;
   }
 
-  if (Platform.OS !== 'web' || !ProseMirrorEditorDOM) {
-    // Fallback for non-web platforms
-    return (
-      <View style={styles.container}>
-        <View style={styles.placeholderContainer}>
-          <Text style={styles.placeholderText}>
-            Document editor is only available on web
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <React.Suspense fallback={
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading editor...</Text>
-        </View>
-      }>
-        <ProseMirrorEditorDOM
-          ref={editorDomRef}
-          content={content}
-          onChange={handleContentChange}
-          editable={editable}
-          placeholder="Start writing your itinerary..."
-        />
-      </React.Suspense>
+      <ProseMirrorEditorDOM
+        ref={editorDomRef}
+        content={content}
+        onChange={handleContentChange}
+        editable={editable}
+        placeholder="Start writing your itinerary..."
+      />
     </View>
   );
 });
@@ -549,23 +526,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-  },
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#999',
   },
 });
