@@ -1,0 +1,944 @@
+'use dom';
+
+import React, { useState, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { ProseMirror } from '@nytimes/react-prosemirror';
+import { EditorState, Plugin, PluginKey, Transaction, Command } from 'prosemirror-state';
+import { Schema, Node, DOMSerializer, DOMParser as ProseMirrorDOMParser, Mark } from 'prosemirror-model';
+import { schema as basicSchema } from 'prosemirror-schema-basic';
+import { Decoration, DecorationSet } from 'prosemirror-view';
+import { baseKeymap, toggleMark } from 'prosemirror-commands';
+import { keymap } from 'prosemirror-keymap';
+import { history } from 'prosemirror-history';
+import { MapView } from './map-view';
+import './test-prosemirror-styles.css';
+
+// Location interface for map markers
+interface Location {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  description?: string;
+}
+
+// Create custom schema with geolocation mark
+const createSchemaWithGeoMark = () => {
+  // Get existing marks from basic schema
+  const existingMarks: any = {};
+  basicSchema.spec.marks.forEach((markName, markSpec) => {
+    existingMarks[markName] = markSpec;
+  });
+
+  // Add geo mark
+  const marks = {
+    ...existingMarks,
+    geo: {
+      attrs: {
+        lat: { default: null },
+        lng: { default: null },
+        placeName: { default: null },
+        placeId: { default: null }
+      },
+      parseDOM: [{
+        tag: 'span[data-geo]',
+        getAttrs(dom: any) {
+          return {
+            lat: parseFloat(dom.getAttribute('data-lat')) || null,
+            lng: parseFloat(dom.getAttribute('data-lng')) || null,
+            placeName: dom.getAttribute('data-place-name') || null,
+            placeId: dom.getAttribute('data-place-id') || null
+          };
+        }
+      }],
+      toDOM(mark: Mark) {
+        const attrs: any = {
+          'class': 'geo-mark',
+          'data-geo': 'true',
+          'data-lat': mark.attrs.lat,
+          'data-lng': mark.attrs.lng
+        };
+        if (mark.attrs.placeName) attrs['data-place-name'] = mark.attrs.placeName;
+        if (mark.attrs.placeId) attrs['data-place-id'] = mark.attrs.placeId;
+        attrs['title'] = mark.attrs.placeName || `📍 ${mark.attrs.lat}, ${mark.attrs.lng}`;
+        return ['span', attrs];
+      }
+    }
+  };
+
+  return new Schema({
+    nodes: basicSchema.spec.nodes,
+    marks
+  });
+};
+
+const geoSchema = createSchemaWithGeoMark();
+
+// Create geo mark commands
+const addGeoMark = (lat: number, lng: number, placeName?: string, placeId?: string): Command => {
+  return (state, dispatch) => {
+    const { from, to } = state.selection;
+    if (from === to) return false; // No selection
+
+    if (dispatch) {
+      const geoMark = geoSchema.marks.geo.create({ lat, lng, placeName, placeId });
+      const tr = state.tr.addMark(from, to, geoMark);
+      dispatch(tr);
+    }
+    return true;
+  };
+};
+
+const removeGeoMark: Command = (state, dispatch) => {
+  const { from, to } = state.selection;
+  const geoMarkType = geoSchema.marks.geo;
+
+  if (dispatch) {
+    const tr = state.tr.removeMark(from, to, geoMarkType);
+    dispatch(tr);
+  }
+  return true;
+};
+
+// Plugin key for diff visualization
+const diffPluginKey = new PluginKey('diff');
+
+
+// Create diff visualization plugin
+const createDiffPlugin = () => {
+  return new Plugin({
+    key: diffPluginKey,
+    state: {
+      init() {
+        return {
+          decorations: DecorationSet.empty,
+          originalDoc: null,
+          proposedDoc: null,
+          isPreview: false,
+        };
+      },
+      apply(tr, pluginState) {
+        const meta = tr.getMeta(diffPluginKey);
+
+        if (meta?.setPreview) {
+          const decorations = meta.decorations || DecorationSet.empty;
+          return {
+            decorations,
+            originalDoc: meta.originalDoc,
+            proposedDoc: meta.proposedDoc || null,
+            isPreview: true,
+          };
+        }
+
+        if (meta?.clearPreview) {
+          return {
+            decorations: DecorationSet.empty,
+            originalDoc: null,
+            proposedDoc: null,
+            isPreview: false,
+          };
+        }
+
+        // Map decorations through the transaction
+        return {
+          ...pluginState,
+          decorations: pluginState.decorations.map(tr.mapping, tr.doc),
+        };
+      },
+    },
+    props: {
+      decorations(state) {
+        const pluginState = this.getState(state);
+        return pluginState?.decorations || DecorationSet.empty;
+      },
+    },
+  });
+};
+
+// Create initial document
+const createInitialDoc = (schema: Schema) => {
+  return schema.node('doc', null, [
+    schema.node('heading', { level: 1 }, [
+      schema.text('Paris Weekend Trip')
+    ]),
+    schema.node('paragraph', null, [
+      schema.text('A romantic 3-day getaway to the City of Light.')
+    ]),
+    schema.node('heading', { level: 2 }, [
+      schema.text('Day 1 - Arrival')
+    ]),
+    schema.node('paragraph', null, [
+      schema.text('Check into hotel near the Louvre. Evening stroll along the Seine.')
+    ]),
+    // Day 2 will be inserted here
+    schema.node('heading', { level: 2 }, [
+      schema.text('Day 3 - Departure')
+    ]),
+    schema.node('paragraph', null, [
+      schema.text('Morning visit to a local café. Departure from Charles de Gaulle airport.')
+    ])
+  ]);
+};
+
+interface TestProseMirrorDOMProps {
+  onStateChange?: (state: EditorState) => void;
+  initialContent?: any;
+}
+
+export interface TestProseMirrorDOMRef {
+  showChanges: () => void;
+  hideChanges: () => void;
+  applyAIProposal: (proposalHtml: string) => void;
+  showProposedChanges: (proposalHtml: string) => void;
+  acceptProposedChanges: () => void;
+  rejectProposedChanges: () => void;
+  getHTML: () => string;
+  getState: () => EditorState;
+  addGeoLocation: (lat: number, lng: number, placeName?: string, placeId?: string) => void;
+  removeGeoLocation: () => void;
+}
+
+// Location modal component
+const LocationModal = ({ isOpen, onClose, onSelect, initialText }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (location: { lat: number; lng: number; name: string; placeId: string }) => void;
+  initialText?: string;
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionToken, setSessionToken] = useState('');
+
+  // Initialize session token and search query for Google Places
+  useEffect(() => {
+    if (isOpen) {
+      // Generate a unique session token for billing optimization
+      setSessionToken(Math.random().toString(36).substring(7));
+      // Set initial search query from selected text
+      if (initialText) {
+        setSearchQuery(initialText);
+      }
+    } else {
+      // Clear search when closing
+      setSearchQuery('');
+      setSuggestions([]);
+    }
+  }, [isOpen, initialText]);
+
+  // Fetch places from Google Places API
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      console.warn('Google Places API key not configured');
+      // Fallback to popular places
+      setSuggestions([
+        { place_id: 'eiffel-tower', description: 'Eiffel Tower, Paris', lat: 48.8584, lng: 2.2945 },
+        { place_id: 'sagrada-familia', description: 'Sagrada Familia, Barcelona', lat: 41.4036, lng: 2.1744 },
+      ]);
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      setIsLoading(true);
+
+      try {
+        // Use Supabase Edge Function as proxy for Google Places API
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/google-places-proxy`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              action: 'autocomplete',
+              input: searchQuery,
+              sessionToken: sessionToken,
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch suggestions');
+        }
+
+        const data = await response.json();
+
+        if (data.predictions) {
+          setSuggestions(data.predictions.map((prediction: any) => ({
+            place_id: prediction.place_id,
+            description: prediction.description,
+            // Note: lat/lng will be fetched when selected
+          })));
+        }
+      } catch (error) {
+        console.error('Error fetching places:', error);
+        // Fallback suggestions
+        setSuggestions([
+          { place_id: 'eiffel-tower', description: 'Eiffel Tower, Paris', lat: 48.8584, lng: 2.2945 },
+          { place_id: 'sagrada-familia', description: 'Sagrada Familia, Barcelona', lat: 41.4036, lng: 2.1744 },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Debounce the API call
+    const timeoutId = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, sessionToken]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="location-modal-overlay" onClick={onClose}>
+      <div className="location-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="location-modal-header">
+          <h3>Select Location</h3>
+          <button className="location-modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="location-modal-search">
+          <input
+            type="text"
+            placeholder="Search for a place..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="location-search-input"
+            autoFocus
+          />
+        </div>
+
+        <div className="location-modal-suggestions">
+          {isLoading && (
+            <div className="location-loading">
+              <span>Loading suggestions...</span>
+            </div>
+          )}
+          {!isLoading && suggestions.map((suggestion) => (
+            <div
+              key={suggestion.place_id}
+              className="location-suggestion"
+              onClick={async () => {
+                // Fetch place details to get coordinates
+                const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+
+                if (suggestion.lat && suggestion.lng) {
+                  // If we already have coordinates (fallback data)
+                  onSelect({
+                    lat: suggestion.lat,
+                    lng: suggestion.lng,
+                    name: suggestion.description || suggestion.name,
+                    placeId: suggestion.place_id,
+                  });
+                  onClose();
+                  return;
+                }
+
+                if (!apiKey) {
+                  console.warn('Cannot fetch place details without API key');
+                  return;
+                }
+
+                try {
+                  // Fetch place details using Supabase proxy
+                  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+                  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+                  const response = await fetch(
+                    `${supabaseUrl}/functions/v1/google-places-proxy`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                      },
+                      body: JSON.stringify({
+                        action: 'details',
+                        placeId: suggestion.place_id,
+                        sessionToken: sessionToken,
+                      })
+                    }
+                  );
+
+                  if (!response.ok) {
+                    throw new Error('Failed to fetch place details');
+                  }
+
+                  const data = await response.json();
+
+                  if (data.result && data.result.geometry) {
+                    onSelect({
+                      lat: data.result.geometry.location.lat,
+                      lng: data.result.geometry.location.lng,
+                      name: suggestion.description,
+                      placeId: suggestion.place_id,
+                    });
+                    onClose();
+                  }
+                } catch (error) {
+                  console.error('Error fetching place details:', error);
+                  alert('Failed to get location details. Please try again.');
+                }
+              }}
+            >
+              <span className="location-icon">📍</span>
+              <span className="location-name">{suggestion.description || suggestion.name}</span>
+            </div>
+          ))}
+          {!isLoading && suggestions.length === 0 && searchQuery && (
+            <div className="location-no-results">No places found</div>
+          )}
+        </div>
+
+        <div className="location-modal-footer">
+          <small>💡 Tip: Start typing to search for places</small>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMProps>(
+  ({ onStateChange, initialContent }, ref) => {
+    const [mount, setMount] = useState<HTMLElement | null>(null);
+    const [bubbleMenuState, setBubbleMenuState] = useState<{
+      visible: boolean;
+      left?: number;
+      top?: number;
+      from?: number;
+      to?: number;
+    }>({ visible: false });
+    const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+    const [selectedText, setSelectedText] = useState('');
+    const [isMapVisible, setIsMapVisible] = useState(false);
+    const [geoLocations, setGeoLocations] = useState<Location[]>([]);
+
+    // Create initial document
+    const initialDoc = useMemo(() => {
+      return initialContent ?
+        (typeof initialContent === 'string' ?
+          ProseMirrorDOMParser.fromSchema(geoSchema).parse(document.createElement('div'))
+          : initialContent)
+        : createInitialDoc(geoSchema);
+    }, [initialContent]);
+
+    // Create plugins with a callback that will have access to the view
+    const plugins = useMemo(() => [
+      createDiffPlugin(),
+      history(),
+      keymap(baseKeymap),
+    ], []);
+
+    // Create initial editor state
+    const [state, setState] = useState(() => {
+      return EditorState.create({
+        doc: initialDoc,
+        schema: geoSchema,
+        plugins,
+      });
+    });
+    const [originalState, setOriginalState] = useState<EditorState | null>(null);
+    const [proposedState, setProposedState] = useState<EditorState | null>(null);
+    const [isPreviewActive, setIsPreviewActive] = useState(false);
+
+    // Handle state changes
+    const dispatchTransaction = (tr: Transaction) => {
+      const newState = state.apply(tr);
+      setState(newState);
+      onStateChange?.(newState);
+    };
+
+    // Extract geo-marked locations from document
+    useEffect(() => {
+      const locations: Location[] = [];
+      let locationId = 0;
+
+      state.doc.descendants((node, pos) => {
+        if (node.marks && node.marks.length > 0) {
+          node.marks.forEach(mark => {
+            if (mark.type.name === 'geo' && mark.attrs.lat && mark.attrs.lng) {
+              locations.push({
+                id: `geo-${locationId++}`,
+                name: mark.attrs.placeName || node.textContent || 'Unknown Location',
+                lat: mark.attrs.lat,
+                lng: mark.attrs.lng,
+                description: `${node.textContent}`,
+              });
+            }
+          });
+        }
+      });
+
+      setGeoLocations(locations);
+    }, [state]);
+
+    // Update bubble menu based on selection
+    useEffect(() => {
+      const { from, to } = state.selection;
+
+      // No selection
+      if (from === to) {
+        console.log('No selection, hiding menu');
+        setBubbleMenuState({ visible: false });
+        return;
+      }
+
+      // Small delay to ensure DOM selection is ready
+      const timer = setTimeout(() => {
+        // Get the editor element to calculate position
+        if (mount) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const containerRect = mount.getBoundingClientRect();
+
+            // Calculate relative position
+            const left = rect.left - containerRect.left + rect.width / 2;
+            const top = rect.top - containerRect.top - 8; // Above selection
+
+            console.log('Selection detected:', {
+              from, to, left, top,
+              rect,
+              containerRect,
+              selection: selection.toString()
+            });
+
+            setBubbleMenuState({
+              visible: true,
+              left,
+              top,
+              from,
+              to,
+            });
+
+            // Store the selected text
+            const text = selection.toString();
+            setSelectedText(text);
+          } else {
+            console.log('No DOM selection found');
+          }
+        }
+      }, 10);
+
+      return () => clearTimeout(timer);
+    }, [state.selection, mount]);
+
+    // Convert ProseMirror document to HTML
+    const docToHTML = (doc: Node): string => {
+      const serializer = DOMSerializer.fromSchema(geoSchema);
+      const dom = serializer.serializeFragment(doc.content);
+
+      let nodeId = 0;
+      const wrapper = document.createElement('div');
+      wrapper.appendChild(dom);
+
+      // Add IDs to each element (required for Edge Function to work)
+      const addIds = (node: any) => {
+        if (node.nodeType === 1) { // Element node
+          // Only add IDs to block-level elements (h1, h2, p, etc.)
+          const tagName = node.tagName.toLowerCase();
+          if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'blockquote', 'pre'].includes(tagName)) {
+            node.setAttribute('id', `node-${nodeId++}`);
+          }
+          Array.from(node.children).forEach(addIds);
+        }
+      };
+
+      Array.from(wrapper.children).forEach(addIds);
+      console.log('Generated HTML with IDs:', wrapper.innerHTML);
+      return wrapper.innerHTML;
+    };
+
+    // Show changes with diff decorations
+    const showChanges = () => {
+      if (isPreviewActive) return;
+
+      // Save the original state
+      setOriginalState(state);
+
+      // Create a transform to apply the changes
+      const tr = state.tr;
+
+      // Find position after Day 1 paragraph
+      let insertAfterDay1 = 0;
+      let nodeCount = 0;
+
+      state.doc.descendants((node, pos) => {
+        nodeCount++;
+        if (nodeCount === 4) { // Day 1 paragraph
+          insertAfterDay1 = pos + node.nodeSize;
+          return false;
+        }
+      });
+
+      const decorationSpecs = [];
+
+      // Insert Day 2 content after Day 1
+      const day2Heading = geoSchema.node('heading', { level: 2 }, [
+        geoSchema.text('Day 2 - Eiffel Tower & Montmartre')
+      ]);
+      const day2Para1 = geoSchema.node('paragraph', null, [
+        geoSchema.text('Morning: Eiffel Tower visit with pre-booked tickets. Lunch at Café de l\'Homme with tower views.')
+      ]);
+      const day2Para2 = geoSchema.node('paragraph', null, [
+        geoSchema.text('Afternoon: Explore Montmartre, visit Sacré-Cœur, artist squares. Evening: Moulin Rouge show (optional).')
+      ]);
+
+      tr.insert(insertAfterDay1, [day2Heading, day2Para1, day2Para2]);
+      const day2Size = day2Heading.nodeSize + day2Para1.nodeSize + day2Para2.nodeSize;
+
+      // Mark Day 2 as addition
+      decorationSpecs.push(
+        Decoration.inline(
+          insertAfterDay1,
+          insertAfterDay1 + day2Size,
+          { class: 'diff-addition' },
+          { inclusiveStart: true, inclusiveEnd: true }
+        )
+      );
+
+      // Create decorations
+      const decorations = DecorationSet.create(tr.doc, decorationSpecs);
+
+      // Set metadata for the plugin
+      tr.setMeta(diffPluginKey, {
+        setPreview: true,
+        originalDoc: state.doc,
+        decorations,
+      });
+
+      setState(state.apply(tr));
+      setIsPreviewActive(true);
+    };
+
+    // Hide changes and restore original
+    const hideChanges = () => {
+      if (!isPreviewActive || !originalState) return;
+
+      // Restore the original state
+      const tr = originalState.tr;
+      tr.setMeta(diffPluginKey, { clearPreview: true });
+
+      setState(originalState);
+      setIsPreviewActive(false);
+      setOriginalState(null);
+    };
+
+    // Show proposed changes with diff visualization
+    const showProposedChanges = (proposalHtml: string) => {
+      try {
+        console.log('Showing proposed changes with HTML:', proposalHtml);
+
+        // Save current state as original
+        setOriginalState(state);
+
+        // Parse the proposed HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = proposalHtml;
+
+        // Find elements with data-change-type and apply visual styles
+        const addedElements = tempDiv.querySelectorAll('[data-change-type="added"]');
+        console.log('Found added elements:', addedElements.length);
+
+        const parser = ProseMirrorDOMParser.fromSchema(geoSchema);
+        const proposedDoc = parser.parse(tempDiv);
+
+        // Create decorations for added content
+        const decorations: Decoration[] = [];
+
+        // Create a map of added element text content for matching
+        const addedTextSet = new Set<string>();
+        addedElements.forEach(el => {
+          const text = el.textContent?.trim();
+          if (text) {
+            addedTextSet.add(text);
+            console.log('Added element text:', text);
+          }
+        });
+
+        // Traverse the proposed document and find added blocks
+        proposedDoc.descendants((node, pos) => {
+          if (node.isBlock && node.type.name !== 'doc') {
+            const nodeText = node.textContent.trim();
+
+            // Check if this block's text matches any added element
+            if (nodeText && addedTextSet.has(nodeText)) {
+              console.log(`Adding decoration at pos ${pos} for text: "${nodeText}"`);
+              decorations.push(
+                Decoration.node(pos, pos + node.nodeSize, {
+                  class: 'diff-addition'
+                })
+              );
+            }
+          }
+        });
+
+        const decorationSet = DecorationSet.create(proposedDoc, decorations);
+
+        // Apply the proposed document with decorations
+        const tr = state.tr;
+        tr.replaceWith(0, state.doc.content.size, proposedDoc.content);
+        tr.setMeta(diffPluginKey, {
+          setPreview: true,
+          originalDoc: state.doc,
+          proposedDoc: proposedDoc,
+          decorations: decorationSet,
+        });
+
+        setState(state.apply(tr));
+        setIsPreviewActive(true);
+        console.log('Proposed changes displayed with', decorations.length, 'decorations');
+      } catch (error) {
+        console.error('Error showing proposed changes:', error);
+        throw error;
+      }
+    };
+
+
+    // Apply AI proposal directly (without preview)
+    const applyAIProposal = (proposalHtml: string) => {
+      try {
+        console.log('Applying AI proposal with HTML:', proposalHtml);
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = proposalHtml;
+
+        const parser = ProseMirrorDOMParser.fromSchema(geoSchema);
+        const doc = parser.parse(tempDiv);
+
+        console.log('Parsed document:', doc.toJSON());
+
+        const newState = EditorState.create({
+          doc,
+          schema: geoSchema,
+          plugins: state.plugins,
+        });
+
+        setState(newState);
+        setIsPreviewActive(false);
+        setOriginalState(null);
+        setProposedState(null);
+        console.log('AI proposal applied successfully');
+      } catch (error) {
+        console.error('Error applying AI proposal:', error);
+        throw error;
+      }
+    };
+
+    // Accept the proposed changes
+    const acceptProposedChanges = () => {
+      if (!isPreviewActive) return;
+
+      // Clear decorations but keep the proposed content
+      const tr = state.tr;
+      tr.setMeta(diffPluginKey, { clearPreview: true });
+
+      setState(state.apply(tr));
+      setIsPreviewActive(false);
+      setOriginalState(null);
+      setProposedState(null);
+      console.log('Proposed changes accepted');
+    };
+
+    // Reject proposed changes and restore original
+    const rejectProposedChanges = () => {
+      if (!originalState || !isPreviewActive) return;
+
+      // Restore the original state
+      const tr = originalState.tr;
+      tr.setMeta(diffPluginKey, { clearPreview: true });
+
+      setState(originalState);
+      setIsPreviewActive(false);
+      setOriginalState(null);
+      setProposedState(null);
+      console.log('Proposed changes rejected');
+    };
+
+    // Get current HTML
+    const getHTML = () => {
+      return docToHTML(state.doc);
+    };
+
+    // Get current state
+    const getState = () => {
+      return state;
+    };
+
+    // Add geo location to selected text
+    const addGeoLocation = (lat: number, lng: number, placeName?: string, placeId?: string) => {
+      const command = addGeoMark(lat, lng, placeName, placeId);
+      if (command(state, (t) => dispatchTransaction(t))) {
+        console.log('Geo location added:', { lat, lng, placeName });
+      }
+    };
+
+    // Remove geo location from selected text
+    const removeGeoLocation = () => {
+      if (removeGeoMark(state, (t) => dispatchTransaction(t))) {
+        console.log('Geo location removed');
+      }
+    };
+
+    // Expose methods via ref
+    useImperativeHandle(ref, () => ({
+      showChanges,
+      hideChanges,
+      applyAIProposal,
+      showProposedChanges,
+      acceptProposedChanges,
+      rejectProposedChanges,
+      getHTML,
+      getState,
+      addGeoLocation,
+      removeGeoLocation,
+    }));
+
+    // Handle location selection from modal
+    const handleLocationSelect = (location: { lat: number; lng: number; name: string; placeId: string }) => {
+      console.log('Location selected:', location);
+      addGeoLocation(location.lat, location.lng, location.name, location.placeId);
+      setIsLocationModalOpen(false);
+    };
+
+    return (
+      <div className="test-prosemirror-wrapper">
+        {/* Map Toggle Button */}
+        <div className="map-toggle-container">
+          <button
+            className="map-toggle-button"
+            onClick={() => setIsMapVisible(!isMapVisible)}
+            title={isMapVisible ? "Hide Map" : "Show Map"}
+          >
+            <span className="map-toggle-icon">🗺️</span>
+            <span className="map-toggle-text">{isMapVisible ? "Hide Map" : "Show Map"}</span>
+          </button>
+          {geoLocations.length > 0 && (
+            <span className="location-count">📍 {geoLocations.length} location{geoLocations.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        {/* Map View */}
+        {isMapVisible && (
+          <div className="map-view-container">
+            <MapView
+              locations={geoLocations}
+              style={{ width: '100%', height: '300px' }}
+              onLocationClick={(location) => {
+                console.log('Map location clicked:', location);
+                // Find and scroll to the location in the document
+                let found = false;
+                state.doc.descendants((node, pos) => {
+                  if (!found && node.marks && node.marks.length > 0) {
+                    node.marks.forEach(mark => {
+                      if (!found && mark.type.name === 'geo' &&
+                          mark.attrs.lat === location.lat &&
+                          mark.attrs.lng === location.lng) {
+                        // Scroll to this position in the editor
+                        const tr = state.tr.setSelection(
+                          state.selection.constructor.near(state.doc.resolve(pos))
+                        );
+                        dispatchTransaction(tr);
+                        found = true;
+                      }
+                    });
+                  }
+                });
+              }}
+            />
+          </div>
+        )}
+
+        <div className="test-prosemirror-container">
+        {/* Location Modal */}
+        <LocationModal
+          isOpen={isLocationModalOpen}
+          onClose={() => setIsLocationModalOpen(false)}
+          onSelect={handleLocationSelect}
+          initialText={selectedText}
+        />
+
+        {/* Bubble Menu */}
+        {bubbleMenuState.visible && (
+          <div
+            className="bubble-menu"
+            style={{
+              left: `${bubbleMenuState.left}px`,
+              top: `${bubbleMenuState.top}px`,
+            }}
+          >
+            <button
+              className="bubble-menu-button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                toggleMark(geoSchema.marks.strong)(state, dispatchTransaction);
+              }}
+              title="Bold"
+            >
+              <strong>B</strong>
+            </button>
+            <button
+              className="bubble-menu-button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                toggleMark(geoSchema.marks.em)(state, dispatchTransaction);
+              }}
+              title="Italic"
+            >
+              <em>I</em>
+            </button>
+            <div className="bubble-menu-separator" />
+            <button
+              className="bubble-menu-button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsLocationModalOpen(true);
+              }}
+              title="Add Location"
+            >
+              📍
+            </button>
+            <button
+              className="bubble-menu-button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                removeGeoLocation();
+              }}
+              title="Remove Location"
+            >
+              ✕
+            </button>
+            <div className="bubble-menu-arrow" />
+          </div>
+        )}
+
+        <ProseMirror
+          mount={mount}
+          state={state}
+          dispatchTransaction={dispatchTransaction}
+        >
+          <div
+            ref={setMount}
+            className="test-prosemirror-editor"
+          />
+        </ProseMirror>
+      </div>
+    </div>
+  );
+  }
+);
+
+TestProseMirrorDOM.displayName = 'TestProseMirrorDOM';
+
+export default TestProseMirrorDOM;
