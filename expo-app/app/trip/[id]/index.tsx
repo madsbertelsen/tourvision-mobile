@@ -342,13 +342,9 @@ export default function TripDocumentView() {
           );
         }
 
-        // If we have diff decorations with element IDs, use them
-        if (proposal.diff_decorations && Array.isArray(proposal.diff_decorations)) {
-          console.log('Document - Setting diff decorations from HTML changes');
-          if (editorRef.current?.setDiffDecorations) {
-            editorRef.current.setDiffDecorations(proposal.diff_decorations);
-          }
-        }
+        // Skip diff decorations for now to avoid position errors
+        // The proposed content is already being shown by showProposedContent
+        console.log('Document - Skipping diff decorations for HTML-based proposal');
       } else if (proposal.transaction_steps && Array.isArray(proposal.transaction_steps) && proposal.transaction_steps.length > 0) {
         // Legacy transaction steps method
         console.log('Document - Using transaction steps from proposal:', proposal.transaction_steps);
