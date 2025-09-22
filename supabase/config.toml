@@ -320,6 +320,10 @@ deno_version = 2
 # Skip JWT verification since this function is called by database webhook with service role key
 verify_jwt = false
 
+[functions.generate-prosemirror-proposal]
+# Skip JWT verification for CORS compatibility
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

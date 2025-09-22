@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProseMirror } from '@nytimes/react-prosemirror';
-import { EditorState, Plugin, PluginKey } from 'prosemirror-state';
-import { Schema } from 'prosemirror-model';
+import { EditorState, Plugin, PluginKey, Transaction } from 'prosemirror-state';
+import { Schema, Node, Slice, Fragment, DOMSerializer, DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import { schema as basicSchema } from 'prosemirror-schema-basic';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { ReplaceStep, Transform } from 'prosemirror-transform';
 
 // Create initial document
 const createInitialDoc = (schema: Schema) => {
@@ -94,7 +95,11 @@ const staticProposal = {
 export default function TestProseMirrorScreen() {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [isPreviewActive, setIsPreviewActive] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const originalStateRef = useRef<EditorState | null>(null);
+  const inverseStepsRef = useRef<any[]>([]);
 
   const editorState = useMemo(() => {
     return EditorState.create({
@@ -178,7 +183,167 @@ export default function TestProseMirrorScreen() {
 
     setState(originalStateRef.current);
     setIsPreviewActive(false);
+    setAiError(null);
     originalStateRef.current = null;
+    inverseStepsRef.current = [];
+  };
+
+  // Convert ProseMirror document to HTML with IDs
+  const docToHTML = (doc: Node): string => {
+    // Create a DOM serializer
+    const serializer = DOMSerializer.fromSchema(basicSchema);
+
+    // Serialize to DOM
+    const dom = serializer.serializeFragment(doc.content);
+
+    // Add IDs to each element
+    let nodeId = 0;
+    const addIds = (node: any) => {
+      if (node.nodeType === 1) { // Element node
+        node.setAttribute('id', `node-${nodeId++}`);
+        Array.from(node.children).forEach(addIds);
+      }
+    };
+
+    // Create a wrapper div to hold the content
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(dom);
+    Array.from(wrapper.children).forEach(addIds);
+
+    return wrapper.innerHTML;
+  };
+
+  // Convert HTML back to ProseMirror document
+  const htmlToDoc = (html: string): Node => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+
+    const parser = ProseMirrorDOMParser.fromSchema(basicSchema);
+    return parser.parse(wrapper);
+  };
+
+  const handleAIProposal = async () => {
+    if (!aiPrompt.trim() || isPreviewActive) return;
+
+    setIsLoadingAI(true);
+    setAiError(null);
+
+    try {
+      // Convert document to HTML
+      const htmlDocument = docToHTML(state.doc);
+      console.log('Sending HTML:', htmlDocument);
+
+      // Call the edge function with new format
+      const response = await fetch('http://127.0.0.1:54321/functions/v1/generate-prosemirror-proposal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          htmlDocument,
+          prompt: aiPrompt
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate proposal: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('AI Proposal Response:', data);
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate proposal');
+      }
+
+      // Apply the proposal
+      applyAIProposal(data);
+
+    } catch (error) {
+      console.error('AI Proposal Error:', error);
+      setAiError(error instanceof Error ? error.message : 'Failed to generate proposal');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const applyAIProposal = (proposal: any) => {
+    if (!proposal.modifiedHtml) {
+      setAiError('No changes generated');
+      return;
+    }
+
+    console.log('Applying proposal with modified HTML:', proposal.modifiedHtml);
+    console.log('Changes:', proposal.changes);
+
+    // Save original state
+    originalStateRef.current = state;
+
+    try {
+      // Parse the modified HTML back to ProseMirror document
+      const modifiedDoc = htmlToDoc(proposal.modifiedHtml);
+
+      // Create a new state with the modified document
+      const newState = EditorState.create({
+        doc: modifiedDoc,
+        schema: basicSchema,
+        plugins: state.plugins // Keep existing plugins
+      });
+
+      // Create decorations for changed elements
+      const decorationSpecs: Decoration[] = [];
+
+      // Find positions of added content by looking for elements with data-change-type="added"
+      if (proposal.changes && proposal.changes.length > 0) {
+        // Parse the HTML to find which elements have data-change-type="added"
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = proposal.modifiedHtml;
+
+        // Walk through the ProseMirror document to find corresponding positions
+        let elementIndex = 0;
+
+        modifiedDoc.descendants((node, nodePos) => {
+          // Check if this node corresponds to an added element
+          if (node.type.name === 'heading' || node.type.name === 'paragraph') {
+            const domElement = wrapper.querySelectorAll('h1, h2, h3, h4, h5, h6, p')[elementIndex];
+
+            if (domElement && domElement.hasAttribute('data-change-type') &&
+                domElement.getAttribute('data-change-type') === 'added') {
+              // Add decoration for this node
+              const from = nodePos;
+              const to = nodePos + node.nodeSize;
+              decorationSpecs.push(
+                Decoration.inline(from, to, { class: 'diff-addition' })
+              );
+              console.log(`Adding decoration from ${from} to ${to} for added content`);
+            }
+            elementIndex++;
+          }
+        });
+      }
+
+      // Create DecorationSet
+      const decorations = DecorationSet.create(newState.doc, decorationSpecs);
+
+      // Create a transaction with the decorations
+      const tr = newState.tr;
+      tr.setMeta(diffPluginKey, {
+        setPreview: true,
+        originalDoc: state.doc,
+        decorations,
+      });
+
+      // Update the state
+      setState(newState.apply(tr));
+
+      // Update UI state
+      setIsPreviewActive(true);
+      setAiPrompt(''); // Clear the input after successful application
+
+    } catch (error) {
+      console.error('Error applying HTML changes:', error);
+      setAiError(`Failed to apply changes: ${error}`);
+    }
   };
 
   if (Platform.OS !== 'web') {
@@ -193,38 +358,81 @@ export default function TestProseMirrorScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>ProseMirror Diff Preview Test</Text>
-        <Text style={styles.subtitle}>Test ProseMirror with diff visualization</Text>
-      </View>
-
-      <View style={styles.proposalCard}>
-        <View style={styles.proposalHeader}>
-          <Text style={styles.proposalTitle}>{staticProposal.title}</Text>
-          <Text style={styles.proposalDescription}>{staticProposal.description}</Text>
+      <ScrollView style={styles.scrollContainer}>
+        <View style={styles.header}>
+          <Text style={styles.title}>ProseMirror Diff Preview Test</Text>
+          <Text style={styles.subtitle}>Test ProseMirror with diff visualization</Text>
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.previewButton,
-            isPreviewActive && styles.previewButtonActive
-          ]}
-          onPress={isPreviewActive ? handleHideChanges : handleShowChanges}
-        >
-          <Text style={styles.previewButtonText}>
-            {isPreviewActive ? '✓ Hide Changes' : '👁 Show Changes in Document'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.proposalCard}>
+          <View style={styles.proposalHeader}>
+            <Text style={styles.proposalTitle}>AI Proposal Generator</Text>
+            <Text style={styles.proposalDescription}>Enter a prompt to generate document changes</Text>
+          </View>
 
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
-            <Text style={styles.legendText}>Added</Text>
+          <View style={styles.aiInputContainer}>
+            <TextInput
+              style={styles.aiInput}
+              value={aiPrompt}
+              onChangeText={setAiPrompt}
+              placeholder="e.g. 'Make it a week-long trip' or 'Add museum visits'"
+              placeholderTextColor="#999"
+              editable={!isPreviewActive && !isLoadingAI}
+            />
+            <TouchableOpacity
+              style={[
+                styles.aiButton,
+                (isLoadingAI || isPreviewActive || !aiPrompt.trim()) && styles.aiButtonDisabled
+              ]}
+              onPress={handleAIProposal}
+              disabled={isLoadingAI || isPreviewActive || !aiPrompt.trim()}
+            >
+              {isLoadingAI ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.aiButtonText}>Generate</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {aiError && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{aiError}</Text>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          <View style={styles.proposalHeader}>
+            <Text style={styles.proposalTitle}>{staticProposal.title}</Text>
+            <Text style={styles.proposalDescription}>{staticProposal.description}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.previewButton,
+              isPreviewActive && styles.previewButtonActive
+            ]}
+            onPress={isPreviewActive ? handleHideChanges : handleShowChanges}
+          >
+            <Text style={styles.previewButtonText}>
+              {isPreviewActive ? '✓ Hide Changes' : '👁 Show Static Example'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.legendContainer}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
+              <Text style={styles.legendText}>Added</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColor, { backgroundColor: '#ef4444' }]} />
+              <Text style={styles.legendText}>Deleted</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.editorContainer}>
+        <View style={styles.editorContainer}>
         <Text style={styles.editorLabel}>ProseMirror Document Editor</Text>
         <View style={styles.editor}>
           <div ref={setMount}>
@@ -260,9 +468,9 @@ export default function TestProseMirrorScreen() {
             </div>
           )}
         </View>
-      </View>
+        </View>
 
-      <style>{`
+        <style>{`
         .diff-addition {
           background-color: #dcfce7;
           padding: 4px 2px;
@@ -270,6 +478,13 @@ export default function TestProseMirrorScreen() {
           border-left: 3px solid #10b981;
           margin-left: -5px;
           padding-left: 5px;
+        }
+        .diff-deletion {
+          text-decoration: line-through;
+          color: #ef4444;
+          background-color: #fee2e2;
+          padding: 2px;
+          border-radius: 2px;
         }
         .ProseMirror {
           outline: none;
@@ -287,28 +502,31 @@ export default function TestProseMirrorScreen() {
         .ProseMirror p {
           margin: 0.5em 0;
         }
-      `}</style>
+        `}</style>
 
-      <View style={styles.infoCard}>
+        <View style={styles.infoCard}>
         <Text style={styles.infoTitle}>How it works:</Text>
         <Text style={styles.infoText}>
           1. Green highlights show new content additions{'\n'}
           2. Content is inserted at the appropriate position{'\n'}
           3. Document remains fully readable{'\n'}
           4. Click "Hide Changes" to see original document{'\n'}
-          5. No deletions - only additions are supported
+          5. Click "Hide Changes" to revert{'\n'}
+          6. Supports replacements (delete + add)
         </Text>
-      </View>
+        </View>
 
-      <View style={styles.debugInfo}>
+        <View style={styles.debugInfo}>
         <Text style={styles.debugTitle}>Debug Info:</Text>
         <Text style={styles.debugText}>
           Preview Active: {isPreviewActive ? 'Yes' : 'No'}{'\n'}
           Document size: {state.doc.nodeSize}{'\n'}
           Content blocks: {state.doc.content.childCount}{'\n'}
-          Platform: {Platform.OS}
+          Platform: {Platform.OS}{'\n'}
+          AI Loading: {isLoadingAI ? 'Yes' : 'No'}
         </Text>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -317,6 +535,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollContainer: {
+    flex: 1,
     padding: 20,
   },
   header: {
@@ -445,5 +666,52 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  aiInputContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  aiInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: 'white',
+  },
+  aiButton: {
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 90,
+  },
+  aiButtonDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  aiButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 16,
+  },
+  errorContainer: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 12,
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 13,
   },
 });
