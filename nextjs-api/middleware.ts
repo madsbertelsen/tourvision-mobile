@@ -17,10 +17,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow places, route, and transportation APIs to bypass auth for server-side enrichment
-  if (pathname.startsWith('/api/places') || 
-      pathname.startsWith('/api/route') || 
-      pathname.startsWith('/api/transportation')) {
+  // Allow places, route, transportation, and generate-prosemirror-proposal APIs to bypass auth for server-side enrichment
+  if (pathname.startsWith('/api/places') ||
+      pathname.startsWith('/api/route') ||
+      pathname.startsWith('/api/transportation') ||
+      pathname.startsWith('/api/generate-prosemirror-proposal')) {
     return NextResponse.next();
   }
 

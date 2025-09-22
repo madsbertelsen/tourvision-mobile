@@ -50,15 +50,23 @@ export default function TestProseMirrorScreen() {
       // Get current document as HTML
       const currentHtml = editorRef.current?.getHTML() || '';
 
-      // Call the edge function
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-prosemirror-proposal`,
-        {
+      // Call the API - use Next.js API if available, otherwise fall back to Supabase Edge Function
+      const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
+        ? `${process.env.EXPO_PUBLIC_NEXTJS_API_URL}/api/generate-prosemirror-proposal`
+        : `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-prosemirror-proposal`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Only add Authorization header for Supabase Edge Function
+      if (!process.env.EXPO_PUBLIC_NEXTJS_API_URL) {
+        headers['Authorization'] = `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`;
+      }
+
+      const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-          },
+          headers,
           body: JSON.stringify({
             htmlDocument: currentHtml,
             prompt: currentMessage
