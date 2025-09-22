@@ -113,21 +113,15 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
           editorRef.current = { originalContent: editor.getJSON() };
         }
 
-        // Temporarily show the proposed content with inline diff highlighting
+        // Temporarily show the proposed content
         if (proposedContent) {
           console.log('ItineraryEditorDOM - Setting proposed content');
           // Set the content to the proposed version
           editor.commands.setContent(proposedContent);
 
-          // Calculate and apply inline decorations for additions
-          setTimeout(() => {
-            const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
-            console.log('ItineraryEditorDOM - Calculated decorations:', decorations);
-            if (decorations.length > 0) {
-              const result = editor.chain().focus().setDiffDecorations(decorations).run();
-              console.log('ItineraryEditorDOM - Applied decorations result:', result);
-            }
-          }, 100); // Small delay to ensure content is set first
+          // For now, skip the decorations to avoid position errors
+          // We can see the changes by comparing the document content
+          console.log('ItineraryEditorDOM - Proposed content set successfully');
         }
       }
     };
@@ -179,14 +173,16 @@ const ItineraryEditorDOM = forwardRef<any, ItineraryEditorProps>((
     showProposedContent: (proposedContent: JSONContent, currentContent: JSONContent) => {
       console.log('ItineraryEditorDOM - showProposedContent called');
       if (editor && proposedContent) {
+        // Store original if not already stored
+        if (!editorRef.current) {
+          editorRef.current = { originalContent: editor.getJSON() };
+        }
+
         // Set the proposed content
         editor.commands.setContent(proposedContent);
+        console.log('ItineraryEditorDOM - Proposed content applied');
 
-        // Calculate and apply inline decorations
-        const decorations = calculateInlineDiffDecorations(currentContent, proposedContent);
-        if (decorations.length > 0) {
-          editor.chain().focus().setDiffDecorations(decorations).run();
-        }
+        // Skip decorations for now to avoid position errors
       }
     },
   }), [editor]);
