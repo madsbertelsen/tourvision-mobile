@@ -30,7 +30,7 @@ const createDiffPlugin = () => {
       apply(tr, pluginState) {
         const meta = tr.getMeta(diffPluginKey);
 
-        if (meta?.setDeview) {
+        if (meta?.setPreview) {
           // Create decorations for the added content
           const decorations = meta.decorations || DecorationSet.empty;
           return {

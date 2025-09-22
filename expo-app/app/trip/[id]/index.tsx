@@ -359,35 +359,26 @@ export default function TripDocumentView() {
           console.log('Document - Applied transaction steps:', success);
         }
       }
-      // Fall back to diff decorations if no transaction steps
-      else if (proposal.diff_decorations && Array.isArray(proposal.diff_decorations)) {
-        console.log('Document - Using diff decorations from proposal:', proposal.diff_decorations);
+      // For HTML-based proposals, show the proposed content directly
+      else if (proposal.proposed_content) {
+        console.log('Document - Using proposed_content for preview');
+
+        if (editorRef.current?.showProposedContent) {
+          // Show the proposed content (which is the modified HTML/document)
+          editorRef.current.showProposedContent(
+            proposal.proposed_content,
+            proposal.current_content || trip.itinerary_document
+          );
+        }
+      } else if (proposal.diff_decorations && Array.isArray(proposal.diff_decorations)) {
+        console.log('Document - Using diff decorations from proposal (legacy):', proposal.diff_decorations);
 
         if (editorRef.current?.setDiffDecorations) {
-          // Pass the actual diff decorations which include the content to be added
+          // Legacy path for old diff decorations
           editorRef.current.setDiffDecorations(proposal.diff_decorations);
         }
       } else {
-        console.log('Document - WARNING: No transaction_steps or diff_decorations found in proposal');
-
-        // Fallback: Try to generate decorations from proposed_content if available
-        if (proposal.proposed_content) {
-          console.log('Document - Attempting to generate decorations from proposed_content');
-
-          // For now, show a simple preview at the end of the document
-          const docSize = trip.itinerary_document ? calculateDocumentSize(trip.itinerary_document) : 50;
-          const decorations = [{
-            from: docSize,
-            to: docSize,
-            type: 'addition' as const,
-            content: '\n\n## Day 1 - Sagrada Familia Visit\n\nVisit the iconic Sagrada Familia, Antoni Gaudí\'s masterpiece and Barcelona\'s most famous landmark.\n\n**Duration:** 2-3 hours\n**Best time:** Morning (9-11 AM) to avoid crowds\n**Tickets:** Book online in advance to skip the lines'
-          }];
-
-          if (editorRef.current?.setDiffDecorations) {
-            console.log('Document - Setting fallback decorations');
-            editorRef.current.setDiffDecorations(decorations);
-          }
-        }
+        console.log('Document - WARNING: No suitable content found in proposal for preview');
       }
     }
   }, [activeDiffProposalId, proposals, trip]);
