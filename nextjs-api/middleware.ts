@@ -22,7 +22,15 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/route') ||
       pathname.startsWith('/api/transportation') ||
       pathname.startsWith('/api/generate-prosemirror-proposal')) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+
+    // Add CORS headers for these API routes
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.headers.set('Access-Control-Max-Age', '86400');
+
+    return response;
   }
 
   const token = await getToken({

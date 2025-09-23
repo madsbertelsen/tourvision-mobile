@@ -114,7 +114,7 @@ export default function TestProseMirrorScreen() {
         <ScrollView style={styles.scrollContainer}>
         <View style={styles.header}>
           <Text style={styles.title}>ProseMirror Editor Test</Text>
-          <Text style={styles.subtitle}>Testing ProseMirror with DOM components</Text>
+          <Text style={styles.subtitle}>Start from empty - try "create a 3-day itinerary in Copenhagen"</Text>
         </View>
 
 

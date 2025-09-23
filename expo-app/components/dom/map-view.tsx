@@ -16,13 +16,15 @@ interface Location {
 // Matching colors from the TipTap destination nodes
 const MARKER_COLORS = [
   '#3B82F6', // Blue
-  '#8B5CF6', // Purple  
+  '#8B5CF6', // Purple
   '#10B981', // Green
   '#F59E0B', // Amber
   '#EF4444', // Red
   '#EC4899', // Pink
   '#06B6D4', // Cyan
   '#84CC16', // Lime
+  '#F97316', // Orange
+  '#6366F1', // Indigo
 ];
 
 interface TransportationRoute {
@@ -223,22 +225,15 @@ export function MapView({
             >
               <div
                 style={{
-                  width: '30px',
-                  height: '30px',
+                  width: '24px',
+                  height: '24px',
                   borderRadius: '50%',
                   backgroundColor: markerColor,
                   border: '3px solid white',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 }}
-              >
-                <span style={{ color: 'white', fontSize: '16px', fontWeight: 'bold' }}>
-                  {index + 1}
-                </span>
-              </div>
+              />
             </Marker>
           );
         })}

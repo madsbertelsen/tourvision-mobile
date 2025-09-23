@@ -19,7 +19,11 @@ interface Location {
   lat: number;
   lng: number;
   description?: string;
+  colorIndex?: number;
 }
+
+// Note: Color assignment is now done in the API when generating geo marks
+// We preserve the color indices from the HTML attributes
 
 // Create custom schema with geolocation mark
 const createSchemaWithGeoMark = () => {
@@ -37,7 +41,8 @@ const createSchemaWithGeoMark = () => {
         lat: { default: null },
         lng: { default: null },
         placeName: { default: null },
-        placeId: { default: null }
+        placeId: { default: null },
+        colorIndex: { default: 0 }
       },
       parseDOM: [{
         tag: 'span[data-geo]',
@@ -46,7 +51,8 @@ const createSchemaWithGeoMark = () => {
             lat: parseFloat(dom.getAttribute('data-lat')) || null,
             lng: parseFloat(dom.getAttribute('data-lng')) || null,
             placeName: dom.getAttribute('data-place-name') || null,
-            placeId: dom.getAttribute('data-place-id') || null
+            placeId: dom.getAttribute('data-place-id') || null,
+            colorIndex: parseInt(dom.getAttribute('data-color-index') || dom.getAttribute('data-location-index') || '0', 10)
           };
         }
       }],
@@ -55,11 +61,13 @@ const createSchemaWithGeoMark = () => {
           'class': 'geo-mark',
           'data-geo': 'true',
           'data-lat': mark.attrs.lat,
-          'data-lng': mark.attrs.lng
+          'data-lng': mark.attrs.lng,
+          'data-color-index': mark.attrs.colorIndex,
+          'data-location-index': mark.attrs.colorIndex // For CSS styling
         };
         if (mark.attrs.placeName) attrs['data-place-name'] = mark.attrs.placeName;
         if (mark.attrs.placeId) attrs['data-place-id'] = mark.attrs.placeId;
-        attrs['title'] = mark.attrs.placeName || `📍 ${mark.attrs.lat}, ${mark.attrs.lng}`;
+        attrs['title'] = mark.attrs.placeName || `Location ${mark.attrs.lat}, ${mark.attrs.lng}`;
         return ['span', attrs];
       }
     }
@@ -74,13 +82,32 @@ const createSchemaWithGeoMark = () => {
 const geoSchema = createSchemaWithGeoMark();
 
 // Create geo mark commands
-const addGeoMark = (lat: number, lng: number, placeName?: string, placeId?: string): Command => {
+const addGeoMark = (lat: number, lng: number, placeName?: string, placeId?: string, colorIndex?: number): Command => {
   return (state, dispatch) => {
     const { from, to } = state.selection;
     if (from === to) return false; // No selection
 
     if (dispatch) {
-      const geoMark = geoSchema.marks.geo.create({ lat, lng, placeName, placeId });
+      // If no color index provided, find the next available one
+      if (colorIndex === undefined) {
+        const usedIndices = new Set<number>();
+        state.doc.descendants((node) => {
+          node.marks.forEach(mark => {
+            if (mark.type.name === 'geo' && mark.attrs.colorIndex !== undefined) {
+              usedIndices.add(mark.attrs.colorIndex);
+            }
+          });
+        });
+
+        // Find the first available index (0-9)
+        colorIndex = 0;
+        while (usedIndices.has(colorIndex) && colorIndex < 10) {
+          colorIndex++;
+        }
+        colorIndex = colorIndex % 10;
+      }
+
+      const geoMark = geoSchema.marks.geo.create({ lat, lng, placeName, placeId, colorIndex });
       const tr = state.tr.addMark(from, to, geoMark);
       dispatch(tr);
     }
@@ -154,28 +181,11 @@ const createDiffPlugin = () => {
   });
 };
 
-// Create initial document
+// Create initial document - start empty for testing
 const createInitialDoc = (schema: Schema) => {
+  // Start with an empty document - just a single empty paragraph
   return schema.node('doc', null, [
-    schema.node('heading', { level: 1 }, [
-      schema.text('Paris Weekend Trip')
-    ]),
-    schema.node('paragraph', null, [
-      schema.text('A romantic 3-day getaway to the City of Light.')
-    ]),
-    schema.node('heading', { level: 2 }, [
-      schema.text('Day 1 - Arrival')
-    ]),
-    schema.node('paragraph', null, [
-      schema.text('Check into hotel near the Louvre. Evening stroll along the Seine.')
-    ]),
-    // Day 2 will be inserted here
-    schema.node('heading', { level: 2 }, [
-      schema.text('Day 3 - Departure')
-    ]),
-    schema.node('paragraph', null, [
-      schema.text('Morning visit to a local café. Departure from Charles de Gaulle airport.')
-    ])
+    schema.node('paragraph', null, [])
   ]);
 };
 
@@ -193,7 +203,7 @@ export interface TestProseMirrorDOMRef {
   rejectProposedChanges: () => void;
   getHTML: () => string;
   getState: () => EditorState;
-  addGeoLocation: (lat: number, lng: number, placeName?: string, placeId?: string) => void;
+  addGeoLocation: (lat: number, lng: number, placeName?: string, placeId?: string, colorIndex?: number) => void;
   removeGeoLocation: () => void;
 }
 
@@ -420,7 +430,6 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     }>({ visible: false });
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
     const [selectedText, setSelectedText] = useState('');
-    const [isMapVisible, setIsMapVisible] = useState(false);
     const [geoLocations, setGeoLocations] = useState<Location[]>([]);
 
     // Create initial document
@@ -473,6 +482,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                 lat: mark.attrs.lat,
                 lng: mark.attrs.lng,
                 description: `${node.textContent}`,
+                colorIndex: mark.attrs.colorIndex || 0,
               });
             }
           });
@@ -777,8 +787,8 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     };
 
     // Add geo location to selected text
-    const addGeoLocation = (lat: number, lng: number, placeName?: string, placeId?: string) => {
-      const command = addGeoMark(lat, lng, placeName, placeId);
+    const addGeoLocation = (lat: number, lng: number, placeName?: string, placeId?: string, colorIndex?: number) => {
+      const command = addGeoMark(lat, lng, placeName, placeId, colorIndex);
       if (command(state, (t) => dispatchTransaction(t))) {
         console.log('Geo location added:', { lat, lng, placeName });
       }
@@ -814,23 +824,8 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
     return (
       <div className="test-prosemirror-wrapper">
-        {/* Map Toggle Button */}
-        <div className="map-toggle-container">
-          <button
-            className="map-toggle-button"
-            onClick={() => setIsMapVisible(!isMapVisible)}
-            title={isMapVisible ? "Hide Map" : "Show Map"}
-          >
-            <span className="map-toggle-icon">🗺️</span>
-            <span className="map-toggle-text">{isMapVisible ? "Hide Map" : "Show Map"}</span>
-          </button>
-          {geoLocations.length > 0 && (
-            <span className="location-count">📍 {geoLocations.length} location{geoLocations.length !== 1 ? 's' : ''}</span>
-          )}
-        </div>
-
-        {/* Map View */}
-        {isMapVisible && (
+        {/* Map View - Always visible when there are locations */}
+        {geoLocations.length > 0 && (
           <div className="map-view-container">
             <MapView
               locations={geoLocations}
@@ -931,6 +926,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           <div
             ref={setMount}
             className="test-prosemirror-editor"
+            spellCheck={false}
           />
         </ProseMirror>
       </div>
