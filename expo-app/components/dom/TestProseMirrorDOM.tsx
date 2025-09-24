@@ -686,17 +686,65 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       return 'unknown';
     };
 
+    // Helper to find nearest point on a polyline
+    const findNearestPointOnLine = (
+      point: { lng: number; lat: number },
+      lineCoordinates: number[][]
+    ): { lng: number; lat: number; insertIndex: number } => {
+      let minDistance = Infinity;
+      let nearestPoint = { lng: lineCoordinates[0][0], lat: lineCoordinates[0][1], insertIndex: 1 };
+
+      for (let i = 0; i < lineCoordinates.length - 1; i++) {
+        const start = { lng: lineCoordinates[i][0], lat: lineCoordinates[i][1] };
+        const end = { lng: lineCoordinates[i + 1][0], lat: lineCoordinates[i + 1][1] };
+
+        // Calculate projection of point onto line segment
+        const dx = end.lng - start.lng;
+        const dy = end.lat - start.lat;
+        const t = Math.max(0, Math.min(1, ((point.lng - start.lng) * dx + (point.lat - start.lat) * dy) / (dx * dx + dy * dy)));
+
+        const projection = {
+          lng: start.lng + t * dx,
+          lat: start.lat + t * dy
+        };
+
+        // Calculate distance
+        const distance = Math.sqrt(
+          Math.pow(projection.lng - point.lng, 2) +
+          Math.pow(projection.lat - point.lat, 2)
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestPoint = { ...projection, insertIndex: i + 1 };
+        }
+      }
+
+      return nearestPoint;
+    };
+
     // Fetch route geometry from Next.js API
     const fetchRouteGeometry = async (
       fromLng: number,
       fromLat: number,
       toLng: number,
       toLat: number,
-      mode: string
+      mode: string,
+      waypoints?: Array<{ lng: number; lat: number }>
     ): Promise<{ type: 'LineString'; coordinates: number[][] } | null> => {
       try {
         const profile = TRANSPORT_MODE_PROFILES[mode] || 'driving';
-        const coordinates = `${fromLng},${fromLat};${toLng},${toLat}`;
+
+        // Build coordinates string with waypoints
+        let coordinatesArray = [`${fromLng},${fromLat}`];
+        if (waypoints && waypoints.length > 0) {
+          waypoints.forEach(wp => {
+            coordinatesArray.push(`${wp.lng},${wp.lat}`);
+          });
+        }
+        coordinatesArray.push(`${toLng},${toLat}`);
+        const coordinates = coordinatesArray.join(';');
+
         const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL || 'http://localhost:3001';
 
         const response = await fetch(
@@ -766,13 +814,24 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                   // Create async route promise
                   const routePromise = (async (): Promise<TransportationRoute | null> => {
                     try {
-                      // Fetch actual route geometry from API
+                      // Parse waypoints from mark attributes
+                      let waypoints: Array<{ lng: number; lat: number }> | undefined;
+                      if (mark.attrs.transportWaypoints) {
+                        try {
+                          waypoints = JSON.parse(mark.attrs.transportWaypoints);
+                        } catch (e) {
+                          console.warn('Failed to parse waypoints:', e);
+                        }
+                      }
+
+                      // Fetch actual route geometry from API with waypoints
                       const geometry = await fetchRouteGeometry(
                         fromLocation.lng,
                         fromLocation.lat,
                         toLocation.lng,
                         toLocation.lat,
-                        mark.attrs.transportMode
+                        mark.attrs.transportMode,
+                        waypoints
                       );
 
                       // Get color based on transport mode
@@ -791,6 +850,8 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                         routeId,
                         mode: mark.attrs.transportMode,
                         hasApiGeometry: !!geometry,
+                        hasWaypoints: !!waypoints && waypoints.length > 0,
+                        waypointCount: waypoints?.length || 0,
                         coordinatesCount: finalGeometry.coordinates.length
                       });
 
@@ -804,6 +865,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                         geometry: finalGeometry,
                         color: transportColor,
                         duration: mark.attrs.transportDuration,
+                        waypoints: waypoints?.map((wp, index) => ({ ...wp, index })),
                         cost: mark.attrs.transportCostAmount ? {
                           amount: mark.attrs.transportCostAmount,
                           currency: mark.attrs.transportCostCurrency || 'EUR'
@@ -814,6 +876,17 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                       console.error('Failed to fetch route geometry:', error);
                       // Return fallback route with straight line
                       const transportColor = TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS] || '#6B7280';
+
+                      // Parse waypoints even for fallback
+                      let waypoints: Array<{ lng: number; lat: number }> | undefined;
+                      if (mark.attrs.transportWaypoints) {
+                        try {
+                          waypoints = JSON.parse(mark.attrs.transportWaypoints);
+                        } catch (e) {
+                          console.warn('Failed to parse waypoints:', e);
+                        }
+                      }
+
                       return {
                         id: routeId,
                         mode: mark.attrs.transportMode,
@@ -830,6 +903,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                         },
                         color: transportColor,
                         duration: mark.attrs.transportDuration,
+                        waypoints: waypoints?.map((wp, index) => ({ ...wp, index })),
                         cost: mark.attrs.transportCostAmount ? {
                           amount: mark.attrs.transportCostAmount,
                           currency: mark.attrs.transportCostCurrency || 'EUR'
@@ -1626,6 +1700,112 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                       });
                     }
                   });
+                }}
+                onRouteClick={(routeId, lngLat) => {
+                  console.log('Route clicked:', { routeId, lngLat });
+
+                  // Find the route to get its coordinates
+                  const route = transportationRoutes.find(r => r.id === routeId);
+                  if (!route) return;
+
+                  // Find nearest point on the route
+                  const nearestPoint = findNearestPointOnLine(lngLat, route.geometry.coordinates);
+
+                  // Update the ProseMirror document with new waypoint
+                  let updated = false;
+                  const tr = state.tr;
+
+                  state.doc.descendants((node, pos) => {
+                    if (!updated && node.marks) {
+                      node.marks.forEach(mark => {
+                        if (!updated && mark.type.name === 'geo' &&
+                            mark.attrs.transportFromId &&
+                            `${mark.attrs.transportFromId}-${getLocationId(mark)}` === routeId) {
+
+                          // Get existing waypoints or initialize empty array
+                          let waypoints: Array<{ lng: number; lat: number }> = [];
+                          if (mark.attrs.transportWaypoints) {
+                            try {
+                              waypoints = JSON.parse(mark.attrs.transportWaypoints);
+                            } catch (e) {
+                              console.warn('Failed to parse existing waypoints:', e);
+                            }
+                          }
+
+                          // Insert new waypoint at the appropriate position
+                          waypoints.splice(nearestPoint.insertIndex - 1, 0, {
+                            lng: nearestPoint.lng,
+                            lat: nearestPoint.lat
+                          });
+
+                          // Update the mark with new waypoints
+                          const newMark = mark.type.create({
+                            ...mark.attrs,
+                            transportWaypoints: JSON.stringify(waypoints)
+                          });
+
+                          tr.removeMark(pos, pos + node.nodeSize, mark)
+                            .addMark(pos, pos + node.nodeSize, newMark);
+                          updated = true;
+                        }
+                      });
+                    }
+                  });
+
+                  if (updated) {
+                    dispatchTransaction(tr);
+                  }
+                }}
+                onWaypointDrag={(routeId, waypointIndex, newPosition) => {
+                  console.log('Waypoint dragged:', { routeId, waypointIndex, newPosition });
+
+                  // Update the ProseMirror document with updated waypoint position
+                  let updated = false;
+                  const tr = state.tr;
+
+                  state.doc.descendants((node, pos) => {
+                    if (!updated && node.marks) {
+                      node.marks.forEach(mark => {
+                        if (!updated && mark.type.name === 'geo' &&
+                            mark.attrs.transportFromId &&
+                            `${mark.attrs.transportFromId}-${getLocationId(mark)}` === routeId) {
+
+                          // Get existing waypoints
+                          let waypoints: Array<{ lng: number; lat: number }> = [];
+                          if (mark.attrs.transportWaypoints) {
+                            try {
+                              waypoints = JSON.parse(mark.attrs.transportWaypoints);
+                            } catch (e) {
+                              console.warn('Failed to parse existing waypoints:', e);
+                              return;
+                            }
+                          }
+
+                          // Update waypoint position
+                          if (waypointIndex < waypoints.length) {
+                            waypoints[waypointIndex] = {
+                              lng: newPosition.lng,
+                              lat: newPosition.lat
+                            };
+
+                            // Update the mark with updated waypoints
+                            const newMark = mark.type.create({
+                              ...mark.attrs,
+                              transportWaypoints: JSON.stringify(waypoints)
+                            });
+
+                            tr.removeMark(pos, pos + node.nodeSize, mark)
+                              .addMark(pos, pos + node.nodeSize, newMark);
+                            updated = true;
+                          }
+                        }
+                      });
+                    }
+                  });
+
+                  if (updated) {
+                    dispatchTransaction(tr);
+                  }
                 }}
               />
             </div>

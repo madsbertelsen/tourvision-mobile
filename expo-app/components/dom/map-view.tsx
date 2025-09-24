@@ -1,7 +1,7 @@
 'use dom';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Map, { Layer, Marker, Popup, Source } from 'react-map-gl/dist/mapbox';
 
 interface Location {
@@ -27,6 +27,12 @@ const MARKER_COLORS = [
   '#6366F1', // Indigo
 ];
 
+interface Waypoint {
+  lat: number;
+  lng: number;
+  index: number;
+}
+
 interface TransportationRoute {
   id: string;
   mode: string;
@@ -38,6 +44,7 @@ interface TransportationRoute {
   fromPlace: string;
   toPlace: string;
   duration: string;
+  waypoints?: Waypoint[];
 }
 
 interface MapViewProps {
@@ -54,6 +61,8 @@ interface MapViewProps {
   };
   routeColor?: string;
   transportationRoutes?: TransportationRoute[];
+  onRouteClick?: (routeId: string, lngLat: { lng: number; lat: number }) => void;
+  onWaypointDrag?: (routeId: string, waypointIndex: number, newPosition: { lng: number; lat: number }) => void;
 }
 
 export function MapView({
@@ -66,7 +75,9 @@ export function MapView({
   showRoute = false,
   routeGeometry,
   routeColor = '#6366F1',
-  transportationRoutes = []
+  transportationRoutes = [],
+  onRouteClick,
+  onWaypointDrag
 }: MapViewProps) {
 
   // If we have locations, use the first one as center, otherwise use default
@@ -82,6 +93,7 @@ export function MapView({
   
   const [popupInfo, setPopupInfo] = useState<Location | null>(null);
   const mapRef = useRef<any>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string } | null>(null);
 
   useEffect(() => {
     if (locations.length > 0 && mapRef.current) {
@@ -128,18 +140,122 @@ export function MapView({
     }
   }, [onLocationClick]);
 
+  const handleRouteClick = useCallback((routeId: string, e: any) => {
+    if (onRouteClick && e.lngLat) {
+      onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat });
+    }
+  }, [onRouteClick]);
+
+  // Helper to find nearest point on a polyline
+  const findNearestPointOnLine = useCallback((
+    point: { lng: number; lat: number },
+    lineCoordinates: number[][]
+  ): { lng: number; lat: number } => {
+    let minDistance = Infinity;
+    let nearestPoint = { lng: lineCoordinates[0][0], lat: lineCoordinates[0][1] };
+
+    for (let i = 0; i < lineCoordinates.length - 1; i++) {
+      const start = { lng: lineCoordinates[i][0], lat: lineCoordinates[i][1] };
+      const end = { lng: lineCoordinates[i + 1][0], lat: lineCoordinates[i + 1][1] };
+
+      // Calculate projection of point onto line segment
+      const dx = end.lng - start.lng;
+      const dy = end.lat - start.lat;
+      const t = Math.max(0, Math.min(1, ((point.lng - start.lng) * dx + (point.lat - start.lat) * dy) / (dx * dx + dy * dy)));
+
+      const projection = {
+        lng: start.lng + t * dx,
+        lat: start.lat + t * dy
+      };
+
+      // Calculate distance
+      const distance = Math.sqrt(
+        Math.pow(projection.lng - point.lng, 2) +
+        Math.pow(projection.lat - point.lat, 2)
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestPoint = projection;
+      }
+    }
+
+    return nearestPoint;
+  }, []);
+
+  const handleMapMouseMove = useCallback((e: any) => {
+    if (!mapRef.current || !e.lngLat) return;
+
+    // Check if hovering over any route
+    const features = mapRef.current.queryRenderedFeatures(e.point, {
+      layers: transportationRoutes.map(r => `transport-route-click-${r.id}`)
+    });
+
+    if (features && features.length > 0) {
+      const routeId = features[0].properties?.routeId;
+      if (routeId) {
+        const route = transportationRoutes.find(r => r.id === routeId);
+        if (route) {
+          const nearestPoint = findNearestPointOnLine(
+            { lng: e.lngLat.lng, lat: e.lngLat.lat },
+            route.geometry.coordinates
+          );
+          setHoverPreview({ ...nearestPoint, routeId });
+          mapRef.current.getCanvas().style.cursor = 'pointer';
+        }
+      }
+    } else {
+      setHoverPreview(null);
+      mapRef.current.getCanvas().style.cursor = '';
+    }
+  }, [transportationRoutes, findNearestPointOnLine]);
+
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
     <div style={style}>
+      <style>{`
+        @keyframes pulse {
+          0% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
       <Map
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
-        onClick={handleMapClick}
+        onClick={(e) => {
+          // Check if clicking on a route
+          if (mapRef.current && e.lngLat) {
+            const features = mapRef.current.queryRenderedFeatures(e.point, {
+              layers: transportationRoutes.map(r => `transport-route-click-${r.id}`)
+            });
+
+            if (features && features.length > 0) {
+              const routeId = features[0].properties?.routeId;
+              if (routeId && onRouteClick) {
+                onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat });
+                return; // Don't trigger map click
+              }
+            }
+          }
+          handleMapClick(e);
+        }}
+        onMouseMove={handleMapMouseMove}
         mapboxAccessToken={mapboxToken}
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
+        interactiveLayerIds={transportationRoutes.map(r => `transport-route-click-${r.id}`)}
       >
         {showRoute && routeGeometry && (
           <Source
@@ -169,39 +285,102 @@ export function MapView({
         
         {/* Render all transportation routes */}
         {transportationRoutes.map((route) => (
-          <Source
-            key={route.id}
-            id={`transport-route-${route.id}`}
-            type="geojson"
-            data={{
-              type: 'Feature',
-              properties: {
-                mode: route.mode,
-                fromPlace: route.fromPlace,
-                toPlace: route.toPlace,
-                duration: route.duration,
-              },
-              geometry: route.geometry,
-            }}
-          >
-            <Layer
-            
-              id={`transport-route-line-${route.id}`}
-              type="line"
-              layout={{
-                'line-join': 'round',
-                'line-cap': 'round',
+          <React.Fragment key={route.id}>
+            <Source
+              id={`transport-route-${route.id}`}
+              type="geojson"
+              data={{
+                type: 'Feature',
+                properties: {
+                  routeId: route.id,
+                  mode: route.mode,
+                  fromPlace: route.fromPlace,
+                  toPlace: route.toPlace,
+                  duration: route.duration,
+                },
+                geometry: route.geometry,
               }}
-              paint={{
-                'line-color': route.color || '#6B7280',
-                'line-width': 3,
-                'line-opacity': 0.6,
-                'line-dasharray': route.mode === 'walking' ? [2, 2] : undefined,
+            >
+              <Layer
+                id={`transport-route-line-${route.id}`}
+                type="line"
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+                paint={{
+                  'line-color': route.color || '#6B7280',
+                  'line-width': 3,
+                  'line-opacity': 0.6,
+                  'line-dasharray': route.mode === 'walking' ? [2, 2] : undefined,
+                }}
+              />
+              {/* Interactive invisible layer for click detection */}
+              <Layer
+                id={`transport-route-click-${route.id}`}
+                type="line"
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+                paint={{
+                  'line-color': 'transparent',
+                  'line-width': 40, // Wider for easier clicking
+                }}
+              />
+            </Source>
+
+            {/* Render waypoint markers */}
+            {route.waypoints?.map((waypoint, index) => (
+              <Marker
+                key={`${route.id}-waypoint-${index}`}
+                longitude={waypoint.lng}
+                latitude={waypoint.lat}
+                draggable={true}
+                onDragEnd={(e) => {
+                  if (onWaypointDrag) {
+                    onWaypointDrag(route.id, index, { lng: e.lngLat.lng, lat: e.lngLat.lat });
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: route.color || '#6B7280',
+                    border: '2px solid white',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                    cursor: 'move',
+                  }}
+                />
+              </Marker>
+            ))}
+          </React.Fragment>
+        ))}
+
+        {/* Hover preview dot */}
+        {hoverPreview && (
+          <Marker
+            longitude={hoverPreview.lng}
+            latitude={hoverPreview.lat}
+            anchor="center"
+          >
+            <div
+              style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'white',
+                border: '2px solid #333',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                pointerEvents: 'none',
+                animation: 'pulse 1.5s ease-in-out infinite',
               }}
             />
-          </Source>
-        ))}
-        
+          </Marker>
+        )}
+
         {locations.map((location, index) => {
           const colorIndex = location.colorIndex ?? index;
           const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
