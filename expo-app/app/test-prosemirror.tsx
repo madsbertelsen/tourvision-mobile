@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import TestProseMirrorDOM from '@/components/dom/TestProseMirrorDOM';
 import type { TestProseMirrorDOMRef } from '@/components/dom/TestProseMirrorDOM';
+import TestProseMirrorDOM from '@/components/dom/TestProseMirrorDOM';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ChatMessage {
   id: string;
@@ -18,7 +18,9 @@ export default function TestProseMirrorScreen() {
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [acceptedProposalIds, setAcceptedProposalIds] = useState<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [currentMessage, setCurrentMessage] = useState('');
+  const [currentMessage, setCurrentMessage] = useState('create a 3-day itinerary in Copenhagen');
+  const [tripTitle, setTripTitle] = useState('Copenhagen Adventure');
+  const [tripDates, setTripDates] = useState('Dec 15 - Dec 18, 2024');
   const editorRef = useRef<TestProseMirrorDOMRef>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
@@ -110,6 +112,19 @@ export default function TestProseMirrorScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Navigation Header */}
+      <View style={styles.navHeader}>
+        <View style={styles.navContent}>
+          <View>
+            <Text style={styles.navTitle}>{tripTitle}</Text>
+            <Text style={styles.navSubtitle}>{tripDates}</Text>
+          </View>
+          <TouchableOpacity style={styles.navButton}>
+            <Text style={styles.navButtonText}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.mainContent}>
         <ScrollView style={styles.scrollContainer}>
         <View style={styles.header}>
@@ -269,26 +284,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
+  navHeader: {
+    backgroundColor: '#1f2937',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+  },
+  navContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+  },
+  navSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  navButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#3b82f6',
+    borderRadius: 6,
+  },
+  navButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   mainContent: {
     flex: 1,
     flexDirection: 'row',
   },
   scrollContainer: {
     flex: 2,
+    backgroundColor: 'transparent',
   },
   header: {
-    padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    padding: 24,
+    backgroundColor: 'transparent',
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: '600',
+    color: '#1f2937',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#6b7280',
     marginTop: 4,
   },
@@ -297,8 +344,8 @@ const styles = StyleSheet.create({
   },
   proposalTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '500',
+    color: '#1f2937',
     marginBottom: 4,
   },
   proposalDescription: {
@@ -399,7 +446,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   editor: {
-    backgroundColor: 'white',
     borderRadius: 8,
     overflow: 'hidden',
     shadowColor: '#000',

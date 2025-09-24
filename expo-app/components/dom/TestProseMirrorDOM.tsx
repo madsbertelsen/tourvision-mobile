@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { ProseMirror } from '@nytimes/react-prosemirror';
-import { EditorState, Plugin, PluginKey, Transaction, Command } from 'prosemirror-state';
+import { EditorState, Plugin, PluginKey, Transaction, Command, TextSelection } from 'prosemirror-state';
 import { Schema, Node, DOMSerializer, DOMParser as ProseMirrorDOMParser, Mark } from 'prosemirror-model';
 import { schema as basicSchema } from 'prosemirror-schema-basic';
 import { Decoration, DecorationSet } from 'prosemirror-view';
@@ -10,6 +10,7 @@ import { baseKeymap, toggleMark } from 'prosemirror-commands';
 import { keymap } from 'prosemirror-keymap';
 import { history } from 'prosemirror-history';
 import { MapView } from './map-view';
+import { TransportationModal } from './TransportationModal';
 import './test-prosemirror-styles.css';
 
 // Location interface for map markers
@@ -432,6 +433,24 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     const [selectedText, setSelectedText] = useState('');
     const [geoLocations, setGeoLocations] = useState<Location[]>([]);
 
+    // Transportation state
+    const [transportationRoutes, setTransportationRoutes] = useState<Array<{
+      id: string;
+      mode: 'walking' | 'metro' | 'bus' | 'taxi' | 'bike' | 'car';
+      fromLocationId: string;
+      toLocationId: string;
+      duration: string;
+      cost?: { amount: number; currency: string };
+      notes?: string;
+    }>>([]);
+    const [connectionMode, setConnectionMode] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+    const [showTransportModal, setShowTransportModal] = useState(false);
+    const [transportModalData, setTransportModalData] = useState<{
+      fromLocationId: string;
+      toLocationId: string;
+    } | null>(null);
+
     // Create initial document
     const initialDoc = useMemo(() => {
       return initialContent ?
@@ -822,36 +841,230 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       setIsLocationModalOpen(false);
     };
 
+    // Transportation handlers
+    const handlePlaceClick = (location: Location) => {
+      if (connectionMode) {
+        if (!selectedLocation) {
+          // First location selected
+          setSelectedLocation(location.id);
+        } else if (selectedLocation !== location.id) {
+          // Second location selected - open modal
+          setTransportModalData({
+            fromLocationId: selectedLocation,
+            toLocationId: location.id
+          });
+          setShowTransportModal(true);
+          setSelectedLocation(null);
+          setConnectionMode(false);
+        }
+      } else {
+        // Normal click behavior - scroll to location in document
+        let found = false;
+        state.doc.descendants((node, pos) => {
+          if (!found && node.marks && node.marks.length > 0) {
+            node.marks.forEach(mark => {
+              if (!found && mark.type.name === 'geo' &&
+                  mark.attrs.lat === location.lat &&
+                  mark.attrs.lng === location.lng) {
+                const tr = state.tr.setSelection(
+                  TextSelection.near(state.doc.resolve(pos))
+                );
+                dispatchTransaction(tr);
+                found = true;
+              }
+            });
+          }
+        });
+      }
+    };
+
+    const handleAddTransportation = (fromId: string, toId: string) => {
+      setTransportModalData({ fromLocationId: fromId, toLocationId: toId });
+      setShowTransportModal(true);
+    };
+
+    const handleSaveTransportation = (transport: any) => {
+      if (transportModalData) {
+        const newRoute = {
+          id: Date.now().toString(),
+          mode: transport.mode,
+          fromLocationId: transportModalData.fromLocationId,
+          toLocationId: transportModalData.toLocationId,
+          duration: transport.duration,
+          cost: transport.cost,
+          notes: transport.notes
+        };
+        setTransportationRoutes([...transportationRoutes, newRoute]);
+        setShowTransportModal(false);
+        setTransportModalData(null);
+      }
+    };
+
+    // Helper to find transportation between two locations
+    const findTransportation = (fromId: string, toId: string) => {
+      return transportationRoutes.find(
+        route => route.fromLocationId === fromId && route.toLocationId === toId
+      );
+    };
+
+    // Transport mode icons and colors
+    const TRANSPORT_ICONS: Record<string, string> = {
+      walking: '🚶',
+      metro: '🚇',
+      bus: '🚌',
+      taxi: '🚕',
+      bike: '🚴',
+      car: '🚙'
+    };
+
+    const TRANSPORT_COLORS: Record<string, string> = {
+      walking: '#10B981',
+      metro: '#8B5CF6',
+      bus: '#3B82F6',
+      taxi: '#F59E0B',
+      bike: '#84CC16',
+      car: '#6B7280'
+    };
+
     return (
       <div className="test-prosemirror-wrapper">
         {/* Map View - Always visible when there are locations */}
         {geoLocations.length > 0 && (
           <div className="map-view-container">
-            <MapView
-              locations={geoLocations}
-              style={{ width: '100%', height: '300px' }}
-              onLocationClick={(location) => {
-                console.log('Map location clicked:', location);
-                // Find and scroll to the location in the document
-                let found = false;
-                state.doc.descendants((node, pos) => {
-                  if (!found && node.marks && node.marks.length > 0) {
-                    node.marks.forEach(mark => {
-                      if (!found && mark.type.name === 'geo' &&
-                          mark.attrs.lat === location.lat &&
-                          mark.attrs.lng === location.lng) {
-                        // Scroll to this position in the editor
-                        const tr = state.tr.setSelection(
-                          state.selection.constructor.near(state.doc.resolve(pos))
-                        );
-                        dispatchTransaction(tr);
-                        found = true;
-                      }
-                    });
+            {/* Places List - Left side */}
+            <div className="places-list-container">
+              <div className="places-list-header">
+                <span>Places ({geoLocations.length})</span>
+                <button
+                  className={`connection-mode-btn ${connectionMode ? 'active' : ''}`}
+                  onClick={() => {
+                    setConnectionMode(!connectionMode);
+                    setSelectedLocation(null);
+                  }}
+                  title="Connect places with transportation"
+                >
+                  {connectionMode ? '🔗 Connecting...' : '➕ Connect'}
+                </button>
+              </div>
+              <div className="places-list-content">
+                {geoLocations.map((location, index) => {
+                  const colorIndex = location.colorIndex ?? index;
+                  const markerColors = [
+                    '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+                    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+                  ];
+                  const color = markerColors[colorIndex % markerColors.length];
+
+                  return (
+                    <div
+                      key={location.id}
+                      className={`place-item ${
+                        connectionMode && selectedLocation === location.id ? 'selected' : ''
+                      }`}
+                      onClick={() => handlePlaceClick(location)}
+                    >
+                      <div
+                        className="place-item-dot"
+                        style={{ backgroundColor: color }}
+                      />
+                      <div className="place-item-info">
+                        <div className="place-item-name">{location.name}</div>
+                        {location.description && (
+                          <div className="place-item-description">{location.description}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }).reduce<React.ReactNode[]>((acc, item, index, array) => {
+                  // Add the place item
+                  acc.push(item);
+
+                  // Add transportation or quick action button between consecutive places
+                  if (index < array.length - 1 && !connectionMode) {
+                    const currentLoc = geoLocations[index];
+                    const nextLoc = geoLocations[index + 1];
+                    const existingTransport = findTransportation(currentLoc.id, nextLoc.id);
+
+                    if (existingTransport) {
+                      // Show existing transportation
+                      const icon = TRANSPORT_ICONS[existingTransport.mode] || '🚶';
+                      const color = TRANSPORT_COLORS[existingTransport.mode] || '#6B7280';
+
+                      acc.push(
+                        <div key={`transport-${index}`} className="transport-display">
+                          <div className="transport-info" style={{ borderLeftColor: color }}>
+                            <div className="transport-mode">
+                              <span className="transport-icon">{icon}</span>
+                              <span className="transport-mode-name" style={{ color }}>
+                                {existingTransport.mode.charAt(0).toUpperCase() + existingTransport.mode.slice(1)}
+                              </span>
+                              <span className="transport-duration">{existingTransport.duration}</span>
+                            </div>
+                            {existingTransport.cost && (
+                              <span className="transport-cost">
+                                {existingTransport.cost.amount} {existingTransport.cost.currency}
+                              </span>
+                            )}
+                            <button
+                              className="transport-edit-btn"
+                              onClick={() => handleAddTransportation(currentLoc.id, nextLoc.id)}
+                              title="Edit transportation"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      // Show add transport button
+                      acc.push(
+                        <div key={`transport-${index}`} className="transport-quick-action">
+                          <button
+                            className="transport-add-btn"
+                            onClick={() => handleAddTransportation(currentLoc.id, nextLoc.id)}
+                            title={`Add transportation from ${currentLoc.name} to ${nextLoc.name}`}
+                          >
+                            <span>↓</span>
+                            <span className="transport-add-text">Add transport</span>
+                          </button>
+                        </div>
+                      );
+                    }
                   }
-                });
-              }}
-            />
+
+                  return acc;
+                }, [])}
+              </div>
+            </div>
+
+            {/* Map - Right side */}
+            <div className="map-container">
+              <MapView
+                locations={geoLocations}
+                style={{ width: '100%', height: '100%' }}
+                onLocationClick={(location) => {
+                  console.log('Map location clicked:', location);
+                  // Find and scroll to the location in the document
+                  let found = false;
+                  state.doc.descendants((node, pos) => {
+                    if (!found && node.marks && node.marks.length > 0) {
+                      node.marks.forEach(mark => {
+                        if (!found && mark.type.name === 'geo' &&
+                            mark.attrs.lat === location.lat &&
+                            mark.attrs.lng === location.lng) {
+                          // Scroll to this position in the editor
+                          const tr = state.tr.setSelection(
+                            state.selection.constructor.near(state.doc.resolve(pos))
+                          );
+                          dispatchTransaction(tr);
+                          found = true;
+                        }
+                      });
+                    }
+                  });
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -863,6 +1076,20 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           onSelect={handleLocationSelect}
           initialText={selectedText}
         />
+
+        {/* Transportation Modal */}
+        {showTransportModal && transportModalData && (
+          <TransportationModal
+            isOpen={showTransportModal}
+            onClose={() => {
+              setShowTransportModal(false);
+              setTransportModalData(null);
+            }}
+            fromLocation={geoLocations.find(loc => loc.id === transportModalData.fromLocationId) || { id: '', name: 'Unknown' }}
+            toLocation={geoLocations.find(loc => loc.id === transportModalData.toLocationId) || { id: '', name: 'Unknown' }}
+            onSave={handleSaveTransportation}
+          />
+        )}
 
         {/* Bubble Menu */}
         {bubbleMenuState.visible && (

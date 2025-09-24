@@ -1,7 +1,7 @@
 'use dom';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import Map, { Marker, NavigationControl, GeolocateControl, Popup, Source, Layer } from 'react-map-gl/dist/mapbox';
+import Map, { Marker, Popup, Source, Layer } from 'react-map-gl/dist/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface Location {
@@ -146,9 +146,6 @@ export function MapView({
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
       >
-        <NavigationControl position="top-right" />
-        <GeolocateControl position="top-right" />
-        
         {showRoute && routeGeometry && (
           <Source
             id="route"
