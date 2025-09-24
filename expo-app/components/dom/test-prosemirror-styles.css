@@ -193,15 +193,21 @@
   cursor: pointer;
   position: relative;
   display: inline-block;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
   font-weight: 500;
   color: inherit; /* Use default text color */
-  padding: 0 2px;
+  padding: 2px 4px;
   border-radius: 4px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(59, 130, 246, 0.3);
+  text-underline-offset: 3px;
 }
 
 .geo-mark:hover {
-  background-color: rgba(0, 0, 0, 0.05); /* Subtle highlight on hover */
+  background-color: rgba(59, 130, 246, 0.1); /* Blue tint on hover */
+  text-decoration-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 /* Color-coded location markers matching map pins - applied to dots only */

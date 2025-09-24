@@ -8,6 +8,12 @@ interface TransportationModalProps {
   onClose: () => void;
   fromLocation: { id: string; name: string };
   toLocation: { id: string; name: string };
+  existingTransportation?: {
+    mode: string;
+    duration: string;
+    cost?: { amount: number; currency: string };
+    notes?: string;
+  };
   onSave: (transportation: {
     mode: string;
     duration: string;
@@ -30,6 +36,7 @@ export function TransportationModal({
   onClose,
   fromLocation,
   toLocation,
+  existingTransportation,
   onSave,
 }: TransportationModalProps) {
   const [selectedMode, setSelectedMode] = useState('walking');
@@ -37,6 +44,24 @@ export function TransportationModal({
   const [costAmount, setCostAmount] = useState('');
   const [costCurrency, setCostCurrency] = useState('EUR');
   const [notes, setNotes] = useState('');
+
+  // Load existing transportation data when modal opens
+  React.useEffect(() => {
+    if (isOpen && existingTransportation) {
+      setSelectedMode(existingTransportation.mode || 'walking');
+      setDuration(existingTransportation.duration || '');
+      setCostAmount(existingTransportation.cost?.amount?.toString() || '');
+      setCostCurrency(existingTransportation.cost?.currency || 'EUR');
+      setNotes(existingTransportation.notes || '');
+    } else if (isOpen && !existingTransportation) {
+      // Reset to defaults when opening for new transportation
+      setSelectedMode('walking');
+      setDuration('');
+      setCostAmount('');
+      setCostCurrency('EUR');
+      setNotes('');
+    }
+  }, [isOpen, existingTransportation]);
 
   if (!isOpen) return null;
 
@@ -58,12 +83,7 @@ export function TransportationModal({
     }
 
     onSave(transportation);
-
-    // Reset form
-    setSelectedMode('walking');
-    setDuration('');
-    setCostAmount('');
-    setNotes('');
+    // Don't reset form here - let useEffect handle it when modal reopens
   };
 
   return (

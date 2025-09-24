@@ -1,8 +1,8 @@
 'use dom';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import Map, { Marker, Popup, Source, Layer } from 'react-map-gl/dist/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Map, { Layer, Marker, Popup, Source } from 'react-map-gl/dist/mapbox';
 
 interface Location {
   id: string;
@@ -68,12 +68,7 @@ export function MapView({
   routeColor = '#6366F1',
   transportationRoutes = []
 }: MapViewProps) {
-  console.log('MapView render:', {
-    showRoute,
-    hasRouteGeometry: !!routeGeometry,
-    routeCoordinatesLength: routeGeometry?.coordinates?.length,
-    transportationRoutesCount: transportationRoutes.length
-  });
+
   // If we have locations, use the first one as center, otherwise use default
   const initialCenter = locations.length > 0 
     ? { lat: locations[0].lat, lng: locations[0].lng }
@@ -190,6 +185,7 @@ export function MapView({
             }}
           >
             <Layer
+            
               id={`transport-route-line-${route.id}`}
               type="line"
               layout={{
@@ -197,12 +193,10 @@ export function MapView({
                 'line-cap': 'round',
               }}
               paint={{
-                'line-color': route.color,
+                'line-color': "#000",//route.color,
                 'line-width': 3,
                 'line-opacity': 0.6,
-                'line-dasharray': route.mode === 'walking' ? [2, 2] : 
-                                route.mode === 'metro' || route.mode === 'train' ? [5, 2] :
-                                route.mode === 'bus' ? [3, 3] : [1, 0],
+
               }}
             />
           </Source>

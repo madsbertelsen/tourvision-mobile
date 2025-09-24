@@ -468,6 +468,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
     const [selectedText, setSelectedText] = useState('');
     const [geoLocations, setGeoLocations] = useState<Location[]>([]);
+    const [clickedLocation, setClickedLocation] = useState<Location | null>(null);
 
     // Transportation state
     const [transportationRoutes, setTransportationRoutes] = useState<Array<{
@@ -561,11 +562,87 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       return initialContent;
     }, [initialContent]);
 
+    // Store click handler ref to access in plugin
+    const geoClickHandlerRef = React.useRef<{
+      geoLocations: Location[];
+      setClickedLocation: (loc: Location | null) => void;
+      setTransportModalData: (data: any) => void;
+      setShowTransportModal: (show: boolean) => void;
+    }>({
+      geoLocations: [],
+      setClickedLocation: () => {},
+      setTransportModalData: () => {},
+      setShowTransportModal: () => {},
+    });
+
+    // Update ref whenever dependencies change
+    React.useEffect(() => {
+      geoClickHandlerRef.current = {
+        geoLocations,
+        setClickedLocation,
+        setTransportModalData,
+        setShowTransportModal,
+      };
+    }, [geoLocations]);
+
+    // Create plugin to handle clicks on geo marks
+    const createGeoClickPlugin = () => {
+      return new Plugin({
+        props: {
+          handleClick(view, pos, event) {
+            const node = view.state.doc.nodeAt(pos);
+            if (!node) return false;
+
+            // Check if clicked position has a geo mark
+            const $pos = view.state.doc.resolve(pos);
+            const marks = $pos.marks();
+            const geoMark = marks.find(mark => mark.type.name === 'geo');
+
+            if (geoMark) {
+              const handler = geoClickHandlerRef.current;
+              // Find the corresponding location
+              const location = handler.geoLocations.find(loc =>
+                loc.id === geoMark.attrs.placeId ||
+                (loc.lat === geoMark.attrs.lat && loc.lng === geoMark.attrs.lng)
+              );
+
+              if (location) {
+                event.preventDefault();
+                handler.setClickedLocation(location);
+
+                // Find if there's a previous location to set up transportation
+                const currentIndex = handler.geoLocations.findIndex(loc => loc.id === location.id);
+                if (currentIndex > 0) {
+                  const previousLocation = handler.geoLocations[currentIndex - 1];
+                  handler.setTransportModalData({
+                    fromLocationId: previousLocation.id,
+                    toLocationId: location.id
+                  });
+                  handler.setShowTransportModal(true);
+                } else if (currentIndex < handler.geoLocations.length - 1) {
+                  // If it's the first location, allow setting transport to the next one
+                  const nextLocation = handler.geoLocations[currentIndex + 1];
+                  handler.setTransportModalData({
+                    fromLocationId: location.id,
+                    toLocationId: nextLocation.id
+                  });
+                  handler.setShowTransportModal(true);
+                }
+                return true;
+              }
+            }
+            return false;
+          }
+        }
+      });
+    };
+
     // Create plugins with a callback that will have access to the view
     const plugins = useMemo(() => [
       createDiffPlugin(),
       history(),
       keymap(baseKeymap),
+      createGeoClickPlugin(),
     ], []);
 
     // Create initial editor state
@@ -587,17 +664,30 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       onStateChange?.(newState);
     };
 
+    // Helper to generate consistent location IDs
+    const getLocationId = (mark: Mark): string => {
+      if (mark.attrs.placeId) {
+        return mark.attrs.placeId;
+      }
+      // Generate consistent ID based on coordinates
+      if (mark.attrs.lat && mark.attrs.lng) {
+        return `geo-${mark.attrs.lat.toFixed(6)}-${mark.attrs.lng.toFixed(6)}`;
+      }
+      return 'unknown';
+    };
+
     // Extract geo-marked locations and transportation from document
     useEffect(() => {
       const locations: Location[] = [];
       const routes: any[] = [];
       const locationMap: Map<string, Location> = new Map();
 
+      // First pass: collect all locations
       state.doc.descendants((node, pos) => {
         if (node.marks && node.marks.length > 0) {
           node.marks.forEach(mark => {
             if (mark.type.name === 'geo' && mark.attrs.lat && mark.attrs.lng) {
-              const locationId = mark.attrs.placeId || `geo-${locations.length}`;
+              const locationId = getLocationId(mark);
 
               // Only add if not already exists
               if (!locationMap.has(locationId)) {
@@ -612,18 +702,55 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                 locations.push(location);
                 locationMap.set(locationId, location);
               }
+            }
+          });
+        }
+      });
+
+      // Second pass: collect transportation routes
+      state.doc.descendants((node, pos) => {
+        if (node.marks && node.marks.length > 0) {
+          node.marks.forEach(mark => {
+            if (mark.type.name === 'geo' && mark.attrs.lat && mark.attrs.lng) {
+              const locationId = getLocationId(mark);
 
               // Check for transportation info
               if (mark.attrs.transportFromId && mark.attrs.transportMode) {
-                const fromLocation = Array.from(locationMap.values()).find(loc =>
-                  loc.id === mark.attrs.transportFromId
-                );
+                const fromLocation = locationMap.get(mark.attrs.transportFromId);
                 const toLocation = locationMap.get(locationId);
+
+                const transportColor = TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS];
+                console.log('Transportation check:', {
+                  transportFromId: mark.attrs.transportFromId,
+                  transportMode: mark.attrs.transportMode,
+                  transportModeType: typeof mark.attrs.transportMode,
+                  locationId,
+                  foundFromLocation: !!fromLocation,
+                  foundToLocation: !!toLocation,
+                  fromLocationName: fromLocation?.name,
+                  toLocationName: toLocation?.name,
+                  availableColors: Object.keys(TRANSPORT_COLORS),
+                  resolvedColor: transportColor,
+                  fallbackColor: '#6366F1'
+                });
 
                 if (fromLocation && toLocation) {
                   // Check if route already exists
                   const routeId = `${mark.attrs.transportFromId}-${locationId}`;
                   if (!routes.find(r => r.id === routeId)) {
+                    // Hardcode Copenhagen to Nyhavn coordinates for testing
+                    const coordinates = [
+                      [12.5683, 55.6761], // Copenhagen coordinates
+                      [12.5934, 55.6795]  // Nyhavn coordinates
+                    ];
+
+                    console.log('Creating route with coordinates:', {
+                      routeId,
+                      fromLocation: { name: fromLocation.name, lng: fromLocation.lng, lat: fromLocation.lat },
+                      toLocation: { name: toLocation.name, lng: toLocation.lng, lat: toLocation.lat },
+                      coordinates
+                    });
+
                     routes.push({
                       id: routeId,
                       mode: mark.attrs.transportMode,
@@ -633,12 +760,9 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                       toPlace: toLocation.name,
                       geometry: {
                         type: 'LineString' as const,
-                        coordinates: [
-                          [fromLocation.lng, fromLocation.lat],
-                          [toLocation.lng, toLocation.lat]
-                        ]
+                        coordinates: coordinates
                       },
-                      color: TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS] || '#6366F1',
+                      color: '#000000', // Hardcoded black for now
                       duration: mark.attrs.transportDuration,
                       cost: mark.attrs.transportCostAmount ? {
                         amount: mark.attrs.transportCostAmount,
@@ -647,11 +771,33 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                       notes: mark.attrs.transportNotes
                     });
                   }
+                } else {
+                  console.log('Route creation failed - missing locations:', {
+                    hasFromLocation: !!fromLocation,
+                    hasToLocation: !!toLocation,
+                    transportFromId: mark.attrs.transportFromId,
+                    locationId: locationId
+                  });
                 }
               }
             }
           });
         }
+      });
+
+      console.log('Extracted data:', {
+        locationsCount: locations.length,
+        routesCount: routes.length,
+        locationMapSize: locationMap.size,
+        locations: locations.map(l => ({ id: l.id, name: l.name })),
+        routes: routes.map(r => ({
+          id: r.id,
+          mode: r.mode,
+          from: r.fromPlace,
+          to: r.toPlace,
+          fromId: r.fromLocationId,
+          toId: r.toLocationId
+        }))
       });
 
       setGeoLocations(locations);
@@ -1146,6 +1292,9 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
     const handleSaveTransportation = (transport: any) => {
       if (transportModalData) {
+        // Find the destination location to get its coordinates
+        const toLocation = geoLocations.find(loc => loc.id === transportModalData.toLocationId);
+
         // Update the geo mark with transportation info
         const tr = state.tr;
         let updated = false;
@@ -1153,27 +1302,37 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         state.doc.descendants((node, pos) => {
           if (!updated) {
             node.marks.forEach(mark => {
-              if (!updated && mark.type.name === 'geo' &&
-                  mark.attrs.placeId === transportModalData.toLocationId) {
-                // Found the destination mark - add transportation info
-                const from = pos;
-                const to = pos + node.nodeSize;
+              if (!updated && mark.type.name === 'geo') {
+                // Match by location ID (which uses placeId or coordinate-based ID)
+                const markLocationId = getLocationId(mark);
 
-                // Create new mark with transportation data
-                const newMark = geoSchema.marks.geo.create({
-                  ...mark.attrs,
-                  transportFromId: transportModalData.fromLocationId,
-                  transportMode: transport.mode,
-                  transportDuration: transport.duration,
-                  transportCostAmount: transport.cost?.amount || null,
-                  transportCostCurrency: transport.cost?.currency || null,
-                  transportNotes: transport.notes || null
-                });
+                // Also fallback to coordinate matching if needed
+                const isMatch = markLocationId === transportModalData.toLocationId ||
+                  (toLocation &&
+                   Math.abs(mark.attrs.lat - toLocation.lat) < 0.000001 &&
+                   Math.abs(mark.attrs.lng - toLocation.lng) < 0.000001);
 
-                // Remove old mark and add new one
-                tr.removeMark(from, to, mark);
-                tr.addMark(from, to, newMark);
-                updated = true;
+                if (isMatch) {
+                  // Found the destination mark - add/update transportation info
+                  const from = pos;
+                  const to = pos + node.nodeSize;
+
+                  // Create new mark with transportation data
+                  const newMark = geoSchema.marks.geo.create({
+                    ...mark.attrs,
+                    transportFromId: transportModalData.fromLocationId,
+                    transportMode: transport.mode,
+                    transportDuration: transport.duration,
+                    transportCostAmount: transport.cost?.amount || null,
+                    transportCostCurrency: transport.cost?.currency || null,
+                    transportNotes: transport.notes || null
+                  });
+
+                  // Remove old mark and add new one
+                  tr.removeMark(from, to, mark);
+                  tr.addMark(from, to, newMark);
+                  updated = true;
+                }
               }
             });
           }
@@ -1183,9 +1342,15 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           dispatchTransaction(tr);
         }
 
-        // Also update the route visualization state
+        // Update or add the route in visualization state
+        const routeId = `${transportModalData.fromLocationId}-${transportModalData.toLocationId}`;
+        const existingRouteIndex = transportationRoutes.findIndex(r =>
+          r.fromLocationId === transportModalData.fromLocationId &&
+          r.toLocationId === transportModalData.toLocationId
+        );
+
         const newRoute = {
-          id: Date.now().toString(),
+          id: routeId,
           mode: transport.mode,
           fromLocationId: transportModalData.fromLocationId,
           toLocationId: transportModalData.toLocationId,
@@ -1193,7 +1358,17 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           cost: transport.cost,
           notes: transport.notes
         };
-        setTransportationRoutes([...transportationRoutes, newRoute]);
+
+        if (existingRouteIndex >= 0) {
+          // Update existing route
+          const updatedRoutes = [...transportationRoutes];
+          updatedRoutes[existingRouteIndex] = { ...updatedRoutes[existingRouteIndex], ...newRoute };
+          setTransportationRoutes(updatedRoutes);
+        } else {
+          // Add new route
+          setTransportationRoutes([...transportationRoutes, newRoute]);
+        }
+
         setShowTransportModal(false);
         setTransportModalData(null);
       }
@@ -1332,6 +1507,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
             <div className="map-container">
               <MapView
                 locations={geoLocations}
+                transportationRoutes={transportationRoutes}
                 style={{ width: '100%', height: '100%' }}
                 onLocationClick={(location) => {
                   console.log('Map location clicked:', location);
@@ -1378,6 +1554,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
             }}
             fromLocation={geoLocations.find(loc => loc.id === transportModalData.fromLocationId) || { id: '', name: 'Unknown' }}
             toLocation={geoLocations.find(loc => loc.id === transportModalData.toLocationId) || { id: '', name: 'Unknown' }}
+            existingTransportation={findTransportation(transportModalData.fromLocationId, transportModalData.toLocationId)}
             onSave={handleSaveTransportation}
           />
         )}
