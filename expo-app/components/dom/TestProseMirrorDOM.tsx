@@ -455,6 +455,16 @@ const TRANSPORT_COLORS: Record<string, string> = {
   car: '#6B7280'
 };
 
+// Map transport modes to Mapbox routing profiles
+const TRANSPORT_MODE_PROFILES: Record<string, string> = {
+  walking: 'walking',
+  car: 'driving',
+  taxi: 'driving',
+  bike: 'cycling',
+  metro: 'walking', // Use walking as approximation for transit
+  bus: 'walking'    // Use walking as approximation for transit
+};
+
 const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMProps>(
   ({ onStateChange, initialContent }, ref) => {
     const [mount, setMount] = useState<HTMLElement | null>(null);
@@ -676,11 +686,41 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       return 'unknown';
     };
 
+    // Fetch route geometry from Next.js API
+    const fetchRouteGeometry = async (
+      fromLng: number,
+      fromLat: number,
+      toLng: number,
+      toLat: number,
+      mode: string
+    ): Promise<{ type: 'LineString'; coordinates: number[][] } | null> => {
+      try {
+        const profile = TRANSPORT_MODE_PROFILES[mode] || 'driving';
+        const coordinates = `${fromLng},${fromLat};${toLng},${toLat}`;
+        const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL || 'http://localhost:3001';
+
+        const response = await fetch(
+          `${apiUrl}/api/route?coordinates=${coordinates}&mode=${profile}`
+        );
+
+        if (!response.ok) {
+          console.warn(`Failed to fetch route for ${mode}:`, response.statusText);
+          return null;
+        }
+
+        const data = await response.json();
+        return data.geometry || null;
+      } catch (error) {
+        console.error(`Error fetching route geometry for ${mode}:`, error);
+        return null;
+      }
+    };
+
     // Extract geo-marked locations and transportation from document
     useEffect(() => {
       const locations: Location[] = [];
-      const routes: any[] = [];
       const locationMap: Map<string, Location> = new Map();
+      const routePromises: Promise<TransportationRoute | null>[] = [];
 
       // First pass: collect all locations
       state.doc.descendants((node, pos) => {
@@ -707,7 +747,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         }
       });
 
-      // Second pass: collect transportation routes
+      // Second pass: collect transportation routes with async API calls
       state.doc.descendants((node, pos) => {
         if (node.marks && node.marks.length > 0) {
           node.marks.forEach(mark => {
@@ -719,58 +759,87 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                 const fromLocation = locationMap.get(mark.attrs.transportFromId);
                 const toLocation = locationMap.get(locationId);
 
-                const transportColor = TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS];
-                console.log('Transportation check:', {
-                  transportFromId: mark.attrs.transportFromId,
-                  transportMode: mark.attrs.transportMode,
-                  transportModeType: typeof mark.attrs.transportMode,
-                  locationId,
-                  foundFromLocation: !!fromLocation,
-                  foundToLocation: !!toLocation,
-                  fromLocationName: fromLocation?.name,
-                  toLocationName: toLocation?.name,
-                  availableColors: Object.keys(TRANSPORT_COLORS),
-                  resolvedColor: transportColor,
-                  fallbackColor: '#6366F1'
-                });
-
                 if (fromLocation && toLocation) {
-                  // Check if route already exists
+                  // Check if route already exists (avoid duplicates)
                   const routeId = `${mark.attrs.transportFromId}-${locationId}`;
-                  if (!routes.find(r => r.id === routeId)) {
-                    // Hardcode Copenhagen to Nyhavn coordinates for testing
-                    const coordinates = [
-                      [12.5683, 55.6761], // Copenhagen coordinates
-                      [12.5934, 55.6795]  // Nyhavn coordinates
-                    ];
 
-                    console.log('Creating route with coordinates:', {
-                      routeId,
-                      fromLocation: { name: fromLocation.name, lng: fromLocation.lng, lat: fromLocation.lat },
-                      toLocation: { name: toLocation.name, lng: toLocation.lng, lat: toLocation.lat },
-                      coordinates
-                    });
+                  // Create async route promise
+                  const routePromise = (async (): Promise<TransportationRoute | null> => {
+                    try {
+                      // Fetch actual route geometry from API
+                      const geometry = await fetchRouteGeometry(
+                        fromLocation.lng,
+                        fromLocation.lat,
+                        toLocation.lng,
+                        toLocation.lat,
+                        mark.attrs.transportMode
+                      );
 
-                    routes.push({
-                      id: routeId,
-                      mode: mark.attrs.transportMode,
-                      fromLocationId: mark.attrs.transportFromId,
-                      toLocationId: locationId,
-                      fromPlace: fromLocation.name,
-                      toPlace: toLocation.name,
-                      geometry: {
+                      // Get color based on transport mode
+                      const transportColor = TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS] || '#6B7280';
+
+                      // Use fetched geometry if available, otherwise fall back to straight line
+                      const finalGeometry = geometry || {
                         type: 'LineString' as const,
-                        coordinates: coordinates
-                      },
-                      color: '#000000', // Hardcoded black for now
-                      duration: mark.attrs.transportDuration,
-                      cost: mark.attrs.transportCostAmount ? {
-                        amount: mark.attrs.transportCostAmount,
-                        currency: mark.attrs.transportCostCurrency || 'EUR'
-                      } : undefined,
-                      notes: mark.attrs.transportNotes
-                    });
-                  }
+                        coordinates: [
+                          [fromLocation.lng, fromLocation.lat],
+                          [toLocation.lng, toLocation.lat]
+                        ]
+                      };
+
+                      console.log('Route created with geometry:', {
+                        routeId,
+                        mode: mark.attrs.transportMode,
+                        hasApiGeometry: !!geometry,
+                        coordinatesCount: finalGeometry.coordinates.length
+                      });
+
+                      return {
+                        id: routeId,
+                        mode: mark.attrs.transportMode,
+                        fromLocationId: mark.attrs.transportFromId,
+                        toLocationId: locationId,
+                        fromPlace: fromLocation.name,
+                        toPlace: toLocation.name,
+                        geometry: finalGeometry,
+                        color: transportColor,
+                        duration: mark.attrs.transportDuration,
+                        cost: mark.attrs.transportCostAmount ? {
+                          amount: mark.attrs.transportCostAmount,
+                          currency: mark.attrs.transportCostCurrency || 'EUR'
+                        } : undefined,
+                        notes: mark.attrs.transportNotes
+                      };
+                    } catch (error) {
+                      console.error('Failed to fetch route geometry:', error);
+                      // Return fallback route with straight line
+                      const transportColor = TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS] || '#6B7280';
+                      return {
+                        id: routeId,
+                        mode: mark.attrs.transportMode,
+                        fromLocationId: mark.attrs.transportFromId,
+                        toLocationId: locationId,
+                        fromPlace: fromLocation.name,
+                        toPlace: toLocation.name,
+                        geometry: {
+                          type: 'LineString' as const,
+                          coordinates: [
+                            [fromLocation.lng, fromLocation.lat],
+                            [toLocation.lng, toLocation.lat]
+                          ]
+                        },
+                        color: transportColor,
+                        duration: mark.attrs.transportDuration,
+                        cost: mark.attrs.transportCostAmount ? {
+                          amount: mark.attrs.transportCostAmount,
+                          currency: mark.attrs.transportCostCurrency || 'EUR'
+                        } : undefined,
+                        notes: mark.attrs.transportNotes
+                      };
+                    }
+                  })();
+
+                  routePromises.push(routePromise);
                 } else {
                   console.log('Route creation failed - missing locations:', {
                     hasFromLocation: !!fromLocation,
@@ -785,23 +854,34 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         }
       });
 
-      console.log('Extracted data:', {
-        locationsCount: locations.length,
-        routesCount: routes.length,
-        locationMapSize: locationMap.size,
-        locations: locations.map(l => ({ id: l.id, name: l.name })),
-        routes: routes.map(r => ({
-          id: r.id,
-          mode: r.mode,
-          from: r.fromPlace,
-          to: r.toPlace,
-          fromId: r.fromLocationId,
-          toId: r.toLocationId
-        }))
-      });
-
+      // Set locations immediately
       setGeoLocations(locations);
-      setTransportationRoutes(routes);
+
+      // Resolve all route promises and filter out nulls
+      Promise.all(routePromises).then(resolvedRoutes => {
+        const validRoutes = resolvedRoutes.filter((route): route is TransportationRoute => route !== null);
+
+        // Remove duplicates by route id
+        const uniqueRoutes = validRoutes.filter((route, index, self) =>
+          index === self.findIndex((r) => r.id === route.id)
+        );
+
+        console.log('All routes resolved:', {
+          totalRoutes: uniqueRoutes.length,
+          routes: uniqueRoutes.map(r => ({
+            id: r.id,
+            mode: r.mode,
+            from: r.fromPlace,
+            to: r.toPlace,
+            coordinatesCount: r.geometry.coordinates.length
+          }))
+        });
+
+        setTransportationRoutes(uniqueRoutes);
+      }).catch(error => {
+        console.error('Error resolving routes:', error);
+        setTransportationRoutes([]);
+      });
     }, [state]);
 
     // Update bubble menu based on selection
@@ -1293,7 +1373,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     const handleSaveTransportation = (transport: any) => {
       if (transportModalData) {
         // Find the destination location to get its coordinates
-        const toLocation = geoLocations.find(loc => loc.id === transportModalData.toLocationId);
+        const destinationLocation = geoLocations.find(loc => loc.id === transportModalData.toLocationId);
 
         // Update the geo mark with transportation info
         const tr = state.tr;
@@ -1308,9 +1388,9 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
                 // Also fallback to coordinate matching if needed
                 const isMatch = markLocationId === transportModalData.toLocationId ||
-                  (toLocation &&
-                   Math.abs(mark.attrs.lat - toLocation.lat) < 0.000001 &&
-                   Math.abs(mark.attrs.lng - toLocation.lng) < 0.000001);
+                  (destinationLocation &&
+                   Math.abs(mark.attrs.lat - destinationLocation.lat) < 0.000001 &&
+                   Math.abs(mark.attrs.lng - destinationLocation.lng) < 0.000001);
 
                 if (isMatch) {
                   // Found the destination mark - add/update transportation info
@@ -1349,11 +1429,28 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           r.toLocationId === transportModalData.toLocationId
         );
 
+        // Find the locations to get coordinates and names
+        const fromLocation = geoLocations.find(loc => loc.id === transportModalData.fromLocationId);
+        const toLocation = geoLocations.find(loc => loc.id === transportModalData.toLocationId);
+
+        // Get color based on transport mode
+        const transportColor = TRANSPORT_COLORS[transport.mode as keyof typeof TRANSPORT_COLORS] || '#6B7280';
+
         const newRoute = {
           id: routeId,
           mode: transport.mode,
           fromLocationId: transportModalData.fromLocationId,
           toLocationId: transportModalData.toLocationId,
+          fromPlace: fromLocation?.name || 'Unknown',
+          toPlace: toLocation?.name || 'Unknown',
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: fromLocation && toLocation ? [
+              [fromLocation.lng, fromLocation.lat],
+              [toLocation.lng, toLocation.lat]
+            ] : []
+          },
+          color: transportColor,
           duration: transport.duration,
           cost: transport.cost,
           notes: transport.notes

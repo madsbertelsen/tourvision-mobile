@@ -193,10 +193,10 @@ export function MapView({
                 'line-cap': 'round',
               }}
               paint={{
-                'line-color': "#000",//route.color,
+                'line-color': route.color || '#6B7280',
                 'line-width': 3,
                 'line-opacity': 0.6,
-
+                'line-dasharray': route.mode === 'walking' ? [2, 2] : undefined,
               }}
             />
           </Source>
