@@ -43,7 +43,14 @@ const createSchemaWithGeoMark = () => {
         lng: { default: null },
         placeName: { default: null },
         placeId: { default: null },
-        colorIndex: { default: 0 }
+        colorIndex: { default: 0 },
+        // Incoming transportation information
+        transportFromId: { default: null },
+        transportMode: { default: null },
+        transportDuration: { default: null },
+        transportCostAmount: { default: null },
+        transportCostCurrency: { default: null },
+        transportNotes: { default: null }
       },
       parseDOM: [{
         tag: 'span[data-geo]',
@@ -53,7 +60,14 @@ const createSchemaWithGeoMark = () => {
             lng: parseFloat(dom.getAttribute('data-lng')) || null,
             placeName: dom.getAttribute('data-place-name') || null,
             placeId: dom.getAttribute('data-place-id') || null,
-            colorIndex: parseInt(dom.getAttribute('data-color-index') || dom.getAttribute('data-location-index') || '0', 10)
+            colorIndex: parseInt(dom.getAttribute('data-color-index') || dom.getAttribute('data-location-index') || '0', 10),
+            // Parse incoming transportation
+            transportFromId: dom.getAttribute('data-transport-from-id') || null,
+            transportMode: dom.getAttribute('data-transport-mode') || null,
+            transportDuration: dom.getAttribute('data-transport-duration') || null,
+            transportCostAmount: dom.getAttribute('data-transport-cost-amount') ? parseFloat(dom.getAttribute('data-transport-cost-amount')) : null,
+            transportCostCurrency: dom.getAttribute('data-transport-cost-currency') || null,
+            transportNotes: dom.getAttribute('data-transport-notes') || null
           };
         }
       }],
@@ -68,6 +82,18 @@ const createSchemaWithGeoMark = () => {
         };
         if (mark.attrs.placeName) attrs['data-place-name'] = mark.attrs.placeName;
         if (mark.attrs.placeId) attrs['data-place-id'] = mark.attrs.placeId;
+
+        // Add transportation attributes if present
+        if (mark.attrs.transportFromId) attrs['data-transport-from-id'] = mark.attrs.transportFromId;
+        if (mark.attrs.transportMode) {
+          attrs['data-transport-mode'] = mark.attrs.transportMode;
+          attrs['class'] += ` has-transport transport-${mark.attrs.transportMode}`;
+        }
+        if (mark.attrs.transportDuration) attrs['data-transport-duration'] = mark.attrs.transportDuration;
+        if (mark.attrs.transportCostAmount !== null) attrs['data-transport-cost-amount'] = mark.attrs.transportCostAmount;
+        if (mark.attrs.transportCostCurrency) attrs['data-transport-cost-currency'] = mark.attrs.transportCostCurrency;
+        if (mark.attrs.transportNotes) attrs['data-transport-notes'] = mark.attrs.transportNotes;
+
         attrs['title'] = mark.attrs.placeName || `Location ${mark.attrs.lat}, ${mark.attrs.lng}`;
         return ['span', attrs];
       }
@@ -419,6 +445,16 @@ const LocationModal = ({ isOpen, onClose, onSelect, initialText }: {
   );
 };
 
+// Transport mode colors
+const TRANSPORT_COLORS: Record<string, string> = {
+  walking: '#10B981',
+  metro: '#8B5CF6',
+  bus: '#3B82F6',
+  taxi: '#F59E0B',
+  bike: '#84CC16',
+  car: '#6B7280'
+};
+
 const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMProps>(
   ({ onStateChange, initialContent }, ref) => {
     const [mount, setMount] = useState<HTMLElement | null>(null);
@@ -486,29 +522,75 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       onStateChange?.(newState);
     };
 
-    // Extract geo-marked locations from document
+    // Extract geo-marked locations and transportation from document
     useEffect(() => {
       const locations: Location[] = [];
-      let locationId = 0;
+      const routes: any[] = [];
+      const locationMap: Map<string, Location> = new Map();
 
       state.doc.descendants((node, pos) => {
         if (node.marks && node.marks.length > 0) {
           node.marks.forEach(mark => {
             if (mark.type.name === 'geo' && mark.attrs.lat && mark.attrs.lng) {
-              locations.push({
-                id: `geo-${locationId++}`,
-                name: mark.attrs.placeName || node.textContent || 'Unknown Location',
-                lat: mark.attrs.lat,
-                lng: mark.attrs.lng,
-                description: `${node.textContent}`,
-                colorIndex: mark.attrs.colorIndex || 0,
-              });
+              const locationId = mark.attrs.placeId || `geo-${locations.length}`;
+
+              // Only add if not already exists
+              if (!locationMap.has(locationId)) {
+                const location = {
+                  id: locationId,
+                  name: mark.attrs.placeName || node.textContent || 'Unknown Location',
+                  lat: mark.attrs.lat,
+                  lng: mark.attrs.lng,
+                  description: `${node.textContent}`,
+                  colorIndex: mark.attrs.colorIndex || 0,
+                };
+                locations.push(location);
+                locationMap.set(locationId, location);
+              }
+
+              // Check for transportation info
+              if (mark.attrs.transportFromId && mark.attrs.transportMode) {
+                const fromLocation = Array.from(locationMap.values()).find(loc =>
+                  loc.id === mark.attrs.transportFromId
+                );
+                const toLocation = locationMap.get(locationId);
+
+                if (fromLocation && toLocation) {
+                  // Check if route already exists
+                  const routeId = `${mark.attrs.transportFromId}-${locationId}`;
+                  if (!routes.find(r => r.id === routeId)) {
+                    routes.push({
+                      id: routeId,
+                      mode: mark.attrs.transportMode,
+                      fromLocationId: mark.attrs.transportFromId,
+                      toLocationId: locationId,
+                      fromPlace: fromLocation.name,
+                      toPlace: toLocation.name,
+                      geometry: {
+                        type: 'LineString' as const,
+                        coordinates: [
+                          [fromLocation.lng, fromLocation.lat],
+                          [toLocation.lng, toLocation.lat]
+                        ]
+                      },
+                      color: TRANSPORT_COLORS[mark.attrs.transportMode as keyof typeof TRANSPORT_COLORS] || '#6366F1',
+                      duration: mark.attrs.transportDuration,
+                      cost: mark.attrs.transportCostAmount ? {
+                        amount: mark.attrs.transportCostAmount,
+                        currency: mark.attrs.transportCostCurrency || 'EUR'
+                      } : undefined,
+                      notes: mark.attrs.transportNotes
+                    });
+                  }
+                }
+              }
             }
           });
         }
       });
 
       setGeoLocations(locations);
+      setTransportationRoutes(routes);
     }, [state]);
 
     // Update bubble menu based on selection
@@ -885,6 +967,44 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
     const handleSaveTransportation = (transport: any) => {
       if (transportModalData) {
+        // Update the geo mark with transportation info
+        const tr = state.tr;
+        let updated = false;
+
+        state.doc.descendants((node, pos) => {
+          if (!updated) {
+            node.marks.forEach(mark => {
+              if (!updated && mark.type.name === 'geo' &&
+                  mark.attrs.placeId === transportModalData.toLocationId) {
+                // Found the destination mark - add transportation info
+                const from = pos;
+                const to = pos + node.nodeSize;
+
+                // Create new mark with transportation data
+                const newMark = geoSchema.marks.geo.create({
+                  ...mark.attrs,
+                  transportFromId: transportModalData.fromLocationId,
+                  transportMode: transport.mode,
+                  transportDuration: transport.duration,
+                  transportCostAmount: transport.cost?.amount || null,
+                  transportCostCurrency: transport.cost?.currency || null,
+                  transportNotes: transport.notes || null
+                });
+
+                // Remove old mark and add new one
+                tr.removeMark(from, to, mark);
+                tr.addMark(from, to, newMark);
+                updated = true;
+              }
+            });
+          }
+        });
+
+        if (updated) {
+          dispatchTransaction(tr);
+        }
+
+        // Also update the route visualization state
         const newRoute = {
           id: Date.now().toString(),
           mode: transport.mode,
@@ -917,14 +1037,6 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       car: '🚙'
     };
 
-    const TRANSPORT_COLORS: Record<string, string> = {
-      walking: '#10B981',
-      metro: '#8B5CF6',
-      bus: '#3B82F6',
-      taxi: '#F59E0B',
-      bike: '#84CC16',
-      car: '#6B7280'
-    };
 
     return (
       <div className="test-prosemirror-wrapper">
@@ -1054,7 +1166,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                             mark.attrs.lng === location.lng) {
                           // Scroll to this position in the editor
                           const tr = state.tr.setSelection(
-                            state.selection.constructor.near(state.doc.resolve(pos))
+                            TextSelection.near(state.doc.resolve(pos))
                           );
                           dispatchTransaction(tr);
                           found = true;

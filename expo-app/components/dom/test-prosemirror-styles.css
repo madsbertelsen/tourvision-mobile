@@ -246,13 +246,45 @@
 }
 
 /* Add colored dot before location name to match map marker */
-.geo-mark::before {
+.geo-mark:not(.has-transport)::before {
   content: '●';
   margin-right: 6px;
   font-size: 12px;
   display: inline-block;
   /* Default color if no index is set */
   color: #6B7280;
+}
+
+/* Transportation indicators for geo marks with incoming transport */
+.geo-mark.has-transport::before {
+  content: '';
+  margin-right: 6px;
+  font-size: 14px;
+  display: inline-block;
+}
+
+.geo-mark.transport-walking::before {
+  content: '🚶 ';
+}
+
+.geo-mark.transport-metro::before {
+  content: '🚇 ';
+}
+
+.geo-mark.transport-bus::before {
+  content: '🚌 ';
+}
+
+.geo-mark.transport-taxi::before {
+  content: '🚕 ';
+}
+
+.geo-mark.transport-bike::before {
+  content: '🚴 ';
+}
+
+.geo-mark.transport-car::before {
+  content: '🚙 ';
 }
 
 /* Location Modal Styles */
