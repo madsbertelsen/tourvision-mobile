@@ -50,7 +50,8 @@ const createSchemaWithGeoMark = () => {
         transportDuration: { default: null },
         transportCostAmount: { default: null },
         transportCostCurrency: { default: null },
-        transportNotes: { default: null }
+        transportNotes: { default: null },
+        transportWaypoints: { default: null }  // JSON string of waypoints array
       },
       parseDOM: [{
         tag: 'span[data-geo]',
@@ -67,7 +68,8 @@ const createSchemaWithGeoMark = () => {
             transportDuration: dom.getAttribute('data-transport-duration') || null,
             transportCostAmount: dom.getAttribute('data-transport-cost-amount') ? parseFloat(dom.getAttribute('data-transport-cost-amount')) : null,
             transportCostCurrency: dom.getAttribute('data-transport-cost-currency') || null,
-            transportNotes: dom.getAttribute('data-transport-notes') || null
+            transportNotes: dom.getAttribute('data-transport-notes') || null,
+            transportWaypoints: dom.getAttribute('data-transport-waypoints') || null
           };
         }
       }],
@@ -93,6 +95,7 @@ const createSchemaWithGeoMark = () => {
         if (mark.attrs.transportCostAmount !== null) attrs['data-transport-cost-amount'] = mark.attrs.transportCostAmount;
         if (mark.attrs.transportCostCurrency) attrs['data-transport-cost-currency'] = mark.attrs.transportCostCurrency;
         if (mark.attrs.transportNotes) attrs['data-transport-notes'] = mark.attrs.transportNotes;
+        if (mark.attrs.transportWaypoints) attrs['data-transport-waypoints'] = mark.attrs.transportWaypoints;
 
         attrs['title'] = mark.attrs.placeName || `Location ${mark.attrs.lat}, ${mark.attrs.lng}`;
         return ['span', attrs];
@@ -745,6 +748,14 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         coordinatesArray.push(`${toLng},${toLat}`);
         const coordinates = coordinatesArray.join(';');
 
+        if (waypoints && waypoints.length > 0) {
+          console.log('API call with waypoints:', {
+            coordinates,
+            waypoints,
+            url: `api/route?coordinates=${coordinates}&mode=${profile}`
+          });
+        }
+
         const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL || 'http://localhost:3001';
 
         const response = await fetch(
@@ -825,6 +836,10 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                       }
 
                       // Fetch actual route geometry from API with waypoints
+                      if (waypoints && waypoints.length > 0) {
+                        console.log('Fetching route with waypoints:', waypoints);
+                      }
+
                       const geometry = await fetchRouteGeometry(
                         fromLocation.lng,
                         fromLocation.lat,
@@ -852,7 +867,9 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                         hasApiGeometry: !!geometry,
                         hasWaypoints: !!waypoints && waypoints.length > 0,
                         waypointCount: waypoints?.length || 0,
-                        coordinatesCount: finalGeometry.coordinates.length
+                        coordinatesCount: finalGeometry.coordinates.length,
+                        firstCoord: finalGeometry.coordinates[0],
+                        lastCoord: finalGeometry.coordinates[finalGeometry.coordinates.length - 1]
                       });
 
                       return {
@@ -1708,8 +1725,8 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                   const route = transportationRoutes.find(r => r.id === routeId);
                   if (!route) return;
 
-                  // Find nearest point on the route
-                  const nearestPoint = findNearestPointOnLine(lngLat, route.geometry.coordinates);
+                  // Use exact drop location - don't snap to route
+                  console.log('Adding waypoint at exact location:', lngLat);
 
                   // Update the ProseMirror document with new waypoint
                   let updated = false;
@@ -1718,6 +1735,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                   state.doc.descendants((node, pos) => {
                     if (!updated && node.marks) {
                       node.marks.forEach(mark => {
+
                         if (!updated && mark.type.name === 'geo' &&
                             mark.attrs.transportFromId &&
                             `${mark.attrs.transportFromId}-${getLocationId(mark)}` === routeId) {
@@ -1732,20 +1750,38 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                             }
                           }
 
-                          // Insert new waypoint at the appropriate position
-                          waypoints.splice(nearestPoint.insertIndex - 1, 0, {
-                            lng: nearestPoint.lng,
-                            lat: nearestPoint.lat
-                          });
+
+                          // Use exact drop location (not snapped to route)
+                          const newWaypoint = {
+                            lng: lngLat.lng,
+                            lat: lngLat.lat
+                          };
+
+                          const isDuplicate = waypoints.some(wp =>
+                            Math.abs(wp.lng - newWaypoint.lng) < 0.00001 &&
+                            Math.abs(wp.lat - newWaypoint.lat) < 0.00001
+                          );
+
+                          if (!isDuplicate) {
+                            waypoints.push(newWaypoint);
+                          } else {
+                            console.log('Waypoint already exists, not adding duplicate');
+                          }
 
                           // Update the mark with new waypoints
-                          const newMark = mark.type.create({
+                          const newAttrs = {
                             ...mark.attrs,
                             transportWaypoints: JSON.stringify(waypoints)
-                          });
+                          };
 
-                          tr.removeMark(pos, pos + node.nodeSize, mark)
-                            .addMark(pos, pos + node.nodeSize, newMark);
+                          const newMark = mark.type.create(newAttrs);
+
+                          // Get the actual text node bounds
+                          const from = pos;
+                          const to = pos + node.nodeSize;
+
+                          tr.removeMark(from, to, mark)
+                            .addMark(from, to, newMark);
                           updated = true;
                         }
                       });

@@ -94,6 +94,8 @@ export function MapView({
   const [popupInfo, setPopupInfo] = useState<Location | null>(null);
   const mapRef = useRef<any>(null);
   const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string } | null>(null);
+  const [isDraggingPreview, setIsDraggingPreview] = useState(false);
+  const [draggedRoute, setDraggedRoute] = useState<TransportationRoute | null>(null);
 
   useEffect(() => {
     if (locations.length > 0 && mapRef.current) {
@@ -186,6 +188,12 @@ export function MapView({
   const handleMapMouseMove = useCallback((e: any) => {
     if (!mapRef.current || !e.lngLat) return;
 
+    // Skip hover updates when dragging
+    if (isDraggingPreview) {
+      return;
+    }
+
+    // Normal hover behavior when not dragging
     // Check if hovering over any route
     const features = mapRef.current.queryRenderedFeatures(e.point, {
       layers: transportationRoutes.map(r => `transport-route-click-${r.id}`)
@@ -208,7 +216,7 @@ export function MapView({
       setHoverPreview(null);
       mapRef.current.getCanvas().style.cursor = '';
     }
-  }, [transportationRoutes, findNearestPointOnLine]);
+  }, [transportationRoutes, findNearestPointOnLine, isDraggingPreview]);
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
@@ -235,6 +243,9 @@ export function MapView({
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onClick={(e) => {
+          // Don't handle clicks when dragging preview
+          if (isDraggingPreview) return;
+
           // Check if clicking on a route
           if (mapRef.current && e.lngLat) {
             const features = mapRef.current.queryRenderedFeatures(e.point, {
@@ -365,17 +376,61 @@ export function MapView({
             longitude={hoverPreview.lng}
             latitude={hoverPreview.lat}
             anchor="center"
+            draggable={true}
+            onDragStart={() => {
+              setIsDraggingPreview(true);
+              const route = transportationRoutes.find(r => r.id === hoverPreview.routeId);
+              setDraggedRoute(route || null);
+              // Disable map dragging - use getMap() to access the underlying mapbox instance
+              if (mapRef.current) {
+                const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+                if (map && map.dragPan) {
+                  map.dragPan.disable();
+                }
+              }
+            }}
+            onDrag={(e) => {
+              // Don't update position during drag - let the marker follow the cursor naturally
+              // We'll snap to the route on drag end
+            }}
+            onDragEnd={(e) => {
+              // Re-enable map dragging
+              if (mapRef.current) {
+                const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+                if (map && map.dragPan) {
+                  map.dragPan.enable();
+                }
+              }
+
+              // Create waypoint at the exact drop position
+              if (draggedRoute && e && e.lngLat) {
+                const dropPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat };
+                console.log('Waypoint dropped at:', dropPoint);
+
+                // Create waypoint at the exact drop position (not snapped to route)
+                // The route will be recalculated to go through this point
+                if (onRouteClick) {
+                  onRouteClick(draggedRoute.id, dropPoint);
+                }
+              }
+
+              // Reset drag state
+              setIsDraggingPreview(false);
+              setDraggedRoute(null);
+              setHoverPreview(null);
+            }}
           >
             <div
               style={{
-                width: '16px',
-                height: '16px',
+                width: isDraggingPreview ? '20px' : '16px',
+                height: isDraggingPreview ? '20px' : '16px',
                 borderRadius: '50%',
-                backgroundColor: 'white',
-                border: '2px solid #333',
+                backgroundColor: isDraggingPreview ? '#4ade80' : 'white',
+                border: `2px solid ${isDraggingPreview ? '#166534' : '#333'}`,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                pointerEvents: 'none',
-                animation: 'pulse 1.5s ease-in-out infinite',
+                cursor: isDraggingPreview ? 'grabbing' : 'grab',
+                animation: isDraggingPreview ? 'none' : 'pulse 1.5s ease-in-out infinite',
+                transition: 'all 0.2s ease',
               }}
             />
           </Marker>
