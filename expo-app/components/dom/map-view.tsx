@@ -61,7 +61,7 @@ interface MapViewProps {
   };
   routeColor?: string;
   transportationRoutes?: TransportationRoute[];
-  onRouteClick?: (routeId: string, lngLat: { lng: number; lat: number }) => void;
+  onRouteClick?: (routeId: string, lngLat: { lng: number; lat: number }, segmentIndex?: number) => void;
   onWaypointDrag?: (routeId: string, waypointIndex: number, newPosition: { lng: number; lat: number }) => void;
 }
 
@@ -93,7 +93,7 @@ export function MapView({
   
   const [popupInfo, setPopupInfo] = useState<Location | null>(null);
   const mapRef = useRef<any>(null);
-  const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string } | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string; segmentIndex: number } | null>(null);
   const [isDraggingPreview, setIsDraggingPreview] = useState(false);
   const [draggedRoute, setDraggedRoute] = useState<TransportationRoute | null>(null);
 
@@ -148,13 +148,14 @@ export function MapView({
     }
   }, [onRouteClick]);
 
-  // Helper to find nearest point on a polyline
+  // Helper to find nearest point on a polyline and which segment it's on
   const findNearestPointOnLine = useCallback((
     point: { lng: number; lat: number },
     lineCoordinates: number[][]
-  ): { lng: number; lat: number } => {
+  ): { lng: number; lat: number; segmentIndex: number } => {
     let minDistance = Infinity;
     let nearestPoint = { lng: lineCoordinates[0][0], lat: lineCoordinates[0][1] };
+    let nearestSegmentIndex = 0;
 
     for (let i = 0; i < lineCoordinates.length - 1; i++) {
       const start = { lng: lineCoordinates[i][0], lat: lineCoordinates[i][1] };
@@ -179,10 +180,11 @@ export function MapView({
       if (distance < minDistance) {
         minDistance = distance;
         nearestPoint = projection;
+        nearestSegmentIndex = i;
       }
     }
 
-    return nearestPoint;
+    return { ...nearestPoint, segmentIndex: nearestSegmentIndex };
   }, []);
 
   const handleMapMouseMove = useCallback((e: any) => {
@@ -204,11 +206,16 @@ export function MapView({
       if (routeId) {
         const route = transportationRoutes.find(r => r.id === routeId);
         if (route) {
-          const nearestPoint = findNearestPointOnLine(
+          const nearestPointData = findNearestPointOnLine(
             { lng: e.lngLat.lng, lat: e.lngLat.lat },
             route.geometry.coordinates
           );
-          setHoverPreview({ ...nearestPoint, routeId });
+          setHoverPreview({
+            lng: nearestPointData.lng,
+            lat: nearestPointData.lat,
+            routeId,
+            segmentIndex: nearestPointData.segmentIndex
+          });
           mapRef.current.getCanvas().style.cursor = 'pointer';
         }
       }
@@ -255,7 +262,15 @@ export function MapView({
             if (features && features.length > 0) {
               const routeId = features[0].properties?.routeId;
               if (routeId && onRouteClick) {
-                onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat });
+                // Find which segment the click was on
+                const route = transportationRoutes.find(r => r.id === routeId);
+                if (route) {
+                  const nearestPointData = findNearestPointOnLine(
+                    { lng: e.lngLat.lng, lat: e.lngLat.lat },
+                    route.geometry.coordinates
+                  );
+                  onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat }, nearestPointData.segmentIndex);
+                }
                 return; // Don't trigger map click
               }
             }
@@ -403,14 +418,15 @@ export function MapView({
               }
 
               // Create waypoint at the exact drop position
-              if (draggedRoute && e && e.lngLat) {
+              if (draggedRoute && e && e.lngLat && hoverPreview) {
                 const dropPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat };
-                console.log('Waypoint dropped at:', dropPoint);
+                console.log('Waypoint dropped at:', dropPoint, 'from segment:', hoverPreview.segmentIndex);
 
                 // Create waypoint at the exact drop position (not snapped to route)
                 // The route will be recalculated to go through this point
+                // Pass segment index to help with proper waypoint ordering
                 if (onRouteClick) {
-                  onRouteClick(draggedRoute.id, dropPoint);
+                  onRouteClick(draggedRoute.id, dropPoint, hoverPreview.segmentIndex);
                 }
               }
 

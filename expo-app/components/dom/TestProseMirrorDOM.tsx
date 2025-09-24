@@ -1718,12 +1718,20 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                     }
                   });
                 }}
-                onRouteClick={(routeId, lngLat) => {
-                  console.log('Route clicked:', { routeId, lngLat });
+                onRouteClick={(routeId, lngLat, segmentIndex) => {
+                  console.log('Route clicked:', { routeId, lngLat, segmentIndex });
 
                   // Find the route to get its coordinates
                   const route = transportationRoutes.find(r => r.id === routeId);
                   if (!route) return;
+
+                  // Parse the route ID to get origin and destination info
+                  // Route ID format: "geo-<fromLat>-<fromLng>-geo-<toLat>-<toLng>"
+                  const parts = routeId.split('-');
+                  const fromLat = parseFloat(parts[1]);
+                  const fromLng = parseFloat(parts[2]);
+                  const toLat = parseFloat(parts[4]);
+                  const toLng = parseFloat(parts[5]);
 
                   // Use exact drop location - don't snap to route
                   console.log('Adding waypoint at exact location:', lngLat);
@@ -1750,7 +1758,6 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                             }
                           }
 
-
                           // Use exact drop location (not snapped to route)
                           const newWaypoint = {
                             lng: lngLat.lng,
@@ -1763,7 +1770,54 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
                           );
 
                           if (!isDuplicate) {
-                            waypoints.push(newWaypoint);
+                            // Determine where to insert the new waypoint based on its position along the route
+                            // We'll calculate the cumulative distance along the route through all waypoints
+
+                            // Helper function to calculate distance between two points
+                            const distance = (p1: {lng: number, lat: number}, p2: {lng: number, lat: number}) => {
+                              const dx = p2.lng - p1.lng;
+                              const dy = p2.lat - p1.lat;
+                              return Math.sqrt(dx * dx + dy * dy);
+                            };
+
+                            // Build the ordered list of points: origin, waypoints, destination
+                            const routePoints = [
+                              { lng: fromLng, lat: fromLat },
+                              ...waypoints,
+                              { lng: toLng, lat: toLat }
+                            ];
+
+                            // Calculate total distance from origin to the new waypoint through existing waypoints
+                            // and find the best insertion point
+                            let bestInsertIndex = 0;
+                            let minDetour = Infinity;
+
+                            for (let i = 0; i <= waypoints.length; i++) {
+                              // Calculate the detour if we insert at position i
+                              const testRoute = [
+                                { lng: fromLng, lat: fromLat },
+                                ...waypoints.slice(0, i),
+                                newWaypoint,
+                                ...waypoints.slice(i),
+                                { lng: toLng, lat: toLat }
+                              ];
+
+                              // Calculate total distance of this route
+                              let totalDistance = 0;
+                              for (let j = 0; j < testRoute.length - 1; j++) {
+                                totalDistance += distance(testRoute[j], testRoute[j + 1]);
+                              }
+
+                              if (totalDistance < minDetour) {
+                                minDetour = totalDistance;
+                                bestInsertIndex = i;
+                              }
+                            }
+
+                            console.log(`Inserting waypoint at index ${bestInsertIndex} (minimizes total route distance, ${waypoints.length} existing waypoints)`);
+
+                            // Insert at the calculated position
+                            waypoints.splice(bestInsertIndex, 0, newWaypoint);
                           } else {
                             console.log('Waypoint already exists, not adding duplicate');
                           }
