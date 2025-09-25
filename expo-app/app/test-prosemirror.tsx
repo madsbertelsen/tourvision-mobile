@@ -1,7 +1,7 @@
 import type { TestProseMirrorDOMRef } from '@/components/dom/TestProseMirrorDOM';
 import TestProseMirrorDOM from '@/components/dom/TestProseMirrorDOM';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ChatMessage {
@@ -21,16 +21,6 @@ export default function TestProseMirrorScreen() {
   const [tripDates, setTripDates] = useState('Dec 15 - Dec 18, 2024');
   const editorRef = useRef<TestProseMirrorDOMRef>(null);
   const chatScrollRef = useRef<ScrollView>(null);
-
-  if (Platform.OS !== 'web') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Test only available on web platform</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   // Handle suggestion from selection toolbar
   const handleSuggestionFromSelection = async (selectedText: string, suggestion: string, context: any) => {
@@ -358,15 +348,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3f4f6',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: '#1f2937',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
   },
   navHeader: {
     backgroundColor: '#1f2937',

@@ -1,4 +1,3 @@
-import '../global.css';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +8,7 @@ import { useEffect } from 'react';
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import '../global.css';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/lib/supabase/auth-context';
@@ -80,13 +80,10 @@ function ProtectedLayout() {
     const inPublicGroup = segments[0] === '(public)';
     const isBranchingDemo = segments[0] === 'branching-demo';
 
-    if (!isAuthenticated && !inAuthGroup && !inPublicGroup && !isBranchingDemo) {
-      // Redirect to login if not authenticated and not in auth group, public group, or branching demo
-      router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      // Redirect to home if authenticated and in auth group
-      router.replace('/');
-    }
+
+      router.replace('/test-prosemirror');
+      return
+
   }, [isAuthenticated, segments, isLoading, router]);
 
   return (
@@ -94,6 +91,7 @@ function ProtectedLayout() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="test-prosemrror" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
