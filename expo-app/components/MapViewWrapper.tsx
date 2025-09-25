@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { ParsedElement } from '@/utils/html-parser';
 
 // Import DOM component - works on all platforms with expo-dom
-const MapViewDOM = React.lazy(() => import('./dom/map-view').then(m => ({ default: m.MapView })));
+const MapViewDOM = React.lazy(() => import('./dom/map-view'));
 
 interface MapViewWrapperProps {
   elements: ParsedElement[];

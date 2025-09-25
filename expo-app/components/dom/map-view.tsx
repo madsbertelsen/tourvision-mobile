@@ -65,7 +65,7 @@ interface MapViewProps {
   onWaypointDrag?: (routeId: string, waypointIndex: number, newPosition: { lng: number; lat: number }) => void;
 }
 
-export function MapView({
+export default function MapView({
   locations = [],
   center = { lat: 40.7128, lng: -74.0060 },
   zoom = 10,

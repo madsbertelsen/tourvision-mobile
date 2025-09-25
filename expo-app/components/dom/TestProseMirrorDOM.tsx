@@ -17,7 +17,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { baseKeymap, toggleMark } from 'prosemirror-commands';
 import { keymap } from 'prosemirror-keymap';
 import { history } from 'prosemirror-history';
-import { MapView } from './map-view';
+import MapView from './map-view';
 import { TransportationModal } from './TransportationModal';
 import { SelectionToolbar } from './SelectionToolbar';
 import './test-prosemirror-styles.css';
