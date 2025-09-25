@@ -165,9 +165,10 @@ export async function POST(req: NextRequest) {
     const { htmlDocument, prompt } = await req.json();
     console.log('[Info] Processing HTML modification request:', { prompt });
 
-    if (!htmlDocument || !prompt) {
+    // Only require prompt, htmlDocument can be empty
+    if (!prompt) {
       return NextResponse.json(
-        { success: false, error: 'htmlDocument and prompt are required' },
+        { success: false, error: 'prompt is required' },
         { status: 400, headers: corsHeaders }
       );
     }
