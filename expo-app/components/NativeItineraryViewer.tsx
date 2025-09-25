@@ -121,7 +121,7 @@ export function NativeItineraryViewer({
           <View key={index} style={styles.itineraryContainer}>
             {/* Show map at the top of the itinerary */}
             {element.children && (
-              <View style={{ marginVertical: 16 }}>
+              <View style={{ marginVertical: 16, borderRadius: 12, overflow: 'hidden' }}>
                 <MapViewWrapper
                   elements={element.children}
                   height={300}

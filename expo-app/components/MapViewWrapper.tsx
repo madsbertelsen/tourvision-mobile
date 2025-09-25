@@ -92,7 +92,6 @@ export function MapViewWrapper({ elements, height = 400 }: MapViewWrapperProps) 
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    borderRadius: 12,
     overflow: 'hidden',
   },
   loading: {

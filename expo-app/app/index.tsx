@@ -8,13 +8,13 @@ import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
 
-  // Calculate map height (screen height minus header, input, and some padding)
-  const mapHeight = screenHeight - 180;
+  // Square map size based on screen width
+  const mapSize = screenWidth;
 
   // Debug the API URL
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -82,20 +82,24 @@ export default function SimpleChatScreen() {
           <Text style={styles.headerSubtitle}>Ask me anything about travel planning</Text>
         </View>
 
-        {/* Messages */}
+        {/* Map positioned absolutely at bottom */}
+        {messages.length === 0 && (
+          <View style={styles.mapContainer}>
+            <MapViewWrapper
+              elements={[]}
+              height={mapSize}
+            />
+          </View>
+        )}
+
+        {/* Messages overlaying the map */}
         <ScrollView
           style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
+          contentContainerStyle={[
+            styles.messagesContent,
+            messages.length === 0 && styles.messagesContentEmpty
+          ]}
         >
-          {messages.length === 0 && (
-            <View style={styles.emptyState}>
-              <MapViewWrapper
-                elements={[]}
-                height={mapHeight}
-              />
-            </View>
-          )}
-
           {messages.map((message) => {
             // Check if message contains HTML content (itinerary)
             const hasHTMLContent = message.parts?.some((part: any) =>
@@ -214,18 +218,27 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 4,
   },
+  mapContainer: {
+    position: 'absolute',
+    bottom: 60, // Above input area
+    left: 0,
+    right: 0,
+    height: screenWidth,
+    width: screenWidth,
+    zIndex: 0,
+  },
   messagesContainer: {
     flex: 1,
+    zIndex: 1,
   },
   messagesContent: {
     flexGrow: 1,
+    padding: 16,
   },
-  emptyState: {
-    flex: 1,
-    padding: 0,
+  messagesContentEmpty: {
+    minHeight: screenHeight - 300, // Ensure scrollview doesn't collapse when empty
   },
   messageContainer: {
-    margin: 16,
     marginBottom: 20,
     backgroundColor: 'white',
     borderRadius: 12,
@@ -283,7 +296,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    margin: 16,
     backgroundColor: '#f3f4f6',
     borderRadius: 12,
   },
