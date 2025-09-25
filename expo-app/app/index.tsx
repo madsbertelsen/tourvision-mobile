@@ -10,8 +10,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
+interface Location {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  description?: string;
+  colorIndex?: number;
+}
+
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
+  const [mapLocations, setMapLocations] = React.useState<Location[]>([]);
+
+  // Memoize the callback to prevent re-renders
+  const handleLocationsUpdate = React.useCallback((locations: Location[]) => {
+    setMapLocations(locations);
+  }, []);
 
   // Square map size based on screen width
   const mapSize = screenWidth;
@@ -82,15 +97,14 @@ export default function SimpleChatScreen() {
           <Text style={styles.headerSubtitle}>Ask me anything about travel planning</Text>
         </View>
 
-        {/* Map positioned absolutely at bottom */}
-        {messages.length === 0 && (
-          <View style={styles.mapContainer}>
-            <MapViewWrapper
-              elements={[]}
-              height={mapSize}
-            />
-          </View>
-        )}
+        {/* Map positioned absolutely at bottom - always visible */}
+        <View style={styles.mapContainer}>
+          <MapViewWrapper
+            elements={[]} // We'll pass locations directly instead
+            locations={mapLocations}
+            height={mapSize}
+          />
+        </View>
 
         {/* Messages overlaying the map */}
         <ScrollView
@@ -147,6 +161,7 @@ export default function SimpleChatScreen() {
                       onLocationClick={(location, lat, lng) => {
                         console.log('Location clicked:', location, lat, lng);
                       }}
+                      onLocationsUpdate={handleLocationsUpdate}
                     />
                   ) : (
                     <Text style={styles.messageText}>{textContent}</Text>
@@ -230,17 +245,20 @@ const styles = StyleSheet.create({
   messagesContainer: {
     flex: 1,
     zIndex: 1,
+    maxHeight: screenHeight - screenWidth - 160, // Leave space for map and input
+    marginBottom: screenWidth - 60, // Push messages up above the map
   },
   messagesContent: {
     flexGrow: 1,
     padding: 16,
+    paddingBottom: 32,
   },
   messagesContentEmpty: {
-    minHeight: screenHeight - 300, // Ensure scrollview doesn't collapse when empty
+    minHeight: 100, // Smaller min height when empty
   },
   messageContainer: {
     marginBottom: 20,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Semi-transparent white
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -250,10 +268,10 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   userMessage: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: 'rgba(239, 246, 255, 0.95)', // Semi-transparent blue
   },
   assistantMessage: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Semi-transparent white
   },
   messageHeader: {
     flexDirection: 'row',

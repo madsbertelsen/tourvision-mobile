@@ -97,6 +97,7 @@ export default function MapView({
   const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string; segmentIndex: number } | null>(null);
   const [isDraggingPreview, setIsDraggingPreview] = useState(false);
   const [draggedRoute, setDraggedRoute] = useState<TransportationRoute | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   // Add ResizeObserver to handle container size changes
   useEffect(() => {
@@ -119,9 +120,57 @@ export default function MapView({
     };
   }, []);
 
+  // Globe rotation animation when showing empty state
   useEffect(() => {
-    // Only auto-fit bounds if we don't have explicit center/zoom
-    if (locations.length > 0 && mapRef.current && !center && !zoom) {
+    // Start rotation animation only when map is loaded and showing the globe view
+    if (mapLoaded && locations.length === 0 && zoom && zoom <= 1 && mapRef.current) {
+      let animationId: number;
+      let startTime: number | null = null;
+
+      const rotateGlobe = (timestamp: number) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+
+        // Calculate the new longitude (rotate 360 degrees every 20 seconds for smoother effect)
+        const rotationSpeed = 360 / 20000; // degrees per millisecond
+        const newLongitude = (elapsed * rotationSpeed) % 360;
+
+        // Update the map center smoothly
+        if (mapRef.current) {
+          const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+          if (map && map.isStyleLoaded()) {
+            // Use easeTo for smooth animation
+            map.easeTo({
+              center: [newLongitude - 180, 0],
+              duration: 50, // Small duration for smooth continuous movement
+              easing: (t: number) => t, // Linear easing
+            });
+          }
+        }
+
+        // Continue the animation
+        animationId = requestAnimationFrame(rotateGlobe);
+      };
+
+      // Start the animation with a small delay to ensure map is ready
+      const timeoutId = setTimeout(() => {
+        animationId = requestAnimationFrame(rotateGlobe);
+      }, 500);
+
+      // Cleanup function to stop the animation
+      return () => {
+        clearTimeout(timeoutId);
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+        }
+      };
+    }
+  }, [mapLoaded, locations.length, zoom]);
+
+  useEffect(() => {
+    // Auto-fit bounds when we have locations, even if center/zoom were provided for initial state
+    if (locations.length > 0 && mapRef.current && mapLoaded) {
+      // Stop any rotation animation when locations are added
       if (locations.length === 1) {
         // For single location, just fly to it
         mapRef.current.flyTo({
@@ -146,10 +195,11 @@ export default function MapView({
         mapRef.current.fitBounds(bounds, {
           padding: 50,
           duration: 1000,
+          maxZoom: 15, // Prevent zooming in too close
         });
       }
     }
-  }, [locations, center, zoom]);
+  }, [locations, mapLoaded]);
 
   const handleMapClick = useCallback((event: any) => {
     if (onMapClick) {
@@ -273,6 +323,9 @@ export default function MapView({
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onLoad={() => {
+          // Set map as loaded
+          setMapLoaded(true);
+
           // Trigger resize when map loads to ensure it fits container
           if (mapRef.current) {
             const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
