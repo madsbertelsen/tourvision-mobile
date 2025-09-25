@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeItineraryViewer } from '@/components/NativeItineraryViewer';
+import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import { generateAPIUrl } from '@/lib/ai-sdk-config';
-import { ItineraryViewerWrapper } from '@/components/ItineraryViewerWrapper';
+import React from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
@@ -94,56 +94,11 @@ export default function SimpleChatScreen() {
           )}
 
           {messages.map((message) => {
-            // Check if this message has tool calls or tool results
-            const hasItineraryTool = message.parts?.some((part: any) =>
-              (part.type === 'tool-call' && part.toolName === 'createItinerary') ||
-              (part.type === 'tool-result' && part.toolName === 'createItinerary')
+            // Check if message contains HTML content (itinerary)
+            const hasHTMLContent = message.parts?.some((part: any) =>
+              part.type === 'text' && part.text?.includes('<h1>') && part.text?.includes('geo-mark')
             );
 
-            // Render message parts
-            const renderMessageParts = () => {
-              if (!message.parts) return null;
-
-              return message.parts.map((part: any, index: number) => {
-                // Handle text parts
-                if (part.type === 'text') {
-                  return <Text key={index} style={styles.messageText}>{part.text}</Text>;
-                }
-
-                // Handle tool call (when tool is being invoked)
-                if (part.type === 'tool-call' && part.toolName === 'createItinerary') {
-                  return (
-                    <View key={index} style={styles.toolCallContainer}>
-                      <ActivityIndicator size="small" color="#8b5cf6" />
-                      <Text style={styles.toolCallText}>Creating your itinerary...</Text>
-                    </View>
-                  );
-                }
-
-                // Handle tool result (streaming or completed itinerary HTML)
-                if (part.type === 'tool-result' && part.toolName === 'createItinerary') {
-                  // The result should contain the HTML content
-                  const htmlContent = typeof part.result === 'string'
-                    ? part.result
-                    : part.result?.html || part.result?.content || '';
-
-                  if (htmlContent) {
-                    return (
-                      <ItineraryViewerWrapper
-                        key={index}
-                        content={htmlContent}
-                        isStreaming={status === 'in_progress'}
-                        onLocationClick={(location, lat, lng) => {
-                          console.log('Location clicked:', location, lat, lng);
-                        }}
-                      />
-                    );
-                  }
-                }
-
-                return null;
-              });
-            };
 
             // Extract text content for regular messages
             const textContent = message.parts?.filter((part: any) => part.type === 'text')
@@ -156,7 +111,7 @@ export default function SimpleChatScreen() {
                 style={[
                   styles.messageContainer,
                   message.role === 'user' ? styles.userMessage : styles.assistantMessage,
-                  hasItineraryTool && styles.messageWithTool
+                  hasHTMLContent && styles.messageWithTool
                 ]}
               >
                 <View style={styles.messageHeader}>
@@ -176,13 +131,20 @@ export default function SimpleChatScreen() {
                   </Text>
                 </View>
 
-                {/* Render text content if no tool is involved */}
-                {!hasItineraryTool && textContent && (
-                  <Text style={styles.messageText}>{textContent}</Text>
+                {/* Render text content or HTML itinerary */}
+                {textContent && (
+                  hasHTMLContent ? (
+                    <NativeItineraryViewer
+                      content={textContent}
+                      isStreaming={status === 'in_progress' && message === messages[messages.length - 1]}
+                      onLocationClick={(location, lat, lng) => {
+                        console.log('Location clicked:', location, lat, lng);
+                      }}
+                    />
+                  ) : (
+                    <Text style={styles.messageText}>{textContent}</Text>
+                  )
                 )}
-
-                {/* Render message parts for tool interactions */}
-                {hasItineraryTool && renderMessageParts()}
               </View>
             );
           })}

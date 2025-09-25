@@ -219,6 +219,14 @@ useEffect(() => {
 }, []);
 ```
 
+## AI SDK Reference
+
+When working with the Vercel AI SDK, refer to the official documentation:
+- **Documentation**: https://ai-sdk.dev/llms.txt
+- Contains information about tool usage, streaming, and message handling
+- Key functions: `streamText()`, `tool()`, `convertToModelMessages()`
+- Tool definitions require description, parameters (Zod schema), and execute function
+
 ## Environment Variables
 
 Required for map functionality:
