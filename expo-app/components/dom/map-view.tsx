@@ -93,9 +93,31 @@ export function MapView({
   
   const [popupInfo, setPopupInfo] = useState<Location | null>(null);
   const mapRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string; segmentIndex: number } | null>(null);
   const [isDraggingPreview, setIsDraggingPreview] = useState(false);
   const [draggedRoute, setDraggedRoute] = useState<TransportationRoute | null>(null);
+
+  // Add ResizeObserver to handle container size changes
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+        if (map) {
+          // Trigger map resize when container size changes
+          map.resize();
+        }
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (locations.length > 0 && mapRef.current) {
@@ -112,14 +134,14 @@ export function MapView({
           [180, 90],
           [-180, -90]
         ];
-        
+
         locations.forEach(loc => {
           bounds[0][0] = Math.min(bounds[0][0], loc.lng);
           bounds[0][1] = Math.min(bounds[0][1], loc.lat);
           bounds[1][0] = Math.max(bounds[1][0], loc.lng);
           bounds[1][1] = Math.max(bounds[1][1], loc.lat);
         });
-        
+
         mapRef.current.fitBounds(bounds, {
           padding: 50,
           duration: 1000,
@@ -228,7 +250,7 @@ export function MapView({
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
-    <div style={style}>
+    <div ref={containerRef} style={style}>
       <style>{`
         @keyframes pulse {
           0% {
@@ -249,6 +271,18 @@ export function MapView({
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onLoad={() => {
+          // Trigger resize when map loads to ensure it fits container
+          if (mapRef.current) {
+            const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+            if (map) {
+              // Small delay to ensure container is fully rendered
+              setTimeout(() => {
+                map.resize();
+              }, 100);
+            }
+          }
+        }}
         onClick={(e) => {
           // Don't handle clicks when dragging preview
           if (isDraggingPreview) return;

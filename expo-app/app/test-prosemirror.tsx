@@ -248,12 +248,6 @@ Suggestion: ${suggestion}`;
 
       <View style={styles.mainContent}>
         <ScrollView style={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>ProseMirror Editor Test</Text>
-          <Text style={styles.subtitle}>Start from empty - try "create a 3-day itinerary in Copenhagen"</Text>
-        </View>
-
-
         <View style={styles.editorContainer}>
           <Text style={styles.editorLabel}>ProseMirror Document Editor</Text>
           <View style={styles.editor}>
@@ -457,20 +451,6 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 2,
     backgroundColor: 'transparent',
-  },
-  header: {
-    padding: 24,
-    backgroundColor: 'transparent',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6b7280',
-    marginTop: 4,
   },
   proposalHeader: {
     marginBottom: 16,
