@@ -1,7 +1,14 @@
 'use dom';
 
-import React, { useState, useMemo, forwardRef, useEffect } from 'react';
+import React, { useState, useMemo, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { useDOMImperativeHandle, type DOMImperativeFactory } from 'expo/dom';
+
+// Extend window type for WebView detection
+declare global {
+  interface Window {
+    ReactNativeWebView?: any;
+  }
+}
 import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin, PluginKey, Transaction, Command, TextSelection } from 'prosemirror-state';
 import { Schema, Node, DOMSerializer, DOMParser as ProseMirrorDOMParser, Mark } from 'prosemirror-model';
@@ -1481,8 +1488,11 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       }
     };
 
-    // Expose methods via ref using DOM-specific hook
-    useDOMImperativeHandle(ref, () => ({
+    // Expose methods via ref - use different hooks for web vs native
+    // Check if we're in a WebView context (native) or regular web
+    const isWebView = typeof window !== 'undefined' && window.ReactNativeWebView;
+
+    const refObject = {
       showChanges,
       hideChanges,
       applyAIProposal,
@@ -1494,7 +1504,21 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       getState,
       addGeoLocation,
       removeGeoLocation,
-    }), [state]);
+    };
+
+    if (isWebView) {
+      // For native WebView, use the DOM-specific hook
+      useDOMImperativeHandle(ref, () => {
+        console.log('Setting up DOM imperative handle for WebView');
+        return refObject;
+      }, [state, showChanges, hideChanges, applyAIProposal, showProposedChanges, acceptProposedChanges, rejectProposedChanges, getHTML, getState, addGeoLocation, removeGeoLocation]);
+    } else {
+      // For web, use regular useImperativeHandle
+      useImperativeHandle(ref, () => {
+        console.log('Setting up regular imperative handle for web');
+        return refObject;
+      }, [state, showChanges, hideChanges, applyAIProposal, showProposedChanges, acceptProposedChanges, rejectProposedChanges, getHTML, getState, addGeoLocation, removeGeoLocation]);
+    }
 
     // Handle location selection from modal
     const handleLocationSelect = (location: { lat: number; lng: number; name: string; placeId: string }) => {
