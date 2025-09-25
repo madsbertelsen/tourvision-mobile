@@ -1,11 +1,9 @@
 import React, { useMemo } from 'react';
-import { Platform, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { ParsedElement } from '@/utils/html-parser';
 
-// Dynamic import for web-only DOM component
-const MapViewDOM = Platform.OS === 'web'
-  ? React.lazy(() => import('./dom/map-view').then(m => ({ default: m.MapView })))
-  : null;
+// Import DOM component - works on all platforms with expo-dom
+const MapViewDOM = React.lazy(() => import('./dom/map-view').then(m => ({ default: m.MapView })));
 
 interface MapViewWrapperProps {
   elements: ParsedElement[];
@@ -77,11 +75,7 @@ export function MapViewWrapper({ elements, height = 400 }: MapViewWrapperProps) 
     return null;
   }
 
-  // Only render on web platform
-  if (Platform.OS !== 'web' || !MapViewDOM) {
-    return null;
-  }
-
+  // Render DOM component map on all platforms
   return (
     <View style={[styles.container, { height }]}>
       <React.Suspense fallback={<View style={styles.loading} />}>
