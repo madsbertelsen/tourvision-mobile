@@ -1,4 +1,5 @@
 import { NativeItineraryViewer } from '@/components/NativeItineraryViewer';
+import { MapViewWrapper } from '@/components/MapViewWrapper';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
@@ -83,7 +84,10 @@ export default function SimpleChatScreen() {
         >
           {messages.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Start a conversation about your travel plans...</Text>
+              <MapViewWrapper
+                elements={[]}
+                height={300}
+              />
               <View style={styles.suggestions}>
                 <Text style={styles.suggestionTitle}>Try asking:</Text>
                 <Text style={styles.suggestionText}>• "Plan a 3-day trip to Paris"</Text>
@@ -218,7 +222,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyState: {
-    paddingVertical: 40,
+    paddingVertical: 20,
     alignItems: 'center',
   },
   emptyStateText: {
@@ -232,6 +236,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: '100%',
     maxWidth: 400,
+    marginTop: 16,
   },
   suggestionTitle: {
     fontSize: 14,
