@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 12,
     overflow: 'hidden',
-    marginVertical: 16,
   },
   loading: {
     flex: 1,

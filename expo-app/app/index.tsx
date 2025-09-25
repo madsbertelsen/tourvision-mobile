@@ -14,7 +14,7 @@ export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
 
   // Calculate map height (screen height minus header, input, and some padding)
-  const mapHeight = screenHeight - 250;
+  const mapHeight = screenHeight - 180;
 
   // Debug the API URL
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -218,12 +218,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    padding: 16,
+    flexGrow: 1,
   },
   emptyState: {
     flex: 1,
+    padding: 0,
   },
   messageContainer: {
+    margin: 16,
     marginBottom: 20,
     backgroundColor: 'white',
     borderRadius: 12,
@@ -281,6 +283,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    margin: 16,
     backgroundColor: '#f3f4f6',
     borderRadius: 12,
   },
