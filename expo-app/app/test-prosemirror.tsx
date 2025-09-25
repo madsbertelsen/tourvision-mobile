@@ -46,7 +46,7 @@ Suggestion: ${suggestion}`;
 
     // Auto-submit to AI
     try {
-      const currentHtml = context.documentHtml || editorRef.current?.getHTML() || '';
+      const currentHtml = context.documentHtml || editorRef.current?.getHTML?.() || '';
 
       // Call the API
       const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
@@ -128,7 +128,7 @@ Suggestion: ${suggestion}`;
 
     try {
       // Get current document as HTML
-      const currentHtml = editorRef.current?.getHTML() || '';
+      const currentHtml = editorRef.current?.getHTML?.() || '';
 
       // Check if the message is about modifying the itinerary
       const isModificationRequest = currentMessage.toLowerCase().includes('change') ||

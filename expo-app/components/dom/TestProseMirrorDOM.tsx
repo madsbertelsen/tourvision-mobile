@@ -296,6 +296,7 @@ export interface TestProseMirrorDOMRef {
   acceptProposedChanges: () => void;
   rejectProposedChanges: () => void;
   getHTML: () => string;
+  getContent: () => string;  // Alias for getHTML for compatibility
   getState: () => EditorState;
   addGeoLocation: (lat: number, lng: number, placeName?: string, placeId?: string, colorIndex?: number) => void;
   removeGeoLocation: () => void;
@@ -1486,6 +1487,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       acceptProposedChanges,
       rejectProposedChanges,
       getHTML,
+      getContent: getHTML,  // Alias for compatibility
       getState,
       addGeoLocation,
       removeGeoLocation,
