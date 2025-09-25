@@ -5,11 +5,16 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import React from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { height: screenHeight } = Dimensions.get('window');
 
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
+
+  // Calculate map height (screen height minus header, input, and some padding)
+  const mapHeight = screenHeight - 250;
 
   // Debug the API URL
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -86,14 +91,8 @@ export default function SimpleChatScreen() {
             <View style={styles.emptyState}>
               <MapViewWrapper
                 elements={[]}
-                height={300}
+                height={mapHeight}
               />
-              <View style={styles.suggestions}>
-                <Text style={styles.suggestionTitle}>Try asking:</Text>
-                <Text style={styles.suggestionText}>• "Plan a 3-day trip to Paris"</Text>
-                <Text style={styles.suggestionText}>• "What are the best places to visit in Tokyo?"</Text>
-                <Text style={styles.suggestionText}>• "Create an itinerary for Barcelona"</Text>
-              </View>
             </View>
           )}
 
@@ -222,32 +221,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyState: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#9ca3af',
-    marginBottom: 24,
-  },
-  suggestions: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 400,
-    marginTop: 16,
-  },
-  suggestionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4b5563',
-    marginBottom: 12,
-  },
-  suggestionText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
+    flex: 1,
   },
   messageContainer: {
     marginBottom: 20,
