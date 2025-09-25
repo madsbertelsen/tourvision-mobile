@@ -102,8 +102,21 @@ Suggestion: ${suggestion}`;
 
       if (result.success && result.modifiedHtml) {
         // Auto-accept changes without showing diff preview
-        editorRef.current?.applyAIProposal(result.modifiedHtml);
-        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
+        console.log('Attempting to apply AI proposal to editor');
+        console.log('Editor ref exists:', !!editorRef.current);
+        console.log('applyAIProposal method exists:', !!editorRef.current?.applyAIProposal);
+
+        if (editorRef.current && editorRef.current.applyAIProposal) {
+          try {
+            editorRef.current.applyAIProposal(result.modifiedHtml);
+            console.log('AI proposal applied successfully');
+            setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
+          } catch (applyError) {
+            console.error('Error applying AI proposal to editor:', applyError);
+          }
+        } else {
+          console.error('Editor ref or applyAIProposal method not available');
+        }
       }
     } catch (error) {
       console.error('Error processing suggestion:', error);
@@ -238,8 +251,21 @@ Suggestion: ${suggestion}`;
 
       if (result.success && result.modifiedHtml) {
         // Auto-accept changes without showing diff preview
-        editorRef.current?.applyAIProposal(result.modifiedHtml);
-        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
+        console.log('Attempting to apply AI proposal to editor');
+        console.log('Editor ref exists:', !!editorRef.current);
+        console.log('applyAIProposal method exists:', !!editorRef.current?.applyAIProposal);
+
+        if (editorRef.current && editorRef.current.applyAIProposal) {
+          try {
+            editorRef.current.applyAIProposal(result.modifiedHtml);
+            console.log('AI proposal applied successfully');
+            setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
+          } catch (applyError) {
+            console.error('Error applying AI proposal to editor:', applyError);
+          }
+        } else {
+          console.error('Editor ref or applyAIProposal method not available');
+        }
       }
     } catch (error) {
       const errorMessage: ChatMessage = {
