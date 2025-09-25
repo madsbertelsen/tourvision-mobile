@@ -1,7 +1,7 @@
 import type { TestProseMirrorDOMRef } from '@/components/dom/TestProseMirrorDOM';
 import TestProseMirrorDOM from '@/components/dom/TestProseMirrorDOM';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ChatMessage {
@@ -140,8 +140,12 @@ Suggestion: ${suggestion}`;
       console.log('Editor ref exists:', !!editorRef.current);
       console.log('getHTML method exists:', !!editorRef.current?.getHTML);
 
-      // If no HTML content, provide a default
-      const htmlToSend = currentHtml || '<p>No content yet</p>';
+      // If no HTML content, provide a default initial document
+      const htmlToSend = currentHtml || `
+        <h1>${tripTitle}</h1>
+        <p>${tripDates}</p>
+        <p>Start planning your trip here...</p>
+      `.trim();
 
       // Check if the message is about modifying the itinerary
       const isModificationRequest = currentMessage.toLowerCase().includes('change') ||
@@ -168,9 +172,15 @@ Suggestion: ${suggestion}`;
         : currentMessage;
 
       // Call the API - use Next.js API if available, otherwise fall back to Supabase Edge Function
-      const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
+      // On iOS simulator, localhost needs to be replaced with the host machine's address
+      let apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
         ? `${process.env.EXPO_PUBLIC_NEXTJS_API_URL}/api/generate-prosemirror-proposal`
         : `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-prosemirror-proposal`;
+
+      // For iOS simulator, replace localhost with host machine address
+      if (Platform.OS === 'ios' && apiUrl.includes('localhost')) {
+        apiUrl = apiUrl.replace('localhost', '127.0.0.1');
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
