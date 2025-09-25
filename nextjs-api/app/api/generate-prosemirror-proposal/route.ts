@@ -201,6 +201,9 @@ export async function POST(req: NextRequest) {
       aiModel = mistral('mistral-small-latest');
     }
 
+    // Check if document is empty or minimal
+    const isEmptyDocument = !htmlDocument || htmlDocument.trim() === '' || htmlDocument.trim().length < 50;
+
     // Use AI to determine what operation to perform
     const { object: operation } = await generateObject({
       model: useGateway ? "mistral/mistral-small" : aiModel,
@@ -211,8 +214,12 @@ export async function POST(req: NextRequest) {
           content: `You are a document editor. Analyze the HTML document and user request to determine how to modify it.
 
 Core Guidelines:
-- EXISTING elements in the provided HTML have IDs (e.g., id="h1-1", id="p-1", id="h2-1", etc.)
-- These IDs are used to identify elements for from_id and to_id references
+${isEmptyDocument ?
+`- The document is EMPTY or minimal - you're creating new content from scratch
+- Set from_id and to_id both to null when creating content for empty documents
+- Simply provide the full HTML content in html_content field` :
+`- EXISTING elements in the provided HTML have IDs (e.g., id="h1-1", id="p-1", id="h2-1", etc.)
+- These IDs are used to identify elements for from_id and to_id references`}
 - DO NOT add id attributes to NEW elements you create - the system will assign IDs automatically
 - Generate clean HTML without any id attributes for new content
 - Maintain proper HTML structure and semantic meaning
@@ -344,29 +351,39 @@ Determine the from_id and to_id boundaries for the operation. Remember:
     const fromElement = operation.from_id ? $(`#${operation.from_id}`) : null;
     const toElement = operation.to_id ? $(`#${operation.to_id}`) : null;
 
-    // Validate boundary elements exist if specified
-    if (operation.from_id && fromElement?.length === 0) {
-      console.error(`[Error] 'from' element not found: ${operation.from_id}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Element not found: ${operation.from_id}`,
-          details: `The 'from_id' element doesn't exist in the document`
-        },
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    // Skip validation for empty documents (both from_id and to_id should be null)
+    if (isEmptyDocument) {
+      if (operation.from_id !== null || operation.to_id !== null) {
+        console.warn(`[Warning] Empty document but got from_id=${operation.from_id}, to_id=${operation.to_id}. Will ignore and treat as full replacement.`);
+        // Force null for empty documents
+        operation.from_id = null;
+        operation.to_id = null;
+      }
+    } else {
+      // Validate boundary elements exist if specified (only for non-empty documents)
+      if (operation.from_id && fromElement?.length === 0) {
+        console.error(`[Error] 'from' element not found: ${operation.from_id}`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Element not found: ${operation.from_id}`,
+            details: `The 'from_id' element doesn't exist in the document`
+          },
+          { status: 400, headers: corsHeaders }
+        );
+      }
 
-    if (operation.to_id && toElement?.length === 0) {
-      console.error(`[Error] 'to' element not found: ${operation.to_id}`);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Element not found: ${operation.to_id}`,
-          details: `The 'to_id' element doesn't exist in the document`
-        },
-        { status: 400, headers: corsHeaders }
-      );
+      if (operation.to_id && toElement?.length === 0) {
+        console.error(`[Error] 'to' element not found: ${operation.to_id}`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Element not found: ${operation.to_id}`,
+            details: `The 'to_id' element doesn't exist in the document`
+          },
+          { status: 400, headers: corsHeaders }
+        );
+      }
     }
 
     // Collect elements to remove (everything between from_id and to_id)

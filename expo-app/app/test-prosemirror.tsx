@@ -140,12 +140,8 @@ Suggestion: ${suggestion}`;
       console.log('Editor ref exists:', !!editorRef.current);
       console.log('getHTML method exists:', !!editorRef.current?.getHTML);
 
-      // If no HTML content, provide a default initial document with IDs
-      const htmlToSend = currentHtml || `
-        <h1 id="h-0">${tripTitle}</h1>
-        <p id="p-1">${tripDates}</p>
-        <p id="p-2">Start planning your trip here...</p>
-      `.trim();
+      // If no HTML content, provide empty string - API will handle it
+      const htmlToSend = currentHtml || '';
 
       // Check if the message is about modifying the itinerary
       const isModificationRequest = currentMessage.toLowerCase().includes('change') ||
