@@ -290,6 +290,8 @@ const createInitialDoc = (schema: Schema) => {
 interface TestProseMirrorDOMProps {
   onStateChange?: (state: EditorState) => void;
   initialContent?: any;
+  pendingProposal?: string | null;
+  onProposalApplied?: () => void;
   onSuggestChange?: (selectedText: string, suggestion: string, context: {
     from: number;
     to: number;
@@ -544,7 +546,7 @@ const TRANSPORT_MODE_PROFILES: Record<string, string> = {
 };
 
 const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMProps>(
-  ({ onStateChange, initialContent, onSuggestChange }, ref) => {
+  ({ onStateChange, initialContent, pendingProposal, onProposalApplied, onSuggestChange }, ref) => {
     const [mount, setMount] = useState<HTMLElement | null>(null);
     const [bubbleMenuState, setBubbleMenuState] = useState<{
       visible: boolean;
@@ -761,6 +763,17 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       setState(newState);
       onStateChange?.(newState);
     };
+
+    // Watch for pending proposals from parent
+    useEffect(() => {
+      if (pendingProposal) {
+        console.log('Received pending proposal in DOM component, applying...');
+        applyAIProposal(pendingProposal);
+        if (onProposalApplied) {
+          onProposalApplied();
+        }
+      }
+    }, [pendingProposal]);
 
     // Helper to generate consistent location IDs
     const getLocationId = (mark: Mark): string => {

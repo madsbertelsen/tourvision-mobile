@@ -20,6 +20,7 @@ export default function TestProseMirrorScreen() {
   const [tripTitle, setTripTitle] = useState('Copenhagen Adventure');
   const [tripDates, setTripDates] = useState('Dec 15 - Dec 18, 2024');
   const [activeTab, setActiveTab] = useState<'document' | 'chat'>('chat'); // Default to chat on mobile
+  const [pendingProposal, setPendingProposal] = useState<string | null>(null);
   const editorRef = useRef<TestProseMirrorDOMRef>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
@@ -102,21 +103,9 @@ Suggestion: ${suggestion}`;
 
       if (result.success && result.modifiedHtml) {
         // Auto-accept changes without showing diff preview
-        console.log('Attempting to apply AI proposal to editor');
-        console.log('Editor ref exists:', !!editorRef.current);
-        console.log('applyAIProposal method exists:', !!editorRef.current?.applyAIProposal);
-
-        if (editorRef.current && editorRef.current.applyAIProposal) {
-          try {
-            editorRef.current.applyAIProposal(result.modifiedHtml);
-            console.log('AI proposal applied successfully');
-            setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
-          } catch (applyError) {
-            console.error('Error applying AI proposal to editor:', applyError);
-          }
-        } else {
-          console.error('Editor ref or applyAIProposal method not available');
-        }
+        console.log('Setting pending proposal for editor to apply');
+        setPendingProposal(result.modifiedHtml);
+        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
       }
     } catch (error) {
       console.error('Error processing suggestion:', error);
@@ -251,21 +240,9 @@ Suggestion: ${suggestion}`;
 
       if (result.success && result.modifiedHtml) {
         // Auto-accept changes without showing diff preview
-        console.log('Attempting to apply AI proposal to editor');
-        console.log('Editor ref exists:', !!editorRef.current);
-        console.log('applyAIProposal method exists:', !!editorRef.current?.applyAIProposal);
-
-        if (editorRef.current && editorRef.current.applyAIProposal) {
-          try {
-            editorRef.current.applyAIProposal(result.modifiedHtml);
-            console.log('AI proposal applied successfully');
-            setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
-          } catch (applyError) {
-            console.error('Error applying AI proposal to editor:', applyError);
-          }
-        } else {
-          console.error('Editor ref or applyAIProposal method not available');
-        }
+        console.log('Setting pending proposal for editor to apply');
+        setPendingProposal(result.modifiedHtml);
+        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
       }
     } catch (error) {
       const errorMessage: ChatMessage = {
@@ -328,6 +305,8 @@ Suggestion: ${suggestion}`;
                     console.log('Editor state changed');
                   }}
                   onSuggestChange={handleSuggestionFromSelection}
+                  pendingProposal={pendingProposal}
+                  onProposalApplied={() => setPendingProposal(null)}
                   style={{ flex: 1, backgroundColor: '#ffffff' }}
                 />
               </View>
