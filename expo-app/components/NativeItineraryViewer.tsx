@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { parseHTML, ParsedElement } from '@/utils/html-parser';
+import { MapViewWrapper } from './MapViewWrapper';
 
 interface NativeItineraryViewerProps {
   content: string;
@@ -112,6 +113,41 @@ export function NativeItineraryViewer({
         return (
           <Text key={index} style={styles.text}>
             {element.content}
+          </Text>
+        );
+
+      case 'itinerary':
+        return (
+          <View key={index} style={styles.itineraryContainer}>
+            {/* Show map at the top of the itinerary */}
+            {element.children && (
+              <MapViewWrapper
+                elements={element.children}
+                height={300}
+              />
+            )}
+            {/* Render the itinerary content below the map */}
+            {element.children?.map((child, i) => renderElement(child, i))}
+          </View>
+        );
+
+      case 'strong':
+        return (
+          <Text key={index} style={[styles.text, styles.bold]}>
+            {element.content || element.children?.map((child, i) => {
+              if (child.type === 'text') return child.content;
+              return null;
+            }).join('')}
+          </Text>
+        );
+
+      case 'em':
+        return (
+          <Text key={index} style={[styles.text, styles.italic]}>
+            {element.content || element.children?.map((child, i) => {
+              if (child.type === 'text') return child.content;
+              return null;
+            }).join('')}
           </Text>
         );
 
@@ -268,5 +304,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8b5cf6',
     marginLeft: 8,
+  },
+  itineraryContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 16,
+    marginVertical: 8,
+  },
+  bold: {
+    fontWeight: 'bold',
+  },
+  italic: {
+    fontStyle: 'italic',
   },
 });

@@ -1,5 +1,5 @@
 export interface ParsedElement {
-  type: 'h1' | 'h2' | 'h3' | 'p' | 'ul' | 'li' | 'text' | 'geo-mark' | 'br';
+  type: 'h1' | 'h2' | 'h3' | 'p' | 'ul' | 'li' | 'text' | 'geo-mark' | 'br' | 'itinerary' | 'strong' | 'em';
   content?: string;
   children?: ParsedElement[];
   attributes?: {
@@ -14,6 +14,77 @@ export interface ParsedElement {
 export function parseHTML(html: string): ParsedElement[] {
   const elements: ParsedElement[] = [];
 
+  // Check if content contains opening itinerary tag but maybe not closing yet (for streaming)
+  const hasItineraryStart = html.includes('<itinerary>');
+  const hasItineraryEnd = html.includes('</itinerary>');
+
+  if (hasItineraryStart) {
+    // Split by itinerary tags to handle mixed content
+    const parts = html.split(/(<itinerary>|<\/itinerary>)/);
+    let insideItinerary = false;
+    let itineraryContent = '';
+    let textContent = '';
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+
+      if (part === '<itinerary>') {
+        // Process any text content before itinerary
+        if (textContent.trim()) {
+          const lines = textContent.trim().split('\n').filter(line => line.trim());
+          lines.forEach(line => {
+            elements.push({ type: 'text', content: line.trim() });
+          });
+          textContent = '';
+        }
+        insideItinerary = true;
+        itineraryContent = '';
+      } else if (part === '</itinerary>') {
+        // Parse and add the complete itinerary content
+        if (itineraryContent.trim()) {
+          const parsed = parseHTMLContent(itineraryContent);
+          elements.push({
+            type: 'itinerary',
+            children: parsed
+          });
+        }
+        insideItinerary = false;
+        itineraryContent = '';
+      } else if (insideItinerary) {
+        itineraryContent += part;
+      } else {
+        textContent += part;
+      }
+    }
+
+    // Handle incomplete itinerary (still streaming)
+    if (insideItinerary && itineraryContent.trim()) {
+      // Parse what we have so far
+      const parsed = parseHTMLContent(itineraryContent);
+      elements.push({
+        type: 'itinerary',
+        children: parsed
+      });
+    }
+
+    // Handle any remaining text after itinerary
+    if (!insideItinerary && textContent.trim()) {
+      const lines = textContent.trim().split('\n').filter(line => line.trim());
+      lines.forEach(line => {
+        elements.push({ type: 'text', content: line.trim() });
+      });
+    }
+
+    return elements;
+  }
+
+  // If no itinerary tags, parse as regular HTML or text
+  return parseHTMLContent(html);
+}
+
+function parseHTMLContent(html: string): ParsedElement[] {
+  const elements: ParsedElement[] = [];
+
   // Remove newlines between tags for cleaner parsing
   const cleanHTML = html.replace(/>\s+</g, '><').trim();
 
@@ -24,7 +95,7 @@ export function parseHTML(html: string): ParsedElement[] {
 
     while (remaining.length > 0) {
       // Check for opening tags
-      const tagMatch = remaining.match(/^<(\/?)(h1|h2|h3|p|ul|li|span|br)(.*?)>/);
+      const tagMatch = remaining.match(/^<(\/?)(h1|h2|h3|p|ul|li|span|br|strong|em)(.*?)>/);
 
       if (tagMatch) {
         const [fullMatch, isClosing, tagName, attributes] = tagMatch;

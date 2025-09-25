@@ -2,29 +2,10 @@
 const geocodeCache = new Map<string, { lat: number; lng: number; timestamp: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
-// Mock coordinates for common locations (fallback when no API key)
-const MOCK_COORDINATES: Record<string, { lat: number; lng: number }> = {
-  'paris': { lat: 48.8566, lng: 2.3522 },
-  'eiffel tower': { lat: 48.8584, lng: 2.2945 },
-  'louvre museum': { lat: 48.8606, lng: 2.3376 },
-  'barcelona': { lat: 41.3851, lng: 2.1734 },
-  'sagrada familia': { lat: 41.4036, lng: 2.1744 },
-  'park güell': { lat: 41.4145, lng: 2.1527 },
-  'tokyo': { lat: 35.6762, lng: 139.6503 },
-  'shibuya crossing': { lat: 35.6595, lng: 139.7006 },
-  'senso-ji temple': { lat: 35.7148, lng: 139.7967 },
-  'new york': { lat: 40.7128, lng: -74.0060 },
-  'times square': { lat: 40.7580, lng: -73.9855 },
-  'central park': { lat: 40.7829, lng: -73.9654 },
-  'london': { lat: 51.5074, lng: -0.1278 },
-  'big ben': { lat: 51.5007, lng: -0.1246 },
-  'london eye': { lat: 51.5033, lng: -0.1196 },
-};
-
 export interface GeocodingResult {
   lat: number;
   lng: number;
-  source: 'google' | 'cache' | 'mock';
+  source: 'google' | 'cache';
 }
 
 /**
@@ -36,43 +17,54 @@ export async function geocodeLocation(
 ): Promise<GeocodingResult | null> {
   if (!placeName) return null;
 
+  // Normalize the place name for better matching
+  const normalizedName = placeName.toLowerCase().trim();
+
   // Check cache first
-  const cached = geocodeCache.get(placeName);
+  const cached = geocodeCache.get(normalizedName);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[Geocoding] Cache hit for: ${placeName}`);
     return { lat: cached.lat, lng: cached.lng, source: 'cache' };
   }
 
-  // Try Google Places API if key is available
-  if (googleApiKey) {
-    try {
-      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeName)}&key=${googleApiKey}`;
-      const response = await fetch(url);
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'OK' && data.results?.[0]) {
-          const location = data.results[0].geometry.location;
-          const result = { lat: location.lat, lng: location.lng };
-
-          // Cache the result
-          geocodeCache.set(placeName, { ...result, timestamp: Date.now() });
-
-          return { ...result, source: 'google' as const };
-        }
-      }
-    } catch (error) {
-      console.error(`Geocoding error for ${placeName}:`, error);
-    }
+  // Try Google Places API
+  if (!googleApiKey || googleApiKey === 'your_google_maps_api_key_here') {
+    console.warn(`[Geocoding] No valid Google API key configured`);
+    return null;
   }
 
-  // Fallback to mock coordinates
-  const normalizedName = placeName.toLowerCase().trim();
-  for (const [key, coords] of Object.entries(MOCK_COORDINATES)) {
-    if (normalizedName.includes(key) || key.includes(normalizedName)) {
-      // Cache the mock result
-      geocodeCache.set(placeName, { ...coords, timestamp: Date.now() });
-      return { ...coords, source: 'mock' as const };
+  try {
+    console.log(`[Geocoding] Calling Google Places API for: ${placeName}`);
+
+    // Use Place Search API for better results
+    const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?` +
+      `input=${encodeURIComponent(placeName)}` +
+      `&inputtype=textquery` +
+      `&fields=geometry,name,formatted_address` +
+      `&key=${googleApiKey}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'OK' && data.candidates?.[0]) {
+      const location = data.candidates[0].geometry.location;
+      const result = { lat: location.lat, lng: location.lng };
+
+      console.log(`[Geocoding] Google API found: ${placeName} -> ${result.lat}, ${result.lng}`);
+
+      // Cache the result
+      geocodeCache.set(normalizedName, { ...result, timestamp: Date.now() });
+
+      return { ...result, source: 'google' as const };
+    } else if (data.status === 'REQUEST_DENIED') {
+      console.error(`[Geocoding] Google API request denied. Check API key configuration.`);
+    } else if (data.status === 'ZERO_RESULTS') {
+      console.warn(`[Geocoding] Google API found no results for: ${placeName}`);
+    } else {
+      console.warn(`[Geocoding] Google API status: ${data.status} for ${placeName}`);
     }
+  } catch (error) {
+    console.error(`[Geocoding] Google API error for ${placeName}:`, error);
   }
 
   return null;
