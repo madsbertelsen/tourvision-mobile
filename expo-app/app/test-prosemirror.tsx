@@ -140,11 +140,11 @@ Suggestion: ${suggestion}`;
       console.log('Editor ref exists:', !!editorRef.current);
       console.log('getHTML method exists:', !!editorRef.current?.getHTML);
 
-      // If no HTML content, provide a default initial document
+      // If no HTML content, provide a default initial document with IDs
       const htmlToSend = currentHtml || `
-        <h1>${tripTitle}</h1>
-        <p>${tripDates}</p>
-        <p>Start planning your trip here...</p>
+        <h1 id="h-0">${tripTitle}</h1>
+        <p id="p-1">${tripDates}</p>
+        <p id="p-2">Start planning your trip here...</p>
       `.trim();
 
       // Check if the message is about modifying the itinerary
