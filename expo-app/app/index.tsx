@@ -5,6 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
+import { ItineraryViewerWrapper } from '@/components/ItineraryViewerWrapper';
 
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
@@ -93,20 +94,69 @@ export default function SimpleChatScreen() {
           )}
 
           {messages.map((message) => {
-            // Extract text from parts array
-            const messageContent = message.parts?.map((part: any) => {
-              if (part.type === 'text') {
-                return part.text;
-              }
-              return '';
-            }).join('') || message.content || '';
+            // Check if this message has tool calls or tool results
+            const hasItineraryTool = message.parts?.some((part: any) =>
+              (part.type === 'tool-call' && part.toolName === 'createItinerary') ||
+              (part.type === 'tool-result' && part.toolName === 'createItinerary')
+            );
+
+            // Render message parts
+            const renderMessageParts = () => {
+              if (!message.parts) return null;
+
+              return message.parts.map((part: any, index: number) => {
+                // Handle text parts
+                if (part.type === 'text') {
+                  return <Text key={index} style={styles.messageText}>{part.text}</Text>;
+                }
+
+                // Handle tool call (when tool is being invoked)
+                if (part.type === 'tool-call' && part.toolName === 'createItinerary') {
+                  return (
+                    <View key={index} style={styles.toolCallContainer}>
+                      <ActivityIndicator size="small" color="#8b5cf6" />
+                      <Text style={styles.toolCallText}>Creating your itinerary...</Text>
+                    </View>
+                  );
+                }
+
+                // Handle tool result (streaming or completed itinerary HTML)
+                if (part.type === 'tool-result' && part.toolName === 'createItinerary') {
+                  // The result should contain the HTML content
+                  const htmlContent = typeof part.result === 'string'
+                    ? part.result
+                    : part.result?.html || part.result?.content || '';
+
+                  if (htmlContent) {
+                    return (
+                      <ItineraryViewerWrapper
+                        key={index}
+                        content={htmlContent}
+                        isStreaming={status === 'in_progress'}
+                        onLocationClick={(location, lat, lng) => {
+                          console.log('Location clicked:', location, lat, lng);
+                        }}
+                      />
+                    );
+                  }
+                }
+
+                return null;
+              });
+            };
+
+            // Extract text content for regular messages
+            const textContent = message.parts?.filter((part: any) => part.type === 'text')
+              .map((part: any) => part.text)
+              .join('') || message.content || '';
 
             return (
               <View
                 key={message.id}
                 style={[
                   styles.messageContainer,
-                  message.role === 'user' ? styles.userMessage : styles.assistantMessage
+                  message.role === 'user' ? styles.userMessage : styles.assistantMessage,
+                  hasItineraryTool && styles.messageWithTool
                 ]}
               >
                 <View style={styles.messageHeader}>
@@ -125,7 +175,14 @@ export default function SimpleChatScreen() {
                     })}
                   </Text>
                 </View>
-                <Text style={styles.messageText}>{messageContent}</Text>
+
+                {/* Render text content if no tool is involved */}
+                {!hasItineraryTool && textContent && (
+                  <Text style={styles.messageText}>{textContent}</Text>
+                )}
+
+                {/* Render message parts for tool interactions */}
+                {hasItineraryTool && renderMessageParts()}
               </View>
             );
           })}
@@ -290,6 +347,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#6b7280',
+  },
+  messageWithTool: {
+    maxWidth: '100%',
+  },
+  toolCallContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  toolCallText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#8b5cf6',
+    fontStyle: 'italic',
   },
   inputContainer: {
     flexDirection: 'row',
