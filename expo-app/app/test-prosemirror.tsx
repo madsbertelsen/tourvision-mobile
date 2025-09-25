@@ -259,20 +259,7 @@ Suggestion: ${suggestion}`;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Navigation Header */}
-      <View style={styles.navHeader}>
-        <View style={styles.navContent}>
-          <View>
-            <Text style={styles.navTitle}>{tripTitle}</Text>
-            <Text style={styles.navSubtitle}>{tripDates}</Text>
-          </View>
-          <TouchableOpacity style={styles.navButton}>
-            <Text style={styles.navButtonText}>Share</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Mobile Tab Navigation */}
+      {/* Compact Tab Navigation */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'document' && styles.tabActive]}
@@ -297,7 +284,6 @@ Suggestion: ${suggestion}`;
         {activeTab === 'document' ? (
           <ScrollView style={styles.fullWidthContainer}>
             <View style={styles.editorContainer}>
-              <Text style={styles.editorLabel}>ProseMirror Document Editor</Text>
               <View style={styles.editor}>
                 <TestProseMirrorDOM
                   ref={editorRef}
@@ -315,9 +301,6 @@ Suggestion: ${suggestion}`;
         ) : (
           /* Chat Panel - Show when chat tab is active */
           <View style={styles.fullHeightPanel}>
-          <View style={styles.chatHeader}>
-            <Text style={styles.chatTitle}>Chat</Text>
-          </View>
 
           <ScrollView
             ref={chatScrollRef}
@@ -552,7 +535,8 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   editorContainer: {
-    margin: 20,
+    margin: 8,
+    flex: 1,
   },
   editorLabel: {
     fontSize: 16,
@@ -595,7 +579,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
@@ -615,6 +599,7 @@ const styles = StyleSheet.create({
   fullHeightPanel: {
     flex: 1,
     backgroundColor: 'white',
+    paddingTop: 8,
   },
   chatHeader: {
     padding: 16,
