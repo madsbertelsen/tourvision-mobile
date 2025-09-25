@@ -302,6 +302,7 @@ Suggestion: ${suggestion}`;
                     console.log('Editor state changed');
                   }}
                   onSuggestChange={handleSuggestionFromSelection}
+                  style={{ flex: 1, backgroundColor: '#ffffff' }}
                 />
               </View>
             </View>
@@ -563,6 +564,8 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
     minHeight: 400,
+    height: 400,  // Explicit height for iOS WebView
+    backgroundColor: '#ffffff',  // Ensure background is set
   },
   acceptButton: {
     backgroundColor: '#10b981',
