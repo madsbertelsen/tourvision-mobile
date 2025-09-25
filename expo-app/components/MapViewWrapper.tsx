@@ -70,18 +70,16 @@ function extractLocations(elements: ParsedElement[]): Location[] {
 export function MapViewWrapper({ elements, height = 400 }: MapViewWrapperProps) {
   const locations = useMemo(() => extractLocations(elements), [elements]);
 
-  // Don't render if no valid locations
-  if (locations.length === 0) {
-    return null;
-  }
-
-  // Render DOM component map on all platforms
+  // Always render map, show globe view when no locations
   return (
     <View style={[styles.container, { height }]}>
       <React.Suspense fallback={<View style={styles.loading} />}>
         <MapViewDOM
           locations={locations}
           transportationRoutes={[]}
+          // Show entire globe when no locations, otherwise auto-fit to locations
+          center={locations.length === 0 ? { lat: 20, lng: 0 } : undefined}
+          zoom={locations.length === 0 ? 2 : undefined}
           onLocationClick={(location) => {
             console.log('Location clicked:', location);
           }}

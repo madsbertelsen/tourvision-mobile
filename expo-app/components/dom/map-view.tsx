@@ -80,10 +80,10 @@ export default function MapView({
   onWaypointDrag
 }: MapViewProps) {
 
-  // If we have locations, use the first one as center, otherwise use default
-  const initialCenter = locations.length > 0 
+  // Use provided center, or first location, or default
+  const initialCenter = center || (locations.length > 0
     ? { lat: locations[0].lat, lng: locations[0].lng }
-    : center;
+    : { lat: 40.7128, lng: -74.0060 });
     
   const [viewState, setViewState] = useState({
     longitude: initialCenter.lng,
@@ -120,7 +120,8 @@ export default function MapView({
   }, []);
 
   useEffect(() => {
-    if (locations.length > 0 && mapRef.current) {
+    // Only auto-fit bounds if we don't have explicit center/zoom
+    if (locations.length > 0 && mapRef.current && !center && !zoom) {
       if (locations.length === 1) {
         // For single location, just fly to it
         mapRef.current.flyTo({
@@ -148,7 +149,7 @@ export default function MapView({
         });
       }
     }
-  }, [locations]);
+  }, [locations, center, zoom]);
 
   const handleMapClick = useCallback((event: any) => {
     if (onMapClick) {
