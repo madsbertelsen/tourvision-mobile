@@ -1,6 +1,7 @@
 'use dom';
 
-import React, { useState, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
+import React, { useState, useMemo, forwardRef, useEffect } from 'react';
+import { useDOMImperativeHandle, type DOMImperativeFactory } from 'expo/dom';
 import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin, PluginKey, Transaction, Command, TextSelection } from 'prosemirror-state';
 import { Schema, Node, DOMSerializer, DOMParser as ProseMirrorDOMParser, Mark } from 'prosemirror-model';
@@ -288,7 +289,7 @@ interface TestProseMirrorDOMProps {
   }) => void;
 }
 
-export interface TestProseMirrorDOMRef {
+export interface TestProseMirrorDOMRef extends DOMImperativeFactory {
   showChanges: () => void;
   hideChanges: () => void;
   applyAIProposal: (proposalHtml: string) => void;
@@ -1478,8 +1479,8 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       }
     };
 
-    // Expose methods via ref
-    useImperativeHandle(ref, () => ({
+    // Expose methods via ref using DOM-specific hook
+    useDOMImperativeHandle(ref, () => ({
       showChanges,
       hideChanges,
       applyAIProposal,
@@ -1491,7 +1492,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       getState,
       addGeoLocation,
       removeGeoLocation,
-    }));
+    }), [state]);
 
     // Handle location selection from modal
     const handleLocationSelect = (location: { lat: number; lng: number; name: string; placeId: string }) => {
