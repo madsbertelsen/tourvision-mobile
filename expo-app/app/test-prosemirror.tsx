@@ -13,9 +13,7 @@ interface ChatMessage {
 }
 
 export default function TestProseMirrorScreen() {
-  const [isPreviewActive, setIsPreviewActive] = useState(false);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [acceptedProposalIds, setAcceptedProposalIds] = useState<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState('create a 3-day itinerary in Copenhagen');
@@ -106,9 +104,9 @@ Suggestion: ${suggestion}`;
       setChatMessages(prev => [...prev, aiMessage]);
 
       if (result.success && result.modifiedHtml) {
-        editorRef.current?.showProposedChanges(result.modifiedHtml);
-        setIsPreviewActive(true);
-        setActiveProposalId(aiMessage.id);
+        // Auto-accept changes without showing diff preview
+        editorRef.current?.applyAIProposal(result.modifiedHtml);
+        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
       }
     } catch (error) {
       console.error('Error processing suggestion:', error);
@@ -214,9 +212,9 @@ Suggestion: ${suggestion}`;
       setChatMessages(prev => [...prev, aiMessage]);
 
       if (result.success && result.modifiedHtml) {
-        editorRef.current?.showProposedChanges(result.modifiedHtml);
-        setIsPreviewActive(true);
-        setActiveProposalId(aiMessage.id);
+        // Auto-accept changes without showing diff preview
+        editorRef.current?.applyAIProposal(result.modifiedHtml);
+        setAcceptedProposalIds(prev => new Set(prev).add(aiMessage.id));
       }
     } catch (error) {
       const errorMessage: ChatMessage = {
@@ -314,61 +312,11 @@ Suggestion: ${suggestion}`;
                 )}
                 {message.proposal && (
                   <View style={styles.proposalActionsContainer}>
-                    <TouchableOpacity
-                      style={styles.showProposalButton}
-                      onPress={() => {
-                        if (editorRef.current && message.proposal) {
-                          editorRef.current.showProposedChanges(message.proposal);
-                          setIsPreviewActive(true);
-                          setActiveProposalId(message.id);
-                        }
-                      }}
-                    >
-                      <Text style={styles.showProposalButtonText}>👁 Show Changes in Document</Text>
-                    </TouchableOpacity>
+                    {/* Changes are auto-accepted, no preview button needed */}
 
-                    {isPreviewActive && activeProposalId === message.id && !acceptedProposalIds.has(message.id) && (
-                      <View style={styles.proposalActions}>
-                        <TouchableOpacity
-                          style={[styles.chatActionButton, styles.acceptButton]}
-                          onPress={() => {
-                            editorRef.current?.acceptProposedChanges();
-                            setIsPreviewActive(false);
-                            setActiveProposalId(null);
-                            setAcceptedProposalIds(prev => new Set(prev).add(message.id));
-                          }}
-                        >
-                          <Text style={styles.chatActionButtonText}>✓ Accept</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.chatActionButton, styles.rejectButton]}
-                          onPress={() => {
-                            editorRef.current?.rejectProposedChanges();
-                            setIsPreviewActive(false);
-                            setActiveProposalId(null);
-                          }}
-                        >
-                          <Text style={styles.chatActionButtonText}>✗ Reject</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                    {/* Accept/reject buttons removed - changes are auto-accepted */}
 
-                    {isPreviewActive && activeProposalId === message.id && (
-                      <View style={styles.legendContainer}>
-                        <View style={styles.legendItem}>
-                          <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
-                          <Text style={styles.legendText}>Added</Text>
-                        </View>
-                        <View style={styles.legendItem}>
-                          <View style={[styles.legendColor, { backgroundColor: '#ef4444' }]} />
-                          <Text style={styles.legendText}>Deleted</Text>
-                        </View>
-                        <View style={styles.legendItem}>
-                          <View style={[styles.legendColor, { backgroundColor: '#fbbf24' }]} />
-                          <Text style={styles.legendText}>Modified</Text>
-                        </View>
-                      </View>
-                    )}
+                    {/* Legend removed - changes are auto-accepted without preview */}
                   </View>
                 )}
               </View>
@@ -410,6 +358,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3f4f6',
+  },
+  header: {
+    padding: 16,
+    backgroundColor: '#1f2937',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
   },
   navHeader: {
     backgroundColor: '#1f2937',
