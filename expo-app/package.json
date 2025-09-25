@@ -9,6 +9,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@ai-sdk/mistral": "^2.0.16",
+    "@ai-sdk/react": "^2.0.52",
     "@expo/dom-webview": "^0.2.7",
     "@expo/vector-icons": "^15.0.2",
     "@heroicons/react": "^2.2.0",
@@ -21,6 +23,7 @@
     "@tiptap/extension-link": "^3.4.2",
     "@tiptap/react": "^3.4.2",
     "@tiptap/starter-kit": "^3.4.2",
+    "ai": "^5.0.52",
     "date-fns": "^4.1.0",
     "expo": "~54.0.6",
     "expo-constants": "~18.0.8",

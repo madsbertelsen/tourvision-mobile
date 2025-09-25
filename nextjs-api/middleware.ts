@@ -17,10 +17,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow places, route, transportation, and generate-prosemirror-proposal APIs to bypass auth for server-side enrichment
+  // Allow places, route, transportation, chat, chat-simple, and generate-prosemirror-proposal APIs to bypass auth for server-side enrichment
   if (pathname.startsWith('/api/places') ||
       pathname.startsWith('/api/route') ||
       pathname.startsWith('/api/transportation') ||
+      pathname.startsWith('/api/chat') ||
+      pathname.startsWith('/api/chat-simple') ||
       pathname.startsWith('/api/generate-prosemirror-proposal')) {
     const response = NextResponse.next();
 

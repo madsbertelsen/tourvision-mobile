@@ -57,11 +57,27 @@ const ExpoSecureStoreAdapter = {
   },
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Supabase client disabled - authentication is not being used
+// export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+//   auth: {
+//     storage: ExpoSecureStoreAdapter,
+//     autoRefreshToken: true,
+//     persistSession: true,
+//     detectSessionInUrl: false,
+//   },
+// })
+
+// Create a mock supabase object to prevent errors in other files
+export const supabase = {
   auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+    getSession: async () => ({ data: { session: null }, error: null }),
+    signOut: async () => ({ error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
   },
-})
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => Promise.resolve({ data: null, error: null }),
+    delete: () => Promise.resolve({ data: null, error: null }),
+  }),
+}

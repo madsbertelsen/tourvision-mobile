@@ -1,773 +1,332 @@
-import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Platform,
-  Alert,
-  ActivityIndicator,
-  StyleSheet,
-} from 'react-native';
-import { Link, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '@/lib/supabase/auth-context';
-import { formatUserDisplayName, getUserInitials } from '@/lib/auth/utils';
-import { useTrips } from '@/hooks/useTrips';
-import CreateTripModal from '@/components/CreateTripModal';
-import type { Tables } from '@/lib/database.types';
+import React from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { fetch as expoFetch } from 'expo/fetch';
+import { generateAPIUrl } from '@/lib/ai-sdk-config';
 
-interface TripCardProps {
-  id: string;
-  title: string;
-  status: string;
-  statusColor: string;
-  details: string;
-  date: string;
-  gradient: string[];
-  participants?: string[];
-  onPress: () => void;
-}
+export default function SimpleChatScreen() {
+  const [inputText, setInputText] = React.useState('');
 
-const TripCard = ({ id, title, status, statusColor, details, date, gradient, participants, onPress }: TripCardProps) => (
-  <TouchableOpacity style={styles.tripCard} onPress={onPress}>
-    <LinearGradient
-      colors={gradient}
-      style={styles.tripGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <View style={styles.tripHeader}>
-        <View style={styles.tripInfo}>
-          <Text style={styles.tripTitle} numberOfLines={1}>{title}</Text>
-          <View style={styles.tripStatus}>
-            <Text style={styles.tripStatusText}>{status}</Text>
-          </View>
-        </View>
-        {participants && participants.length > 0 && (
-          <View style={styles.tripParticipants}>
-            {participants.map((color, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.participantAvatar,
-                  { backgroundColor: color, marginLeft: index > 0 ? -8 : 0 }
-                ]}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.tripFooter}>
-        <Text style={styles.tripDetails}>{details}</Text>
-        <View style={styles.tripDateRow}>
-          <Feather name="calendar" size={12} color="rgba(255,255,255,0.8)" />
-          <Text style={styles.tripDate}>{date}</Text>
-        </View>
-      </View>
-    </LinearGradient>
-  </TouchableOpacity>
-);
+  // Debug the API URL
+  const apiUrl = generateAPIUrl('/api/chat-simple');
+  console.log('API URL:', apiUrl);
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  trend?: string;
-  trendUp?: boolean;
-}
+  // Use the AI SDK useChat hook with DefaultChatTransport for Expo
+  const chatHelpers = useChat({
+    transport: new DefaultChatTransport({
+      fetch: expoFetch as unknown as typeof globalThis.fetch,
+      api: apiUrl,
+    }),
+    onError: (error) => {
+      console.error('Chat error:', error);
+    },
+  });
 
-const StatCard = ({ icon, value, label, trend, trendUp }: StatCardProps) => (
-  <View style={styles.statCard}>
-    <View style={styles.statHeader}>
-      <View style={styles.statIcon}>
-        {icon}
-      </View>
-      {trend && (
-        <View style={[
-          styles.statTrend,
-          { backgroundColor: trendUp ? '#F0FDF4' : '#FEFCE8' }
-        ]}>
-          <Text style={[
-            styles.statTrendText,
-            { color: trendUp ? '#16A34A' : '#CA8A04' }
-          ]}>
-            {trend}
-          </Text>
-        </View>
-      )}
-    </View>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
+  console.log('Chat helpers:', Object.keys(chatHelpers));
 
-export default function DashboardScreen() {
-  const router = useRouter();
-  const { user, signOut } = useAuth();
-  const { data: trips, isLoading, error, refetch } = useTrips();
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  
-  // Helper function to extract destination count from document
-  const getDestinationCount = (document: any): number => {
-    if (!document?.content) return 0;
-    let count = 0;
-    document.content.forEach((node: any) => {
-      if (node.type === 'dayNode' && node.content) {
-        node.content.forEach((child: any) => {
-          if (child.type === 'destinationNode') count++;
-        });
-      }
-    });
-    return count;
-  };
-  
-  // Helper function to get trip status
-  const getTripStatus = (trip: Tables<'trips'>): { status: string; color: string } => {
-    const doc = trip.itinerary_document as any;
-    const hasPlanning = trip.title.toLowerCase().includes('planning') || 
-                       trip.description?.toLowerCase().includes('planning');
-    
-    if (hasPlanning) return { status: 'Planning', color: '#DBEAFE' };
-    
-    // Check dates in document to determine if upcoming or completed
-    const today = new Date();
-    let earliestDate: Date | null = null;
-    
-    if (doc?.content) {
-      doc.content.forEach((node: any) => {
-        if (node.type === 'dayNode' && node.attrs?.date) {
-          const date = new Date(node.attrs.date);
-          if (!earliestDate || date < earliestDate) {
-            earliestDate = date;
-          }
-        }
-      });
-    }
-    
-    if (earliestDate) {
-      if (earliestDate > today) return { status: 'Upcoming', color: '#FEF3C7' };
-      return { status: 'Completed', color: '#D1FAE5' };
-    }
-    
-    return { status: 'Draft', color: '#E5E5E5' };
-  };
-  
-  // Helper function to format date
-  const formatTripDate = (trip: Tables<'trips'>): string => {
-    const doc = trip.itinerary_document as any;
-    if (doc?.content) {
-      for (const node of doc.content) {
-        if (node.type === 'dayNode' && node.attrs?.date) {
-          const date = new Date(node.attrs.date);
-          return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        }
-      }
-    }
-    if (trip.created_at) {
-      const date = new Date(trip.created_at);
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    }
-    return 'TBD';
-  };
-  
-  // Helper function to get gradient colors based on trip title
-  const getGradientColors = (title: string): string[] => {
-    const gradients = [
-      ['#667EEA', '#764BA2'],
-      ['#F093FB', '#F5576C'],
-      ['#4FACFE', '#00F2FE'],
-      ['#43E97B', '#38F9D7'],
-      ['#FA709A', '#FEE140'],
-      ['#30CCED', '#2A8AE6'],
-    ];
-    
-    // Use title hash to consistently pick same gradient
-    let hash = 0;
-    for (let i = 0; i < title.length; i++) {
-      hash = title.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return gradients[Math.abs(hash) % gradients.length];
-  };
-  
-  const handleSignOut = async () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to sign out?')) {
-        await signOut();
-        router.replace('/login');
+  const {
+    messages = [],
+    sendMessage,
+    status = 'idle',
+    error
+  } = chatHelpers;
+
+  const isLoading = status === 'in_progress';
+
+  // Debug messages
+  console.log('Messages:', messages);
+  console.log('Status:', status);
+  console.log('Error:', error);
+
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputText?.trim() || isLoading) return;
+
+    const message = inputText.trim();
+    console.log('Sending message:', message);
+    console.log('sendMessage available?', !!sendMessage, typeof sendMessage);
+    setInputText(''); // Clear input immediately
+
+    // Use sendMessage which is available in the chatHelpers
+    if (sendMessage) {
+      try {
+        console.log('Calling sendMessage...');
+        await sendMessage({ text: message });
+        console.log('sendMessage completed');
+      } catch (error) {
+        console.error('Error sending message:', error);
       }
     } else {
-      Alert.alert(
-        'Sign Out',
-        'Are you sure you want to sign out?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign Out', 
-            onPress: async () => {
-              await signOut();
-              router.replace('/login');
-            },
-            style: 'destructive'
-          }
-        ]
-      );
+      console.error('sendMessage is not available');
     }
   };
 
-  // Memoized sidebar links
-  const sidebarLinks = useMemo(() => [
-    { icon: 'home', label: 'Dashboard', active: true },
-    { icon: 'compass', label: 'Explore', active: false },
-    { icon: 'map', label: 'My Trips', active: false },
-    { icon: 'message-square', label: 'AI Assistant', active: false },
-  ], []);
-
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.logo}>
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoText}>T</Text>
-            </View>
-            <Text style={styles.appName}>TourVision</Text>
-          </View>
-          
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Feather name="bell" size={20} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <Feather name="settings" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      {/* Navigation Tabs */}
-      <View style={styles.navTabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.navTabsContent}>
-            {sidebarLinks.map((link, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.navTab,
-                  link.active && styles.navTabActive
-                ]}
-              >
-                <Feather 
-                  name={link.icon as any} 
-                  size={18} 
-                  color={link.active ? '#6366F1' : '#6B7280'} 
-                />
-                <Text style={[
-                  styles.navTabText,
-                  link.active && styles.navTabTextActive
-                ]}>
-                  {link.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-
-      <ScrollView style={styles.content}>
-        {/* Welcome Section */}
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>
-            Welcome back, {user ? formatUserDisplayName(user) : 'Guest'}!
-          </Text>
-          <Text style={styles.welcomeSubtitle}>
-            Here's what's happening with your trips today.
-          </Text>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Travel Assistant</Text>
+          <Text style={styles.headerSubtitle}>Ask me anything about travel planning</Text>
         </View>
 
-        {/* Stats Grid */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsContainer}
-          contentContainerStyle={styles.statsContent}
+        {/* Messages */}
+        <ScrollView
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
         >
-          <StatCard
-            icon={<MaterialIcons name="flight" size={20} color="#6366F1" />}
-            value="8"
-            label="Total Trips"
-            trend="+12%"
-            trendUp
-          />
-          <StatCard
-            icon={<Feather name="map-pin" size={20} color="#6366F1" />}
-            value="23"
-            label="Places Visited"
-            trend="New"
-            trendUp={false}
-          />
-          <StatCard
-            icon={<MaterialIcons name="attach-money" size={20} color="#6366F1" />}
-            value="$4,250"
-            label="Total Spent"
-            trend="Budget"
-            trendUp={false}
-          />
-          <StatCard
-            icon={<Feather name="star" size={20} color="#6366F1" />}
-            value="142"
-            label="Reviews"
-            trend="4.8"
-            trendUp={false}
-          />
-        </ScrollView>
-
-        {/* Trips Section */}
-        <View style={styles.tripsSection}>
-          <View style={styles.tripsSectionHeader}>
-            <Text style={styles.tripsSectionTitle}>Your Trips</Text>
-            <View style={styles.tripsSectionActions}>
-              <TouchableOpacity
-                style={styles.headerCreateButton}
-                onPress={() => setShowCreateModal(true)}
-              >
-                <Feather name="plus" size={16} color="white" />
-                <Text style={styles.headerCreateButtonText}>New Trip</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text style={styles.viewAllLink}>View all →</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#6366F1" />
-              <Text style={styles.loadingText}>Loading trips...</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>Failed to load trips</Text>
-              <Text style={styles.errorSubtext}>Please try again later</Text>
-            </View>
-          ) : trips && trips.length > 0 ? (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tripsScrollContent}
-            >
-              {trips.map((trip) => {
-                const { status, color } = getTripStatus(trip);
-                const destinationCount = getDestinationCount(trip.itinerary_document);
-                const duration = trip.description?.match(/(\d+)\s*day/i)?.[1] || '?';
-                
-                return (
-                  <TripCard
-                    key={trip.id}
-                    id={trip.id}
-                    title={trip.title}
-                    status={status}
-                    statusColor={color}
-                    details={`${duration} days • ${destinationCount} places`}
-                    date={formatTripDate(trip)}
-                    gradient={getGradientColors(trip.title)}
-                    participants={trip.collaborators?.slice(0, 3).map(() => {
-                      const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B'];
-                      return colors[Math.floor(Math.random() * colors.length)];
-                    })}
-                    onPress={() => router.push(`/trip/${trip.id}`)}
-                  />
-                );
-              })}
-            </ScrollView>
-          ) : (
+          {messages.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateTitle}>No trips yet</Text>
-              <Text style={styles.emptyStateText}>Start planning your next adventure!</Text>
-              <TouchableOpacity style={styles.createTripButton}>
-                <Text style={styles.createTripButtonText}>Create Trip</Text>
-              </TouchableOpacity>
+              <Text style={styles.emptyStateText}>Start a conversation about your travel plans...</Text>
+              <View style={styles.suggestions}>
+                <Text style={styles.suggestionTitle}>Try asking:</Text>
+                <Text style={styles.suggestionText}>• "Plan a 3-day trip to Paris"</Text>
+                <Text style={styles.suggestionText}>• "What are the best places to visit in Tokyo?"</Text>
+                <Text style={styles.suggestionText}>• "Create an itinerary for Barcelona"</Text>
+              </View>
             </View>
           )}
-        </View>
-      </ScrollView>
 
-      {/* User Profile Button */}
-      <View style={styles.profileButton}>
-        <TouchableOpacity 
-          onPress={handleSignOut}
-          style={styles.profileAvatar}
-        >
-          <Text style={styles.profileAvatarText}>
-            {user ? getUserInitials(user) : '?'}
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>
-            {user ? formatUserDisplayName(user) : 'Guest'}
-          </Text>
-          <Text style={styles.profileEmail}>
-            {user?.email || 'No email'}
-          </Text>
-        </View>
-      </View>
+          {messages.map((message) => {
+            // Extract text from parts array
+            const messageContent = message.parts?.map((part: any) => {
+              if (part.type === 'text') {
+                return part.text;
+              }
+              return '';
+            }).join('') || message.content || '';
 
-      {/* Create Trip Modal */}
-      <CreateTripModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={(tripId) => {
-          refetch();
-        }}
-      />
-    </View>
+            return (
+              <View
+                key={message.id}
+                style={[
+                  styles.messageContainer,
+                  message.role === 'user' ? styles.userMessage : styles.assistantMessage
+                ]}
+              >
+                <View style={styles.messageHeader}>
+                  <View style={[styles.avatar, message.role === 'assistant' && styles.assistantAvatar]}>
+                    <Text style={styles.avatarText}>
+                      {message.role === 'user' ? 'U' : 'AI'}
+                    </Text>
+                  </View>
+                  <Text style={styles.senderName}>
+                    {message.role === 'user' ? 'You' : 'Travel Assistant'}
+                  </Text>
+                  <Text style={styles.timestamp}>
+                    {new Date(message.createdAt || Date.now()).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                </View>
+                <Text style={styles.messageText}>{messageContent}</Text>
+              </View>
+            );
+          })}
+
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#8b5cf6" />
+              <Text style={styles.loadingText}>Thinking...</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Input */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask about travel plans..."
+            placeholderTextColor="#9ca3af"
+            multiline
+            editable={!isLoading}
+            onSubmitEditing={handleSendMessage}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText?.trim() || isLoading) && styles.sendButtonDisabled]}
+            onPress={handleSendMessage}
+            disabled={!inputText?.trim() || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.sendButtonText}>Send</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#f9fafb',
   },
-  header: {
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingTop: 48,
-    paddingBottom: 16,
-    paddingHorizontal: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#6366F1',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  logoText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  appName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  headerButton: {
-    padding: 8,
-  },
-  navTabs: {
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingHorizontal: 24,
-  },
-  navTabsContent: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-  },
-  navTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 8,
-  },
-  navTabActive: {
-    backgroundColor: '#EEF2FF',
-  },
-  navTabText: {
-    marginLeft: 8,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  navTabTextActive: {
-    color: '#6366F1',
-  },
-  content: {
+  keyboardView: {
     flex: 1,
   },
-  welcomeSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  welcomeTitle: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
   },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
     marginTop: 4,
   },
-  statsContainer: {
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: 16,
+  },
+  emptyState: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#9ca3af',
     marginBottom: 24,
   },
-  statsContent: {
-    paddingHorizontal: 24,
-  },
-  statCard: {
-    width: 160,
+  suggestions: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 400,
+  },
+  suggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4b5563',
+    marginBottom: 12,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  messageContainer: {
+    marginBottom: 20,
+    backgroundColor: 'white',
+    borderRadius: 12,
     padding: 16,
-    marginRight: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 1,
   },
-  statHeader: {
+  userMessage: {
+    backgroundColor: '#eff6ff',
+  },
+  assistantMessage: {
+    backgroundColor: 'white',
+  },
+  messageHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  statIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-    alignItems: 'center',
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
     justifyContent: 'center',
-  },
-  statTrend: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statTrendText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  tripsSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  tripsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginRight: 8,
   },
-  tripsSectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+  assistantAvatar: {
+    backgroundColor: '#8b5cf6',
   },
-  tripsSectionActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  viewAllLink: {
-    color: '#6366F1',
-    fontWeight: '500',
-  },
-  headerCreateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 6,
-  },
-  headerCreateButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tripsScrollContent: {
-    paddingRight: 24,
-  },
-  tripCard: {
-    width: 280,
-    marginRight: 16,
-  },
-  tripGradient: {
-    height: 160,
-    borderRadius: 16,
-    padding: 20,
-  },
-  tripHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  tripInfo: {
-    flex: 1,
-  },
-  tripTitle: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  tripStatus: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  tripStatusText: {
+  avatarText: {
     color: 'white',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
-  tripParticipants: {
-    flexDirection: 'row',
-  },
-  participantAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  tripFooter: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  tripDetails: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  tripDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tripDate: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  loadingContainer: {
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#6B7280',
-    marginTop: 8,
-  },
-  errorContainer: {
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#EF4444',
-  },
-  errorSubtext: {
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  emptyState: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyStateTitle: {
-    fontSize: 18,
+  senderName: {
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 8,
+    fontSize: 14,
   },
-  emptyStateText: {
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  createTripButton: {
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  createTripButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  profileButton: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileAvatar: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#6366F1',
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  profileAvatarText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  profileInfo: {
-    position: 'absolute',
-    bottom: -8,
-    right: -8,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  profileName: {
+  timestamp: {
     fontSize: 12,
-    fontWeight: '500',
+    color: '#9ca3af',
+    marginLeft: 'auto',
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
     color: '#374151',
   },
-  profileEmail: {
-    fontSize: 12,
-    color: '#6B7280',
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    alignItems: 'flex-end',
+  },
+  textInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#111827',
+    marginRight: 12,
+  },
+  sendButton: {
+    minWidth: 64,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#9ca3af',
+  },
+  sendButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

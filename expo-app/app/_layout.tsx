@@ -11,7 +11,7 @@ import 'react-native-reanimated';
 import '../global.css';
 
 import { useColorScheme } from '@/components/useColorScheme';
-import { AuthProvider, useAuth } from '@/lib/supabase/auth-context';
+// Authentication disabled - removed AuthProvider and useAuth imports
 
 const queryClient = new QueryClient();
 
@@ -58,40 +58,26 @@ function RootLayoutNav() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <ProtectedLayout />
-          </ThemeProvider>
-        </AuthProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <ProtectedLayout />
+        </ThemeProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
 
 function ProtectedLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    const inPublicGroup = segments[0] === '(public)';
-    const isBranchingDemo = segments[0] === 'branching-demo';
-
-
-      router.replace('/test-prosemirror');
-      return
-
-  }, [isAuthenticated, segments, isLoading, router]);
+  // Authentication disabled - app is now public
+  // const { isAuthenticated, isLoading } = useAuth();
+  // const segments = useSegments();
+  // const router = useRouter();
 
   return (
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="test-prosemrror" options={{ headerShown: false }} />
+      <Stack.Screen name="test-prosemirror" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
