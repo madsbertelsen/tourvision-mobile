@@ -270,11 +270,13 @@ const createSelectionPlugin = (onSelectionChange: (selection: { from: number; to
   });
 };
 
-// Create initial document - start empty for testing
+// Create initial document - start with sample text for visibility
 const createInitialDoc = (schema: Schema) => {
-  // Start with an empty document - just a single empty paragraph
+  // Start with a paragraph containing sample text
   return schema.node('doc', null, [
-    schema.node('paragraph', null, [])
+    schema.node('paragraph', null, [
+      schema.text('Start typing here to create your itinerary...')
+    ])
   ]);
 };
 
