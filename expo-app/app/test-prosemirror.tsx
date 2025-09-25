@@ -19,6 +19,7 @@ export default function TestProseMirrorScreen() {
   const [currentMessage, setCurrentMessage] = useState('create a 3-day itinerary in Copenhagen');
   const [tripTitle, setTripTitle] = useState('Copenhagen Adventure');
   const [tripDates, setTripDates] = useState('Dec 15 - Dec 18, 2024');
+  const [activeTab, setActiveTab] = useState<'document' | 'chat'>('chat'); // Default to chat on mobile
   const editorRef = useRef<TestProseMirrorDOMRef>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
@@ -268,24 +269,46 @@ Suggestion: ${suggestion}`;
         </View>
       </View>
 
-      <View style={styles.mainContent}>
-        <ScrollView style={styles.scrollContainer}>
-        <View style={styles.editorContainer}>
-          <Text style={styles.editorLabel}>ProseMirror Document Editor</Text>
-          <View style={styles.editor}>
-            <TestProseMirrorDOM
-              ref={editorRef}
-              onStateChange={() => {
-                console.log('Editor state changed');
-              }}
-              onSuggestChange={handleSuggestionFromSelection}
-            />
-          </View>
-        </View>
-        </ScrollView>
+      {/* Mobile Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'document' && styles.tabActive]}
+          onPress={() => setActiveTab('document')}
+        >
+          <Text style={[styles.tabText, activeTab === 'document' && styles.tabTextActive]}>
+            Document
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'chat' && styles.tabActive]}
+          onPress={() => setActiveTab('chat')}
+        >
+          <Text style={[styles.tabText, activeTab === 'chat' && styles.tabTextActive]}>
+            Chat
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Chat Panel */}
-        <View style={styles.chatPanel}>
+      <View style={styles.mainContent}>
+        {/* Document View - Show when document tab is active */}
+        {activeTab === 'document' ? (
+          <ScrollView style={styles.fullWidthContainer}>
+            <View style={styles.editorContainer}>
+              <Text style={styles.editorLabel}>ProseMirror Document Editor</Text>
+              <View style={styles.editor}>
+                <TestProseMirrorDOM
+                  ref={editorRef}
+                  onStateChange={() => {
+                    console.log('Editor state changed');
+                  }}
+                  onSuggestChange={handleSuggestionFromSelection}
+                />
+              </View>
+            </View>
+          </ScrollView>
+        ) : (
+          /* Chat Panel - Show when chat tab is active */
+          <View style={styles.fullHeightPanel}>
           <View style={styles.chatHeader}>
             <Text style={styles.chatTitle}>Chat</Text>
           </View>
@@ -373,6 +396,7 @@ Suggestion: ${suggestion}`;
             </View>
           </View>
         </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -553,6 +577,36 @@ const styles = StyleSheet.create({
     borderLeftColor: '#e5e7eb',
     maxWidth: 400,
     minWidth: 300,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 16,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: '#3b82f6',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  tabTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  fullHeightPanel: {
+    flex: 1,
+    backgroundColor: 'white',
   },
   chatHeader: {
     padding: 16,
