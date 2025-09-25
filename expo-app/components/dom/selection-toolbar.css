@@ -1,0 +1,124 @@
+.selection-toolbar {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.selection-toolbar-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.selection-toolbar-button {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.selection-toolbar-button:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.selection-comment-input {
+  padding: 8px;
+  min-width: 300px;
+}
+
+.selection-comment-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.selection-comment-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.selection-comment-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.selection-comment-submit,
+.selection-comment-cancel {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.selection-comment-submit {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.selection-comment-submit:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.selection-comment-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selection-comment-cancel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.selection-comment-cancel:hover {
+  background: #f3f4f6;
+}
+
+/* Highlight for text with pending changes */
+.pending-change {
+  background: #fef3c7;
+  border-bottom: 2px dotted #f59e0b;
+  cursor: pointer;
+  position: relative;
+}
+
+.pending-change::after {
+  content: '💭';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 12px;
+}

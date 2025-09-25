@@ -11,6 +11,7 @@ import { keymap } from 'prosemirror-keymap';
 import { history } from 'prosemirror-history';
 import { MapView } from './map-view';
 import { TransportationModal } from './TransportationModal';
+import { SelectionToolbar } from './SelectionToolbar';
 import './test-prosemirror-styles.css';
 
 // Location interface for map markers
@@ -99,6 +100,33 @@ const createSchemaWithGeoMark = () => {
 
         attrs['title'] = mark.attrs.placeName || `Location ${mark.attrs.lat}, ${mark.attrs.lng}`;
         return ['span', attrs];
+      }
+    },
+    pendingChange: {
+      attrs: {
+        comment: { default: '' },
+        originalText: { default: '' },
+        timestamp: { default: null }
+      },
+      parseDOM: [{
+        tag: 'span[data-pending-change]',
+        getAttrs(dom: any) {
+          return {
+            comment: dom.getAttribute('data-comment') || '',
+            originalText: dom.getAttribute('data-original-text') || '',
+            timestamp: dom.getAttribute('data-timestamp') || null
+          };
+        }
+      }],
+      toDOM(mark: Mark) {
+        return ['span', {
+          'class': 'pending-change',
+          'data-pending-change': 'true',
+          'data-comment': mark.attrs.comment,
+          'data-original-text': mark.attrs.originalText,
+          'data-timestamp': mark.attrs.timestamp,
+          'title': `Suggested change: ${mark.attrs.comment}`
+        }, 0];
       }
     }
   };
@@ -211,6 +239,36 @@ const createDiffPlugin = () => {
   });
 };
 
+// Create selection tracking plugin
+const selectionPluginKey = new PluginKey('selection');
+
+const createSelectionPlugin = (onSelectionChange: (selection: { from: number; to: number; text: string } | null) => void) => {
+  return new Plugin({
+    key: selectionPluginKey,
+    state: {
+      init() {
+        return null;
+      },
+      apply(tr, prev) {
+        const selection = tr.selection;
+        if (selection && !selection.empty) {
+          const text = tr.doc.textBetween(selection.from, selection.to);
+          return { from: selection.from, to: selection.to, text };
+        }
+        return null;
+      }
+    },
+    view() {
+      return {
+        update(view) {
+          const pluginState = selectionPluginKey.getState(view.state);
+          onSelectionChange(pluginState);
+        }
+      };
+    }
+  });
+};
+
 // Create initial document - start empty for testing
 const createInitialDoc = (schema: Schema) => {
   // Start with an empty document - just a single empty paragraph
@@ -222,6 +280,12 @@ const createInitialDoc = (schema: Schema) => {
 interface TestProseMirrorDOMProps {
   onStateChange?: (state: EditorState) => void;
   initialContent?: any;
+  onSuggestChange?: (selectedText: string, suggestion: string, context: {
+    from: number;
+    to: number;
+    documentHtml: string;
+    surroundingText?: string;
+  }) => void;
 }
 
 export interface TestProseMirrorDOMRef {
@@ -469,7 +533,7 @@ const TRANSPORT_MODE_PROFILES: Record<string, string> = {
 };
 
 const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMProps>(
-  ({ onStateChange, initialContent }, ref) => {
+  ({ onStateChange, initialContent, onSuggestChange }, ref) => {
     const [mount, setMount] = useState<HTMLElement | null>(null);
     const [bubbleMenuState, setBubbleMenuState] = useState<{
       visible: boolean;
@@ -482,6 +546,10 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
     const [selectedText, setSelectedText] = useState('');
     const [geoLocations, setGeoLocations] = useState<Location[]>([]);
     const [clickedLocation, setClickedLocation] = useState<Location | null>(null);
+
+    // Selection tracking state
+    const [currentSelection, setCurrentSelection] = useState<{ from: number; to: number; text: string } | null>(null);
+    const [editorView, setEditorView] = useState<any>(null);
 
     // Transportation state
     const [transportationRoutes, setTransportationRoutes] = useState<Array<{
@@ -656,6 +724,7 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       history(),
       keymap(baseKeymap),
       createGeoClickPlugin(),
+      createSelectionPlugin(setCurrentSelection),
     ], []);
 
     // Create initial editor state
@@ -1579,6 +1648,47 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
       car: '🚙'
     };
 
+    // Handle suggestion from selection toolbar
+    const handleSuggestChange = (selectedText: string, suggestion: string) => {
+      if (!currentSelection) return;
+
+      // Add pendingChange mark to the selected text
+      const tr = state.tr;
+      const pendingChangeMark = geoSchema.marks.pendingChange.create({
+        comment: suggestion,
+        originalText: selectedText,
+        timestamp: new Date().toISOString()
+      });
+
+      tr.addMark(currentSelection.from, currentSelection.to, pendingChangeMark);
+      dispatchTransaction(tr);
+
+      // Get surrounding context (50 characters before and after)
+      const doc = state.doc;
+      const contextStart = Math.max(0, currentSelection.from - 50);
+      const contextEnd = Math.min(doc.content.size, currentSelection.to + 50);
+      const surroundingText = doc.textBetween(contextStart, contextEnd, ' ');
+
+      // Get the current document as HTML
+      const documentHtml = docToHTML(state.doc);
+
+      // Call parent callback if provided
+      if (onSuggestChange) {
+        onSuggestChange(selectedText, suggestion, {
+          from: currentSelection.from,
+          to: currentSelection.to,
+          documentHtml,
+          surroundingText
+        });
+      }
+
+      console.log('Suggestion added:', {
+        selectedText,
+        suggestion,
+        from: currentSelection.from,
+        to: currentSelection.to
+      });
+    };
 
     return (
       <div className="test-prosemirror-wrapper">
@@ -1984,11 +2094,22 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
           mount={mount}
           state={state}
           dispatchTransaction={dispatchTransaction}
+          handleDOMEvents={{
+            focus: (view) => {
+              setEditorView(view);
+              return false;
+            }
+          }}
         >
           <div
             ref={setMount}
             className="test-prosemirror-editor"
             spellCheck={false}
+          />
+          <SelectionToolbar
+            selection={currentSelection}
+            editorView={editorView}
+            onSuggestChange={handleSuggestChange}
           />
         </ProseMirror>
       </div>

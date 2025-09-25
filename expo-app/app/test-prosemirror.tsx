@@ -34,6 +34,96 @@ export default function TestProseMirrorScreen() {
     );
   }
 
+  // Handle suggestion from selection toolbar
+  const handleSuggestionFromSelection = async (selectedText: string, suggestion: string, context: any) => {
+    // Simple prompt that matches what appears in chat
+    const simplePrompt = `Regarding this text: "${selectedText}"
+
+Suggestion: ${suggestion}`;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: simplePrompt,
+      timestamp: new Date(),
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setIsLoadingAI(true);
+
+    // Scroll to bottom of chat
+    setTimeout(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Auto-submit to AI
+    try {
+      const currentHtml = context.documentHtml || editorRef.current?.getHTML() || '';
+
+      // Call the API
+      const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
+        ? `${process.env.EXPO_PUBLIC_NEXTJS_API_URL}/api/generate-prosemirror-proposal`
+        : `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-prosemirror-proposal`;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (!process.env.EXPO_PUBLIC_NEXTJS_API_URL) {
+        headers['Authorization'] = `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          htmlDocument: currentHtml,
+          prompt: simplePrompt  // Use the same simple prompt that appears in chat
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate proposal');
+      }
+
+      const result = await response.json();
+
+      console.log('API Response:', {
+        success: result.success,
+        description: result.description,
+        hasModifiedHtml: !!result.modifiedHtml,
+        changes: result.changes
+      });
+
+      const aiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: result.description || 'I\'ve updated the itinerary based on your suggestion.',
+        timestamp: new Date(),
+        proposal: result.modifiedHtml,
+      };
+
+      setChatMessages(prev => [...prev, aiMessage]);
+
+      if (result.success && result.modifiedHtml) {
+        editorRef.current?.showProposedChanges(result.modifiedHtml);
+        setIsPreviewActive(true);
+        setActiveProposalId(aiMessage.id);
+      }
+    } catch (error) {
+      console.error('Error processing suggestion:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: 'Sorry, I encountered an error processing your suggestion. Please try again.',
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
   const sendChatMessage = async () => {
     if (!currentMessage.trim()) return;
 
@@ -51,6 +141,30 @@ export default function TestProseMirrorScreen() {
     try {
       // Get current document as HTML
       const currentHtml = editorRef.current?.getHTML() || '';
+
+      // Check if the message is about modifying the itinerary
+      const isModificationRequest = currentMessage.toLowerCase().includes('change') ||
+                                    currentMessage.toLowerCase().includes('modify') ||
+                                    currentMessage.toLowerCase().includes('instead') ||
+                                    currentMessage.toLowerCase().includes('overnight') ||
+                                    currentMessage.toLowerCase().includes('stay the night');
+
+      // Create enhanced prompt if it's a modification request
+      const promptToSend = isModificationRequest
+        ? `IMPORTANT: When modifying an itinerary based on the user's request:
+          1. PRESERVE existing day activities that aren't being changed
+          2. Each day number must appear EXACTLY ONCE - no duplicates
+          3. If adding overnight stays:
+             - KEEP the day's activities, only change the evening
+             - ADD Day 4 ONLY for next morning activities
+          4. DO NOT add unnecessary extra days (like Day 5)
+          5. DO NOT create separate sections for the same day
+          6. Example: "Stay overnight in Roskilde" means:
+             - Day 3 ends with overnight in Roskilde (keep Land of Legends trip)
+             - Day 4 has morning activity and return to Copenhagen
+
+          User request: ${currentMessage}`
+        : currentMessage;
 
       // Call the API - use Next.js API if available, otherwise fall back to Supabase Edge Function
       const apiUrl = process.env.EXPO_PUBLIC_NEXTJS_API_URL
@@ -71,7 +185,7 @@ export default function TestProseMirrorScreen() {
           headers,
           body: JSON.stringify({
             htmlDocument: currentHtml,
-            prompt: currentMessage
+            prompt: promptToSend
           })
         }
       );
@@ -81,6 +195,13 @@ export default function TestProseMirrorScreen() {
       }
 
       const result = await response.json();
+
+      console.log('API Response:', {
+        success: result.success,
+        description: result.description,
+        hasModifiedHtml: !!result.modifiedHtml,
+        changes: result.changes
+      });
 
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -141,6 +262,7 @@ export default function TestProseMirrorScreen() {
               onStateChange={() => {
                 console.log('Editor state changed');
               }}
+              onSuggestChange={handleSuggestionFromSelection}
             />
           </View>
         </View>
@@ -184,7 +306,18 @@ export default function TestProseMirrorScreen() {
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
-                <Text style={styles.messageText}>{message.text}</Text>
+                {message.text.includes('Regarding this text:') ? (
+                  <View>
+                    <Text style={[styles.messageText, { fontStyle: 'italic', color: '#6B7280', marginBottom: 4 }]}>
+                      {message.text.split('\n\n')[0]}
+                    </Text>
+                    <Text style={styles.messageText}>
+                      {message.text.split('\n\n')[1]}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.messageText}>{message.text}</Text>
+                )}
                 {message.proposal && (
                   <View style={styles.proposalActionsContainer}>
                     <TouchableOpacity
