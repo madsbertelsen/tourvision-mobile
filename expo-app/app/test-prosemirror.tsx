@@ -71,7 +71,13 @@ Suggestion: ${suggestion}`;
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate proposal');
+        const errorText = await response.text();
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Failed to generate proposal: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
@@ -130,6 +136,13 @@ Suggestion: ${suggestion}`;
       // Get current document as HTML
       const currentHtml = editorRef.current?.getHTML?.() || '';
 
+      console.log('Current HTML from editor:', currentHtml);
+      console.log('Editor ref exists:', !!editorRef.current);
+      console.log('getHTML method exists:', !!editorRef.current?.getHTML);
+
+      // If no HTML content, provide a default
+      const htmlToSend = currentHtml || '<p>No content yet</p>';
+
       // Check if the message is about modifying the itinerary
       const isModificationRequest = currentMessage.toLowerCase().includes('change') ||
                                     currentMessage.toLowerCase().includes('modify') ||
@@ -168,18 +181,33 @@ Suggestion: ${suggestion}`;
         headers['Authorization'] = `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`;
       }
 
+      const requestPayload = {
+        htmlDocument: htmlToSend,
+        prompt: promptToSend
+      };
+
+      console.log('API Request:', {
+        url: apiUrl,
+        htmlLength: htmlToSend.length,
+        htmlSample: htmlToSend.substring(0, 100),
+        prompt: promptToSend
+      });
+
       const response = await fetch(apiUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            htmlDocument: currentHtml,
-            prompt: promptToSend
-          })
+          body: JSON.stringify(requestPayload)
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to generate proposal');
+        const errorText = await response.text();
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Failed to generate proposal: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
