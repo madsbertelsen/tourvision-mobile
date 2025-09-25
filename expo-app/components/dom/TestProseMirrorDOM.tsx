@@ -582,25 +582,33 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         let doc = parser.parse(tempDiv);
 
         // Ensure all geo marks have color indices
-        const usedIndices = new Set<number>();
+        const locationColorMap = new Map<string, number>();
         let needsColorAssignment = false;
+        let nextColorIndex = 0; // Start at 0 to match array index
 
-        // First pass: check what color indices are used
+        // First pass: check what locations exist and assign sequential colors
         doc.descendants((node) => {
           node.marks.forEach(mark => {
             if (mark.type.name === 'geo') {
-              if (mark.attrs.colorIndex !== undefined && mark.attrs.colorIndex !== null && mark.attrs.colorIndex !== 0) {
-                usedIndices.add(mark.attrs.colorIndex);
-              } else {
+              const locationId = `${mark.attrs.lat}_${mark.attrs.lng}`;
+
+              // If this location doesn't have a color assigned yet
+              if (!locationColorMap.has(locationId)) {
+                // Assign sequential color index for this unique location
+                locationColorMap.set(locationId, nextColorIndex);
+                nextColorIndex++;
+              }
+
+              // Check if mark needs color update
+              if (mark.attrs.colorIndex !== locationColorMap.get(locationId)) {
                 needsColorAssignment = true;
               }
             }
           });
         });
 
-        // Second pass: assign color indices to marks that don't have them
+        // Second pass: assign consistent color indices to all marks of the same location
         if (needsColorAssignment) {
-          let nextColorIndex = 1; // Start at 1, not 0
           const tempState = EditorState.create({
             doc,
             schema: geoSchema
@@ -609,27 +617,24 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
           doc.descendants((node, pos) => {
             node.marks.forEach(mark => {
-              if (mark.type.name === 'geo' && (!mark.attrs.colorIndex || mark.attrs.colorIndex === 0)) {
-                // Find next available color index
-                while (usedIndices.has(nextColorIndex) && nextColorIndex <= 9) {
-                  nextColorIndex++;
+              if (mark.type.name === 'geo') {
+                const locationId = `${mark.attrs.lat}_${mark.attrs.lng}`;
+                const colorIndex = locationColorMap.get(locationId) || 0;
+
+                // Only update if color is different
+                if (mark.attrs.colorIndex !== colorIndex) {
+                  // Create new mark with correct color index
+                  const newMark = geoSchema.marks.geo.create({
+                    ...mark.attrs,
+                    colorIndex
+                  });
+
+                  // Replace the mark
+                  const from = pos;
+                  const to = pos + node.nodeSize;
+                  tr.removeMark(from, to, mark);
+                  tr.addMark(from, to, newMark);
                 }
-                const colorIndex = nextColorIndex > 9 ? ((nextColorIndex - 1) % 9) + 1 : nextColorIndex;
-                usedIndices.add(colorIndex);
-
-                // Create new mark with color index
-                const newMark = geoSchema.marks.geo.create({
-                  ...mark.attrs,
-                  colorIndex
-                });
-
-                // Replace the mark
-                const from = pos;
-                const to = pos + node.nodeSize;
-                tr.removeMark(from, to, mark);
-                tr.addMark(from, to, newMark);
-
-                nextColorIndex++;
               }
             });
           });
@@ -1338,25 +1343,33 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
         let doc = parser.parse(tempDiv);
 
         // Ensure all geo marks have color indices
-        const usedIndices = new Set<number>();
+        const locationColorMap = new Map<string, number>();
         let needsColorAssignment = false;
+        let nextColorIndex = 0; // Start at 0 to match array index
 
-        // First pass: check what color indices are used
+        // First pass: check what locations exist and assign sequential colors
         doc.descendants((node) => {
           node.marks.forEach(mark => {
             if (mark.type.name === 'geo') {
-              if (mark.attrs.colorIndex !== undefined && mark.attrs.colorIndex !== null && mark.attrs.colorIndex !== 0) {
-                usedIndices.add(mark.attrs.colorIndex);
-              } else {
+              const locationId = `${mark.attrs.lat}_${mark.attrs.lng}`;
+
+              // If this location doesn't have a color assigned yet
+              if (!locationColorMap.has(locationId)) {
+                // Assign sequential color index for this unique location
+                locationColorMap.set(locationId, nextColorIndex);
+                nextColorIndex++;
+              }
+
+              // Check if mark needs color update
+              if (mark.attrs.colorIndex !== locationColorMap.get(locationId)) {
                 needsColorAssignment = true;
               }
             }
           });
         });
 
-        // Second pass: assign color indices to marks that don't have them
+        // Second pass: assign consistent color indices to all marks of the same location
         if (needsColorAssignment) {
-          let nextColorIndex = 1; // Start at 1, not 0
           const tempState = EditorState.create({
             doc,
             schema: geoSchema
@@ -1365,27 +1378,24 @@ const TestProseMirrorDOM = forwardRef<TestProseMirrorDOMRef, TestProseMirrorDOMP
 
           doc.descendants((node, pos) => {
             node.marks.forEach(mark => {
-              if (mark.type.name === 'geo' && (!mark.attrs.colorIndex || mark.attrs.colorIndex === 0)) {
-                // Find next available color index
-                while (usedIndices.has(nextColorIndex) && nextColorIndex <= 9) {
-                  nextColorIndex++;
+              if (mark.type.name === 'geo') {
+                const locationId = `${mark.attrs.lat}_${mark.attrs.lng}`;
+                const colorIndex = locationColorMap.get(locationId) || 0;
+
+                // Only update if color is different
+                if (mark.attrs.colorIndex !== colorIndex) {
+                  // Create new mark with correct color index
+                  const newMark = geoSchema.marks.geo.create({
+                    ...mark.attrs,
+                    colorIndex
+                  });
+
+                  // Replace the mark
+                  const from = pos;
+                  const to = pos + node.nodeSize;
+                  tr.removeMark(from, to, mark);
+                  tr.addMark(from, to, newMark);
                 }
-                const colorIndex = nextColorIndex > 9 ? ((nextColorIndex - 1) % 9) + 1 : nextColorIndex;
-                usedIndices.add(colorIndex);
-
-                // Create new mark with color index
-                const newMark = geoSchema.marks.geo.create({
-                  ...mark.attrs,
-                  colorIndex
-                });
-
-                // Replace the mark
-                const from = pos;
-                const to = pos + node.nodeSize;
-                tr.removeMark(from, to, mark);
-                tr.addMark(from, to, newMark);
-
-                nextColorIndex++;
               }
             });
           });

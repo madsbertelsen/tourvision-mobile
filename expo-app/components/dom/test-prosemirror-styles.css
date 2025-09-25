@@ -211,44 +211,45 @@
 }
 
 /* Color-coded location markers matching map pins - applied to dots only */
+/* Match MARKER_COLORS array order from map-view.tsx */
 .geo-mark[data-location-index="0"]::before {
-  color: #6B7280; /* Default gray for index 0 */
+  color: #3B82F6; /* Blue - first color in array */
 }
 
 .geo-mark[data-location-index="1"]::before {
-  color: #3B82F6; /* Blue */
-}
-
-.geo-mark[data-location-index="2"]::before {
   color: #8B5CF6; /* Purple */
 }
 
-.geo-mark[data-location-index="3"]::before {
+.geo-mark[data-location-index="2"]::before {
   color: #10B981; /* Green */
 }
 
-.geo-mark[data-location-index="4"]::before {
+.geo-mark[data-location-index="3"]::before {
   color: #F59E0B; /* Amber */
 }
 
-.geo-mark[data-location-index="5"]::before {
+.geo-mark[data-location-index="4"]::before {
   color: #EF4444; /* Red */
 }
 
-.geo-mark[data-location-index="6"]::before {
+.geo-mark[data-location-index="5"]::before {
   color: #EC4899; /* Pink */
 }
 
-.geo-mark[data-location-index="7"]::before {
+.geo-mark[data-location-index="6"]::before {
   color: #06B6D4; /* Cyan */
 }
 
-.geo-mark[data-location-index="8"]::before {
+.geo-mark[data-location-index="7"]::before {
   color: #84CC16; /* Lime */
 }
 
-.geo-mark[data-location-index="9"]::before {
+.geo-mark[data-location-index="8"]::before {
   color: #F97316; /* Orange */
+}
+
+.geo-mark[data-location-index="9"]::before {
+  color: #6366F1; /* Indigo */
 }
 
 /* Add colored dot before location name to match map marker - ALL geo marks get dots */
