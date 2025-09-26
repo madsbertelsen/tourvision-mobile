@@ -1,11 +1,11 @@
-import { NativeItineraryViewer } from '@/components/NativeItineraryViewer';
 import { MapViewWrapper } from '@/components/MapViewWrapper';
+import { NativeItineraryViewer } from '@/components/NativeItineraryViewer';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import React from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Dimensions } from 'react-native';
+import { ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -24,12 +24,16 @@ interface Location {
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
   const [mapLocations, setMapLocations] = React.useState<Location[]>([]);
-  const [focusedLocation, setFocusedLocation] = React.useState<Location | null>(null);
+  // const [focusedLocation, setFocusedLocation] = React.useState<Location | null>(null); // Disabled geo-mark focus
   const messagesScrollRef = React.useRef<ScrollView>(null);
   const scrollDebounceTimer = React.useRef<NodeJS.Timeout>();
 
+  // Track paragraph positions for highlighting
+  const paragraphPositions = React.useRef<Map<string, { y: number; height: number }>>(new Map());
+  const [highlightedParagraphId, setHighlightedParagraphId] = React.useState<string | null>(null);
+
   // Square map size based on screen width
-  const mapSize = screenWidth;
+  const mapSize = screenWidth; // Square map based on screen width
 
   // Debug the API URL
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -83,6 +87,8 @@ export default function SimpleChatScreen() {
   // Remove the old effect - we'll handle this in the scroll handler directly
 
   // Handle scroll to detect which message's locations should be shown
+  // DISABLED: Geo-mark focus feature
+  /*
   const handleMessagesScroll = React.useCallback((event: any) => {
     // Early return if messages not yet available
     if (!messages || messages.length === 0 || mapLocations.length === 0) {
@@ -153,6 +159,7 @@ export default function SimpleChatScreen() {
       });
     }, 200); // 200ms debounce
   }, [messages, mapLocations, focusedLocation]);
+  */
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -183,34 +190,90 @@ export default function SimpleChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Travel Assistant</Text>
-          <Text style={styles.headerSubtitle}>Ask me anything about travel planning</Text>
-        </View>
-
-        {/* Map positioned absolutely at bottom - always visible */}
+        {/* Map as background layer */}
         <View style={styles.mapContainer}>
           <MapViewWrapper
             elements={[]} // We'll pass locations directly instead
             locations={mapLocations}
-            focusedLocation={focusedLocation}
+            focusedLocation={null} // Disabled geo-mark focus
             height={mapSize}
           />
         </View>
 
-        {/* Messages overlaying the map */}
-        <ScrollView
+        {/* Main container overlaying the map */}
+        <View style={styles.mainContainer}>
+          {/* Content area - takes up available space with flex: 1 */}
+          <View style={styles.contentContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Travel Assistant</Text>
+              <Text style={styles.headerSubtitle}>Ask me anything about travel planning</Text>
+            </View>
+
+            {/* Messages scrollable area overlaying map */}
+            <ScrollView
           ref={messagesScrollRef}
           style={styles.messagesContainer}
           contentContainerStyle={[
             styles.messagesContent,
             messages.length === 0 && styles.messagesContentEmpty
           ]}
-          onScroll={handleMessagesScroll}
+          onScroll={(event) => {
+            // Calculate which paragraph should be highlighted
+            const scrollY = event.nativeEvent?.contentOffset?.y || 0;
+            const viewportHeight = event.nativeEvent?.layoutMeasurement?.height || 600;
+
+            // Clear existing debounce timer
+            if (scrollDebounceTimer.current) {
+              clearTimeout(scrollDebounceTimer.current);
+            }
+
+            // Debounce the calculation
+            scrollDebounceTimer.current = setTimeout(() => {
+              messagesScrollRef.current?.measureInWindow((x, scrollViewY, width, scrollViewHeight) => {
+                // Calculate viewport bounds with offset
+                const viewportTop = scrollViewY + scrollY;
+                const viewportBottom = viewportTop + viewportHeight;
+                const viewportCenter = viewportTop + (viewportHeight / 2); // Center of viewport
+                const targetY = viewportCenter; // Element at center should be highlighted
+
+                console.log(`[Main ScrollView] Viewport: top=${viewportTop}, bottom=${viewportBottom}, target=${targetY}`);
+                console.log(`[Main ScrollView] Tracked paragraphs: ${paragraphPositions.current.size}`);
+
+                // Find element closest to the target Y position
+                let closestElement: { id: string; y: number; distance: number } | null = null;
+
+                paragraphPositions.current.forEach((position, id) => {
+                  const paragraphTop = position.y;
+                  const paragraphBottom = position.y + position.height;
+
+                  // Only consider elements that are at least partially visible
+                  if (paragraphTop < viewportBottom && paragraphBottom > viewportTop) {
+                    // Calculate distance from paragraph top to target position
+                    const distance = Math.abs(paragraphTop - targetY);
+
+                    if (!closestElement || distance < closestElement.distance) {
+                      closestElement = { id, y: paragraphTop, distance };
+                    }
+                  }
+                });
+
+                // Highlight the element closest to the target position
+                if (closestElement) {
+                  if (closestElement.id !== highlightedParagraphId) {
+                    console.log(`[Main ScrollView] >>> Highlighting: ${closestElement.id} (distance: ${closestElement.distance.toFixed(0)}px from target)`);
+                    setHighlightedParagraphId(closestElement.id);
+                  }
+                } else {
+                  console.log(`[Main ScrollView] No visible paragraphs found`);
+                  setHighlightedParagraphId(null);
+                }
+              });
+            }, 100);
+          }}
           scrollEventThrottle={16}
-          onScrollEndDrag={handleMessagesScroll}
-          onMomentumScrollEnd={handleMessagesScroll}
+          // onScrollEndDrag={handleMessagesScroll} // Disabled geo-mark focus
+          // onMomentumScrollEnd={handleMessagesScroll} // Disabled geo-mark focus
         >
           {messages.map((message) => {
             // Check if message contains HTML content (itinerary)
@@ -257,20 +320,25 @@ export default function SimpleChatScreen() {
                       content={textContent}
                       isStreaming={status === 'in_progress' && message === messages[messages.length - 1]}
                       messageId={message.id}
-                      focusedLocation={focusedLocation}
+                      focusedLocation={null} // Disabled geo-mark focus
                       onLocationClick={(location, lat, lng) => {
                         console.log('Location clicked:', location, lat, lng);
-                        // Focus on clicked location
-                        const clickedLoc = mapLocations.find(loc =>
-                          loc.name === location &&
-                          loc.lat.toString() === lat &&
-                          loc.lng.toString() === lng
-                        );
-                        if (clickedLoc) {
-                          setFocusedLocation(clickedLoc);
-                        }
+                        // Focus on clicked location - DISABLED
+                        // const clickedLoc = mapLocations.find(loc =>
+                        //   loc.name === location &&
+                        //   loc.lat.toString() === lat &&
+                        //   loc.lng.toString() === lng
+                        // );
+                        // if (clickedLoc) {
+                        //   setFocusedLocation(clickedLoc);
+                        // }
                       }}
                       onLocationsUpdate={(locations) => handleLocationsUpdate(locations, message.id)}
+                      highlightedParagraphId={highlightedParagraphId}
+                      onParagraphPositionUpdate={(id, y, height) => {
+                        paragraphPositions.current.set(id, { y, height });
+                        console.log(`[Main] Paragraph position updated: ${id} at y=${y}`);
+                      }}
                     />
                   ) : (
                     <Text style={styles.messageText}>{textContent}</Text>
@@ -286,10 +354,11 @@ export default function SimpleChatScreen() {
               <Text style={styles.loadingText}>Thinking...</Text>
             </View>
           )}
-        </ScrollView>
+            </ScrollView>
+          </View>
 
-        {/* Input */}
-        <View style={styles.inputContainer}>
+          {/* Input container - stays at bottom */}
+          <View style={styles.inputContainer}>
           <TextInput
             style={styles.textInput}
             value={inputText}
@@ -312,6 +381,7 @@ export default function SimpleChatScreen() {
             )}
           </TouchableOpacity>
         </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -325,12 +395,25 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  mainContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  contentContainer: {
+    flex: 1, // This makes content grow to fill available space
+    display: 'flex',
+    flexDirection: 'column',
+  },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    backgroundColor: 'transparent',
   },
   headerTitle: {
     fontSize: 24,
@@ -344,43 +427,37 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     position: 'absolute',
-    bottom: 60, // Above input area
     left: 0,
     right: 0,
-    height: screenWidth,
-    width: screenWidth,
+    bottom: 0,
+    width: '100%',
+    height: screenWidth, // Square map
     zIndex: 0,
   },
   messagesContainer: {
     flex: 1,
-    zIndex: 1,
-    maxHeight: screenHeight - screenWidth - 160, // Leave space for map and input
-    marginBottom: screenWidth - 60, // Push messages up above the map
+    backgroundColor: 'transparent',
   },
   messagesContent: {
     flexGrow: 1,
     padding: 16,
-    paddingBottom: 32,
+    backgroundColor: 'transparent',
   },
   messagesContentEmpty: {
     minHeight: 100, // Smaller min height when empty
+    backgroundColor: 'transparent',
   },
   messageContainer: {
     marginBottom: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Semi-transparent white
+    backgroundColor: 'transparent',
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   userMessage: {
-    backgroundColor: 'rgba(239, 246, 255, 0.95)', // Semi-transparent blue
+    backgroundColor: 'transparent',
   },
   assistantMessage: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)', // Semi-transparent white
+    backgroundColor: 'transparent',
   },
   messageHeader: {
     flexDirection: 'row',
@@ -448,9 +525,9 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: 'rgba(229, 231, 235, 0.5)',
     alignItems: 'flex-end',
   },
   textInput: {

@@ -42,6 +42,8 @@ interface NativeItineraryViewerProps {
   onVisibleLocationChange?: (location: Location) => void;
   messageId?: string;
   focusedLocation?: Location | null;
+  highlightedParagraphId?: string | null;
+  onParagraphPositionUpdate?: (id: string, y: number, height: number) => void;
 }
 
 // Extract all geo-marks from parsed elements
@@ -100,12 +102,16 @@ export function NativeItineraryViewer({
   onVisibleLocationChange,
   messageId,
   focusedLocation,
+  highlightedParagraphId,
+  onParagraphPositionUpdate,
 }: NativeItineraryViewerProps) {
   // Track geo-mark positions
   const locationPositions = React.useRef<Map<string, { yPosition: number; height: number }>>(new Map());
   const scrollViewRef = React.useRef<ScrollView>(null);
   const containerRef = React.useRef<View>(null);
   const paragraphGeoMarks = React.useRef<Map<number, string[]>>(new Map()); // Track which geo-marks are in each paragraph
+
+  // Remove local paragraph tracking since parent handles it now
 
   // Parse HTML content
   const parsedElements = useMemo(() => {
@@ -130,6 +136,29 @@ export function NativeItineraryViewer({
     });
     return map;
   }, [parsedElements]);
+
+  // Track all paragraph IDs in order
+  const elementIdsRef = React.useRef<string[]>([]);
+
+  // Collect element IDs during render
+  const collectElementId = React.useCallback((id: string) => {
+    if (!elementIdsRef.current.includes(id)) {
+      elementIdsRef.current.push(id);
+    }
+  }, []);
+
+  // Determine which elements should be visible based on highlighted element
+  const isElementVisible = React.useCallback((elementId: string): boolean => {
+    if (!highlightedParagraphId) return false;
+
+    const highlightedIndex = elementIdsRef.current.indexOf(highlightedParagraphId);
+    const elementIndex = elementIdsRef.current.indexOf(elementId);
+
+    if (highlightedIndex === -1 || elementIndex === -1) return false;
+
+    // All elements up to and including the highlighted one should be visible
+    return elementIndex <= highlightedIndex;
+  }, [highlightedParagraphId]);
 
   // Extract locations and notify parent
   const locations = useMemo(() => {
@@ -157,34 +186,103 @@ export function NativeItineraryViewer({
   // Render a parsed element
   const renderElement = (element: ParsedElement, index: number): React.ReactNode => {
     switch (element.type) {
-      case 'h1':
-        return (
-          <Text key={index} style={styles.h1}>
-            {element.content}
-            {element.children && element.children.map((child, i) => renderElement(child, i))}
-          </Text>
-        );
+      case 'h1': {
+        const headerId = `h1-${messageId}-${index}`;
+        collectElementId(headerId);
+        const isHeaderHighlighted = highlightedParagraphId === headerId;
+        const isVisible = isElementVisible(headerId);
 
-      case 'h2':
         return (
-          <Text key={index} style={styles.h2}>
-            {element.content}
-            {element.children && element.children.map((child, i) => renderElement(child, i))}
-          </Text>
+          <View
+            key={index}
+            style={[
+              styles.headerContainer,
+              !isVisible && styles.elementHidden,
+              isHeaderHighlighted && styles.paragraphFocused
+            ]}
+            onLayout={(event) => {
+              event.target.measureInWindow((x, y, width, height) => {
+                if (onParagraphPositionUpdate) {
+                  onParagraphPositionUpdate(headerId, y, height);
+                }
+              });
+            }}
+          >
+            <Text style={styles.h1}>
+              {element.content}
+              {element.children && element.children.map((child, i) => renderElement(child, i))}
+            </Text>
+          </View>
         );
+      }
 
-      case 'h3':
+      case 'h2': {
+        const headerId = `h2-${messageId}-${index}`;
+        collectElementId(headerId);
+        const isHeaderHighlighted = highlightedParagraphId === headerId;
+        const isVisible = isElementVisible(headerId);
+
         return (
-          <Text key={index} style={styles.h3}>
-            {element.content}
-            {element.children && element.children.map((child, i) => renderElement(child, i))}
-          </Text>
+          <View
+            key={index}
+            style={[
+              styles.headerContainer,
+              !isVisible && styles.elementHidden,
+              isHeaderHighlighted && styles.paragraphFocused
+            ]}
+            onLayout={(event) => {
+              event.target.measureInWindow((x, y, width, height) => {
+                if (onParagraphPositionUpdate) {
+                  onParagraphPositionUpdate(headerId, y, height);
+                }
+              });
+            }}
+          >
+            <Text style={styles.h2}>
+              {element.content}
+              {element.children && element.children.map((child, i) => renderElement(child, i))}
+            </Text>
+          </View>
         );
+      }
+
+      case 'h3': {
+        const headerId = `h3-${messageId}-${index}`;
+        collectElementId(headerId);
+        const isHeaderHighlighted = highlightedParagraphId === headerId;
+        const isVisible = isElementVisible(headerId);
+
+        return (
+          <View
+            key={index}
+            style={[
+              styles.headerContainer,
+              !isVisible && styles.elementHidden,
+              isHeaderHighlighted && styles.paragraphFocused
+            ]}
+            onLayout={(event) => {
+              event.target.measureInWindow((x, y, width, height) => {
+                if (onParagraphPositionUpdate) {
+                  onParagraphPositionUpdate(headerId, y, height);
+                }
+              });
+            }}
+          >
+            <Text style={styles.h3}>
+              {element.content}
+              {element.children && element.children.map((child, i) => renderElement(child, i))}
+            </Text>
+          </View>
+        );
+      }
 
       case 'p':
         // Track which geo-marks are in this paragraph
         const geoMarksInParagraph: string[] = [];
-        let hasFocusedLocation = false;
+        const paragraphId = `p-${messageId}-${index}`;
+        collectElementId(paragraphId);
+        const isParagraphHighlighted = highlightedParagraphId === paragraphId;
+        const isParagraphVisible = isElementVisible(paragraphId);
 
         if (element.children) {
           element.children.forEach(child => {
@@ -193,18 +291,6 @@ export function NativeItineraryViewer({
               const name = child.content || dataPlaceName || 'Unknown';
               const key = `${name}-${dataLat}-${dataLng}`;
               geoMarksInParagraph.push(key);
-
-              // Check if this matches the focused location
-              if (focusedLocation && dataLat && dataLng && dataLat !== 'PENDING' && dataLng !== 'PENDING') {
-                const lat = parseFloat(dataLat);
-                const lng = parseFloat(dataLng);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                  if (Math.abs(focusedLocation.lat - lat) < 0.0001 &&
-                      Math.abs(focusedLocation.lng - lng) < 0.0001) {
-                    hasFocusedLocation = true;
-                  }
-                }
-              }
             }
           });
         }
@@ -212,17 +298,27 @@ export function NativeItineraryViewer({
         return (
           <View
             key={index}
-            style={[styles.paragraph, hasFocusedLocation && styles.paragraphFocused]}
+            style={[
+              styles.paragraph,
+              !isParagraphVisible && styles.elementHidden,
+              isParagraphHighlighted && styles.paragraphFocused
+            ]}
             onLayout={(event) => {
-              if (geoMarksInParagraph.length > 0) {
-                event.target.measureInWindow((x, y, width, height) => {
+              // Report position to parent
+              event.target.measureInWindow((x, y, width, height) => {
+                // Report paragraph position to parent
+                if (onParagraphPositionUpdate) {
+                  onParagraphPositionUpdate(paragraphId, y, height);
+                }
+
+                // Also update geo-mark positions if any
+                if (geoMarksInParagraph.length > 0) {
                   console.log(`Paragraph with geo-marks layout: Y=${y}, Height=${height}`);
-                  // Update position for all geo-marks in this paragraph
                   geoMarksInParagraph.forEach(geoMarkKey => {
                     updateGeoMarkPosition(geoMarkKey, y, height);
                   });
-                });
-              }
+                }
+              });
             }}
           >
             <Text style={styles.text}>
@@ -249,7 +345,10 @@ export function NativeItineraryViewer({
       case 'li':
         // Track geo-marks in list items too
         const listItemGeoMarks: string[] = [];
-        let listItemHasFocus = false;
+        const listItemId = `li-${messageId}-${index}`;
+        collectElementId(listItemId);
+        const isListItemHighlighted = highlightedParagraphId === listItemId;
+        const isListItemVisible = isElementVisible(listItemId);
 
         const findGeoMarksInElement = (el: ParsedElement) => {
           if (el.type === 'geo-mark' && el.attributes) {
@@ -257,18 +356,6 @@ export function NativeItineraryViewer({
             const name = el.content || dataPlaceName || 'Unknown';
             const key = `${name}-${dataLat}-${dataLng}`;
             listItemGeoMarks.push(key);
-
-            // Check if this matches the focused location
-            if (focusedLocation && dataLat && dataLng && dataLat !== 'PENDING' && dataLng !== 'PENDING') {
-              const lat = parseFloat(dataLat);
-              const lng = parseFloat(dataLng);
-              if (!isNaN(lat) && !isNaN(lng)) {
-                if (Math.abs(focusedLocation.lat - lat) < 0.0001 &&
-                    Math.abs(focusedLocation.lng - lng) < 0.0001) {
-                  listItemHasFocus = true;
-                }
-              }
-            }
           }
           if (el.children) {
             el.children.forEach(findGeoMarksInElement);
@@ -281,17 +368,27 @@ export function NativeItineraryViewer({
         return (
           <View
             key={index}
-            style={[styles.listItem, listItemHasFocus && styles.listItemFocused]}
+            style={[
+              styles.listItem,
+              !isListItemVisible && styles.elementHidden,
+              isListItemHighlighted && styles.listItemFocused
+            ]}
             onLayout={(event) => {
-              if (listItemGeoMarks.length > 0) {
-                event.target.measureInWindow((x, y, width, height) => {
+              // Report position to parent
+              event.target.measureInWindow((x, y, width, height) => {
+                // Report list item position to parent
+                if (onParagraphPositionUpdate) {
+                  onParagraphPositionUpdate(listItemId, y, height);
+                }
+
+                // Also update geo-mark positions if any
+                if (listItemGeoMarks.length > 0) {
                   console.log(`List item with geo-marks layout: Y=${y}, Height=${height}`);
-                  // Update position for all geo-marks in this list item
                   listItemGeoMarks.forEach(geoMarkKey => {
                     updateGeoMarkPosition(geoMarkKey, y, height);
                   });
-                });
-              }
+                }
+              });
             }}
           >
             <Text style={styles.bullet}>• </Text>
@@ -402,8 +499,8 @@ export function NativeItineraryViewer({
     const locationName = element.content || dataPlaceName || 'Unknown Location';
 
     // Get the color index for this location
-    const locationKey = `${locationName}-${dataLat}-${dataLng}`;
-    const colorIndex = locationColorMap.get(locationKey) ?? 0;
+    const locKey = `${locationName}-${dataLat}-${dataLng}`;
+    const colorIndex = locationColorMap.get(locKey) ?? 0;
     const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
 
     // For inline rendering within text
@@ -435,7 +532,7 @@ export function NativeItineraryViewer({
       // Use measureInWindow to get absolute position
       event.target.measureInWindow((x, y, width, height) => {
         console.log(`Standalone GeoMark measureInWindow: ${locationName} -> Y=${y}, Height=${height}`);
-        updateGeoMarkPosition(locationKey, y, height);
+        updateGeoMarkPosition(locKey, y, height);
       });
     };
 
@@ -477,13 +574,8 @@ export function NativeItineraryViewer({
 
   return (
     <View ref={containerRef} style={styles.container}>
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-      >
+      {/* Removed internal ScrollView since we're nested in parent ScrollView */}
+      <View style={styles.scrollContent}>
         {parsedElements.map((element, index) => renderElement(element, index))}
 
         {isStreaming && (
@@ -492,7 +584,7 @@ export function NativeItineraryViewer({
             <Text style={styles.streamingText}>Loading more...</Text>
           </View>
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -500,7 +592,7 @@ export function NativeItineraryViewer({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     overflow: 'hidden',
     marginVertical: 8,
@@ -510,6 +602,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    backgroundColor: 'transparent',
   },
   h1: {
     fontSize: 24,
@@ -535,11 +628,17 @@ const styles = StyleSheet.create({
   paragraph: {
     marginBottom: 12,
   },
+  elementHidden: {
+    opacity: 0.05, // Extremely transparent - map fully visible through text
+    backgroundColor: 'transparent',
+  },
   paragraphFocused: {
-    backgroundColor: '#FEF3C7', // Light amber highlight
-    marginHorizontal: -8,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    opacity: 1, // Full visibility when highlighted
+    backgroundColor: 'transparent', // Transparent background to show map
+    marginHorizontal: -12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   text: {
     fontSize: 14,
@@ -555,10 +654,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   listItemFocused: {
-    backgroundColor: '#FEF3C7', // Light amber highlight
-    marginHorizontal: -8,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    opacity: 1, // Full visibility when highlighted
+    backgroundColor: 'transparent', // Transparent background to show map
+    marginHorizontal: -12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  headerContainer: {
+    // Container for headers to allow highlighting
   },
   bullet: {
     fontSize: 14,
@@ -612,7 +716,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   itineraryContainer: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: 'transparent',
     borderRadius: 8,
     padding: 16,
     marginVertical: 8,
