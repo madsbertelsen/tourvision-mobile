@@ -33,13 +33,21 @@ export default function TestTransparencyScreen() {
   const [scrollOffset, setScrollOffset] = React.useState(0);
   const [containerHeight, setContainerHeight] = React.useState(0);
 
-  // Define 4 messages with colors and random element counts
-  const messages = React.useMemo(() => [
-    { id: 'msg1', color: '#3498DB', elementCount: Math.floor(Math.random() * 11) + 5 }, // 5-15 elements
-    { id: 'msg2', color: '#2ECC71', elementCount: Math.floor(Math.random() * 11) + 5 },
-    { id: 'msg3', color: '#9B59B6', elementCount: Math.floor(Math.random() * 11) + 5 },
-    { id: 'msg4', color: '#E67E22', elementCount: Math.floor(Math.random() * 11) + 5 },
-  ], []);
+  // Define 20 messages with colors and random element counts
+  const messageColors = [
+    '#3498DB', '#2ECC71', '#9B59B6', '#E67E22', '#E74C3C',
+    '#1ABC9C', '#F39C12', '#D35400', '#C0392B', '#16A085',
+    '#27AE60', '#2980B9', '#8E44AD', '#2C3E50', '#F1C40F',
+    '#95A5A6', '#34495E', '#7F8C8D', '#BDC3C7', '#ECF0F1',
+  ];
+
+  const messages = React.useMemo(() =>
+    messageColors.map((color, index) => ({
+      id: `msg${index + 1}`,
+      color: color,
+      elementCount: Math.floor(Math.random() * 11) + 5, // 5-15 elements
+    }))
+  , []);
 
   // Generate flat array from messages
   const flatElements = React.useMemo(() => {
@@ -94,9 +102,19 @@ export default function TestTransparencyScreen() {
   const visibleThreshold = containerHeight * 0.75;
 
   const isItemVisible = (index: number) => {
-    // Each item is 60px height with 10px margin = 70px total
-    const itemTop = index * 70 - scrollOffset;
-    const itemBottom = itemTop + 60;
+    // Calculate actual position based on element types before this index
+    let position = 0;
+    for (let i = 0; i < index; i++) {
+      if (flatElements[i].type === 'gap') {
+        position += 40; // gap height (30) + margin (10)
+      } else {
+        position += 70; // box height (60) + margin (10)
+      }
+    }
+
+    const itemTop = position - scrollOffset;
+    const itemHeight = flatElements[index].type === 'gap' ? 30 : 60;
+    const itemBottom = itemTop + itemHeight;
 
     // Item is visible if its bottom edge is above the threshold
     return itemBottom <= visibleThreshold;
