@@ -42,8 +42,8 @@ interface NativeItineraryViewerProps {
   onVisibleLocationChange?: (location: Location) => void;
   messageId?: string;
   focusedLocation?: Location | null;
-  highlightedParagraphId?: string | null;
-  onParagraphPositionUpdate?: (id: string, y: number, height: number) => void;
+  scrollOffset?: number;
+  containerHeight?: number;
 }
 
 // Extract all geo-marks from parsed elements
@@ -102,14 +102,18 @@ export function NativeItineraryViewer({
   onVisibleLocationChange,
   messageId,
   focusedLocation,
-  highlightedParagraphId,
-  onParagraphPositionUpdate,
+  scrollOffset = 0,
+  containerHeight = 0,
 }: NativeItineraryViewerProps) {
   // Track geo-mark positions
   const locationPositions = React.useRef<Map<string, { yPosition: number; height: number }>>(new Map());
   const scrollViewRef = React.useRef<ScrollView>(null);
   const containerRef = React.useRef<View>(null);
   const paragraphGeoMarks = React.useRef<Map<number, string[]>>(new Map()); // Track which geo-marks are in each paragraph
+
+  // Track element positions and transparency state
+  const elementPositions = React.useRef<Map<string, { y: number; height: number }>>(new Map());
+  const [transparentElements, setTransparentElements] = React.useState<Set<string>>(new Set());
 
   // Remove local paragraph tracking since parent handles it now
 
@@ -147,18 +151,26 @@ export function NativeItineraryViewer({
     }
   }, []);
 
-  // Determine which elements should be visible based on highlighted element
-  const isElementVisible = React.useCallback((elementId: string): boolean => {
-    if (!highlightedParagraphId) return false;
+  // Update transparency based on scroll position
+  React.useEffect(() => {
+    if (containerHeight === 0) return;
 
-    const highlightedIndex = elementIdsRef.current.indexOf(highlightedParagraphId);
-    const elementIndex = elementIdsRef.current.indexOf(elementId);
+    const transparencyThreshold = containerHeight * 0.75; // Elements below 75% become transparent
+    const newTransparentElements = new Set<string>();
 
-    if (highlightedIndex === -1 || elementIndex === -1) return false;
+    elementPositions.current.forEach((position, elementId) => {
+      // Calculate element's position relative to viewport
+      const elementTop = position.y - scrollOffset;
 
-    // All elements up to and including the highlighted one should be visible
-    return elementIndex <= highlightedIndex;
-  }, [highlightedParagraphId]);
+      // If element starts below 75% mark, make it transparent
+      if (elementTop >= transparencyThreshold) {
+        newTransparentElements.add(elementId);
+      }
+    });
+
+    setTransparentElements(newTransparentElements);
+  }, [scrollOffset, containerHeight]);
+
 
   // Extract locations and notify parent
   const locations = useMemo(() => {
@@ -189,22 +201,25 @@ export function NativeItineraryViewer({
       case 'h1': {
         const headerId = `h1-${messageId}-${index}`;
         collectElementId(headerId);
-        const isHeaderHighlighted = highlightedParagraphId === headerId;
-        const isVisible = isElementVisible(headerId);
+        const isTransparent = transparentElements.has(headerId);
 
         return (
           <View
             key={index}
             style={[
               styles.headerContainer,
-              !isVisible && styles.elementHidden,
-              isHeaderHighlighted && styles.paragraphFocused
+              styles.transparentBackground,
+              { opacity: isTransparent ? 0 : 1 }
             ]}
             onLayout={(event) => {
-              event.target.measureInWindow((x, y, width, height) => {
-                if (onParagraphPositionUpdate) {
-                  onParagraphPositionUpdate(headerId, y, height);
-                }
+              const { y, height } = event.nativeEvent.layout;
+              // Store element position
+              elementPositions.current.set(headerId, { y, height });
+
+              // Also measure in window for absolute position
+              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                // Update with absolute window position if needed
+                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
               });
             }}
           >
@@ -219,22 +234,22 @@ export function NativeItineraryViewer({
       case 'h2': {
         const headerId = `h2-${messageId}-${index}`;
         collectElementId(headerId);
-        const isHeaderHighlighted = highlightedParagraphId === headerId;
-        const isVisible = isElementVisible(headerId);
+        const isTransparent = transparentElements.has(headerId);
 
         return (
           <View
             key={index}
             style={[
               styles.headerContainer,
-              !isVisible && styles.elementHidden,
-              isHeaderHighlighted && styles.paragraphFocused
+              styles.transparentBackground,
+              { opacity: isTransparent ? 0 : 1 }
             ]}
             onLayout={(event) => {
-              event.target.measureInWindow((x, y, width, height) => {
-                if (onParagraphPositionUpdate) {
-                  onParagraphPositionUpdate(headerId, y, height);
-                }
+              const { y, height } = event.nativeEvent.layout;
+              elementPositions.current.set(headerId, { y, height });
+
+              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
               });
             }}
           >
@@ -249,22 +264,22 @@ export function NativeItineraryViewer({
       case 'h3': {
         const headerId = `h3-${messageId}-${index}`;
         collectElementId(headerId);
-        const isHeaderHighlighted = highlightedParagraphId === headerId;
-        const isVisible = isElementVisible(headerId);
+        const isTransparent = transparentElements.has(headerId);
 
         return (
           <View
             key={index}
             style={[
               styles.headerContainer,
-              !isVisible && styles.elementHidden,
-              isHeaderHighlighted && styles.paragraphFocused
+              styles.transparentBackground,
+              { opacity: isTransparent ? 0 : 1 }
             ]}
             onLayout={(event) => {
-              event.target.measureInWindow((x, y, width, height) => {
-                if (onParagraphPositionUpdate) {
-                  onParagraphPositionUpdate(headerId, y, height);
-                }
+              const { y, height } = event.nativeEvent.layout;
+              elementPositions.current.set(headerId, { y, height });
+
+              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
               });
             }}
           >
@@ -281,8 +296,7 @@ export function NativeItineraryViewer({
         const geoMarksInParagraph: string[] = [];
         const paragraphId = `p-${messageId}-${index}`;
         collectElementId(paragraphId);
-        const isParagraphHighlighted = highlightedParagraphId === paragraphId;
-        const isParagraphVisible = isElementVisible(paragraphId);
+        const isTransparent = transparentElements.has(paragraphId);
 
         if (element.children) {
           element.children.forEach(child => {
@@ -298,24 +312,21 @@ export function NativeItineraryViewer({
         return (
           <View
             key={index}
-            style={[
-              styles.paragraph,
-              !isParagraphVisible && styles.elementHidden,
-              isParagraphHighlighted && styles.paragraphFocused
-            ]}
+            style={[styles.paragraph, styles.transparentBackground, { opacity: isTransparent ? 0 : 1 }]}
             onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              elementPositions.current.set(paragraphId, { y, height });
+
               // Report position to parent
-              event.target.measureInWindow((x, y, width, height) => {
-                // Report paragraph position to parent
-                if (onParagraphPositionUpdate) {
-                  onParagraphPositionUpdate(paragraphId, y, height);
-                }
+              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                // Update with absolute window position
+                elementPositions.current.set(paragraphId, { y: yWindow, height: heightWindow });
 
                 // Also update geo-mark positions if any
                 if (geoMarksInParagraph.length > 0) {
-                  console.log(`Paragraph with geo-marks layout: Y=${y}, Height=${height}`);
+                  console.log(`Paragraph with geo-marks layout: Y=${yWindow}, Height=${heightWindow}`);
                   geoMarksInParagraph.forEach(geoMarkKey => {
-                    updateGeoMarkPosition(geoMarkKey, y, height);
+                    updateGeoMarkPosition(geoMarkKey, yWindow, heightWindow);
                   });
                 }
               });
@@ -347,8 +358,6 @@ export function NativeItineraryViewer({
         const listItemGeoMarks: string[] = [];
         const listItemId = `li-${messageId}-${index}`;
         collectElementId(listItemId);
-        const isListItemHighlighted = highlightedParagraphId === listItemId;
-        const isListItemVisible = isElementVisible(listItemId);
 
         const findGeoMarksInElement = (el: ParsedElement) => {
           if (el.type === 'geo-mark' && el.attributes) {
@@ -368,18 +377,11 @@ export function NativeItineraryViewer({
         return (
           <View
             key={index}
-            style={[
-              styles.listItem,
-              !isListItemVisible && styles.elementHidden,
-              isListItemHighlighted && styles.listItemFocused
-            ]}
+            style={[styles.listItem, styles.transparentBackground]}
             onLayout={(event) => {
               // Report position to parent
               event.target.measureInWindow((x, y, width, height) => {
                 // Report list item position to parent
-                if (onParagraphPositionUpdate) {
-                  onParagraphPositionUpdate(listItemId, y, height);
-                }
 
                 // Also update geo-mark positions if any
                 if (listItemGeoMarks.length > 0) {
@@ -628,17 +630,8 @@ const styles = StyleSheet.create({
   paragraph: {
     marginBottom: 12,
   },
-  elementHidden: {
-    opacity: 0.05, // Extremely transparent - map fully visible through text
+  transparentBackground: {
     backgroundColor: 'transparent',
-  },
-  paragraphFocused: {
-    opacity: 1, // Full visibility when highlighted
-    backgroundColor: 'transparent', // Transparent background to show map
-    marginHorizontal: -12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
   },
   text: {
     fontSize: 14,
@@ -652,14 +645,6 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: 'row',
     marginBottom: 6,
-  },
-  listItemFocused: {
-    opacity: 1, // Full visibility when highlighted
-    backgroundColor: 'transparent', // Transparent background to show map
-    marginHorizontal: -12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
   },
   headerContainer: {
     // Container for headers to allow highlighting

@@ -4,6 +4,7 @@ import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,13 +25,9 @@ interface Location {
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
   const [mapLocations, setMapLocations] = React.useState<Location[]>([]);
-  // const [focusedLocation, setFocusedLocation] = React.useState<Location | null>(null); // Disabled geo-mark focus
   const messagesScrollRef = React.useRef<ScrollView>(null);
-  const scrollDebounceTimer = React.useRef<NodeJS.Timeout>();
-
-  // Track paragraph positions for highlighting
-  const paragraphPositions = React.useRef<Map<string, { y: number; height: number }>>(new Map());
-  const [highlightedParagraphId, setHighlightedParagraphId] = React.useState<string | null>(null);
+  const [scrollOffset, setScrollOffset] = React.useState(0);
+  const [containerHeight, setContainerHeight] = React.useState(0);
 
   // Square map size based on screen width
   const mapSize = screenWidth; // Square map based on screen width
@@ -65,6 +62,9 @@ export default function SimpleChatScreen() {
   console.log('Messages:', messages);
   console.log('Status:', status);
   console.log('Error:', error);
+
+  // No longer need message-level visibility tracking
+  // Transparency is now handled at the element level in NativeItineraryViewer
 
   // Memoize the callback to prevent re-renders
   const handleLocationsUpdate = React.useCallback((locations: Location[], messageId: string) => {
@@ -211,70 +211,22 @@ export default function SimpleChatScreen() {
             </View>
 
             {/* Messages scrollable area overlaying map */}
-            <ScrollView
-          ref={messagesScrollRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={[
-            styles.messagesContent,
-            messages.length === 0 && styles.messagesContentEmpty
-          ]}
-          onScroll={(event) => {
-            // Calculate which paragraph should be highlighted
-            const scrollY = event.nativeEvent?.contentOffset?.y || 0;
-            const viewportHeight = event.nativeEvent?.layoutMeasurement?.height || 600;
-
-            // Clear existing debounce timer
-            if (scrollDebounceTimer.current) {
-              clearTimeout(scrollDebounceTimer.current);
-            }
-
-            // Debounce the calculation
-            scrollDebounceTimer.current = setTimeout(() => {
-              messagesScrollRef.current?.measureInWindow((x, scrollViewY, width, scrollViewHeight) => {
-                // Calculate viewport bounds with offset
-                const viewportTop = scrollViewY + scrollY;
-                const viewportBottom = viewportTop + viewportHeight;
-                const viewportCenter = viewportTop + (viewportHeight / 2); // Center of viewport
-                const targetY = viewportCenter; // Element at center should be highlighted
-
-                console.log(`[Main ScrollView] Viewport: top=${viewportTop}, bottom=${viewportBottom}, target=${targetY}`);
-                console.log(`[Main ScrollView] Tracked paragraphs: ${paragraphPositions.current.size}`);
-
-                // Find element closest to the target Y position
-                let closestElement: { id: string; y: number; distance: number } | null = null;
-
-                paragraphPositions.current.forEach((position, id) => {
-                  const paragraphTop = position.y;
-                  const paragraphBottom = position.y + position.height;
-
-                  // Only consider elements that are at least partially visible
-                  if (paragraphTop < viewportBottom && paragraphBottom > viewportTop) {
-                    // Calculate distance from paragraph top to target position
-                    const distance = Math.abs(paragraphTop - targetY);
-
-                    if (!closestElement || distance < closestElement.distance) {
-                      closestElement = { id, y: paragraphTop, distance };
-                    }
-                  }
-                });
-
-                // Highlight the element closest to the target position
-                if (closestElement) {
-                  if (closestElement.id !== highlightedParagraphId) {
-                    console.log(`[Main ScrollView] >>> Highlighting: ${closestElement.id} (distance: ${closestElement.distance.toFixed(0)}px from target)`);
-                    setHighlightedParagraphId(closestElement.id);
-                  }
-                } else {
-                  console.log(`[Main ScrollView] No visible paragraphs found`);
-                  setHighlightedParagraphId(null);
-                }
-              });
-            }, 100);
-          }}
-          scrollEventThrottle={16}
-          // onScrollEndDrag={handleMessagesScroll} // Disabled geo-mark focus
-          // onMomentumScrollEnd={handleMessagesScroll} // Disabled geo-mark focus
-        >
+            <View style={styles.messagesWrapper}>
+              <ScrollView
+            ref={messagesScrollRef}
+            style={styles.messagesContainer}
+            contentContainerStyle={[
+              styles.messagesContent,
+              messages.length === 0 && styles.messagesContentEmpty
+            ]}
+            onScroll={(event) => {
+              setScrollOffset(event.nativeEvent.contentOffset.y);
+            }}
+            scrollEventThrottle={16}
+            onLayout={(event) => {
+              setContainerHeight(event.nativeEvent.layout.height);
+            }}
+          >
           {messages.map((message) => {
             // Check if message contains HTML content (itinerary)
             const hasHTMLContent = message.parts?.some((part: any) =>
@@ -321,6 +273,8 @@ export default function SimpleChatScreen() {
                       isStreaming={status === 'in_progress' && message === messages[messages.length - 1]}
                       messageId={message.id}
                       focusedLocation={null} // Disabled geo-mark focus
+                      scrollOffset={scrollOffset}
+                      containerHeight={containerHeight}
                       onLocationClick={(location, lat, lng) => {
                         console.log('Location clicked:', location, lat, lng);
                         // Focus on clicked location - DISABLED
@@ -334,11 +288,6 @@ export default function SimpleChatScreen() {
                         // }
                       }}
                       onLocationsUpdate={(locations) => handleLocationsUpdate(locations, message.id)}
-                      highlightedParagraphId={highlightedParagraphId}
-                      onParagraphPositionUpdate={(id, y, height) => {
-                        paragraphPositions.current.set(id, { y, height });
-                        console.log(`[Main] Paragraph position updated: ${id} at y=${y}`);
-                      }}
                     />
                   ) : (
                     <Text style={styles.messageText}>{textContent}</Text>
@@ -356,9 +305,10 @@ export default function SimpleChatScreen() {
           )}
             </ScrollView>
           </View>
+        </View>
 
-          {/* Input container - stays at bottom */}
-          <View style={styles.inputContainer}>
+        {/* Input container - stays at bottom */}
+        <View style={styles.inputContainer}>
           <TextInput
             style={styles.textInput}
             value={inputText}
@@ -381,7 +331,7 @@ export default function SimpleChatScreen() {
             )}
           </TouchableOpacity>
         </View>
-        </View>
+      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -404,16 +354,19 @@ const styles = StyleSheet.create({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'space-between', // Push input to bottom
   },
   contentContainer: {
-    flex: 1, // This makes content grow to fill available space
+    height: '75%', // Only take 3/4 of container height
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden', // Clip content at boundaries
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: 'transparent',
+    zIndex: 2, // Above white background
   },
   headerTitle: {
     fontSize: 24,
@@ -434,9 +387,14 @@ const styles = StyleSheet.create({
     height: screenWidth, // Square map
     zIndex: 0,
   },
+  messagesWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
   messagesContainer: {
     flex: 1,
     backgroundColor: 'transparent',
+    zIndex: 2, // Above white background
   },
   messagesContent: {
     flexGrow: 1,
@@ -449,15 +407,23 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     marginBottom: 20,
-    backgroundColor: 'transparent',
+    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   userMessage: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'white',
   },
   assistantMessage: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'white',
   },
   messageHeader: {
     flexDirection: 'row',
