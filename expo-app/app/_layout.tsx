@@ -78,6 +78,7 @@ function ProtectedLayout() {
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="test-prosemirror" options={{ headerShown: false }} />
+      <Stack.Screen name="test-transparency" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
