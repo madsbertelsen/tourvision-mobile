@@ -10,93 +10,96 @@ import {
 
 const { height: screenHeight } = Dimensions.get('window');
 
+// Helper function to adjust color brightness
+const adjustColor = (color: string, amount: number): string => {
+  const usePound = color[0] === '#';
+  const col = usePound ? color.slice(1) : color;
+  const num = parseInt(col, 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
+  return (usePound ? '#' : '') + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+};
+
+type FlatElement = {
+  id: string;
+  type: 'header' | 'content' | 'footer' | 'gap';
+  messageId: string;
+  messageColor: string;
+  text: string;
+};
+
 export default function TestTransparencyScreen() {
   const [scrollOffset, setScrollOffset] = React.useState(0);
   const [containerHeight, setContainerHeight] = React.useState(0);
-  const [elementPositions, setElementPositions] = React.useState<Map<string, { y: number; height: number }>>(new Map());
-  const [transparentElements, setTransparentElements] = React.useState<Set<string>>(new Set());
 
-  // Sample content
-  const baseElements = [
-    { type: 'h1', content: 'Paris in 2 Days' },
-    { type: 'p', content: 'Experience the best of Paris with this 2-day itinerary covering iconic landmarks.' },
-    { type: 'h2', content: 'Day 1: Iconic Landmarks' },
-    { type: 'h3', content: 'Morning' },
-    { type: 'p', content: 'Start your day at the Louvre Museum. Arrive early to beat the crowds.' },
-    { type: 'p', content: 'After the Louvre, take a leisurely stroll through the Jardin des Tuileries.' },
-    { type: 'h3', content: 'Afternoon' },
-    { type: 'p', content: 'Head to the Eiffel Tower. Consider going up to the second floor for views.' },
-    { type: 'p', content: 'Walk along the Seine River towards Notre-Dame Cathedral.' },
-    { type: 'h3', content: 'Evening' },
-    { type: 'p', content: 'For dinner, head to Le Procope, the oldest restaurant in Paris.' },
-    { type: 'p', content: 'After dinner, take a relaxing Seine River cruise.' },
-    { type: 'h2', content: 'Day 2: History and Culture' },
-    { type: 'h3', content: 'Morning' },
-    { type: 'p', content: 'Visit the Arc de Triomphe and walk down the Champs-Élysées.' },
-    { type: 'p', content: 'Stop at a café for coffee and croissants.' },
-    { type: 'footer', content: '' },
-  ];
+  // Define 4 messages with colors and random element counts
+  const messages = React.useMemo(() => [
+    { id: 'msg1', color: '#3498DB', elementCount: Math.floor(Math.random() * 11) + 5 }, // 5-15 elements
+    { id: 'msg2', color: '#2ECC71', elementCount: Math.floor(Math.random() * 11) + 5 },
+    { id: 'msg3', color: '#9B59B6', elementCount: Math.floor(Math.random() * 11) + 5 },
+    { id: 'msg4', color: '#E67E22', elementCount: Math.floor(Math.random() * 11) + 5 },
+  ], []);
 
-  const elements = baseElements.map((el, idx) => ({
-    ...el,
-    id: `el-${idx}`
-  }));
+  // Generate flat array from messages
+  const flatElements = React.useMemo(() => {
+    const elements: FlatElement[] = [];
 
-  // Update transparency based on scroll
-  React.useEffect(() => {
-    if (containerHeight === 0) return;
+    messages.forEach((message, msgIndex) => {
+      // Add header
+      elements.push({
+        id: `${message.id}-header`,
+        type: 'header',
+        messageId: message.id,
+        messageColor: message.color,
+        text: `Message ${msgIndex + 1} Header`,
+      });
 
-    const visibleAreaHeight = containerHeight * 0.75;
-    const newTransparentElements = new Set<string>();
+      // Add content elements
+      for (let i = 0; i < message.elementCount; i++) {
+        elements.push({
+          id: `${message.id}-content-${i}`,
+          type: 'content',
+          messageId: message.id,
+          messageColor: message.color,
+          text: `Message ${msgIndex + 1} Item ${i + 1}`,
+        });
+      }
 
-    elementPositions.forEach((position, elementId) => {
-      const elementTop = position.y - scrollOffset;
-      const elementBottom = elementTop + position.height;
+      // Add footer
+      elements.push({
+        id: `${message.id}-footer`,
+        type: 'footer',
+        messageId: message.id,
+        messageColor: message.color,
+        text: `Message ${msgIndex + 1} Footer`,
+      });
 
-      // Add a small buffer to prevent flickering at the boundary
-      const buffer = 2;
-
-      // Make transparent if bottom would be cut off
-      if (elementBottom > visibleAreaHeight - buffer) {
-        newTransparentElements.add(elementId);
+      // Add gap (except after last message)
+      if (msgIndex < messages.length - 1) {
+        elements.push({
+          id: `gap-${msgIndex}`,
+          type: 'gap',
+          messageId: '',
+          messageColor: '',
+          text: '',
+        });
       }
     });
 
-    // Only update state if the set has actually changed
-    const hasChanged = newTransparentElements.size !== transparentElements.size ||
-      [...newTransparentElements].some(id => !transparentElements.has(id));
+    return elements;
+  }, [messages]);
 
-    if (hasChanged) {
-      setTransparentElements(newTransparentElements);
-    }
-  }, [scrollOffset, containerHeight, elementPositions, transparentElements]);
+  // Calculate which items should be visible based on scroll
+  const visibleThreshold = containerHeight * 0.75;
 
-  const handleElementLayout = (elementId: string, event: any) => {
-    const { y, height } = event.nativeEvent.layout;
-    setElementPositions(prev => {
-      const newMap = new Map(prev);
-      newMap.set(elementId, { y, height });
-      return newMap;
-    });
-  };
+  const isItemVisible = (index: number) => {
+    // Each item is 60px height with 10px margin = 70px total
+    const itemTop = index * 70 - scrollOffset;
+    const itemBottom = itemTop + 60;
 
-  const renderElement = (element: any) => {
-    const isTransparent = transparentElements.has(element.id);
-
-    const baseStyle = element.type === 'h1' ? styles.h1 :
-                      element.type === 'h2' ? styles.h2 :
-                      element.type === 'h3' ? styles.h3 : styles.p;
-
-    return (
-      <View
-        key={element.id}
-        style={styles.elementContainer}
-        onLayout={(event) => handleElementLayout(element.id, event)}
-      >
-        {!isTransparent && <View style={styles.elementBackground} />}
-        <Text style={[baseStyle, isTransparent && { opacity: 0 }]}>{element.content}</Text>
-      </View>
-    );
+    // Item is visible if its bottom edge is above the threshold
+    return itemBottom <= visibleThreshold;
   };
 
   return (
@@ -113,7 +116,7 @@ export default function TestTransparencyScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Test Transparency</Text>
           <Text style={styles.debugText}>
-            Scroll: {Math.round(scrollOffset)} | Height: {Math.round(containerHeight)} | 75%: {Math.round(containerHeight * 0.75)}
+            Scroll: {Math.round(scrollOffset)} | Height: {Math.round(containerHeight)} | 75%: {Math.round(visibleThreshold)}
           </Text>
         </View>
 
@@ -127,39 +130,51 @@ export default function TestTransparencyScreen() {
             onScroll={(event) => setScrollOffset(event.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}
           >
-            <View style={styles.messageContainer}>
-              <View
-                style={[styles.messageHeader, {
-                  backgroundColor: '#10b981',
-                  marginHorizontal: -16,
-                  marginTop: -16,
-                  paddingHorizontal: 16,
-                  paddingTop: 16,
-                  paddingBottom: 12,
-                  borderTopLeftRadius: 12,
-                  borderTopRightRadius: 12
-                }]}
-                onLayout={(event) => handleElementLayout('header', event)}
-              >
-                {!transparentElements.has('header') && (
-                  <Text style={styles.messageTitle}>AI Response</Text>
-                )}
-              </View>
-              <View style={styles.itineraryContent}>
-                {elements.map(renderElement)}
-              </View>
-              <View
-                style={{
-                  backgroundColor: transparentElements.has('footer') ? 'transparent' : '#10b981',
-                  height: 16,
-                  marginHorizontal: -16,
-                  marginBottom: -16,
-                  borderBottomLeftRadius: 12,
-                  borderBottomRightRadius: 12,
-                }}
-                onLayout={(event) => handleElementLayout('footer', event)}
-              />
-            </View>
+            {flatElements.map((element, index) => {
+              if (element.type === 'gap') {
+                // Render gap view - always transparent, no border, smaller height
+                return (
+                  <View
+                    key={element.id}
+                    style={styles.gapBox}
+                  />
+                );
+              }
+
+              // Determine background color based on element type
+              let backgroundColor = element.messageColor;
+              if (element.type === 'header') {
+                // Darker shade for header
+                backgroundColor = adjustColor(element.messageColor, -30);
+              } else if (element.type === 'footer') {
+                // Lighter shade for footer
+                backgroundColor = adjustColor(element.messageColor, 30);
+              }
+
+              // Render element
+              return (
+                <View
+                  key={element.id}
+                  style={[
+                    styles.box,
+                    {
+                      backgroundColor: isItemVisible(index) ? backgroundColor : 'transparent',
+                      borderColor: backgroundColor,
+                    }
+                  ]}
+                >
+                  <Text style={[
+                    styles.boxText,
+                    {
+                      opacity: isItemVisible(index) ? 1 : 0.3,
+                      fontWeight: element.type === 'header' ? 'bold' : 'normal',
+                    }
+                  ]}>
+                    {element.text}
+                  </Text>
+                </View>
+              );
+            })}
           </ScrollView>
         </View>
       </View>
@@ -198,7 +213,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     flexDirection: 'column',
-    marginBottom: 0, // Remove margin to allow input to be at very bottom
   },
   header: {
     padding: 16,
@@ -217,64 +231,32 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
-    maxHeight: '70%', // Limit to 70% of screen
+    maxHeight: '75%',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 100,
   },
-  messageContainer: {
+  box: {
+    height: 60,
+    marginBottom: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gapBox: {
+    height: 30,
+    marginBottom: 10,
     backgroundColor: 'transparent',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
   },
-  messageHeader: {
-    marginBottom: 0,
-  },
-  messageTitle: {
-    fontWeight: '600',
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  itineraryContent: {
-    // Container for itinerary elements
-  },
-  elementContainer: {
-    marginBottom: 0,
-    backgroundColor: 'transparent',
-    position: 'relative',
-  },
-  elementBackground: {
-    position: 'absolute',
-    top: -4,
-    bottom: -4,
-    left: -16,
-    right: -16,
-    backgroundColor: '#10b981',
-    zIndex: -1,
-  },
-  h1: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  h2: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  h3: {
+  boxText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#4b5563',
-  },
-  p: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
+    fontWeight: 'bold',
+    color: '#000',
   },
   inputContainer: {
     position: 'absolute',
