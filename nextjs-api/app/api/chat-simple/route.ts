@@ -9,7 +9,8 @@ export async function POST(req: Request) {
   const modelMessages = convertToModelMessages(messages);
 
   // Initialize enrichment pipeline with Google Maps API key if available
-  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  console.log('[chat-simple] Google API Key configured:', googleApiKey ? `Yes (${googleApiKey.substring(0, 10)}...)` : 'No');
   const enrichmentPipeline = new EnrichmentPipeline(googleApiKey);
 
   // Create UI message stream with improved pattern
@@ -108,7 +109,13 @@ Be conversational and helpful in your responses.`,
     async transform(chunk: any, controller) {
       // Only process text-delta chunks that might contain HTML
       if (chunk.type === 'text-delta' && chunk.delta) {
+        if (chunk.delta.includes('geo-mark')) {
+          console.log('[chat-simple] Found geo-mark in chunk, processing for enrichment');
+        }
         const enrichedText = await enrichmentPipeline.processChunk(chunk.delta);
+        if (chunk.delta !== enrichedText) {
+          console.log('[chat-simple] Chunk was enriched:', chunk.delta.substring(0, 100), ' -> ', enrichedText.substring(0, 100));
+        }
         controller.enqueue({
           ...chunk,
           delta: enrichedText

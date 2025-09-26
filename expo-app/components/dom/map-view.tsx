@@ -49,6 +49,7 @@ interface TransportationRoute {
 
 interface MapViewProps {
   locations?: Location[];
+  focusedLocation?: Location | null;
   center?: { lat: number; lng: number };
   zoom?: number;
   onLocationClick?: (location: Location) => void;
@@ -67,6 +68,7 @@ interface MapViewProps {
 
 export default function MapView({
   locations = [],
+  focusedLocation = null,
   center = { lat: 40.7128, lng: -74.0060 },
   zoom = 10,
   onLocationClick,
@@ -167,9 +169,25 @@ export default function MapView({
     }
   }, [mapLoaded, locations.length, zoom]);
 
+  // Focus on a specific location when it changes
   useEffect(() => {
-    // Auto-fit bounds when we have locations, even if center/zoom were provided for initial state
-    if (locations.length > 0 && mapRef.current && mapLoaded) {
+    console.log('Map: focusedLocation changed:', focusedLocation, 'mapLoaded:', mapLoaded, 'hasMapRef:', !!mapRef.current);
+    if (focusedLocation && mapRef.current && mapLoaded) {
+      console.log('Map: Flying to location:', focusedLocation.name, 'at', focusedLocation.lat, focusedLocation.lng);
+
+      // Simply fly to the focused location
+      mapRef.current.flyTo({
+        center: [focusedLocation.lng, focusedLocation.lat],
+        zoom: 14,
+        duration: 800,
+        essential: true, // This animation is considered essential with respect to prefers-reduced-motion
+      });
+    }
+  }, [focusedLocation, mapLoaded]);
+
+  useEffect(() => {
+    // Initial auto-fit bounds when locations are first loaded
+    if (locations.length > 0 && mapRef.current && mapLoaded && !focusedLocation) {
       // Stop any rotation animation when locations are added
       if (locations.length === 1) {
         // For single location, just fly to it
@@ -199,7 +217,7 @@ export default function MapView({
         });
       }
     }
-  }, [locations, mapLoaded]);
+  }, [locations.length, mapLoaded]);
 
   const handleMapClick = useCallback((event: any) => {
     if (onMapClick) {
@@ -543,7 +561,7 @@ export default function MapView({
         {locations.map((location, index) => {
           const colorIndex = location.colorIndex ?? index;
           const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-          
+
           return (
             <Marker
               key={location.id}
@@ -554,15 +572,42 @@ export default function MapView({
             >
               <div
                 style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  backgroundColor: markerColor,
-                  border: '3px solid white',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   cursor: 'pointer',
                 }}
-              />
+              >
+                <div
+                  style={{
+                    backgroundColor: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    marginBottom: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#333',
+                    maxWidth: '120px',
+                    textAlign: 'center',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {location.name}
+                </div>
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    backgroundColor: markerColor,
+                    border: '3px solid white',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  }}
+                />
+              </div>
             </Marker>
           );
         })}

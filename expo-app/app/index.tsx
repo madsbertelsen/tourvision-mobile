@@ -17,16 +17,16 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+  yPosition?: number;
+  height?: number;
 }
 
 export default function SimpleChatScreen() {
   const [inputText, setInputText] = React.useState('');
   const [mapLocations, setMapLocations] = React.useState<Location[]>([]);
-
-  // Memoize the callback to prevent re-renders
-  const handleLocationsUpdate = React.useCallback((locations: Location[]) => {
-    setMapLocations(locations);
-  }, []);
+  const [focusedLocation, setFocusedLocation] = React.useState<Location | null>(null);
+  const messagesScrollRef = React.useRef<ScrollView>(null);
+  const scrollDebounceTimer = React.useRef<NodeJS.Timeout>();
 
   // Square map size based on screen width
   const mapSize = screenWidth;
@@ -61,6 +61,98 @@ export default function SimpleChatScreen() {
   console.log('Messages:', messages);
   console.log('Status:', status);
   console.log('Error:', error);
+
+  // Memoize the callback to prevent re-renders
+  const handleLocationsUpdate = React.useCallback((locations: Location[], messageId: string) => {
+    console.log('Locations updated for message:', messageId, locations.length, 'locations');
+
+    // Log Y offsets for all geo-marks
+    console.log('=== GEO-MARK Y OFFSETS ===');
+    locations.forEach((loc, index) => {
+      console.log(`  ${index + 1}. ${loc.name}: Y=${loc.yPosition || 'not set'}, Height=${loc.height || 'not set'}`);
+    });
+    console.log('==========================');
+
+    // Only update if we have new position data
+    const hasPositions = locations.some(loc => loc.yPosition !== undefined && loc.yPosition > 0);
+    if (hasPositions || locations.length > mapLocations.length) {
+      setMapLocations(locations);
+    }
+  }, [mapLocations.length]);
+
+  // Remove the old effect - we'll handle this in the scroll handler directly
+
+  // Handle scroll to detect which message's locations should be shown
+  const handleMessagesScroll = React.useCallback((event: any) => {
+    // Early return if messages not yet available
+    if (!messages || messages.length === 0 || mapLocations.length === 0) {
+      return;
+    }
+
+    // Capture event values immediately (before they're pooled)
+    const scrollY = event.nativeEvent?.contentOffset?.y || 0;
+    const viewportHeight = event.nativeEvent?.layoutMeasurement?.height || 600;
+
+    // Clear existing debounce timer
+    if (scrollDebounceTimer.current) {
+      clearTimeout(scrollDebounceTimer.current);
+    }
+
+    // Debounce the focus update
+    scrollDebounceTimer.current = setTimeout(() => {
+      // Get the ScrollView's position on screen
+      messagesScrollRef.current?.measureInWindow((x, scrollViewY, width, scrollViewHeight) => {
+        const viewportCenterAbsolute = scrollViewY + scrollY + (viewportHeight / 2);
+
+        console.log('\n=== SCROLL POSITION CALCULATION ===');
+        console.log(`ScrollView Y on screen: ${scrollViewY}`);
+        console.log(`Scroll offset: ${scrollY}`);
+        console.log(`Viewport Height: ${viewportHeight}`);
+        console.log(`Absolute Viewport Center: ${viewportCenterAbsolute}`);
+
+        // Filter locations that have valid positions
+        const locationsWithPositions = mapLocations.filter(loc =>
+          loc.yPosition !== undefined && loc.yPosition > 0
+        );
+
+        if (locationsWithPositions.length === 0) {
+          console.log('No locations with valid positions');
+          return;
+        }
+
+        console.log('\nLocations with absolute positions:');
+        locationsWithPositions.forEach(location => {
+          console.log(`  ${location.name}: Y=${location.yPosition}`);
+        });
+
+        // Find the location closest to viewport center
+        let closestLocation = locationsWithPositions[0];
+        let minDistance = Math.abs((closestLocation.yPosition || 0) - viewportCenterAbsolute);
+
+        console.log('\nDistance from viewport center:');
+        locationsWithPositions.forEach(location => {
+          const distance = Math.abs((location.yPosition || 0) - viewportCenterAbsolute);
+          console.log(`  ${location.name}: ${distance.toFixed(0)}px`);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestLocation = location;
+          }
+        });
+
+        // Only update if location changed
+        if (!focusedLocation ||
+            focusedLocation.lat !== closestLocation.lat ||
+            focusedLocation.lng !== closestLocation.lng) {
+          console.log(`\n>>> FOCUSING: ${closestLocation.name} (Y: ${closestLocation.yPosition}, Distance: ${minDistance.toFixed(0)}px)`);
+          console.log('===================================\n');
+          setFocusedLocation(closestLocation);
+        } else {
+          console.log(`\nNo change needed - already focused on ${focusedLocation.name}`);
+          console.log('===================================\n');
+        }
+      });
+    }, 200); // 200ms debounce
+  }, [messages, mapLocations, focusedLocation]);
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -102,17 +194,23 @@ export default function SimpleChatScreen() {
           <MapViewWrapper
             elements={[]} // We'll pass locations directly instead
             locations={mapLocations}
+            focusedLocation={focusedLocation}
             height={mapSize}
           />
         </View>
 
         {/* Messages overlaying the map */}
         <ScrollView
+          ref={messagesScrollRef}
           style={styles.messagesContainer}
           contentContainerStyle={[
             styles.messagesContent,
             messages.length === 0 && styles.messagesContentEmpty
           ]}
+          onScroll={handleMessagesScroll}
+          scrollEventThrottle={16}
+          onScrollEndDrag={handleMessagesScroll}
+          onMomentumScrollEnd={handleMessagesScroll}
         >
           {messages.map((message) => {
             // Check if message contains HTML content (itinerary)
@@ -158,10 +256,21 @@ export default function SimpleChatScreen() {
                     <NativeItineraryViewer
                       content={textContent}
                       isStreaming={status === 'in_progress' && message === messages[messages.length - 1]}
+                      messageId={message.id}
+                      focusedLocation={focusedLocation}
                       onLocationClick={(location, lat, lng) => {
                         console.log('Location clicked:', location, lat, lng);
+                        // Focus on clicked location
+                        const clickedLoc = mapLocations.find(loc =>
+                          loc.name === location &&
+                          loc.lat.toString() === lat &&
+                          loc.lng.toString() === lng
+                        );
+                        if (clickedLoc) {
+                          setFocusedLocation(clickedLoc);
+                        }
                       }}
-                      onLocationsUpdate={handleLocationsUpdate}
+                      onLocationsUpdate={(locations) => handleLocationsUpdate(locations, message.id)}
                     />
                   ) : (
                     <Text style={styles.messageText}>{textContent}</Text>

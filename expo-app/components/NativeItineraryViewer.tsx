@@ -16,20 +16,22 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+  yPosition?: number;
+  height?: number;
 }
 
 // Define marker colors to match the map
 const MARKER_COLORS = [
-  '#22c55e', // green
-  '#3b82f6', // blue
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#a855f7', // purple
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-  '#f97316', // orange
-  '#84cc16', // lime
-  '#6366f1', // indigo
+  '#3B82F6', // Blue
+  '#8B5CF6', // Purple
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#EF4444', // Red
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#84CC16', // Lime
+  '#F97316', // Orange
+  '#6366F1', // Indigo
 ];
 
 interface NativeItineraryViewerProps {
@@ -37,6 +39,9 @@ interface NativeItineraryViewerProps {
   isStreaming?: boolean;
   onLocationClick?: (location: string, lat: string, lng: string) => void;
   onLocationsUpdate?: (locations: Location[]) => void;
+  onVisibleLocationChange?: (location: Location) => void;
+  messageId?: string;
+  focusedLocation?: Location | null;
 }
 
 // Extract all geo-marks from parsed elements
@@ -92,7 +97,16 @@ export function NativeItineraryViewer({
   isStreaming = false,
   onLocationClick,
   onLocationsUpdate,
+  onVisibleLocationChange,
+  messageId,
+  focusedLocation,
 }: NativeItineraryViewerProps) {
+  // Track geo-mark positions
+  const locationPositions = React.useRef<Map<string, { yPosition: number; height: number }>>(new Map());
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const containerRef = React.useRef<View>(null);
+  const paragraphGeoMarks = React.useRef<Map<number, string[]>>(new Map()); // Track which geo-marks are in each paragraph
+
   // Parse HTML content
   const parsedElements = useMemo(() => {
     if (!content) return [];
@@ -118,10 +132,25 @@ export function NativeItineraryViewer({
   }, [parsedElements]);
 
   // Extract locations and notify parent
+  const locations = useMemo(() => {
+    if (parsedElements.length > 0) {
+      return extractLocations(parsedElements);
+    }
+    return [];
+  }, [parsedElements]);
+
   useEffect(() => {
-    if (onLocationsUpdate && parsedElements.length > 0) {
-      const locations = extractLocations(parsedElements);
-      onLocationsUpdate(locations);
+    if (onLocationsUpdate && locations.length > 0) {
+      // Add position data if available
+      const locationsWithPositions = locations.map(loc => {
+        const key = `${loc.name}-${loc.lat}-${loc.lng}`;
+        const position = locationPositions.current.get(key);
+        if (position) {
+          return { ...loc, ...position };
+        }
+        return loc;
+      });
+      onLocationsUpdate(locationsWithPositions);
     }
   }, [content]); // Only depend on content, not onLocationsUpdate
 
@@ -153,20 +182,60 @@ export function NativeItineraryViewer({
         );
 
       case 'p':
-        return (
-          <View key={index} style={styles.paragraph}>
-            {element.content ? (
-              <Text style={styles.text}>{element.content}</Text>
-            ) : (
-              <Text style={styles.text}>
-                {element.children?.map((child, i) => {
-                  if (child.type === 'geo-mark') {
-                    return renderGeoMark(child, i, true);
+        // Track which geo-marks are in this paragraph
+        const geoMarksInParagraph: string[] = [];
+        let hasFocusedLocation = false;
+
+        if (element.children) {
+          element.children.forEach(child => {
+            if (child.type === 'geo-mark' && child.attributes) {
+              const { dataLat, dataLng, dataPlaceName } = child.attributes;
+              const name = child.content || dataPlaceName || 'Unknown';
+              const key = `${name}-${dataLat}-${dataLng}`;
+              geoMarksInParagraph.push(key);
+
+              // Check if this matches the focused location
+              if (focusedLocation && dataLat && dataLng && dataLat !== 'PENDING' && dataLng !== 'PENDING') {
+                const lat = parseFloat(dataLat);
+                const lng = parseFloat(dataLng);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  if (Math.abs(focusedLocation.lat - lat) < 0.0001 &&
+                      Math.abs(focusedLocation.lng - lng) < 0.0001) {
+                    hasFocusedLocation = true;
                   }
-                  return renderInlineElement(child, i);
-                })}
-              </Text>
-            )}
+                }
+              }
+            }
+          });
+        }
+
+        return (
+          <View
+            key={index}
+            style={[styles.paragraph, hasFocusedLocation && styles.paragraphFocused]}
+            onLayout={(event) => {
+              if (geoMarksInParagraph.length > 0) {
+                event.target.measureInWindow((x, y, width, height) => {
+                  console.log(`Paragraph with geo-marks layout: Y=${y}, Height=${height}`);
+                  // Update position for all geo-marks in this paragraph
+                  geoMarksInParagraph.forEach(geoMarkKey => {
+                    updateGeoMarkPosition(geoMarkKey, y, height);
+                  });
+                });
+              }
+            }}
+          >
+            <Text style={styles.text}>
+              {element.content || element.children?.map((child, i) => {
+                if (child.type === 'geo-mark') {
+                  return renderGeoMark(child, i, true);
+                }
+                if (child.type === 'text') {
+                  return child.content;
+                }
+                return renderInlineElement(child, i);
+              })}
+            </Text>
           </View>
         );
 
@@ -178,13 +247,66 @@ export function NativeItineraryViewer({
         );
 
       case 'li':
+        // Track geo-marks in list items too
+        const listItemGeoMarks: string[] = [];
+        let listItemHasFocus = false;
+
+        const findGeoMarksInElement = (el: ParsedElement) => {
+          if (el.type === 'geo-mark' && el.attributes) {
+            const { dataLat, dataLng, dataPlaceName } = el.attributes;
+            const name = el.content || dataPlaceName || 'Unknown';
+            const key = `${name}-${dataLat}-${dataLng}`;
+            listItemGeoMarks.push(key);
+
+            // Check if this matches the focused location
+            if (focusedLocation && dataLat && dataLng && dataLat !== 'PENDING' && dataLng !== 'PENDING') {
+              const lat = parseFloat(dataLat);
+              const lng = parseFloat(dataLng);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                if (Math.abs(focusedLocation.lat - lat) < 0.0001 &&
+                    Math.abs(focusedLocation.lng - lng) < 0.0001) {
+                  listItemHasFocus = true;
+                }
+              }
+            }
+          }
+          if (el.children) {
+            el.children.forEach(findGeoMarksInElement);
+          }
+        };
+        if (element.children) {
+          element.children.forEach(findGeoMarksInElement);
+        }
+
         return (
-          <View key={index} style={styles.listItem}>
+          <View
+            key={index}
+            style={[styles.listItem, listItemHasFocus && styles.listItemFocused]}
+            onLayout={(event) => {
+              if (listItemGeoMarks.length > 0) {
+                event.target.measureInWindow((x, y, width, height) => {
+                  console.log(`List item with geo-marks layout: Y=${y}, Height=${height}`);
+                  // Update position for all geo-marks in this list item
+                  listItemGeoMarks.forEach(geoMarkKey => {
+                    updateGeoMarkPosition(geoMarkKey, y, height);
+                  });
+                });
+              }
+            }}
+          >
             <Text style={styles.bullet}>• </Text>
             <View style={styles.listItemContent}>
               {element.children?.map((child, i) => {
                 if (child.type === 'text') {
                   return <Text key={i} style={styles.text}>{child.content}</Text>;
+                }
+                if (child.type === 'geo-mark') {
+                  // Render inline geo-marks in list items
+                  return (
+                    <Text key={i} style={styles.text}>
+                      {renderGeoMark(child, i, true)}
+                    </Text>
+                  );
                 }
                 return renderElement(child, i);
               })}
@@ -246,8 +368,33 @@ export function NativeItineraryViewer({
     if (element.type === 'geo-mark') {
       return renderGeoMark(element, index, true);
     }
+    if (element.type === 'strong') {
+      return <Text key={index} style={styles.bold}>{element.content || element.children?.map((child, i) => renderInlineElement(child, i))}</Text>;
+    }
+    if (element.type === 'em') {
+      return <Text key={index} style={styles.italic}>{element.content || element.children?.map((child, i) => renderInlineElement(child, i))}</Text>;
+    }
     return null;
   };
+
+  // Track when a geo-mark's position changes
+  const updateGeoMarkPosition = React.useCallback((locationKey: string, y: number, height: number) => {
+    console.log(`GeoMark position update: ${locationKey} -> Y=${y}, Height=${height}`);
+    locationPositions.current.set(locationKey, { yPosition: y, height });
+
+    // Update locations with new position
+    if (onLocationsUpdate) {
+      const locationsWithPositions = locations.map(loc => {
+        const key = `${loc.name}-${loc.lat}-${loc.lng}`;
+        const position = locationPositions.current.get(key);
+        if (position) {
+          return { ...loc, ...position };
+        }
+        return loc;
+      });
+      onLocationsUpdate(locationsWithPositions);
+    }
+  }, [locations, onLocationsUpdate]);
 
   // Render a geo-mark as a clickable location with colored marker
   const renderGeoMark = (element: ParsedElement, index: number, isInline: boolean = false): React.ReactNode => {
@@ -261,13 +408,17 @@ export function NativeItineraryViewer({
 
     // For inline rendering within text
     if (isInline) {
+      // Return Text elements that can be inline with other text
       if (onLocationClick && dataLat && dataLng) {
-        // Note: TouchableOpacity doesn't work well inline in Text
-        // So we'll just render as styled text with colored dot
         return (
           <Text key={index}>
             <Text style={[styles.geoMarkDotInline, { color: markerColor }]}>● </Text>
-            <Text style={styles.geoMarkInline}>{locationName}</Text>
+            <Text
+              style={styles.geoMarkInline}
+              onPress={() => onLocationClick(locationName, dataLat, dataLng)}
+            >
+              {locationName}
+            </Text>
           </Text>
         );
       }
@@ -280,12 +431,21 @@ export function NativeItineraryViewer({
     }
 
     // For standalone rendering
+    const handleLayout = (event: any) => {
+      // Use measureInWindow to get absolute position
+      event.target.measureInWindow((x, y, width, height) => {
+        console.log(`Standalone GeoMark measureInWindow: ${locationName} -> Y=${y}, Height=${height}`);
+        updateGeoMarkPosition(locationKey, y, height);
+      });
+    };
+
     if (onLocationClick && dataLat && dataLng) {
       return (
         <TouchableOpacity
           key={index}
           onPress={() => onLocationClick(locationName, dataLat, dataLng)}
           style={styles.geoMarkTouchable}
+          onLayout={handleLayout}
         >
           <View style={styles.geoMarkContainer}>
             <View style={[styles.geoMarkDot, { backgroundColor: markerColor }]} />
@@ -298,7 +458,7 @@ export function NativeItineraryViewer({
     }
 
     return (
-      <View key={index} style={styles.geoMarkContainer}>
+      <View key={index} style={styles.geoMarkContainer} onLayout={handleLayout}>
         <View style={[styles.geoMarkDot, { backgroundColor: markerColor }]} />
         <Text style={styles.geoMark}>
           {locationName}
@@ -316,11 +476,13 @@ export function NativeItineraryViewer({
   }
 
   return (
-    <View style={styles.container}>
+    <View ref={containerRef} style={styles.container}>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
       >
         {parsedElements.map((element, index) => renderElement(element, index))}
 
@@ -373,6 +535,12 @@ const styles = StyleSheet.create({
   paragraph: {
     marginBottom: 12,
   },
+  paragraphFocused: {
+    backgroundColor: '#FEF3C7', // Light amber highlight
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
   text: {
     fontSize: 14,
     color: '#374151',
@@ -385,6 +553,12 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: 'row',
     marginBottom: 6,
+  },
+  listItemFocused: {
+    backgroundColor: '#FEF3C7', // Light amber highlight
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+    borderRadius: 4,
   },
   bullet: {
     fontSize: 14,

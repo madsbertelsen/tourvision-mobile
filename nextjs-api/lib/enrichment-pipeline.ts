@@ -10,6 +10,7 @@ export class EnrichmentPipeline {
 
   constructor(googleApiKey?: string) {
     this.googleApiKey = googleApiKey;
+    console.log('[EnrichmentPipeline] Initialized with API key:', googleApiKey ? 'Yes' : 'No');
   }
 
   /**
@@ -19,6 +20,10 @@ export class EnrichmentPipeline {
   async processChunk(chunk: string): Promise<string> {
     // Add chunk to buffer
     this.buffer += chunk;
+
+    if (chunk.includes('geo-mark')) {
+      console.log('[EnrichmentPipeline] Processing chunk with geo-mark, buffer size:', this.buffer.length);
+    }
 
     // Check if we have complete geo-marks to process
     const processedContent = await this.processBuffer();
@@ -39,6 +44,7 @@ export class EnrichmentPipeline {
     let match;
 
     while ((match = geoMarkRegex.exec(currentBuffer)) !== null) {
+      console.log('[EnrichmentPipeline] Found complete geo-mark:', match[0].substring(0, 100));
       // Add content before the geo-mark
       result += currentBuffer.slice(lastIndex, match.index);
 
@@ -73,24 +79,31 @@ export class EnrichmentPipeline {
    * Enrich a geo-mark with coordinates
    */
   private async enrichGeoMark(geoMarkHtml: string): Promise<string> {
+    console.log('[EnrichmentPipeline] enrichGeoMark called with:', geoMarkHtml.substring(0, 150));
     // Extract attributes
     const placeNameMatch = geoMarkHtml.match(/data-place-name="([^"]*)"/);
     const latMatch = geoMarkHtml.match(/data-lat="([^"]*)"/);
 
     // If already has valid coordinates, return as-is
     if (latMatch && latMatch[1] !== 'PENDING') {
+      console.log('[EnrichmentPipeline] Geo-mark already has coordinates, skipping');
       return geoMarkHtml;
     }
 
     // Extract place name
     const placeName = placeNameMatch ? placeNameMatch[1] : null;
+    console.log('[EnrichmentPipeline] Extracted place name:', placeName);
     if (!placeName) {
+      console.log('[EnrichmentPipeline] No place name found, returning original');
       return geoMarkHtml;
     }
 
     // Get coordinates
+    console.log('[EnrichmentPipeline] Calling geocodeLocation for:', placeName);
     const coords = await geocodeLocation(placeName, this.googleApiKey);
+    console.log('[EnrichmentPipeline] Geocoding result:', coords);
     if (!coords) {
+      console.log('[EnrichmentPipeline] No coordinates found, returning original');
       return geoMarkHtml;
     }
 
@@ -105,6 +118,7 @@ export class EnrichmentPipeline {
       `data-geo="true" data-coord-source="${coords.source}"`
     );
 
+    console.log('[EnrichmentPipeline] Enriched geo-mark:', enriched.substring(0, 150));
     return enriched;
   }
 

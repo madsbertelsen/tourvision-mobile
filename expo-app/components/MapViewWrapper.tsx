@@ -8,6 +8,7 @@ const MapViewDOM = React.lazy(() => import('./dom/map-view'));
 interface MapViewWrapperProps {
   elements?: ParsedElement[];
   locations?: Location[];
+  focusedLocation?: Location | null;
   height?: number;
 }
 
@@ -68,7 +69,7 @@ function extractLocations(elements: ParsedElement[]): Location[] {
   return locations;
 }
 
-export function MapViewWrapper({ elements = [], locations: providedLocations, height = 400 }: MapViewWrapperProps) {
+export function MapViewWrapper({ elements = [], locations: providedLocations, focusedLocation, height = 400 }: MapViewWrapperProps) {
   // Use provided locations if available, otherwise extract from elements
   const locations = useMemo(() => {
     if (providedLocations && providedLocations.length > 0) {
@@ -77,12 +78,15 @@ export function MapViewWrapper({ elements = [], locations: providedLocations, he
     return extractLocations(elements);
   }, [elements, providedLocations]);
 
+  console.log('MapViewWrapper - focusedLocation:', focusedLocation);
+
   // Always render map, show globe view when no locations
   return (
     <View style={[styles.container, { height }]}>
       <React.Suspense fallback={<View style={styles.loading} />}>
         <MapViewDOM
           locations={locations}
+          focusedLocation={focusedLocation}
           transportationRoutes={[]}
           // Only provide center/zoom for empty globe view, let map auto-fit when locations exist
           {...(locations.length === 0 ? {

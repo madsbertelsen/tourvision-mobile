@@ -15,7 +15,11 @@ export async function geocodeLocation(
   placeName: string,
   googleApiKey?: string
 ): Promise<GeocodingResult | null> {
-  if (!placeName) return null;
+  console.log('[Geocoding] geocodeLocation called with:', placeName, 'API key:', googleApiKey ? 'present' : 'missing');
+  if (!placeName) {
+    console.log('[Geocoding] No place name provided');
+    return null;
+  }
 
   // Normalize the place name for better matching
   const normalizedName = placeName.toLowerCase().trim();
@@ -29,7 +33,7 @@ export async function geocodeLocation(
 
   // Try Google Places API
   if (!googleApiKey || googleApiKey === 'your_google_maps_api_key_here') {
-    console.warn(`[Geocoding] No valid Google API key configured`);
+    console.warn(`[Geocoding] No valid Google API key configured. Key value:`, googleApiKey);
     return null;
   }
 
@@ -43,8 +47,10 @@ export async function geocodeLocation(
       `&fields=geometry,name,formatted_address` +
       `&key=${googleApiKey}`;
 
+    console.log('[Geocoding] Making request to Google Places API');
     const response = await fetch(url);
     const data = await response.json();
+    console.log('[Geocoding] Google API response status:', data.status);
 
     if (data.status === 'OK' && data.candidates?.[0]) {
       const location = data.candidates[0].geometry.location;
