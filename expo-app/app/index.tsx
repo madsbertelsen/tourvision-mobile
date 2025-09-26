@@ -46,7 +46,9 @@ type FlatElement = {
   role?: 'user' | 'assistant';
   timestamp?: Date;
   isItineraryContent?: boolean;
-  parsedContent?: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>;
+  parsedContent?: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>;
+  isHeading?: boolean;
+  headingLevel?: 1 | 2 | 3;
 };
 
 interface Location {
@@ -121,6 +123,22 @@ const MessageElement = ({
 
   // Handle content rendering
   if (element.type === 'content') {
+    // Check if it's a heading
+    if (element.isHeading && element.headingLevel) {
+      const headingStyles = {
+        1: styles.heading1,
+        2: styles.heading2,
+        3: styles.heading3,
+      };
+      return (
+        <View style={baseStyle}>
+          <Text style={[headingStyles[element.headingLevel], { opacity: isVisible ? 1 : 0.3 }]}>
+            {element.text}
+          </Text>
+        </View>
+      );
+    }
+
     return (
       <View style={baseStyle}>
         {element.parsedContent ? (
@@ -158,79 +176,106 @@ const MessageElement = ({
 };
 
 // Helper to parse itinerary HTML into chunks with geo-mark tracking
-const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>}> => {
-  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>}> = [];
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
   let colorIndex = 0;
   const locationColors = new Map<string, string>();
 
   // Remove the itinerary wrapper tags
   let content = htmlContent.replace(/<\/?itinerary>/g, '');
 
-  // Process headings
-  content = content.replace(/<h1>([^<]+)<\/h1>/g, '\n\n**$1**\n');
-  content = content.replace(/<h2>([^<]+)<\/h2>/g, '\n\n$1:\n');
-  content = content.replace(/<h3>([^<]+)<\/h3>/g, '\n$1:\n');
+  // Split content into elements while preserving order
+  const elementRegex = /(<h[123]>[^<]+<\/h[123]>|<p>[\s\S]*?<\/p>)/g;
+  const elements = content.match(elementRegex) || [];
 
-  // Split into paragraphs and process each
-  const paragraphs = content.split(/<\/?p>/g).filter(p => p.trim());
+  elements.forEach(element => {
+    // Check if it's a heading
+    const h1Match = element.match(/<h1>([^<]+)<\/h1>/);
+    const h2Match = element.match(/<h2>([^<]+)<\/h2>/);
+    const h3Match = element.match(/<h3>([^<]+)<\/h3>/);
 
-  paragraphs.forEach(paragraph => {
-    let processedText = paragraph;
-    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}> = [];
+    if (h1Match) {
+      chunks.push({
+        text: h1Match[1],
+        parsedContent: [{type: 'h1', text: h1Match[1]}],
+        isHeading: true,
+        headingLevel: 1
+      });
+    } else if (h2Match) {
+      chunks.push({
+        text: h2Match[1],
+        parsedContent: [{type: 'h2', text: h2Match[1]}],
+        isHeading: true,
+        headingLevel: 2
+      });
+    } else if (h3Match) {
+      chunks.push({
+        text: h3Match[1],
+        parsedContent: [{type: 'h3', text: h3Match[1]}],
+        isHeading: true,
+        headingLevel: 3
+      });
+    } else {
+      // It's a paragraph - process for geo-marks
+      const paragraph = element.replace(/<\/?p>/g, '').trim();
+      if (!paragraph) return;
 
-    // Find all geo-marks in this paragraph
-    const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
-    let lastIndex = 0;
-    let match;
+      const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}> = [];
 
-    while ((match = geoMarkRegex.exec(paragraph)) !== null) {
-      // Add text before the geo-mark
-      if (match.index > lastIndex) {
-        const textBefore = paragraph.substring(lastIndex, match.index).replace(/<[^>]+>/g, '').trim();
-        if (textBefore) {
-          parsedContent.push({type: 'text', text: textBefore});
+      // Find all geo-marks in this paragraph
+      const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = geoMarkRegex.exec(paragraph)) !== null) {
+        // Add text before the geo-mark
+        if (match.index > lastIndex) {
+          const textBefore = paragraph.substring(lastIndex, match.index).replace(/<[^>]+>/g, '').trim();
+          if (textBefore) {
+            parsedContent.push({type: 'text', text: textBefore});
+          }
+        }
+
+        // Add the geo-mark with color
+        const locationName = match[1];
+        if (!locationColors.has(locationName)) {
+          locationColors.set(locationName, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
+          colorIndex++;
+        }
+        parsedContent.push({
+          type: 'geo-mark',
+          text: locationName,
+          color: locationColors.get(locationName)
+        });
+
+        lastIndex = geoMarkRegex.lastIndex;
+      }
+
+      // Add remaining text after last geo-mark
+      if (lastIndex < paragraph.length) {
+        const textAfter = paragraph.substring(lastIndex).replace(/<[^>]+>/g, '').trim();
+        if (textAfter) {
+          parsedContent.push({type: 'text', text: textAfter});
         }
       }
 
-      // Add the geo-mark with color
-      const locationName = match[1];
-      if (!locationColors.has(locationName)) {
-        locationColors.set(locationName, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
-        colorIndex++;
+      // If no geo-marks found, just add as plain text
+      if (parsedContent.length === 0) {
+        const cleanText = paragraph.replace(/<[^>]+>/g, '').trim();
+        if (cleanText) {
+          parsedContent.push({type: 'text', text: cleanText});
+        }
       }
-      parsedContent.push({
-        type: 'geo-mark',
-        text: locationName,
-        color: locationColors.get(locationName)
-      });
 
-      lastIndex = geoMarkRegex.lastIndex;
-    }
+      // Create combined text for display
+      const fullText = parsedContent.map(item => item.text).join(' ').trim();
 
-    // Add remaining text after last geo-mark
-    if (lastIndex < paragraph.length) {
-      const textAfter = paragraph.substring(lastIndex).replace(/<[^>]+>/g, '').trim();
-      if (textAfter) {
-        parsedContent.push({type: 'text', text: textAfter});
+      if (fullText) {
+        chunks.push({
+          text: fullText,
+          parsedContent
+        });
       }
-    }
-
-    // If no geo-marks found, just add as plain text
-    if (parsedContent.length === 0) {
-      const cleanText = paragraph.replace(/<[^>]+>/g, '').trim();
-      if (cleanText) {
-        parsedContent.push({type: 'text', text: cleanText});
-      }
-    }
-
-    // Create combined text for display
-    const fullText = parsedContent.map(item => item.text).join(' ').trim();
-
-    if (fullText) {
-      chunks.push({
-        text: fullText,
-        parsedContent
-      });
     }
   });
 
@@ -311,6 +356,8 @@ export default function SimpleChatScreen() {
             parsedContent: chunk.parsedContent,
             height: 0, // Let content grow naturally
             isItineraryContent: true,
+            isHeading: chunk.isHeading,
+            headingLevel: chunk.headingLevel,
           });
         });
       } else if (textContent) {
@@ -384,7 +431,6 @@ export default function SimpleChatScreen() {
     const position = elementPositions.get(elementId);
     if (!position) return true; // Default to visible if position not tracked yet
 
-    const itemTop = position.top - scrollOffset;
     const itemBottom = position.bottom - scrollOffset;
 
     // Item is visible if its bottom edge is above the threshold
@@ -653,6 +699,27 @@ const styles = StyleSheet.create({
   locationText: {
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  heading1: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  heading2: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  heading3: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginBottom: 4,
+    marginTop: 2,
   },
   loadingContainer: {
     flexDirection: 'row',
