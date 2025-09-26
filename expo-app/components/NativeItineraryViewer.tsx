@@ -217,10 +217,12 @@ export function NativeItineraryViewer({
               elementPositions.current.set(headerId, { y, height });
 
               // Also measure in window for absolute position
-              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
-                // Update with absolute window position if needed
-                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
-              });
+              if (event.target?.measureInWindow) {
+                event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                  // Update with absolute window position if needed
+                  elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
+                });
+              }
             }}
           >
             <Text style={styles.h1}>
@@ -248,9 +250,11 @@ export function NativeItineraryViewer({
               const { y, height } = event.nativeEvent.layout;
               elementPositions.current.set(headerId, { y, height });
 
-              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
-                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
-              });
+              if (event.target?.measureInWindow) {
+                event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                  elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
+                });
+              }
             }}
           >
             <Text style={styles.h2}>
@@ -278,9 +282,11 @@ export function NativeItineraryViewer({
               const { y, height } = event.nativeEvent.layout;
               elementPositions.current.set(headerId, { y, height });
 
-              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
-                elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
-              });
+              if (event.target?.measureInWindow) {
+                event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+                  elementPositions.current.set(headerId, { y: yWindow, height: heightWindow });
+                });
+              }
             }}
           >
             <Text style={styles.h3}>
@@ -318,7 +324,8 @@ export function NativeItineraryViewer({
               elementPositions.current.set(paragraphId, { y, height });
 
               // Report position to parent
-              event.target.measureInWindow((x, yWindow, width, heightWindow) => {
+              if (event.target?.measureInWindow) {
+                event.target.measureInWindow((x, yWindow, width, heightWindow) => {
                 // Update with absolute window position
                 elementPositions.current.set(paragraphId, { y: yWindow, height: heightWindow });
 
@@ -329,7 +336,8 @@ export function NativeItineraryViewer({
                     updateGeoMarkPosition(geoMarkKey, yWindow, heightWindow);
                   });
                 }
-              });
+                });
+              }
             }}
           >
             <Text style={styles.text}>
@@ -380,7 +388,8 @@ export function NativeItineraryViewer({
             style={[styles.listItem, styles.transparentBackground]}
             onLayout={(event) => {
               // Report position to parent
-              event.target.measureInWindow((x, y, width, height) => {
+              if (event.target?.measureInWindow) {
+                event.target.measureInWindow((x, y, width, height) => {
                 // Report list item position to parent
 
                 // Also update geo-mark positions if any
@@ -390,7 +399,8 @@ export function NativeItineraryViewer({
                     updateGeoMarkPosition(geoMarkKey, y, height);
                   });
                 }
-              });
+                });
+              }
             }}
           >
             <Text style={styles.bullet}>• </Text>
@@ -532,10 +542,12 @@ export function NativeItineraryViewer({
     // For standalone rendering
     const handleLayout = (event: any) => {
       // Use measureInWindow to get absolute position
-      event.target.measureInWindow((x, y, width, height) => {
-        console.log(`Standalone GeoMark measureInWindow: ${locationName} -> Y=${y}, Height=${height}`);
-        updateGeoMarkPosition(locKey, y, height);
-      });
+      if (event.target?.measureInWindow) {
+        event.target.measureInWindow((x, y, width, height) => {
+          console.log(`Standalone GeoMark measureInWindow: ${locationName} -> Y=${y}, Height=${height}`);
+          updateGeoMarkPosition(locKey, y, height);
+        });
+      }
     };
 
     if (onLocationClick && dataLat && dataLng) {

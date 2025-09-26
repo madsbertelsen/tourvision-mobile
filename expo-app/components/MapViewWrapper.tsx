@@ -9,7 +9,7 @@ interface MapViewWrapperProps {
   elements?: ParsedElement[];
   locations?: Location[];
   focusedLocation?: Location | null;
-  height?: number;
+  height?: number | string;
 }
 
 interface Location {
@@ -81,13 +81,20 @@ export function MapViewWrapper({ elements = [], locations: providedLocations, fo
   console.log('MapViewWrapper - focusedLocation:', focusedLocation);
 
   // Always render map, show globe view when no locations
+  // If height is a string percentage, use flex: 1 to fill parent
+  const containerStyle = height === '100%'
+    ? [styles.container, styles.fullHeight]
+    : [styles.container, { height }];
+
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={containerStyle}>
       <React.Suspense fallback={<View style={styles.loading} />}>
         <MapViewDOM
           locations={locations}
           focusedLocation={focusedLocation}
           transportationRoutes={[]}
+          // Pass full height style to DOM component
+          style={{ width: '100%', height: '100%' }}
           // Only provide center/zoom for empty globe view, let map auto-fit when locations exist
           {...(locations.length === 0 ? {
             center: { lat: 0, lng: 0 },
@@ -106,6 +113,10 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     overflow: 'hidden',
+  },
+  fullHeight: {
+    flex: 1,
+    height: '100%',
   },
   loading: {
     flex: 1,
