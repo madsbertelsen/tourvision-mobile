@@ -4,11 +4,9 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
-
-const { height: screenHeight } = Dimensions.get('window');
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Helper function to adjust color brightness
 const adjustColor = (color: string, amount: number): string => {
@@ -27,6 +25,53 @@ type FlatElement = {
   messageId: string;
   messageColor: string;
   text: string;
+  height: number; // Height of this element (40, 60, or 80 for content)
+};
+
+// Component to render a single message element
+const MessageElement = ({
+  element,
+  isVisible,
+  backgroundColor
+}: {
+  element: FlatElement;
+  isVisible: boolean;
+  backgroundColor: string;
+}) => {
+  if (element.type === 'gap') {
+    return <View style={styles.gapBox} />;
+  }
+
+  return (
+    <View
+      style={[
+        styles.box,
+        {
+          height: element.height,
+          backgroundColor: isVisible ? backgroundColor : 'transparent',
+          borderColor: backgroundColor,
+          borderTopWidth: element.type === 'header' ? 2 : 0,
+          borderLeftWidth: 2,
+          borderRightWidth: 2,
+          borderBottomWidth: element.type === 'footer' ? 2 : 0,
+          borderTopLeftRadius: element.type === 'header' ? 8 : 0,
+          borderTopRightRadius: element.type === 'header' ? 8 : 0,
+          borderBottomLeftRadius: element.type === 'footer' ? 8 : 0,
+          borderBottomRightRadius: element.type === 'footer' ? 8 : 0,
+        }
+      ]}
+    >
+      <Text style={[
+        styles.boxText,
+        {
+          opacity: isVisible ? 1 : 0.3,
+          fontWeight: element.type === 'header' ? 'bold' : 'normal',
+        }
+      ]}>
+        {element.text}
+      </Text>
+    </View>
+  );
 };
 
 export default function TestTransparencyScreen() {
@@ -49,21 +94,28 @@ export default function TestTransparencyScreen() {
     }))
   , []);
 
+  // Helper to get random height for content elements
+  const getRandomHeight = () => {
+    const heights = [40, 60, 80];
+    return heights[Math.floor(Math.random() * heights.length)];
+  };
+
   // Generate flat array from messages
   const flatElements = React.useMemo(() => {
     const elements: FlatElement[] = [];
 
     messages.forEach((message, msgIndex) => {
-      // Add header
+      // Add header (always 60px)
       elements.push({
         id: `${message.id}-header`,
         type: 'header',
         messageId: message.id,
         messageColor: message.color,
         text: `Message ${msgIndex + 1} Header`,
+        height: 60,
       });
 
-      // Add content elements
+      // Add content elements with random heights
       for (let i = 0; i < message.elementCount; i++) {
         elements.push({
           id: `${message.id}-content-${i}`,
@@ -71,16 +123,18 @@ export default function TestTransparencyScreen() {
           messageId: message.id,
           messageColor: message.color,
           text: `Message ${msgIndex + 1} Item ${i + 1}`,
+          height: getRandomHeight(),
         });
       }
 
-      // Add footer
+      // Add footer (always 60px)
       elements.push({
         id: `${message.id}-footer`,
         type: 'footer',
         messageId: message.id,
         messageColor: message.color,
         text: `Message ${msgIndex + 1} Footer`,
+        height: 60,
       });
 
       // Add gap (except after last message)
@@ -91,6 +145,7 @@ export default function TestTransparencyScreen() {
           messageId: '',
           messageColor: '',
           text: '',
+          height: 30,
         });
       }
     });
@@ -102,18 +157,18 @@ export default function TestTransparencyScreen() {
   const visibleThreshold = containerHeight * 0.75;
 
   const isItemVisible = (index: number) => {
-    // Calculate actual position based on element types before this index
+    // Calculate actual position based on element heights before this index
     let position = 0;
     for (let i = 0; i < index; i++) {
       if (flatElements[i].type === 'gap') {
-        position += 40; // gap height (30) + margin (10)
+        position += flatElements[i].height + 10; // gap height + margin
       } else {
-        position += 70; // box height (60) + margin (10)
+        position += flatElements[i].height; // element actual height with no margin
       }
     }
 
     const itemTop = position - scrollOffset;
-    const itemHeight = flatElements[index].type === 'gap' ? 30 : 60;
+    const itemHeight = flatElements[index].height;
     const itemBottom = itemTop + itemHeight;
 
     // Item is visible if its bottom edge is above the threshold
@@ -149,16 +204,6 @@ export default function TestTransparencyScreen() {
             scrollEventThrottle={16}
           >
             {flatElements.map((element, index) => {
-              if (element.type === 'gap') {
-                // Render gap view - always transparent, no border, smaller height
-                return (
-                  <View
-                    key={element.id}
-                    style={styles.gapBox}
-                  />
-                );
-              }
-
               // Determine background color based on element type
               let backgroundColor = element.messageColor;
               if (element.type === 'header') {
@@ -169,28 +214,13 @@ export default function TestTransparencyScreen() {
                 backgroundColor = adjustColor(element.messageColor, 30);
               }
 
-              // Render element
               return (
-                <View
+                <MessageElement
                   key={element.id}
-                  style={[
-                    styles.box,
-                    {
-                      backgroundColor: isItemVisible(index) ? backgroundColor : 'transparent',
-                      borderColor: backgroundColor,
-                    }
-                  ]}
-                >
-                  <Text style={[
-                    styles.boxText,
-                    {
-                      opacity: isItemVisible(index) ? 1 : 0.3,
-                      fontWeight: element.type === 'header' ? 'bold' : 'normal',
-                    }
-                  ]}>
-                    {element.text}
-                  </Text>
-                </View>
+                  element={element}
+                  isVisible={isItemVisible(index)}
+                  backgroundColor={backgroundColor}
+                />
               );
             })}
           </ScrollView>
@@ -259,10 +289,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   box: {
-    height: 60,
-    marginBottom: 10,
-    borderRadius: 8,
-    borderWidth: 2,
+    marginBottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },
