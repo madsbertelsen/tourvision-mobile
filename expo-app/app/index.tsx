@@ -21,16 +21,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Helper function to adjust color brightness
-const adjustColor = (color: string, amount: number): string => {
-  const usePound = color[0] === '#';
-  const col = usePound ? color.slice(1) : color;
-  const num = parseInt(col, 16);
-  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
-  const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
-  return (usePound ? '#' : '') + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-};
+// Color palette for location markers
+const MARKER_COLORS = [
+  '#3B82F6', // Blue
+  '#8B5CF6', // Purple
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#EF4444', // Red
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#84CC16', // Lime
+  '#F97316', // Orange
+  '#6366F1', // Indigo
+];
 
 type FlatElement = {
   id: string;
@@ -43,6 +46,7 @@ type FlatElement = {
   role?: 'user' | 'assistant';
   timestamp?: Date;
   isItineraryContent?: boolean;
+  parsedContent?: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>;
 };
 
 interface Location {
@@ -81,13 +85,7 @@ const MessageElement = ({
   const baseStyle = [
     styles.box,
     {
-      height: element.height,
-      backgroundColor: isVisible ? backgroundColor : 'transparent',
-      borderColor: backgroundColor,
-      borderTopWidth: element.type === 'header' ? 2 : 0,
-      borderLeftWidth: 2,
-      borderRightWidth: 2,
-      borderBottomWidth: element.type === 'footer' ? 2 : 0,
+      backgroundColor: isVisible ? 'white' : 'transparent',
       borderTopLeftRadius: element.type === 'header' ? 12 : 0,
       borderTopRightRadius: element.type === 'header' ? 12 : 0,
       borderBottomLeftRadius: element.type === 'footer' ? 12 : 0,
@@ -125,15 +123,32 @@ const MessageElement = ({
   if (element.type === 'content') {
     return (
       <View style={baseStyle}>
-        <Text style={[
-          styles.messageText,
-          {
-            opacity: isVisible ? 1 : 0.3,
-            fontStyle: element.isItineraryContent ? 'italic' : 'normal'
-          }
-        ]}>
-          {element.text}
-        </Text>
+        {element.parsedContent ? (
+          <Text style={[styles.messageText, { opacity: isVisible ? 1 : 0.3 }]}>
+            {element.parsedContent.map((item, idx) => {
+              if (item.type === 'geo-mark') {
+                return (
+                  <Text key={idx}>
+                    <Text style={{ color: item.color, fontSize: 10 }}>● </Text>
+                    <Text style={[styles.locationText, { color: item.color }]}>{item.text}</Text>
+                    {idx < element.parsedContent!.length - 1 ? ' ' : ''}
+                  </Text>
+                );
+              }
+              return <Text key={idx}>{item.text}{idx < element.parsedContent!.length - 1 ? ' ' : ''}</Text>;
+            })}
+          </Text>
+        ) : (
+          <Text style={[
+            styles.messageText,
+            {
+              opacity: isVisible ? 1 : 0.3,
+              fontStyle: element.isItineraryContent ? 'italic' : 'normal'
+            }
+          ]}>
+            {element.text}
+          </Text>
+        )}
       </View>
     );
   }
@@ -142,63 +157,80 @@ const MessageElement = ({
   return <View style={baseStyle} />;
 };
 
-// Helper to parse itinerary HTML into chunks
-const parseItineraryContent = (htmlContent: string): string[] => {
-  const chunks: string[] = [];
+// Helper to parse itinerary HTML into chunks with geo-mark tracking
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}>}> = [];
+  let colorIndex = 0;
+  const locationColors = new Map<string, string>();
 
-  // Remove the itinerary wrapper tags completely
-  let cleanContent = htmlContent.replace(/<\/?itinerary>/g, '');
+  // Remove the itinerary wrapper tags
+  let content = htmlContent.replace(/<\/?itinerary>/g, '');
 
-  // Process different heading levels to extract structure
-  // First, handle h3 headings (times/subheadings)
-  cleanContent = cleanContent.replace(/<h3>([^<]+)<\/h3>/g, '\n$1:\n');
+  // Process headings
+  content = content.replace(/<h1>([^<]+)<\/h1>/g, '\n\n**$1**\n');
+  content = content.replace(/<h2>([^<]+)<\/h2>/g, '\n\n$1:\n');
+  content = content.replace(/<h3>([^<]+)<\/h3>/g, '\n$1:\n');
 
-  // Then h2 headings (section headers)
-  cleanContent = cleanContent.replace(/<h2>([^<]+)<\/h2>/g, '\n\n$1:\n');
+  // Split into paragraphs and process each
+  const paragraphs = content.split(/<\/?p>/g).filter(p => p.trim());
 
-  // Then h1 headings (day headers)
-  cleanContent = cleanContent.replace(/<h1>([^<]+)<\/h1>/g, '\n\n$1\n');
+  paragraphs.forEach(paragraph => {
+    let processedText = paragraph;
+    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}> = [];
 
-  // Handle geo-marks specially to preserve location names
-  cleanContent = cleanContent.replace(/<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g, '📍 $1');
+    // Find all geo-marks in this paragraph
+    const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
+    let lastIndex = 0;
+    let match;
 
-  // Handle paragraphs
-  cleanContent = cleanContent.replace(/<p>/g, '\n');
-  cleanContent = cleanContent.replace(/<\/p>/g, '');
-
-  // Remove all remaining HTML tags
-  cleanContent = cleanContent.replace(/<[^>]+>/g, ' ');
-
-  // Clean up whitespace
-  cleanContent = cleanContent.replace(/\s+/g, ' ');
-  cleanContent = cleanContent.replace(/\n\s+/g, '\n');
-  cleanContent = cleanContent.trim();
-
-  // Split content into logical chunks based on double newlines
-  const rawChunks = cleanContent.split(/\n\n+/);
-
-  rawChunks.forEach(chunk => {
-    const trimmedChunk = chunk.trim();
-    if (trimmedChunk) {
-      // Split very long chunks
-      if (trimmedChunk.length > 300) {
-        const sentences = trimmedChunk.match(/[^.!?]+[.!?]+/g) || [trimmedChunk];
-        let currentChunk = '';
-
-        sentences.forEach(sentence => {
-          const trimmedSentence = sentence.trim();
-          if ((currentChunk + ' ' + trimmedSentence).length <= 300) {
-            currentChunk = currentChunk ? `${currentChunk} ${trimmedSentence}` : trimmedSentence;
-          } else {
-            if (currentChunk) chunks.push(currentChunk);
-            currentChunk = trimmedSentence;
-          }
-        });
-
-        if (currentChunk) chunks.push(currentChunk);
-      } else {
-        chunks.push(trimmedChunk);
+    while ((match = geoMarkRegex.exec(paragraph)) !== null) {
+      // Add text before the geo-mark
+      if (match.index > lastIndex) {
+        const textBefore = paragraph.substring(lastIndex, match.index).replace(/<[^>]+>/g, '').trim();
+        if (textBefore) {
+          parsedContent.push({type: 'text', text: textBefore});
+        }
       }
+
+      // Add the geo-mark with color
+      const locationName = match[1];
+      if (!locationColors.has(locationName)) {
+        locationColors.set(locationName, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
+        colorIndex++;
+      }
+      parsedContent.push({
+        type: 'geo-mark',
+        text: locationName,
+        color: locationColors.get(locationName)
+      });
+
+      lastIndex = geoMarkRegex.lastIndex;
+    }
+
+    // Add remaining text after last geo-mark
+    if (lastIndex < paragraph.length) {
+      const textAfter = paragraph.substring(lastIndex).replace(/<[^>]+>/g, '').trim();
+      if (textAfter) {
+        parsedContent.push({type: 'text', text: textAfter});
+      }
+    }
+
+    // If no geo-marks found, just add as plain text
+    if (parsedContent.length === 0) {
+      const cleanText = paragraph.replace(/<[^>]+>/g, '').trim();
+      if (cleanText) {
+        parsedContent.push({type: 'text', text: cleanText});
+      }
+    }
+
+    // Create combined text for display
+    const fullText = parsedContent.map(item => item.text).join(' ').trim();
+
+    if (fullText) {
+      chunks.push({
+        text: fullText,
+        parsedContent
+      });
     }
   });
 
@@ -260,7 +292,7 @@ export default function SimpleChatScreen() {
         type: 'header',
         messageId: message.id,
         messageColor: messageColor,
-        height: 50,
+        height: 0, // Let it grow naturally
         role: message.role as 'user' | 'assistant',
         timestamp: new Date((message as any).createdAt || Date.now()),
       });
@@ -275,8 +307,9 @@ export default function SimpleChatScreen() {
             type: 'content',
             messageId: message.id,
             messageColor: messageColor,
-            text: chunk,
-            height: Math.min(120, 40 + Math.ceil(chunk.length / 50) * 15),
+            text: chunk.text,
+            parsedContent: chunk.parsedContent,
+            height: 0, // Let content grow naturally
             isItineraryContent: true,
           });
         });
@@ -312,7 +345,7 @@ export default function SimpleChatScreen() {
             messageId: message.id,
             messageColor: messageColor,
             text: chunk,
-            height: Math.min(80, 40 + Math.ceil(chunk.length / 50) * 20), // Dynamic height based on text length
+            height: 0, // Let content grow naturally
           });
         });
       }
@@ -323,7 +356,7 @@ export default function SimpleChatScreen() {
         type: 'footer',
         messageId: message.id,
         messageColor: messageColor,
-        height: 20,
+        height: 10, // Small footer height
       });
 
       // Add gap between messages (except after last)
@@ -344,19 +377,15 @@ export default function SimpleChatScreen() {
   // Calculate visibility threshold
   const visibleThreshold = containerHeight * 0.75;
 
-  const isItemVisible = (index: number) => {
-    // Calculate actual position based on element heights
-    let position = 0;
-    for (let i = 0; i < index; i++) {
-      if (flatElements[i].type === 'gap') {
-        position += flatElements[i].height + 10; // gap with margin
-      } else {
-        position += flatElements[i].height; // element height
-      }
-    }
+  // Track element positions
+  const [elementPositions, setElementPositions] = React.useState<Map<string, {top: number, bottom: number}>>(new Map());
 
-    const itemTop = position - scrollOffset;
-    const itemBottom = itemTop + flatElements[index].height;
+  const isItemVisible = (elementId: string) => {
+    const position = elementPositions.get(elementId);
+    if (!position) return true; // Default to visible if position not tracked yet
+
+    const itemTop = position.top - scrollOffset;
+    const itemBottom = position.bottom - scrollOffset;
 
     // Item is visible if its bottom edge is above the threshold
     return itemBottom <= visibleThreshold;
@@ -406,7 +435,7 @@ export default function SimpleChatScreen() {
               elements={[]}
               locations={mapLocations}
               focusedLocation={null}
-              height="100%" // Fill parent container completely
+              height={mapSize} // Square map based on screen width
             />
           </View>
 
@@ -433,28 +462,31 @@ export default function SimpleChatScreen() {
               onScroll={(event) => setScrollOffset(event.nativeEvent.contentOffset.y)}
               scrollEventThrottle={16}
               >
-                {flatElements.map((element, index) => {
-                  // Determine background color
-                  let backgroundColor = element.messageColor;
-                  if (element.type === 'header') {
-                    backgroundColor = adjustColor(element.messageColor, -30);
-                  } else if (element.type === 'footer') {
-                    backgroundColor = adjustColor(element.messageColor, 30);
-                  }
-
+                {flatElements.map((element) => {
                   return (
-                    <MessageElement
+                    <View
                       key={element.id}
-                      element={element}
-                      isVisible={isItemVisible(index)}
-                      backgroundColor={backgroundColor}
-                      onLocationsUpdate={(locations) => handleLocationsUpdate(locations, element.messageId)}
-                      onLocationClick={(location, lat, lng) => {
-                        console.log('Location clicked:', location, lat, lng);
+                      onLayout={(event) => {
+                        const { y, height } = event.nativeEvent.layout;
+                        setElementPositions(prev => {
+                          const newMap = new Map(prev);
+                          newMap.set(element.id, { top: y, bottom: y + height });
+                          return newMap;
+                        });
                       }}
-                      scrollOffset={scrollOffset}
-                      containerHeight={containerHeight}
-                    />
+                    >
+                      <MessageElement
+                        element={element}
+                        isVisible={isItemVisible(element.id)}
+                        backgroundColor="white"
+                        onLocationsUpdate={(locations) => handleLocationsUpdate(locations, element.messageId)}
+                        onLocationClick={(location, lat, lng) => {
+                          console.log('Location clicked:', location, lat, lng);
+                        }}
+                        scrollOffset={scrollOffset}
+                        containerHeight={containerHeight}
+                      />
+                    </View>
                   );
                 })}
 
@@ -517,12 +549,11 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
+    width: screenWidth,
+    height: screenWidth, // Square map
   },
   chatOverlay: {
     position: 'absolute',
@@ -566,7 +597,15 @@ const styles = StyleSheet.create({
   box: {
     marginBottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   gapBox: {
     height: 20,
@@ -610,6 +649,10 @@ const styles = StyleSheet.create({
     color: '#111827',
     lineHeight: 20,
     paddingVertical: 8,
+  },
+  locationText: {
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   loadingContainer: {
     flexDirection: 'row',
