@@ -57,18 +57,11 @@ NEVER use markdown (no #, ##, **, *, etc.) inside <itinerary> tags.
 NEVER include <html>, <body>, <head> or other document-level tags.
 
 For locations inside itineraries, use this special format to enable map visualization:
-<span class="geo-mark" data-geo="true" data-lat="48.8584" data-lng="2.2945" data-place-name="Eiffel Tower, Paris" title="📍 Eiffel Tower">Eiffel Tower</span>
+<span class="geo-mark" data-geo="true" data-lat="PENDING" data-lng="PENDING" data-place-name="Location Name, City" title="📍 Location Name">Location Name</span>
 
-Include known coordinates for major landmarks:
-- Eiffel Tower, Paris: lat="48.8584" lng="2.2945"
-- Louvre Museum, Paris: lat="48.8606" lng="2.3376"
-- Sagrada Familia, Barcelona: lat="41.4036" lng="2.1744"
-- Park Güell, Barcelona: lat="41.4145" lng="2.1527"
-- Big Ben, London: lat="51.5007" lng="-0.1246"
-- Times Square, New York: lat="40.7580" lng="-73.9855"
-- Colosseum, Rome: lat="41.8902" lng="12.4922"
-
-For unknown locations, use lat="PENDING" lng="PENDING".
+CRITICAL: You MUST ALWAYS use data-lat="PENDING" data-lng="PENDING" for ALL locations.
+Never provide actual coordinate values - the system will automatically fetch accurate coordinates from Google Places API.
+LLM-generated coordinates are often inaccurate and will be replaced anyway.
 
 Create rich, detailed itineraries with:
 - Specific attractions and landmarks (with geo-marks)

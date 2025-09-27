@@ -84,11 +84,9 @@ export class EnrichmentPipeline {
     const placeNameMatch = geoMarkHtml.match(/data-place-name="([^"]*)"/);
     const latMatch = geoMarkHtml.match(/data-lat="([^"]*)"/);
 
-    // If already has valid coordinates, return as-is
-    if (latMatch && latMatch[1] !== 'PENDING') {
-      console.log('[EnrichmentPipeline] Geo-mark already has coordinates, skipping');
-      return geoMarkHtml;
-    }
+    // ALWAYS use Google Places API for accurate coordinates
+    // LLM-generated coordinates are unreliable
+    console.log('[EnrichmentPipeline] Will fetch accurate coordinates from Google Places API');
 
     // Extract place name
     const placeName = placeNameMatch ? placeNameMatch[1] : null;

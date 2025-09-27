@@ -46,7 +46,7 @@ type FlatElement = {
   role?: 'user' | 'assistant';
   timestamp?: Date;
   isItineraryContent?: boolean;
-  parsedContent?: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>;
+  parsedContent?: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
 };
@@ -92,6 +92,9 @@ const MessageElement = ({
       borderTopRightRadius: element.type === 'header' ? 12 : 0,
       borderBottomLeftRadius: element.type === 'footer' ? 12 : 0,
       borderBottomRightRadius: element.type === 'footer' ? 12 : 0,
+      // Hide shadows and elevation when not visible
+      shadowOpacity: isVisible ? 0.1 : 0,
+      elevation: isVisible ? 2 : 0,
     }
   ];
 
@@ -105,11 +108,11 @@ const MessageElement = ({
               {element.role === 'user' ? 'U' : 'AI'}
             </Text>
           </View>
-          <Text style={[styles.senderName, { opacity: isVisible ? 1 : 0.3 }]}>
+          <Text style={[styles.senderName, { opacity: isVisible ? 1 : 0 }]}>
             {element.role === 'user' ? 'You' : 'Travel Assistant'}
           </Text>
           {element.timestamp && (
-            <Text style={[styles.timestamp, { opacity: isVisible ? 1 : 0.3 }]}>
+            <Text style={[styles.timestamp, { opacity: isVisible ? 1 : 0 }]}>
               {element.timestamp.toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit'
@@ -132,7 +135,7 @@ const MessageElement = ({
       };
       return (
         <View style={baseStyle}>
-          <Text style={[headingStyles[element.headingLevel], { opacity: isVisible ? 1 : 0.3 }]}>
+          <Text style={[headingStyles[element.headingLevel], { opacity: isVisible ? 1 : 0 }]}>
             {element.text}
           </Text>
         </View>
@@ -142,13 +145,13 @@ const MessageElement = ({
     return (
       <View style={baseStyle}>
         {element.parsedContent ? (
-          <Text style={[styles.messageText, { opacity: isVisible ? 1 : 0.3 }]}>
+          <Text style={[styles.messageText, { opacity: isVisible ? 1 : 0 }]}>
             {element.parsedContent.map((item, idx) => {
               if (item.type === 'geo-mark') {
                 return (
                   <Text key={idx}>
                     <Text style={{ color: item.color, fontSize: 10 }}>● </Text>
-                    <Text style={[styles.locationText, { color: item.color }]}>{item.text}</Text>
+                    <Text style={styles.locationText}>{item.text}</Text>
                     {idx < element.parsedContent!.length - 1 ? ' ' : ''}
                   </Text>
                 );
@@ -160,7 +163,7 @@ const MessageElement = ({
           <Text style={[
             styles.messageText,
             {
-              opacity: isVisible ? 1 : 0.3,
+              opacity: isVisible ? 1 : 0,
               fontStyle: element.isItineraryContent ? 'italic' : 'normal'
             }
           ]}>
@@ -176,8 +179,8 @@ const MessageElement = ({
 };
 
 // Helper to parse itinerary HTML into chunks with geo-mark tracking
-const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
-  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
   let colorIndex = 0;
   const locationColors = new Map<string, string>();
 
@@ -220,9 +223,9 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
       const paragraph = element.replace(/<\/?p>/g, '').trim();
       if (!paragraph) return;
 
-      const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string}> = [];
+      const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null}> = [];
 
-      // Find all geo-marks in this paragraph
+      // Find all geo-marks in this paragraph with their attributes
       const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
       let lastIndex = 0;
       let match;
@@ -236,8 +239,15 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
           }
         }
 
-        // Add the geo-mark with color
+        // Extract coordinates from the geo-mark
+        const fullMatch = match[0];
         const locationName = match[1];
+        const latMatch = fullMatch.match(/data-lat="([^"]+)"/);
+        const lngMatch = fullMatch.match(/data-lng="([^"]+)"/);
+        const lat = latMatch ? latMatch[1] : null;
+        const lng = lngMatch ? lngMatch[1] : null;
+
+        // Add the geo-mark with color
         if (!locationColors.has(locationName)) {
           locationColors.set(locationName, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
           colorIndex++;
@@ -245,7 +255,9 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         parsedContent.push({
           type: 'geo-mark',
           text: locationName,
-          color: locationColors.get(locationName)
+          color: locationColors.get(locationName),
+          lat,
+          lng
         });
 
         lastIndex = geoMarkRegex.lastIndex;
@@ -437,7 +449,50 @@ export default function SimpleChatScreen() {
     return itemBottom <= visibleThreshold;
   };
 
-  // Handle locations update from itinerary viewer
+  // Extract locations from flat elements for map display
+  React.useEffect(() => {
+    const locations: Location[] = [];
+    const seenLocations = new Set<string>();
+    let colorIndex = 0;
+
+    flatElements.forEach(element => {
+      if (element.parsedContent) {
+        element.parsedContent.forEach(item => {
+          if (item.type === 'geo-mark' && item.text) {
+            const locationKey = `${item.text}-${item.lat}-${item.lng}`;
+            if (!seenLocations.has(locationKey)) {
+              seenLocations.add(locationKey);
+
+              // Only add if we have valid coordinates
+              if (item.lat && item.lng && item.lat !== 'PENDING' && item.lng !== 'PENDING') {
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lng);
+
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  locations.push({
+                    id: `location-${locations.length}`,
+                    name: item.text,
+                    lat,
+                    lng,
+                    colorIndex: colorIndex % 10,
+                  });
+                  colorIndex++;
+                  console.log(`Added location: ${item.text} at ${lat}, ${lng}`);
+                }
+              }
+            }
+          }
+        });
+      }
+    });
+
+    if (locations.length > 0) {
+      console.log('Updating map with', locations.length, 'locations from parsed content');
+      setMapLocations(locations);
+    }
+  }, [flatElements]);
+
+  // Handle locations update from itinerary viewer (for when we have actual coords)
   const handleLocationsUpdate = React.useCallback((locations: Location[], messageId: string) => {
     console.log('Locations updated for message:', messageId, locations.length, 'locations');
     const hasPositions = locations.some(loc => loc.yPosition !== undefined && loc.yPosition > 0);
@@ -649,9 +704,8 @@ const styles = StyleSheet.create({
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 0, // Ensure no borders
   },
   gapBox: {
     height: 20,
@@ -697,8 +751,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   locationText: {
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+    fontWeight: '700', // Slightly thicker than regular text
+    color: '#111827', // Black text color
+    // No underline decoration
   },
   heading1: {
     fontSize: 20,
