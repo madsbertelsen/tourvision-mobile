@@ -1,7 +1,7 @@
-import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Text, View, StyleSheet, Animated } from 'react-native';
 
-// Type definitions
+// Enhanced type definitions with focus support
 export type FlatElement = {
   id: string;
   type: 'header' | 'content' | 'footer' | 'gap';
@@ -13,7 +13,13 @@ export type FlatElement = {
   role?: 'user' | 'assistant';
   timestamp?: Date;
   isItineraryContent?: boolean;
-  parsedContent?: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>;
+  parsedContent?: Array<{
+    type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3';
+    text: string;
+    color?: string; // Assigned color when active
+    lat?: string | null;
+    lng?: string | null;
+  }>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
 };
@@ -29,28 +35,90 @@ export interface Location {
   height?: number;
 }
 
-interface MessageElementProps {
+interface MessageElementWithFocusProps {
   element: FlatElement;
   isVisible: boolean;
-  backgroundColor: string;
+  isFocused: boolean; // New: whether this element is in focus
+  backgroundColor?: string;
   onLocationsUpdate?: (locations: Location[]) => void;
   onLocationClick?: (location: string, lat: string, lng: string) => void;
+  onFocus?: (locations: Array<{name: string, lat: number, lng: number}>) => void;
   scrollOffset?: number;
   containerHeight?: number;
-  styles: any; // Will receive styles from parent component
+  styles: any;
+  transitionDuration?: number;
 }
 
-// Component to render a single message element
-export const MessageElement: React.FC<MessageElementProps> = ({
+// Colors
+const INACTIVE_COLOR = '#6B7280'; // gray-500
+const INACTIVE_TEXT_COLOR = '#9CA3AF'; // gray-400
+
+export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = ({
   element,
   isVisible,
-  backgroundColor,
+  isFocused,
+  backgroundColor = 'white',
   onLocationsUpdate,
   onLocationClick,
+  onFocus,
   scrollOffset,
   containerHeight,
   styles,
+  transitionDuration = 300,
 }) => {
+  // Animated values for geo-mark colors
+  const geoMarkAnimations = useRef<Map<string, Animated.Value>>(new Map()).current;
+  
+  // Initialize animation values for geo-marks
+  useEffect(() => {
+    if (element.parsedContent) {
+      element.parsedContent.forEach((item, idx) => {
+        if (item.type === 'geo-mark') {
+          const key = `${element.id}-${idx}`;
+          if (!geoMarkAnimations.has(key)) {
+            geoMarkAnimations.set(key, new Animated.Value(0));
+          }
+        }
+      });
+    }
+  }, [element.parsedContent]);
+
+  // Handle focus changes
+  useEffect(() => {
+    if (element.parsedContent) {
+      const geoMarks: Array<{name: string, lat: number, lng: number}> = [];
+      
+      element.parsedContent.forEach((item, idx) => {
+        if (item.type === 'geo-mark') {
+          const key = `${element.id}-${idx}`;
+          const animation = geoMarkAnimations.get(key);
+          
+          if (animation) {
+            Animated.timing(animation, {
+              toValue: isFocused ? 1 : 0,
+              duration: transitionDuration,
+              useNativeDriver: false,
+            }).start();
+          }
+          
+          // Collect geo-marks for focus callback
+          if (isFocused && item.lat && item.lng) {
+            const lat = parseFloat(item.lat);
+            const lng = parseFloat(item.lng);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              geoMarks.push({ name: item.text, lat, lng });
+            }
+          }
+        }
+      });
+      
+      // Notify parent about focused locations
+      if (isFocused && geoMarks.length > 0 && onFocus) {
+        onFocus(geoMarks);
+      }
+    }
+  }, [isFocused, element.parsedContent, transitionDuration]);
+
   if (element.type === 'gap') {
     return <View style={styles.gapBox} />;
   }
@@ -58,14 +126,20 @@ export const MessageElement: React.FC<MessageElementProps> = ({
   const baseStyle = [
     styles.box,
     {
-      backgroundColor: isVisible ? 'white' : 'transparent',
+      backgroundColor: isVisible ? backgroundColor : 'transparent',
       borderTopLeftRadius: element.type === 'header' ? 12 : 0,
       borderTopRightRadius: element.type === 'header' ? 12 : 0,
       borderBottomLeftRadius: element.type === 'footer' ? 12 : 0,
       borderBottomRightRadius: element.type === 'footer' ? 12 : 0,
-      // Hide shadows and elevation when not visible
-      shadowOpacity: isVisible ? 0.1 : 0,
-      elevation: isVisible ? 2 : 0,
+      // Enhanced shadow for focus indication without layout shift
+      shadowColor: isFocused ? '#3B82F6' : '#000',
+      shadowOpacity: isVisible ? (isFocused ? 0.3 : 0.1) : 0,
+      shadowRadius: isFocused ? 8 : 2,
+      shadowOffset: {
+        width: 0,
+        height: isFocused ? 0 : 1,
+      },
+      elevation: isVisible ? (isFocused ? 4 : 2) : 0,
     }
   ];
 
@@ -95,7 +169,7 @@ export const MessageElement: React.FC<MessageElementProps> = ({
     );
   }
 
-  // Handle content rendering
+  // Handle content rendering with focus-aware geo-marks
   if (element.type === 'content') {
     // Check if it's a heading
     if (element.isHeading && element.headingLevel) {
@@ -119,10 +193,31 @@ export const MessageElement: React.FC<MessageElementProps> = ({
           <Text style={[styles.messageText, { opacity: isVisible ? 1 : 0 }]}>
             {element.parsedContent.map((item, idx) => {
               if (item.type === 'geo-mark') {
+                const key = `${element.id}-${idx}`;
+                const animation = geoMarkAnimations.get(key) || new Animated.Value(0);
+                
+                // Interpolate colors for smooth transition
+                const dotColor = animation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [INACTIVE_COLOR, item.color || '#3B82F6'],
+                });
+                
+                const textColor = animation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [INACTIVE_TEXT_COLOR, '#111827'],
+                });
+                
                 return (
                   <Text key={idx}>
-                    <Text style={{ color: item.color, fontSize: 10 }}>● </Text>
-                    <Text style={styles.locationText}>{item.text}</Text>
+                    <Animated.Text style={{ 
+                      color: dotColor, 
+                      fontSize: 10,
+                      marginRight: 2,
+                    }}>● </Animated.Text>
+                    <Animated.Text style={[
+                      styles.locationText,
+                      { color: textColor }
+                    ]}>{item.text}</Animated.Text>
                     {idx < element.parsedContent!.length - 1 ? ' ' : ''}
                   </Text>
                 );
@@ -145,12 +240,12 @@ export const MessageElement: React.FC<MessageElementProps> = ({
     );
   }
 
-  // Footer (if needed in future)
+  // Footer
   return <View style={baseStyle} />;
 };
 
-// Default styles that components using MessageElement should provide
-export const messageElementStyles = StyleSheet.create({
+// Default styles
+export const messageElementWithFocusStyles = StyleSheet.create({
   box: {
     marginBottom: 0,
     justifyContent: 'center',
@@ -161,7 +256,6 @@ export const messageElementStyles = StyleSheet.create({
       height: 1,
     },
     shadowRadius: 2,
-    borderWidth: 0,
   },
   gapBox: {
     height: 20,
@@ -208,7 +302,6 @@ export const messageElementStyles = StyleSheet.create({
   },
   locationText: {
     fontWeight: '700',
-    color: '#111827',
   },
   heading1: {
     fontSize: 20,

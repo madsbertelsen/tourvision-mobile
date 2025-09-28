@@ -78,7 +78,28 @@ export function MapViewWrapper({ elements = [], locations: providedLocations, fo
     return extractLocations(elements);
   }, [elements, providedLocations]);
 
-  console.log('MapViewWrapper - focusedLocation:', focusedLocation);
+  // Pass focused location to map for centering with padding
+  const mapProps = useMemo(() => {
+    // If there's a focused location, center on it with higher zoom and padding
+    if (focusedLocation) {
+      return {
+        center: { lat: focusedLocation.lat, lng: focusedLocation.lng },
+        zoom: 14, // Closer zoom for focused location
+        animateDuration: 500, // Smooth transition
+        // Add padding to bring marker below chat overlay (75% of screen is covered by chat)
+        padding: { top: 300, bottom: 50, left: 50, right: 50 }, // Top padding to account for chat overlay
+      };
+    }
+    // If no locations, show globe view
+    if (locations.length === 0) {
+      return {
+        center: { lat: 0, lng: 0 },
+        zoom: 0.5,
+      };
+    }
+    // Otherwise let map auto-fit to all locations
+    return {};
+  }, [focusedLocation, locations.length]);
 
   // Always render map, show globe view when no locations
   // If height is a string percentage, use flex: 1 to fill parent
@@ -95,11 +116,7 @@ export function MapViewWrapper({ elements = [], locations: providedLocations, fo
           transportationRoutes={[]}
           // Pass full height style to DOM component
           style={{ width: '100%', height: '100%' }}
-          // Only provide center/zoom for empty globe view, let map auto-fit when locations exist
-          {...(locations.length === 0 ? {
-            center: { lat: 0, lng: 0 },
-            zoom: 0.5
-          } : {})}
+          {...mapProps}
           onLocationClick={(location) => {
             console.log('Location clicked:', location);
           }}

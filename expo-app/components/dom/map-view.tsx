@@ -52,6 +52,7 @@ interface MapViewProps {
   focusedLocation?: Location | null;
   center?: { lat: number; lng: number };
   zoom?: number;
+  padding?: { top?: number; bottom?: number; left?: number; right?: number };
   onLocationClick?: (location: Location) => void;
   onMapClick?: (lat: number, lng: number) => void;
   style?: React.CSSProperties;
@@ -71,6 +72,7 @@ export default function MapView({
   focusedLocation = null,
   center = { lat: 40.7128, lng: -74.0060 },
   zoom = 10,
+  padding,
   onLocationClick,
   onMapClick,
   style = { width: '100%', height: '400px' },
@@ -175,15 +177,22 @@ export default function MapView({
     if (focusedLocation && mapRef.current && mapLoaded) {
       console.log('Map: Flying to location:', focusedLocation.name, 'at', focusedLocation.lat, focusedLocation.lng);
 
-      // Simply fly to the focused location
-      mapRef.current.flyTo({
+      // Fly to the focused location with padding if provided
+      const flyToOptions: any = {
         center: [focusedLocation.lng, focusedLocation.lat],
         zoom: 14,
         duration: 800,
         essential: true, // This animation is considered essential with respect to prefers-reduced-motion
-      });
+      };
+      
+      // Add padding if provided to offset the marker position
+      if (padding) {
+        flyToOptions.padding = padding;
+      }
+      
+      mapRef.current.flyTo(flyToOptions);
     }
-  }, [focusedLocation, mapLoaded]);
+  }, [focusedLocation, mapLoaded, padding]);
 
   useEffect(() => {
     // Initial auto-fit bounds when locations are first loaded

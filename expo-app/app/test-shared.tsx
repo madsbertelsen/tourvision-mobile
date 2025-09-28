@@ -330,13 +330,37 @@ I hope this itinerary helps you make the most of your time in Barcelona! Don't f
   // Track element positions
   const [elementPositions, setElementPositions] = React.useState<Map<string, {top: number, bottom: number}>>(new Map());
 
+  // Track which messages have visible content
+  const getVisibleContentByMessage = React.useCallback(() => {
+    const visibleContent = new Map<string, boolean>();
+    flatElements.forEach(element => {
+      if (element.type === 'content') {
+        const position = elementPositions.get(element.id);
+        if (position) {
+          const itemBottom = position.bottom - scrollOffset;
+          if (itemBottom <= visibleThreshold) {
+            visibleContent.set(element.messageId, true);
+          }
+        }
+      }
+    });
+    return visibleContent;
+  }, [elementPositions, scrollOffset, visibleThreshold, flatElements]);
+
   const isItemVisible = (elementId: string) => {
     const position = elementPositions.get(elementId);
     if (!position) return true; // Default to visible if position not tracked yet
 
     const itemBottom = position.bottom - scrollOffset;
+    const element = flatElements.find(el => el.id === elementId);
     
-    // Item is visible if its bottom edge is above the threshold
+    // Headers only visible when at least one content from same message is visible
+    if (element && element.type === 'header') {
+      const visibleContent = getVisibleContentByMessage();
+      return itemBottom <= visibleThreshold && visibleContent.has(element.messageId);
+    }
+    
+    // Other elements follow normal visibility rules
     return itemBottom <= visibleThreshold;
   };
 
