@@ -1,6 +1,8 @@
 import { EnrichmentPipeline } from '@/lib/enrichment-pipeline';
+import { FirecrawlClient, formatForAI } from '@/lib/firecrawl/firecrawl-client';
 import { mistral } from '@ai-sdk/mistral';
-import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, streamText } from 'ai';
+import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, tool } from 'ai';
+import { z } from 'zod';
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
@@ -18,12 +20,53 @@ export async function POST(req: Request) {
     execute: ({ writer: dataStream }) => {
       const result = streamText({
         model: mistral('mistral-small-latest'),
+        stopWhen: stepCountIs(3),
         experimental_transform: smoothStream({
           delayInMs: 20,
           chunking: 'line',
         }),
         messages: modelMessages,
-        system: `You are a helpful travel planning assistant.
+        tools: {
+          extractUrlContent: tool({
+            description: 'Extract travel content and locations from a URL using Firecrawl',
+            parameters: z.object({
+              url: z.string().url().describe('The URL to extract content from'),
+            }),
+            execute: async ({ url }) => {
+              console.log('[Firecrawl Tool] Extracting content from URL:', url);
+
+              const apiKey = process.env.FIRECRAWL_API_KEY;
+              if (!apiKey) {
+                return {
+                  success: false,
+                  error: 'Firecrawl API key not configured'
+                };
+              }
+
+              const client = new FirecrawlClient(apiKey);
+              const extracted = await client.extractUrlContent(url);
+
+              if (extracted) {
+                console.log(`[Firecrawl Tool] Successfully extracted ${extracted.locations.length} locations`);
+                return {
+                  success: true,
+                  content: formatForAI(extracted),
+                  locations: extracted.locations,
+                  title: extracted.title,
+                  sourceUrl: extracted.sourceUrl
+                };
+              } else {
+                return {
+                  success: false,
+                  error: 'Failed to extract content from URL'
+                };
+              }
+            },
+          }),
+        },
+        system: `You are a helpful travel planning assistant with the ability to extract content from travel websites.
+
+IMPORTANT: When users share URLs in their messages, use the extractUrlContent tool to get detailed information about the travel destination or content from the URL. This will help you provide more accurate and specific travel recommendations.
 
 When users ask about trip planning or itineraries:
 1. FIRST respond conversationally with regular text (e.g., "That sounds like a wonderful trip! Paris is...")
