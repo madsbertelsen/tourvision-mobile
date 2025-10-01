@@ -102,9 +102,19 @@ NEVER include <html>, <body>, <head> or other document-level tags.
 For locations inside itineraries, use this special format to enable map visualization:
 <span class="geo-mark" data-geo="true" data-lat="PENDING" data-lng="PENDING" data-place-name="Location Name, City" title="📍 Location Name">Location Name</span>
 
-CRITICAL: You MUST ALWAYS use data-lat="PENDING" data-lng="PENDING" for ALL locations.
-Never provide actual coordinate values - the system will automatically fetch accurate coordinates from Google Places API.
-LLM-generated coordinates are often inaccurate and will be replaced anyway.
+CRITICAL RULES for geo-marks:
+1. You MUST wrap EVERY location name (cities, attractions, stations, restaurants, etc.) in geo-mark spans
+2. This applies to locations in ALL contexts: paragraphs (<p>), lists (<li>), headings, etc.
+3. Provide APPROXIMATE coordinates (data-lat and data-lng) based on your knowledge - these help disambiguate locations
+4. The data-place-name should include city/country context (e.g., "Eiffel Tower, Paris, France")
+5. The system will fetch accurate coordinates from Google Places API using your approximate coords to disambiguate
+
+Examples:
+- In paragraphs: Visit <span class="geo-mark" data-geo="true" data-lat="48.8584" data-lng="2.2945" data-place-name="Eiffel Tower, Paris">Eiffel Tower</span> in the morning.
+- In lists: <li><span class="geo-mark" data-geo="true" data-lat="55.6414" data-lng="12.0803" data-place-name="Roskilde Station, Denmark">Roskilde Station</span>: Departure at 12:20</li>
+- Multiple per line: Travel from <span class="geo-mark" data-geo="true" data-lat="55.6761" data-lng="12.5683" data-place-name="Copenhagen Central Station, Denmark">Copenhagen</span> to <span class="geo-mark" data-geo="true" data-lat="59.9111" data-lng="10.7500" data-place-name="Oslo Central Station, Norway">Oslo</span>.
+
+Your approximate coordinates don't need to be perfect - they're used to help Google Places API choose the correct location when multiple matches exist.
 
 Create rich, detailed itineraries with:
 - Specific attractions and landmarks (with geo-marks)

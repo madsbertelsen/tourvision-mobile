@@ -1,7 +1,7 @@
 'use dom';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Map, { Marker, Source, Layer } from 'react-map-gl/dist/mapbox';
 
 interface Location {
@@ -11,6 +11,13 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+}
+
+interface FocusedLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
 }
 
 // Matching colors from the TipTap destination nodes
@@ -32,6 +39,7 @@ interface MapViewSimpleProps {
   center?: { lat: number; lng: number };
   zoom?: number;
   style?: React.CSSProperties;
+  focusedLocation?: FocusedLocation | null;
 }
 
 export default function MapViewSimple({
@@ -39,6 +47,7 @@ export default function MapViewSimple({
   center = { lat: 0, lng: 0 },
   zoom = 2,
   style = { width: '100%', height: '400px' },
+  focusedLocation = null,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -47,6 +56,13 @@ export default function MapViewSimple({
     latitude: center.lat,
     zoom: zoom,
   });
+
+  // Saved view state for restoration when unfocusing
+  const [savedViewState, setSavedViewState] = useState<{
+    longitude: number;
+    latitude: number;
+    zoom: number;
+  } | null>(null);
 
   // Flying marker state
   const [flyingMarker, setFlyingMarker] = useState<{
@@ -176,6 +192,47 @@ export default function MapViewSimple({
     animationRef.current.frameId = requestAnimationFrame(animate);
   }, [viewState]);
 
+  // Track previous focusedLocation to detect changes
+  const prevFocusedLocationRef = useRef<FocusedLocation | null>(null);
+
+  // Watch for focusedLocation changes
+  useEffect(() => {
+    const prevFocusedLocation = prevFocusedLocationRef.current;
+
+    // Check if focusedLocation actually changed
+    const focusedLocationChanged =
+      (!prevFocusedLocation && focusedLocation) ||
+      (prevFocusedLocation && !focusedLocation) ||
+      (prevFocusedLocation && focusedLocation && prevFocusedLocation.id !== focusedLocation.id);
+
+    if (!focusedLocationChanged) {
+      return; // No change, don't animate
+    }
+
+    if (focusedLocation) {
+      // Save current view state before animating to focused location
+      console.log('Saving current view state before focusing:', viewState);
+      setSavedViewState({ ...viewState });
+
+      // Animate to the focused location with closer zoom
+      const targetState = {
+        longitude: focusedLocation.lng,
+        latitude: focusedLocation.lat,
+        zoom: 12, // Zoom in closer for location details
+      };
+      console.log('Animating to focused location:', focusedLocation.name, targetState);
+      animateToLocation(targetState);
+    } else if (savedViewState) {
+      // focusedLocation became null and we have a saved state - restore it
+      console.log('Restoring saved view state:', savedViewState);
+      animateToLocation(savedViewState);
+      setSavedViewState(null); // Clear after restoring
+    }
+
+    // Update the ref to track current focusedLocation
+    prevFocusedLocationRef.current = focusedLocation;
+  }, [focusedLocation]);
+
   // Handle map click
   const handleMapClick = useCallback(() => {
     const randomLocation = getRandomLocation();
@@ -232,7 +289,7 @@ export default function MapViewSimple({
       `}</style>
       <Map
         {...viewState}
-        onMove={evt => setViewState(evt.viewState)}
+        onMove={(evt: any) => setViewState(evt.viewState)}
         onClick={handleMapClick}
         mapboxAccessToken={mapboxToken}
         mapStyle="mapbox://styles/mapbox/light-v11"

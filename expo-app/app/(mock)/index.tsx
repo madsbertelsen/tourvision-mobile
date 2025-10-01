@@ -282,6 +282,7 @@ export default function MockChatScreen() {
           part.text?.includes('<h1>') ||
           part.text?.includes('<h2>') ||
           part.text?.includes('<h3>') ||
+          part.text?.includes('<ul>') ||
           part.text?.includes('geo-mark') ||
           (part.text?.includes('<p>') && part.text?.includes('</p>'))
         )

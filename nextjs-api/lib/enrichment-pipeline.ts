@@ -83,10 +83,7 @@ export class EnrichmentPipeline {
     // Extract attributes
     const placeNameMatch = geoMarkHtml.match(/data-place-name="([^"]*)"/);
     const latMatch = geoMarkHtml.match(/data-lat="([^"]*)"/);
-
-    // ALWAYS use Google Places API for accurate coordinates
-    // LLM-generated coordinates are unreliable
-    console.log('[EnrichmentPipeline] Will fetch accurate coordinates from Google Places API');
+    const lngMatch = geoMarkHtml.match(/data-lng="([^"]*)"/);
 
     // Extract place name
     const placeName = placeNameMatch ? placeNameMatch[1] : null;
@@ -96,16 +93,27 @@ export class EnrichmentPipeline {
       return geoMarkHtml;
     }
 
-    // Get coordinates
+    // Extract LLM-provided approximate coordinates
+    let proximityCoords = null;
+    if (latMatch && lngMatch) {
+      const lat = parseFloat(latMatch[1]);
+      const lng = parseFloat(lngMatch[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        proximityCoords = { lat, lng };
+        console.log('[EnrichmentPipeline] LLM provided approximate coords:', proximityCoords);
+      }
+    }
+
+    // Get accurate coordinates from Google Places API, using LLM coords to disambiguate
     console.log('[EnrichmentPipeline] Calling geocodeLocation for:', placeName);
-    const coords = await geocodeLocation(placeName, this.googleApiKey);
+    const coords = await geocodeLocation(placeName, this.googleApiKey, proximityCoords);
     console.log('[EnrichmentPipeline] Geocoding result:', coords);
     if (!coords) {
       console.log('[EnrichmentPipeline] No coordinates found, returning original');
       return geoMarkHtml;
     }
 
-    // Replace PENDING with actual coordinates
+    // Replace LLM approximate coordinates with accurate Google API coordinates
     let enriched = geoMarkHtml;
     enriched = enriched.replace(/data-lat="[^"]*"/, `data-lat="${coords.lat}"`);
     enriched = enriched.replace(/data-lng="[^"]*"/, `data-lng="${coords.lng}"`);

@@ -215,25 +215,17 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                   <TouchableOpacity
                     key={idx}
                     onPress={() => {
-                      // Save current map bounds and set focused location before navigating
-                      if (mockContext) {
-                        // Save current map bounds
-                        if (mockContext.currentMapBounds) {
-                          mockContext.saveMapBounds(mockContext.currentMapBounds);
-                        }
-
-                        // Set the focused location for the map
-                        if (item.lat && item.lng) {
-                          const lat = parseFloat(item.lat);
-                          const lng = parseFloat(item.lng);
-                          if (!isNaN(lat) && !isNaN(lng)) {
-                            mockContext.setFocusedLocation({
-                              id: `loc-${idx}`,
-                              name: item.text,
-                              lat,
-                              lng
-                            });
-                          }
+                      // Set the focused location for the map before navigating
+                      if (mockContext && item.lat && item.lng) {
+                        const lat = parseFloat(item.lat);
+                        const lng = parseFloat(item.lng);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                          mockContext.setFocusedLocation({
+                            id: `loc-${idx}`,
+                            name: item.text,
+                            lat,
+                            lng
+                          });
                         }
                       }
 

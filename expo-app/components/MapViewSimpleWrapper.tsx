@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useMockContext } from '@/contexts/MockContext';
 
 // Import DOM component - works on all platforms with expo-dom
 const MapViewSimpleDOM = React.lazy(() => import('./dom/map-view-simple'));
@@ -26,6 +27,14 @@ export function MapViewSimpleWrapper({
   center = { lat: 0, lng: 0 },
   zoom = 2,
 }: MapViewSimpleWrapperProps) {
+  // Get focusedLocation from context
+  let focusedLocation = null;
+  try {
+    const context = useMockContext();
+    focusedLocation = context.focusedLocation;
+  } catch (error) {
+    // Context not available, focusedLocation stays null
+  }
 
   // If height is a string percentage, use flex: 1 to fill parent
   const containerStyle = height === '100%'
@@ -39,6 +48,7 @@ export function MapViewSimpleWrapper({
           locations={locations}
           center={center}
           zoom={zoom}
+          focusedLocation={focusedLocation}
           style={{ width: '100%', height: '100%' }}
         />
       </React.Suspense>
