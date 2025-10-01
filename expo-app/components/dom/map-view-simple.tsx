@@ -40,6 +40,7 @@ interface MapViewSimpleProps {
   zoom?: number;
   style?: React.CSSProperties;
   focusedLocation?: FocusedLocation | null;
+  followMode?: boolean;
 }
 
 export default function MapViewSimple({
@@ -48,6 +49,7 @@ export default function MapViewSimple({
   zoom = 2,
   style = { width: '100%', height: '400px' },
   focusedLocation = null,
+  followMode = false,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -298,6 +300,76 @@ export default function MapViewSimple({
     // Update the ref to track current focusedLocation
     prevFocusedLocationRef.current = focusedLocation;
   }, [focusedLocation]);
+
+  // Track previous bounds to prevent redundant animations
+  const prevBoundsRef = useRef<string | null>(null);
+
+  // Follow mode: auto-fit bounds to visible locations
+  useEffect(() => {
+    // Only auto-fit if followMode is enabled, we have locations, and no focused location
+    if (!followMode || locations.length === 0 || focusedLocation) {
+      return;
+    }
+
+    // Calculate bounding box for all locations
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+
+    locations.forEach(loc => {
+      minLat = Math.min(minLat, loc.lat);
+      maxLat = Math.max(maxLat, loc.lat);
+      minLng = Math.min(minLng, loc.lng);
+      maxLng = Math.max(maxLng, loc.lng);
+    });
+
+    // Calculate center and zoom to fit all locations
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+
+    // Calculate zoom level to fit bounds
+    // Simple heuristic: larger span = lower zoom
+    const latSpan = maxLat - minLat;
+    const lngSpan = maxLng - minLng;
+    const maxSpan = Math.max(latSpan, lngSpan);
+
+    let targetZoom = 2; // Default world view
+    if (maxSpan < 0.01) targetZoom = 14; // Very close locations
+    else if (maxSpan < 0.05) targetZoom = 12;
+    else if (maxSpan < 0.1) targetZoom = 11;
+    else if (maxSpan < 0.5) targetZoom = 9;
+    else if (maxSpan < 1) targetZoom = 8;
+    else if (maxSpan < 5) targetZoom = 6;
+    else if (maxSpan < 10) targetZoom = 5;
+    else if (maxSpan < 20) targetZoom = 4;
+    else if (maxSpan < 50) targetZoom = 3;
+
+    const targetState = {
+      longitude: centerLng,
+      latitude: centerLat,
+      zoom: targetZoom,
+    };
+
+    // Create a stable key for the bounds to detect actual changes
+    const boundsKey = `${minLat.toFixed(4)},${maxLat.toFixed(4)},${minLng.toFixed(4)},${maxLng.toFixed(4)},${targetZoom}`;
+
+    // Only animate if bounds actually changed
+    if (prevBoundsRef.current === boundsKey) {
+      return;
+    }
+
+    console.log('Follow mode: fitting bounds to locations', {
+      locations: locations.length,
+      bounds: { minLat, maxLat, minLng, maxLng },
+      target: targetState
+    });
+
+    prevBoundsRef.current = boundsKey;
+
+    // Smoothly animate to fit bounds
+    animateToLocation(targetState, false);
+  }, [locations, followMode, focusedLocation]);
 
   // Handle map click
   const handleMapClick = useCallback(() => {
