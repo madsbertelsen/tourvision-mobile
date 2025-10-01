@@ -1,8 +1,9 @@
 'use dom';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import Map, { Marker, Source, Layer } from 'react-map-gl/dist/mapbox';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import Map, { Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
+import { calculateEdgeLabels, type EdgeLabel } from './edge-label-layout';
 
 interface Location {
   id: string;
@@ -43,6 +44,169 @@ interface MapViewSimpleProps {
   followMode?: boolean;
 }
 
+// Inner component to access map instance
+function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
+  locations: Location[],
+  focusedLocation: FocusedLocation | null,
+  isAnimating: boolean,
+  viewState: { longitude: number; latitude: number; zoom: number }
+}) {
+  const { current: map } = useMap();
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+
+  // Track viewport size
+  useEffect(() => {
+    if (!map) return;
+
+    const updateSize = () => {
+      const container = map.getContainer();
+      setViewportSize({
+        width: container.clientWidth,
+        height: container.clientHeight,
+      });
+    };
+
+    updateSize();
+    map.on('resize', updateSize);
+    return () => {
+      map.off('resize', updateSize);
+    };
+  }, [map]);
+
+  // Calculate edge labels - recalculate when viewState changes
+  const edgeLabels = useMemo(() => {
+    if (!map || !locations.length || viewportSize.width === 0) return [];
+
+    const mapProjection = (lng: number, lat: number) => {
+      try {
+        const point = map.project([lng, lat]);
+        return { x: point.x, y: point.y };
+      } catch {
+        return null;
+      }
+    };
+
+    return calculateEdgeLabels(
+      locations,
+      mapProjection,
+      viewportSize.width,
+      viewportSize.height,
+      MARKER_COLORS
+    );
+  }, [map, locations, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
+
+  return (
+    <>
+      {/* Small dots at actual locations */}
+      {locations.map((location, index) => {
+        const colorIndex = location.colorIndex ?? index;
+        const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+
+        return (
+          <Marker
+            key={location.id}
+            longitude={location.lng}
+            latitude={location.lat}
+            anchor="center"
+          >
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: markerColor,
+                border: '2px solid white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              }}
+            />
+          </Marker>
+        );
+      })}
+
+      {/* Edge labels and connection lines - only show when not animating */}
+      {!isAnimating && (
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+          {/* SVG for connection lines */}
+          <svg style={{ width: '100%', height: '100%', position: 'absolute' }}>
+            {edgeLabels.map(label => (
+              <line
+                key={`line-${label.id}`}
+                x1={label.locationX}
+                y1={label.locationY}
+                x2={label.x}
+                y2={label.y}
+                stroke={label.color}
+                strokeWidth="1.5"
+                strokeOpacity="0.6"
+                strokeDasharray="3,3"
+              />
+            ))}
+          </svg>
+
+          {/* Edge labels */}
+          {edgeLabels.map(label => (
+          <div
+            key={`label-${label.id}`}
+            style={{
+              position: 'absolute',
+              left: `${label.x}px`,
+              top: `${label.y}px`,
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: 'white',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: `2px solid ${label.color}`,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              fontSize: '11px',
+              fontWeight: '600',
+              color: '#333',
+              width: '120px',
+              textAlign: 'center',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'auto',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.05)';
+              e.currentTarget.style.zIndex = '10';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translate(-50%, -50%)';
+              e.currentTarget.style.zIndex = '1';
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              <div
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: label.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {label.name}
+              </span>
+            </div>
+          </div>
+        ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function MapViewSimple({
   locations = [],
   center = { lat: 0, lng: 0 },
@@ -76,6 +240,9 @@ export default function MapViewSimple({
 
   // Tail trail for the flying marker (as coordinates for line)
   const [markerTrail, setMarkerTrail] = useState<number[][]>([]);
+
+  // Track if map is currently animating
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // Animation state
   const animationRef = useRef<{
@@ -120,6 +287,9 @@ export default function MapViewSimple({
       targetState: target,
       duration,
     };
+
+    // Set animating flag to hide edge labels during animation
+    setIsAnimating(true);
 
     // Show the flying marker and clear trail
     setFlyingMarker({
@@ -248,6 +418,10 @@ export default function MapViewSimple({
         setFlyingMarker(null);
         setMarkerTrail([]);
         animationRef.current = null;
+
+        // Clear animating flag to show edge labels again
+        setIsAnimating(false);
+
         console.log('Animation complete. New location:', {
           lng: newLongitude.toFixed(2),
           lat: newLatitude.toFixed(2),
@@ -523,59 +697,13 @@ export default function MapViewSimple({
           </Source>
         )}
 
-        {/* Render location markers */}
-        {locations.map((location, index) => {
-          const colorIndex = location.colorIndex ?? index;
-          const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-
-          return (
-            <Marker
-              key={location.id}
-              longitude={location.lng}
-              latitude={location.lat}
-              anchor="bottom"
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                    marginBottom: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#333',
-                    maxWidth: '120px',
-                    textAlign: 'center',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {location.name}
-                </div>
-                <div
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: markerColor,
-                    border: '3px solid white',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  }}
-                />
-              </div>
-            </Marker>
-          );
-        })}
+        {/* Render edge labels and markers */}
+        <MapContent
+          locations={locations}
+          focusedLocation={focusedLocation}
+          isAnimating={isAnimating}
+          viewState={viewState}
+        />
       </Map>
     </div>
   );

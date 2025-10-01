@@ -18,11 +18,15 @@ This is a monorepo with two main applications:
 - Trip cards showing sample trips
 - Database seeding with test data
 - Web platform support
+- **AI-Powered Chat** - Streaming responses with location extraction
+- **Interactive Maps** - Mapbox with smooth animations and flying marker
+- **Geo-Mark Navigation** - Click locations in chat to focus on map
+- **LLM-Biased Geocoding** - Accurate location resolution using Google Places API
+- **Enrichment Pipeline** - Automatic coordinate lookup for locations in chat
 
 ### 🚧 In Progress
 - Trip detail views (`/trip/[id]`) - Mostly complete with document editor
 - TipTap editor integration - Working with custom nodes and diff preview
-- Map view with destinations - Functional with Mapbox
 - Collaboration features - Chat and AI proposals working
 - Native iOS/Android support - Web platform fully functional
 
@@ -122,10 +126,12 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 - **Expo Router** - File-based routing in `/app` directory
 - **NativeWind v4** - Tailwind CSS for React Native styling
 - **TipTap** - Rich text editor for trip itineraries (runs in DOM components)
-- **react-map-gl** - Cross-platform maps (runs in DOM components)
+- **react-map-gl + Mapbox GL** - Interactive maps with animations (runs in DOM components)
 - **Supabase** - Backend, auth, and real-time database
 - **Zustand** - State management with persistence
 - **React Query** - Data fetching and caching
+- **Vercel AI SDK** - Streaming AI responses from Next.js API
+- **Google Places API** - Location geocoding and disambiguation
 
 ### Key Architectural Patterns
 
@@ -149,6 +155,8 @@ Each node has specific attributes stored in the TipTap document JSON structure.
 #### Routing Structure
 - `/expo-app/app/index.tsx` - Dashboard/home screen
 - `/expo-app/app/(auth)/` - Authentication screens (login, register, forgot-password)
+- `/expo-app/app/(mock)/index.tsx` - Mock chat interface with AI and maps
+- `/expo-app/app/(mock)/location/[id].tsx` - Location detail screen
 - `/expo-app/app/trip/[id]/` - Trip detail screens with tabs
 - `/expo-app/app/_layout.tsx` - Root layout with auth protection
 
@@ -577,3 +585,259 @@ The MCP tools allow direct database queries through natural language:
 - **Data validation**: Ensure seed data loaded correctly
 
 Using MCP tools provides accurate, real-time database information and significantly speeds up debugging compared to trial-and-error approaches.
+
+## AI Chat and Map Integration
+
+### Overview
+The mock chat interface (`/expo-app/app/(mock)/index.tsx`) demonstrates the AI-powered travel planning experience with integrated map visualization and location navigation.
+
+### Architecture
+
+#### Backend API (Next.js)
+Located in `/nextjs-api/app/api/chat-simple/route.ts`:
+- Uses Vercel AI SDK for streaming responses
+- Mistral AI model (`mistral-small-latest`) for chat
+- Enrichment pipeline for coordinate lookup
+- Tool support for URL content extraction (Firecrawl)
+
+#### Frontend Components
+
+**1. Chat Screen** (`/expo-app/app/(mock)/index.tsx`):
+- Uses `useChat` hook from AI SDK
+- Displays messages with HTML parsing
+- Shows map above chat interface
+- Handles geo-mark clicks for navigation
+
+**2. Map Wrapper** (`/expo-app/components/MapViewSimpleWrapper.tsx`):
+- Bridge between React Native and DOM component
+- Gets `focusedLocation` from MockContext
+- Passes location data to map
+
+**3. Map Component** (`/expo-app/components/dom/map-view-simple.tsx`):
+- DOM component with Mapbox GL
+- Animated camera movements with requestAnimationFrame
+- Flying marker with trail effect
+- Two-phase animation system
+
+**4. Message Display** (`/expo-app/components/MessageElementWithFocus.tsx`):
+- Parses HTML content and geo-marks
+- Makes locations clickable
+- Updates context on geo-mark click
+
+### Geo-Mark System
+
+#### What are Geo-Marks?
+Geo-marks are special HTML spans that wrap location names in AI responses:
+```html
+<span class="geo-mark"
+      data-geo="true"
+      data-lat="48.8584"
+      data-lng="2.2945"
+      data-place-name="Eiffel Tower, Paris, France"
+      data-coord-source="google"
+      title="📍 Eiffel Tower">
+  Eiffel Tower
+</span>
+```
+
+#### How They Work
+1. **AI Generation**: LLM wraps location names in geo-mark spans with approximate coordinates
+2. **Enrichment**: Backend pipeline queries Google Places API for accurate coordinates
+3. **Display**: Frontend parses and makes them clickable
+4. **Navigation**: Click triggers map focus animation
+
+#### Coordinate Sources
+- `google` - Accurate coordinates from Google Places Text Search API
+- `llm-fallback` - LLM-provided coordinates when API fails
+- `cache` - Previously fetched coordinates (24-hour TTL)
+
+### Map Animation System
+
+#### Two-Phase Animation
+The map uses a sophisticated two-phase animation to maintain spatial awareness:
+
+**Forward Animation (Focusing on Location)**:
+1. **Pan Phase (60%)**: Move camera to location, keeping zoom constant
+2. **Zoom Phase (40%)**: Zoom in to detail view (zoom level 12)
+
+**Reverse Animation (Unfocusing)**:
+1. **Zoom Phase (40%)**: Zoom out to overview level
+2. **Pan Phase (60%)**: Move camera back to original position
+
+#### Implementation Details
+- Duration: 2 seconds total
+- Easing: `easeInOutCubic` for smooth motion
+- Flying marker: Moves ahead of camera by 20%
+- Trail effect: Last 20 marker positions rendered as line
+- State restoration: Saves view state before focusing
+
+#### Code Location
+`/expo-app/components/dom/map-view-simple.tsx`:
+- `animateToLocation()` function handles animation logic
+- `useEffect` watches `focusedLocation` prop changes
+- `prevFocusedLocationRef` prevents infinite loops
+
+### Enrichment Pipeline
+
+#### Purpose
+Automatically enriches AI-generated content with accurate coordinates from Google Places API.
+
+#### Flow
+1. **LLM Response**: Includes geo-marks with approximate coordinates
+2. **Stream Processing**: Transform stream intercepts text chunks
+3. **Geo-Mark Detection**: RegEx finds complete `<span class="geo-mark">` tags
+4. **Coordinate Lookup**: Queries Google Places API with location bias
+5. **Replacement**: Updates data-lat/data-lng with accurate values
+6. **Client Rendering**: Frontend receives enriched HTML
+
+#### Code Location
+- **Pipeline**: `/nextjs-api/lib/enrichment-pipeline.ts`
+  - `EnrichmentPipeline` class handles buffering and processing
+  - `createEnrichmentTransform()` creates TransformStream
+- **Geocoding**: `/nextjs-api/lib/geocoding-service.ts`
+  - `geocodeLocation()` queries Google Places API
+  - Supports proximity bias for disambiguation
+  - Includes caching with 24-hour TTL
+
+### Google Places API Integration
+
+#### Text Search API
+Uses the new Google Places Text Search API (v1):
+```typescript
+POST https://places.googleapis.com/v1/places:searchText
+Headers:
+  X-Goog-Api-Key: YOUR_API_KEY
+  X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location
+Body:
+  {
+    "textQuery": "Eiffel Tower, Paris",
+    "locationBias": {
+      "circle": {
+        "center": { "latitude": 48.86, "longitude": 2.29 },
+        "radius": 50000.0
+      }
+    }
+  }
+```
+
+#### Location Disambiguation
+The LLM-provided approximate coordinates help disambiguate locations:
+- Multiple "Springfield" cities → Uses proximity to select correct one
+- Common landmark names → Biases toward expected region
+- Radius: 50km circle around LLM coordinates
+
+#### Environment Variables
+Required in `/nextjs-api/.env.local`:
+```bash
+GOOGLE_PLACES_API_KEY=your-api-key-here
+# OR
+GOOGLE_MAPS_API_KEY=your-api-key-here
+```
+
+### Mock Context
+
+#### Purpose
+Manages state for the mock chat interface, particularly focused location.
+
+#### Location
+`/expo-app/contexts/mock-context.tsx`
+
+#### State
+```typescript
+interface MockContextType {
+  focusedLocation: FocusedLocation | null;
+  setFocusedLocation: (location: FocusedLocation | null) => void;
+}
+
+interface FocusedLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+```
+
+#### Usage Pattern
+1. **Setting Focus**: Click geo-mark → `setFocusedLocation({ id, name, lat, lng })`
+2. **Map Response**: Map watches `focusedLocation` prop → Triggers animation
+3. **Clearing Focus**: Navigate back → `setFocusedLocation(null)`
+4. **State Restoration**: Map animates back to saved view state
+
+### Common Patterns
+
+#### Checking for HTML Content
+```typescript
+const hasHTMLContent = message.parts?.some((part: any) =>
+  part.type === 'text' && (
+    part.text?.includes('<itinerary>') ||
+    part.text?.includes('<h1>') ||
+    part.text?.includes('<ul>') ||
+    part.text?.includes('geo-mark')
+  )
+);
+```
+
+#### Parsing Geo-Marks
+```typescript
+const geoMarkRegex = /<span class="geo-mark"[^>]*data-lat="([^"]*)"[^>]*data-lng="([^"]*)"[^>]*data-place-name="([^"]*)"[^>]*>([^<]*)<\/span>/g;
+```
+
+#### Preventing Animation Loops
+```typescript
+// Track previous value to detect actual changes
+const prevFocusedLocationRef = useRef<FocusedLocation | null>(null);
+
+useEffect(() => {
+  const prevFocusedLocation = prevFocusedLocationRef.current;
+
+  // Only animate if ID actually changed
+  const focusedLocationChanged =
+    (!prevFocusedLocation && focusedLocation) ||
+    (prevFocusedLocation && !focusedLocation) ||
+    (prevFocusedLocation && focusedLocation && prevFocusedLocation.id !== focusedLocation.id);
+
+  if (!focusedLocationChanged) return;
+
+  // ... animation logic
+
+  prevFocusedLocationRef.current = focusedLocation;
+}, [focusedLocation]);
+```
+
+### Testing the Integration
+
+#### Manual Testing
+1. Start Next.js API:
+   ```bash
+   cd nextjs-api
+   PORT=3001 npm run dev
+   ```
+
+2. Start Expo app:
+   ```bash
+   cd expo-app
+   npx expo start --web --port 8082
+   ```
+
+3. Navigate to mock chat interface
+4. Ask AI: "Plan a 3-day trip to Paris"
+5. Verify:
+   - AI wraps locations in geo-marks
+   - Coordinates are enriched by backend
+   - Clicking location animates map
+   - Back navigation restores view
+
+#### Debugging Tips
+- **Check enrichment logs**: Look for `[Geocoding]` and `[EnrichmentPipeline]` in API logs
+- **Inspect HTML**: Use browser DevTools to verify geo-mark attributes
+- **Monitor API calls**: Check Google Places API requests in Network tab
+- **Test without API key**: Verify fallback to LLM coordinates
+- **Watch animation**: Open console to see animation logs
+
+### Future Enhancements
+- Real-time collaboration on map
+- Offline map tiles
+- Custom marker clustering
+- Route visualization between locations
+- Distance/duration calculations
+- Integration with TipTap document editor

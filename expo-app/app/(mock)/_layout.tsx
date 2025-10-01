@@ -5,7 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  SafeAreaView
+  SafeAreaView,
+  Switch
 } from 'react-native';
 import { Stack, usePathname, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,9 @@ function MockLayoutContent() {
   const {
     visibleLocations,
     focusedLocation,
-    setFocusedLocation
+    setFocusedLocation,
+    followMode,
+    setFollowMode
   } = useMockContext();
 
   // Determine if we're on a location detail page
@@ -86,7 +89,27 @@ function MockLayoutContent() {
               </View>
             ) : (
               <>
-                <Text style={styles.headerTitle}>Travel Assistant</Text>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.headerTitle}>Travel Assistant</Text>
+                  <View style={styles.followToggle}>
+                    <Ionicons
+                      name={followMode ? "navigate" : "navigate-outline"}
+                      size={16}
+                      color={followMode ? "#3B82F6" : "#6b7280"}
+                    />
+                    <Text style={[styles.followLabel, followMode && styles.followLabelActive]}>
+                      Follow
+                    </Text>
+                    <Switch
+                      value={followMode}
+                      onValueChange={setFollowMode}
+                      trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+                      thumbColor={followMode ? '#3B82F6' : '#f3f4f6'}
+                      ios_backgroundColor="#d1d5db"
+                      style={styles.switch}
+                    />
+                  </View>
+                </View>
                 <Text style={styles.headerSubtitle}>
                   Share a travel URL or ask about any destination
                 </Text>
@@ -155,6 +178,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  followToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  followLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  followLabelActive: {
+    color: '#3B82F6',
+  },
+  switch: {
+    transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }],
   },
   headerWithBack: {
     flexDirection: 'row',
