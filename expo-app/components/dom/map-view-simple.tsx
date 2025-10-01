@@ -102,7 +102,7 @@ export default function MapViewSimple({
   };
 
   // Animate to a target location using requestAnimationFrame
-  const animateToLocation = useCallback((target: { longitude: number; latitude: number; zoom: number }) => {
+  const animateToLocation = useCallback((target: { longitude: number; latitude: number; zoom: number }, reverse = false) => {
     // Cancel any existing animation
     if (animationRef.current?.frameId) {
       cancelAnimationFrame(animationRef.current.frameId);
@@ -133,15 +133,86 @@ export default function MapViewSimple({
 
       const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = easeInOutCubic(progress);
 
-      // Calculate marker position (ahead of camera by 20% of remaining distance)
-      const markerProgress = Math.min(eased + 0.2, 1); // Marker is 20% ahead
-      const markerEased = easeInOutCubic(markerProgress);
+      // Two-phase animation: pan first (60%), then zoom (40%)
+      const panDuration = duration * 0.6;
+      const zoomDuration = duration * 0.4;
 
-      // Update flying marker position (ahead of camera)
-      const markerLongitude = startState.longitude + (target.longitude - startState.longitude) * markerEased;
-      const markerLatitude = startState.latitude + (target.latitude - startState.latitude) * markerEased;
+      let newLongitude: number;
+      let newLatitude: number;
+      let newZoom: number;
+      let markerLongitude: number;
+      let markerLatitude: number;
+
+      if (!reverse) {
+        // Forward animation: Pan first, then zoom in
+        if (elapsed < panDuration) {
+          // Phase 1: Pan to target location (keep zoom constant)
+          const panProgress = elapsed / panDuration;
+          const panEased = easeInOutCubic(panProgress);
+
+          // Camera pans at panEased rate
+          newLongitude = startState.longitude + (target.longitude - startState.longitude) * panEased;
+          newLatitude = startState.latitude + (target.latitude - startState.latitude) * panEased;
+          newZoom = startState.zoom; // Keep zoom constant during pan
+
+          // Marker moves ahead of camera by 20%
+          const markerProgress = Math.min(panProgress + 0.2, 1);
+          const markerEased = easeInOutCubic(markerProgress);
+          markerLongitude = startState.longitude + (target.longitude - startState.longitude) * markerEased;
+          markerLatitude = startState.latitude + (target.latitude - startState.latitude) * markerEased;
+        } else {
+          // Phase 2: Zoom in to detail view (keep position at target)
+          const zoomElapsed = elapsed - panDuration;
+          const zoomProgress = zoomElapsed / zoomDuration;
+          const zoomEased = easeInOutCubic(zoomProgress);
+
+          // Position stays at target
+          newLongitude = target.longitude;
+          newLatitude = target.latitude;
+
+          // Zoom interpolates from start to target
+          newZoom = startState.zoom + (target.zoom - startState.zoom) * zoomEased;
+
+          // Marker stays at target location
+          markerLongitude = target.longitude;
+          markerLatitude = target.latitude;
+        }
+      } else {
+        // Reverse animation: Zoom out first, then pan back
+        if (elapsed < zoomDuration) {
+          // Phase 1: Zoom out (keep position constant)
+          const zoomProgress = elapsed / zoomDuration;
+          const zoomEased = easeInOutCubic(zoomProgress);
+
+          // Position stays at start
+          newLongitude = startState.longitude;
+          newLatitude = startState.latitude;
+
+          // Zoom out
+          newZoom = startState.zoom + (target.zoom - startState.zoom) * zoomEased;
+
+          // Marker stays at start location
+          markerLongitude = startState.longitude;
+          markerLatitude = startState.latitude;
+        } else {
+          // Phase 2: Pan back to target location (keep zoom constant)
+          const panElapsed = elapsed - zoomDuration;
+          const panProgress = panElapsed / panDuration;
+          const panEased = easeInOutCubic(panProgress);
+
+          // Camera pans back
+          newLongitude = startState.longitude + (target.longitude - startState.longitude) * panEased;
+          newLatitude = startState.latitude + (target.latitude - startState.latitude) * panEased;
+          newZoom = target.zoom; // Keep zoomed out during pan
+
+          // Marker moves ahead of camera by 20%
+          const markerProgress = Math.min(panProgress + 0.2, 1);
+          const markerEased = easeInOutCubic(markerProgress);
+          markerLongitude = startState.longitude + (target.longitude - startState.longitude) * markerEased;
+          markerLatitude = startState.latitude + (target.latitude - startState.latitude) * markerEased;
+        }
+      }
 
       // Add pulsing effect
       const pulseScale = 1 + 0.2 * Math.sin(elapsed * 0.004);
@@ -159,11 +230,6 @@ export default function MapViewSimple({
         const newTrail = [newPoint, ...prevTrail].slice(0, 20);
         return newTrail;
       });
-
-      // Interpolate camera values
-      const newLongitude = startState.longitude + (target.longitude - startState.longitude) * eased;
-      const newLatitude = startState.latitude + (target.latitude - startState.latitude) * eased;
-      const newZoom = startState.zoom + (target.zoom - startState.zoom) * eased;
 
       // Update view state
       setViewState({
@@ -214,18 +280,18 @@ export default function MapViewSimple({
       console.log('Saving current view state before focusing:', viewState);
       setSavedViewState({ ...viewState });
 
-      // Animate to the focused location with closer zoom
+      // Animate to the focused location with closer zoom (forward: pan then zoom)
       const targetState = {
         longitude: focusedLocation.lng,
         latitude: focusedLocation.lat,
         zoom: 12, // Zoom in closer for location details
       };
       console.log('Animating to focused location:', focusedLocation.name, targetState);
-      animateToLocation(targetState);
+      animateToLocation(targetState, false);
     } else if (savedViewState) {
-      // focusedLocation became null and we have a saved state - restore it
+      // focusedLocation became null and we have a saved state - restore it (reverse: zoom out then pan)
       console.log('Restoring saved view state:', savedViewState);
-      animateToLocation(savedViewState);
+      animateToLocation(savedViewState, true);
       setSavedViewState(null); // Clear after restoring
     }
 
