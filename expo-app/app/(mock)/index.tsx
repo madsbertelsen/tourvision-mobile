@@ -45,8 +45,8 @@ function getColorIndex(color?: string): number {
 }
 
 // Helper to parse itinerary content with geo-marks
-const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
-  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
   let colorIndex = 0;
   const locationColors = new Map<string, string>();
 
@@ -66,7 +66,7 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
 
     // Combine all paragraphs in the group
     const combinedContent = currentParagraphGroup.join(' ');
-    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}> = [];
+    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}> = [];
 
     // Process the combined content for geo-marks
     const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
@@ -82,21 +82,24 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         }
       }
 
-      // Extract coordinates and photo from the geo-mark
+      // Extract coordinates, photo, and description from the geo-mark
       const fullMatch = match[0];
       const locationName = match[1];
       const latMatch = fullMatch.match(/data-lat="([^"]+)"/);
       const lngMatch = fullMatch.match(/data-lng="([^"]+)"/);
       const photoNameMatch = fullMatch.match(/data-photo-name="([^"]+)"/);
+      const descriptionMatch = fullMatch.match(/data-description="([^"]+)"/);
       const lat = latMatch ? latMatch[1] : null;
       const lng = lngMatch ? lngMatch[1] : null;
       const photoName = photoNameMatch ? photoNameMatch[1] : null;
+      const description = descriptionMatch ? descriptionMatch[1].replace(/&quot;/g, '"') : null;
 
       console.log('[parseItineraryContent] Extracted geo-mark:', {
         locationName,
         lat,
         lng,
         photoName,
+        description: description ? description.substring(0, 50) + '...' : null,
         fullMatch: fullMatch.substring(0, 200) + '...'
       });
 
@@ -111,7 +114,8 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         color: locationColors.get(locationName),
         lat,
         lng,
-        photoName
+        photoName,
+        description
       });
 
       lastIndex = geoMarkRegex.lastIndex;

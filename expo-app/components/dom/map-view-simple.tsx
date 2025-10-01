@@ -2,7 +2,7 @@
 
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import Map, { Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
+import { Map as MapGL, Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
 import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
 
 interface Location {
@@ -55,6 +55,11 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
   const { current: map } = useMap();
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
+  // Animation state: track which labels have been animated and their progress
+  const animatedLabelsRef = useRef(new Set<string>());
+  const [labelAnimations, setLabelAnimations] = useState(() => new Map<string, number>());
+  const animationTimersRef = useRef(new Map<string, NodeJS.Timeout>());
+
   // Track viewport size
   useEffect(() => {
     if (!map) return;
@@ -104,6 +109,71 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
     );
   }, [map, locations, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
 
+  // Detect labels that are visible in viewport and haven't been animated yet
+  useEffect(() => {
+    if (!viewportSize.width || !viewportSize.height) return;
+
+    // Check which labels are currently visible in viewport
+    const visibleLabels = hexGridData.labels.filter(label => {
+      // Check if label is within viewport bounds
+      const inViewport =
+        label.x >= 0 &&
+        label.x <= viewportSize.width &&
+        label.y >= 0 &&
+        label.y <= viewportSize.height;
+
+      // Only animate if visible and not yet animated
+      return inViewport && !animatedLabelsRef.current.has(label.id);
+    });
+
+    if (visibleLabels.length === 0) return;
+
+    console.log('[Animation] Visible labels to animate:', visibleLabels.map(l => l.id));
+
+    // Animate each visible label with stagger delay
+    visibleLabels.forEach((label, index) => {
+      const delay = index * 150; // 150ms stagger between animations
+
+      const timer = setTimeout(() => {
+        console.log(`[Animation] Starting animation for label: ${label.id}`);
+
+        // Mark as animated
+        animatedLabelsRef.current.add(label.id);
+
+        // Start animation by setting progress to 0
+        setLabelAnimations(prev => new Map(prev).set(label.id, 0));
+
+        // Animate progress from 0 to 1 over 3000ms (3 seconds)
+        const startTime = Date.now();
+        const duration = 3000;
+
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+
+          console.log(`[Animation] ${label.id} progress: ${progress.toFixed(3)}`);
+          setLabelAnimations(prev => new Map(prev).set(label.id, progress));
+
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            console.log(`[Animation] Completed animation for label: ${label.id}`);
+          }
+        };
+
+        requestAnimationFrame(animate);
+      }, delay);
+
+      animationTimersRef.current.set(label.id, timer);
+    });
+
+    // Cleanup timers on unmount
+    return () => {
+      animationTimersRef.current.forEach(timer => clearTimeout(timer));
+      animationTimersRef.current.clear();
+    };
+  }, [hexGridData.labels, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
+
   return (
     <>
       {/* Location markers - small black dots */}
@@ -137,21 +207,58 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
               // Find the label for this hexagon if it's used
               const hexLabel = isUsed ? hexGridData.labels.find(l => l.hexagonId === hex.id) : null;
 
+              let hexScale = 1;
+              let hexOpacity = hexLabel ? 0.8 : 0.2;
+
+              if (hexLabel) {
+                // Get animation progress - don't render if not animated yet
+                const progress = labelAnimations.get(hexLabel.id);
+
+                // Skip rendering if animation hasn't started yet
+                if (progress === undefined) {
+                  return null;
+                }
+
+                console.log(`[Render] Hexagon ${hexLabel.id} progress: ${progress}`);
+
+                // Hexagon explosion phase: 0.3-0.5 (900-1500ms of 3000ms)
+                const hexProgress = Math.max(0, Math.min((progress - 0.3) / 0.2, 1));
+
+                // Scale from 0.2 to 1.0 with bounce easing
+                const t = hexProgress;
+                const bounce = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                hexScale = 0.2 + bounce * 0.8;
+
+                hexOpacity = hexProgress > 0 ? 0.8 : 0;
+              }
+
               return (
-                <path
-                  key={hex.id}
-                  d={getHexagonPath(hex.x, hex.y, hexGridData.hexSize)}
-                  fill={hexLabel ? 'white' : 'none'}
-                  fillOpacity={hexLabel ? 0.9 : 0}
-                  stroke={hexLabel ? hexLabel.color : (isAvailable ? '#D1D5DB' : '#EF4444')}
-                  strokeWidth={hexLabel ? 2 : 1}
-                  strokeOpacity={hexLabel ? 0.8 : 0.2}
-                />
+                <g key={hex.id} transform={`translate(${hex.x}, ${hex.y})`}>
+                  <path
+                    d={getHexagonPath(0, 0, hexGridData.hexSize * hexScale)}
+                    fill={hexLabel ? 'white' : 'none'}
+                    fillOpacity={hexLabel ? 0.9 : 0}
+                    stroke={hexLabel ? hexLabel.color : (isAvailable ? '#D1D5DB' : '#EF4444')}
+                    strokeWidth={hexLabel ? 2 : 1}
+                    strokeOpacity={hexOpacity}
+                  />
+                </g>
               );
             })}
 
             {/* Connection lines from labels to locations */}
             {hexGridData.labels.map(label => {
+              // Get animation progress (0 = start, 1 = complete)
+              const progress = labelAnimations.get(label.id);
+
+              // Skip rendering if animation hasn't started yet
+              if (progress === undefined) {
+                return null;
+              }
+
+              // Line growth phase: 0-0.3 (0-900ms of 3000ms)
+              const lineProgress = Math.min(progress / 0.3, 1);
+
               // Calculate perpendicular offsets for tapering
               const dx = label.connectionPointX - label.locationX;
               const dy = label.connectionPointY - label.locationY;
@@ -169,22 +276,26 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
               const thinWidth = 0.5; // Thin end at location (1px total width)
               const thickWidth = 1.5; // Thick end at hexagon (3px total width)
 
+              // Animated connection point (grows from location to hexagon)
+              const currentX = label.locationX + (label.connectionPointX - label.locationX) * lineProgress;
+              const currentY = label.locationY + (label.connectionPointY - label.locationY) * lineProgress;
+
               // Calculate polygon points for tapered line
               const x1 = label.locationX + px * thinWidth;
               const y1 = label.locationY + py * thinWidth;
               const x2 = label.locationX - px * thinWidth;
               const y2 = label.locationY - py * thinWidth;
-              const x3 = label.connectionPointX - px * thickWidth;
-              const y3 = label.connectionPointY - py * thickWidth;
-              const x4 = label.connectionPointX + px * thickWidth;
-              const y4 = label.connectionPointY + py * thickWidth;
+              const x3 = currentX - px * (thinWidth + (thickWidth - thinWidth) * lineProgress);
+              const y3 = currentY - py * (thinWidth + (thickWidth - thinWidth) * lineProgress);
+              const x4 = currentX + px * (thinWidth + (thickWidth - thinWidth) * lineProgress);
+              const y4 = currentY + py * (thinWidth + (thickWidth - thinWidth) * lineProgress);
 
               return (
                 <polygon
                   key={`connection-${label.id}`}
                   points={`${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`}
                   fill={label.color}
-                  fillOpacity="0.8"
+                  fillOpacity={lineProgress > 0 ? "0.8" : "0"}
                 />
               );
             })}
@@ -192,12 +303,27 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
 
           {/* Photos on hexagons */}
           {hexGridData.labels.map(label => {
+            // Get animation progress - skip if not animated yet
+            const progress = labelAnimations.get(label.id);
+
+            // Skip rendering if animation hasn't started yet
+            if (progress === undefined) {
+              return null;
+            }
+
             const photoUrl = label.photoName
               ? `https://places.googleapis.com/v1/${label.photoName}/media?maxHeightPx=400&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
               : null;
 
             // Photo size - larger to fill more of the hexagon while keeping border visible
             const photoSize = hexGridData.hexSize * 0.85;
+
+            // Photo reveal phase: 0.4-0.7 (1200-2100ms of 3000ms)
+            const photoProgress = Math.max(0, Math.min((progress - 0.4) / 0.3, 1));
+
+            // Scale from 0.8 to 1.0 and opacity from 0 to 1
+            const photoOpacity = photoProgress;
+            const photoScale = 0.8 + photoProgress * 0.2;
 
             return photoUrl ? (
               <div
@@ -206,11 +332,13 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   position: 'absolute',
                   left: `${label.x}px`,
                   top: `${label.y}px`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) scale(${photoScale})`,
                   width: `${photoSize * 2}px`,
                   height: `${photoSize * 2}px`,
                   pointerEvents: 'auto',
                   cursor: 'pointer',
+                  opacity: photoOpacity,
+                  transition: 'opacity 300ms ease-out, transform 300ms ease-out',
                 }}
               >
                 {/* Photo hexagon */}
@@ -230,7 +358,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   position: 'absolute',
                   bottom: '10%',
                   left: '50%',
-                  transform: 'translateX(-50%)',
+                  transform: `translateX(-50%) translateY(${(1 - Math.max(0, Math.min((progress - 0.6) / 0.3, 1))) * 5}px)`,
                   fontSize: '10px',
                   fontWeight: '700',
                   color: 'white',
@@ -243,6 +371,8 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
+                  opacity: Math.max(0, Math.min((progress - 0.6) / 0.3, 1)),
+                  transition: 'opacity 300ms ease-out, transform 300ms ease-out',
                 }}>
                   {label.name}
                 </div>
@@ -647,7 +777,7 @@ export default function MapViewSimple({
           border-radius: 50%;
         }
       `}</style>
-      <Map
+      <MapGL
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
         onClick={handleMapClick}
@@ -752,7 +882,7 @@ export default function MapViewSimple({
           isAnimating={isAnimating}
           viewState={viewState}
         />
-      </Map>
+      </MapGL>
     </div>
   );
 }

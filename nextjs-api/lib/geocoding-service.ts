@@ -1,5 +1,5 @@
 // Cache for geocoding results
-const geocodeCache = new Map<string, { lat: number; lng: number; photoName?: string; timestamp: number }>();
+const geocodeCache = new Map<string, { lat: number; lng: number; photoName?: string; description?: string; timestamp: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface GeocodingResult {
@@ -7,6 +7,7 @@ export interface GeocodingResult {
   lng: number;
   source: 'google' | 'cache' | 'llm-fallback';
   photoName?: string;
+  description?: string;
 }
 
 export interface ProximityCoords {
@@ -38,7 +39,7 @@ export async function geocodeLocation(
   const cached = geocodeCache.get(normalizedName);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log(`[Geocoding] Cache hit for: ${placeName}`);
-    return { lat: cached.lat, lng: cached.lng, photoName: cached.photoName, source: 'cache' };
+    return { lat: cached.lat, lng: cached.lng, photoName: cached.photoName, description: cached.description, source: 'cache' };
   }
 
   // Try Google Places API
@@ -80,7 +81,7 @@ export async function geocodeLocation(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': googleApiKey,
-        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.photos',
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.photos,places.editorialSummary',
       },
       body: JSON.stringify(requestBody),
     });
@@ -92,10 +93,11 @@ export async function geocodeLocation(
       const place = data.places[0];
       const location = place.location;
       const photoName = place.photos && place.photos.length > 0 ? place.photos[0].name : undefined;
+      const description = place.editorialSummary?.text || undefined;
 
-      const result = { lat: location.latitude, lng: location.longitude, photoName };
+      const result = { lat: location.latitude, lng: location.longitude, photoName, description };
 
-      console.log(`[Geocoding] Google API found: ${placeName} -> ${result.lat}, ${result.lng}, photo: ${photoName || 'none'}`);
+      console.log(`[Geocoding] Google API found: ${placeName} -> ${result.lat}, ${result.lng}, photo: ${photoName || 'none'}, description: ${description ? 'present' : 'none'}`);
 
       // Cache the result
       geocodeCache.set(normalizedName, { ...result, timestamp: Date.now() });

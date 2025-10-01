@@ -126,6 +126,12 @@ export class EnrichmentPipeline {
       sourceAttrs += ` data-photo-name="${coords.photoName}"`;
     }
 
+    // Add description if available (escape quotes for HTML attribute)
+    if (coords.description) {
+      const escapedDescription = coords.description.replace(/"/g, '&quot;');
+      sourceAttrs += ` data-description="${escapedDescription}"`;
+    }
+
     enriched = enriched.replace(
       'data-geo="true"',
       `data-geo="true" ${sourceAttrs}`

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,24 @@ import {
   StyleSheet,
   TouchableOpacity,
   Linking,
-  Platform
+  Platform,
+  Image
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function LocationDetailScreen() {
   const params = useLocalSearchParams();
-  const { id, name, lat, lng } = params as {
+  const { id, name, lat, lng, description, photoName } = params as {
     id: string;
     name: string;
     lat: string;
     lng: string;
+    description?: string;
+    photoName?: string;
   };
+
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Format coordinates for display
   const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
@@ -52,14 +57,52 @@ export default function LocationDetailScreen() {
     }
   };
 
+  // Photo URL from Google Places
+  const photoUrl = photoName
+    ? `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
+    : null;
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
+        {/* Photo Banner */}
+        {photoUrl && (
+          <View style={styles.photoBanner}>
+            <Image
+              source={{ uri: photoUrl }}
+              style={styles.photo}
+              resizeMode="cover"
+            />
+            <TouchableOpacity
+              style={styles.bookmarkButton}
+              onPress={() => setIsBookmarked(!isBookmarked)}
+            >
+              <Ionicons
+                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={28}
+                color={isBookmarked ? '#3B82F6' : '#fff'}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Location Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="location" size={24} color="#3B82F6" />
             <Text style={styles.locationName}>{name}</Text>
+            {!photoUrl && (
+              <TouchableOpacity
+                style={styles.headerBookmarkButton}
+                onPress={() => setIsBookmarked(!isBookmarked)}
+              >
+                <Ionicons
+                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                  size={24}
+                  color={isBookmarked ? '#3B82F6' : '#6b7280'}
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.coordinatesContainer}>
@@ -96,10 +139,13 @@ export default function LocationDetailScreen() {
         {/* Additional Info */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>About this location</Text>
+          {description && (
+            <Text style={styles.descriptionText}>
+              {description}
+            </Text>
+          )}
           <Text style={styles.infoText}>
-            This location was mentioned in your travel conversation.
-            Tap "Open in Maps" to view it in your preferred maps application
-            or get directions.
+            {description ? 'This location was mentioned in your travel conversation.' : 'This location was mentioned in your travel conversation. Tap "Open in Maps" to view it in your preferred maps application or get directions.'}
           </Text>
         </View>
 
@@ -124,13 +170,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   content: {
-    padding: 16,
+    padding: 0,
+  },
+  photoBanner: {
+    width: '100%',
+    height: 250,
+    position: 'relative',
+    marginBottom: 16,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  bookmarkButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   card: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -151,6 +227,9 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginLeft: 8,
     flex: 1,
+  },
+  headerBookmarkButton: {
+    padding: 4,
   },
   coordinatesContainer: {
     backgroundColor: '#f3f4f6',
@@ -176,6 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginBottom: 16,
+    marginHorizontal: 16,
   },
   actionButton: {
     flex: 1,
@@ -206,12 +286,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    marginHorizontal: 16,
   },
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 15,
+    color: '#111827',
+    lineHeight: 22,
+    marginBottom: 12,
   },
   infoText: {
     fontSize: 14,
@@ -222,6 +309,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   factsTitle: {
     fontSize: 16,

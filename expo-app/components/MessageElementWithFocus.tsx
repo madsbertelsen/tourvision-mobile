@@ -22,6 +22,7 @@ export type FlatElement = {
     lat?: string | null;
     lng?: string | null;
     photoName?: string | null;
+    description?: string | null;
   }>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
@@ -252,7 +253,9 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                           id: `loc-${idx}`,
                           name: item.text,
                           lat: item.lat || '0',
-                          lng: item.lng || '0'
+                          lng: item.lng || '0',
+                          description: item.description || '',
+                          photoName: item.photoName || ''
                         }
                       });
                     }}
