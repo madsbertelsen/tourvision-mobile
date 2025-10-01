@@ -13402,3 +13402,703 @@ Stream finished, messages count: 1
 [chat-simple] Chunk was enriched:   <p>Don't forget to try local specialties like <span class="geo-mark" data-geo="true" data-lat="55.  ->    <p>Don't forget to try local specialties like <span class="geo-mark" data-geo="true" data-coord-so
 Stream finished, messages count: 1
  POST /api/chat-simple 200 in 32395ms
+ OPTIONS /api/chat-simple 200 in 439ms
+[chat-simple] Google API Key configured: Yes (AIzaSyBQPF...)
+[EnrichmentPipeline] Initialized with API key: Yes
+[Firecrawl Tool] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracted 70 locations from content
+[Firecrawl Tool] Successfully extracted 70 locations
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 237
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne, Denmark" title="📍 Rønne">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Denmark
+[Geocoding] geocodeLocation called with: Rønne, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Rønne, Denmark
+[Geocoding] Using proximity bias: 55.0833, 14.7667
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Rønne, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Rønne, Denmark -> 55.101017, 14.708328999999999, photo: places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52x
+[chat-simple] Chunk was enriched:   <p>Arrive in <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-pla  ->    <p>Arrive in <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pl
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 264
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne, Denmark" title="📍 Rønne">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Denmark
+[Geocoding] geocodeLocation called with: Rønne, Denmark API key: present
+[Geocoding] Cache hit for: Rønne, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xu
+[chat-simple] Chunk was enriched:   <p>Explore <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place  ->    <p>Explore <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="place
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 370
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.7333" data-place-name="Nørrek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.7333" data-place-name="Nørrekås Strand, Denmark" title="📍 Nørrekås Strand">Nør
+[EnrichmentPipeline] Extracted place name: Nørrekås Strand, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.7333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nørrekås Strand, Denmark
+[Geocoding] geocodeLocation called with: Nørrekås Strand, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Nørrekås Strand, Denmark
+[Geocoding] Using proximity bias: 55.1167, 14.7333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Nørrekaas Strand, Nordre Kystvej, 3700 Rønne, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Nørrekås Strand, Denmark -> 55.104445899999995, 14.6955952, photo: places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fepD0i9tyaoVvLtSgvR4F0xJUsho7MGN35GXGCzPDQ5_4Muv94WIc0V4CBfpigLsbD_JEcM-dJJwzgXNZgdS84ox9WnYY3ZfmhUUJViSLkTN3zpGrUhPaItavO3dSQ-ZgZTX_yD5q80z9lITBTKWdOqCqihEN3Qp9brzu5pmjCli8tU4soH4vOzXFbSfmeaCikUKZkE6U99SkXf9q03OmzfzuH2Ryrn7Sj2d2hOVpqVNkSrjf5KR4b9M3HmY_L6-LmQP3A9_aRCOnr4xlhEDeWucEN722bVv9vw_v1Fyk962sASr7jKhGieKK9lMoi5g_anhFy_ex5AW4T7v3tmnWDJAT0NKW6RymNAIXSpeioUH_zR4gY-ShXJn3YovNqfxlvubEJghIBJvk24xg88Nt69O4tb5kSz-jQQGHrjGLXqg, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.104445899999995,
+  lng: 14.6955952,
+  photoName: 'places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fepD0i9tyaoVvLtSgvR4F0xJUsho7MGN35GXGCzPDQ5_4Muv94WIc0V4CBfpigLsbD_JEcM-dJJwzgXNZgdS84ox9WnYY3ZfmhUUJViSLkTN3zpGrUhPaItavO3dSQ-ZgZTX_yD5q80z9lITBTKWdOqCqihEN3Qp9brzu5pmjCli8tU4soH4vOzXFbSfmeaCikUKZkE6U99SkXf9q03OmzfzuH2Ryrn7Sj2d2hOVpqVNkSrjf5KR4b9M3HmY_L6-LmQP3A9_aRCOnr4xlhEDeWucEN722bVv9vw_v1Fyk962sASr7jKhGieKK9lMoi5g_anhFy_ex5AW4T7v3tmnWDJAT0NKW6RymNAIXSpeioUH_zR4gY-ShXJn3YovNqfxlvubEJghIBJvk24xg88Nt69O4tb5kSz-jQQGHrjGLXqg',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fepD0i9tyaoVvLtSgvR4F0xJUsho7MGN35GXGCzPDQ5_4Muv94WIc0V4CBfpigLsbD_JE
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.15" data-lng="14.7333" data-place-name="Antoinet
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.15" data-lng="14.7333" data-place-name="Antoinettes Strand, Denmark" title="📍 Antoinettes Strand"
+[EnrichmentPipeline] Extracted place name: Antoinettes Strand, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.15, lng: 14.7333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Antoinettes Strand, Denmark
+[Geocoding] geocodeLocation called with: Antoinettes Strand, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Antoinettes Strand, Denmark
+[Geocoding] Using proximity bias: 55.15, 14.7333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Antoinette, 3700 Rønne, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Antoinettes Strand, Denmark -> 55.1194438, 14.7048284, photo: places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2dD_cJKrbpO9i9YkjaDd6lUTjZw1VGNsi2Lln8fCECA97f5FoDTbdxK2DRVuEpEiZxchIW6lKrWkGJcH8vRhEFuqKPp3TmUfnEaU1Kr-C-LDru0RtAclEu2chZIGP-LKXb0mqUQH1P4lxS-NPVqGXXQazWUvqMNf28vnImI-GhfEtVZH4a5D1D2vzEu4hUCVSvRUn6fHvdNXiF-j2YYChPr235fABMenH-U5mC84ZVDyVHnDN3Lh5pQL_Inc5YszKy2mXtYYvVic9CiAyfh9jJ8tS-CdvmC-9NPQRyCa9YPjg-pixJ5NpKiz1Um4HVHHzz7KmNxbVvoCNQbagLRUuu4ApnV_9oZCL84ITS4Dp9Q0ra0aLdWPNE4Q014TL37qAstN9rc6vkJ0oxRyKSrDUJhpNtapQqp1ei0m3BVDGDvyT6n, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1194438,
+  lng: 14.7048284,
+  photoName: 'places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2dD_cJKrbpO9i9YkjaDd6lUTjZw1VGNsi2Lln8fCECA97f5FoDTbdxK2DRVuEpEiZxchIW6lKrWkGJcH8vRhEFuqKPp3TmUfnEaU1Kr-C-LDru0RtAclEu2chZIGP-LKXb0mqUQH1P4lxS-NPVqGXXQazWUvqMNf28vnImI-GhfEtVZH4a5D1D2vzEu4hUCVSvRUn6fHvdNXiF-j2YYChPr235fABMenH-U5mC84ZVDyVHnDN3Lh5pQL_Inc5YszKy2mXtYYvVic9CiAyfh9jJ8tS-CdvmC-9NPQRyCa9YPjg-pixJ5NpKiz1Um4HVHHzz7KmNxbVvoCNQbagLRUuu4ApnV_9oZCL84ITS4Dp9Q0ra0aLdWPNE4Q014TL37qAstN9rc6vkJ0oxRyKSrDUJhpNtapQqp1ei0m3BVDGDvyT6n',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2dD_cJKrbpO9i9YkjaDd6lUTjZw1VGNsi2Lln8fCECA97f5FoDTbdxK2DRVuEpEiZxchIW
+[chat-simple] Chunk was enriched:   <p>Relax at <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.7333" data-plac  ->    <p>Relax at <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 210
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvig, Denmark" title="📍 Sandvig">Sandvig</span>
+[EnrichmentPipeline] Extracted place name: Sandvig, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.2333, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Denmark
+[Geocoding] geocodeLocation called with: Sandvig, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Sandvig, Denmark
+[Geocoding] Using proximity bias: 55.2333, 14.6333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Allinge-Sandvig, 3770 Allinge-Sandvig, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Sandvig, Denmark -> 55.277752799999995, 14.797747500000002, photo: places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cpXgJnBhbXU06_WI1sFsPPkDdEg5eUfedsiiCsL0tSc2OALNk7X9SQhz73euZf3xS7Hblhxr7a1EZrn3YF5Z1XyMFF4LODy5iDn_f8WfPE245go01fpTFrBbpbjuWaY04jhbRpUCDeHPv71xYZd6bkbnKzhwch2oyMA2esdif-8hI4wrxXDzAC1zow3zPRwlit6T4Fb3W0tCy1KM15OzHs7Py9DKgbuxkwrAA6GPcwQS657YmqkCFLmklHl_-yV-irWPM2ITGbZRd0ZaV9yBUS9EJQqlnJW8PbOBR0LTt_YaRQHzo1oei1McE5yBi2af_U1HyzT3VNsjZFkQBXNXO3WVFfelWXzEnPRIUw1Ct8wEuELfVVqS7FHCh3Zn4QyNP6U-WBm0OnUF4z8eliDGVf2dYdosbuZDj4ake083W00OgR, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cpXgJnBhbXU06_WI1sFsPPkDdEg5eUfedsiiCsL0tSc2OALNk7X9SQhz73euZf3xS7Hblhxr7a1EZrn3YF5Z1XyMFF4LODy5iDn_f8WfPE245go01fpTFrBbpbjuWaY04jhbRpUCDeHPv71xYZd6bkbnKzhwch2oyMA2esdif-8hI4wrxXDzAC1zow3zPRwlit6T4Fb3W0tCy1KM15OzHs7Py9DKgbuxkwrAA6GPcwQS657YmqkCFLmklHl_-yV-irWPM2ITGbZRd0ZaV9yBUS9EJQqlnJW8PbOBR0LTt_YaRQHzo1oei1McE5yBi2af_U1HyzT3VNsjZFkQBXNXO3WVFfelWXzEnPRIUw1Ct8wEuELfVVqS7FHCh3Zn4QyNP6U-WBm0OnUF4z8eliDGVf2dYdosbuZDj4ake083W00OgR',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cpXgJnBhbXU06_WI1sFsPPkDdEg5eUfedsiiCsL0tSc2OALNk7X9SQhz73euZf3xS7Hbl
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-plac  ->    <p>Drive to <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 388
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.25" data-lng="14.65" data-place-name="Hammershus
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.25" data-lng="14.65" data-place-name="Hammershus, Denmark" title="📍 Hammershus">Hammershus</span>
+[EnrichmentPipeline] Extracted place name: Hammershus, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.25, lng: 14.65 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hammershus, Denmark
+[Geocoding] geocodeLocation called with: Hammershus, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Hammershus, Denmark
+[Geocoding] Using proximity bias: 55.25, 14.65
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Langebjergvej 26, 3770 Allinge-Sandvig, Denmark',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Hammershus, Denmark -> 55.2713045, 14.7553955, photo: places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2dShmY_psHRoK-his_pwt-BJ0SKAvnU9_Qmm8ppVuxHKPFIvxZbnpyBnmVJmSuSdFO8xBhcwg2iM-QZNvf0XjfbKgvzXnNtaGDcTizw8BHuDWI2mOibO89F1Me6-fh3bAHeBdLewKqtCIe6YhuKlKetXvwKSZiPIhSryIc6fO1Uxt3m2CtZnIwfwxF56LMKr-bcU-ui7LxYeXQ3XO-7pYoKTPH5e42E3-CIkSVtLnyJ_Aaecmaa_I5dAnZoBeI2XWT77pJJU1PSLlcBnBsrvHgl3Xcxvf8HV7dbV2nnpWklVDk86j9pbdfTXkIDMM8uh4n0ckldVHhouEf-zGznehdOMI9MAW_PiOtrGj6Nn7e7cMfWaiMbrz9pkUKsB12UglJFbz3DaAUitzvWomnNLsl_Xmhu4UKMimD9Cd1YrsqlLpEd, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2713045,
+  lng: 14.7553955,
+  photoName: 'places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2dShmY_psHRoK-his_pwt-BJ0SKAvnU9_Qmm8ppVuxHKPFIvxZbnpyBnmVJmSuSdFO8xBhcwg2iM-QZNvf0XjfbKgvzXnNtaGDcTizw8BHuDWI2mOibO89F1Me6-fh3bAHeBdLewKqtCIe6YhuKlKetXvwKSZiPIhSryIc6fO1Uxt3m2CtZnIwfwxF56LMKr-bcU-ui7LxYeXQ3XO-7pYoKTPH5e42E3-CIkSVtLnyJ_Aaecmaa_I5dAnZoBeI2XWT77pJJU1PSLlcBnBsrvHgl3Xcxvf8HV7dbV2nnpWklVDk86j9pbdfTXkIDMM8uh4n0ckldVHhouEf-zGznehdOMI9MAW_PiOtrGj6Nn7e7cMfWaiMbrz9pkUKsB12UglJFbz3DaAUitzvWomnNLsl_Xmhu4UKMimD9Cd1YrsqlLpEd',
+  description: 'Ruins of an imposing castle, built by the church in 1200, plus an exhibition center with models.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2dShmY_psHRoK-his_pwt-BJ0SKAvnU9_Qmm8ppVuxHKPFIvxZbnpyBnmVJmSuSdFO8xBh
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvig Strand, Denmark" title="📍 Sandvig Strand">Sandv
+[EnrichmentPipeline] Extracted place name: Sandvig Strand, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.2333, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig Strand, Denmark
+[Geocoding] geocodeLocation called with: Sandvig Strand, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Sandvig Strand, Denmark
+[Geocoding] Using proximity bias: 55.2333, 14.6333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Sandvig Strand Bornholm, 3770 Allinge-Sandvig, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Sandvig Strand, Denmark -> 55.2900023, 14.777671899999998, photo: places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2dZGXGJDRjbwwEnidBp4X_WEwQJjwMVqnlrmRg69ywC3oE5o6N7XO5PDOtW0WhhUBGsZDNz3fefErdWEqNATtoM7GFilEA2mQwpCvMRz1UWTn9B1E6oyBjzuvl-DYgQJPThUA3Pc7CjPTFsbzb3pomqBEJFuP1FwgmLoAKIM7GGtOoakhjIUlYsHQGjK3ghWrdH4WlQsdFXccDyMwfm0I-yWcdIy_UNCZ3q5nB9xK7g5w-B1APz9YjeQ-tYUdScwZHGkffAlYBkakxctjF9dUdOAE_3pQVxOYpSlCf3PPaEni_nQEUjd5OYqOapb65lgT51R0I4AUxdab4iYl6KzCL4G-ruFyIu6v717fylDL8HQIXL9AJCQLhyxBwcLPphGq73cp6x59FMgR5vjcZFnIZZswYdFM41vEjYtvuJzeq2svKK, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2900023,
+  lng: 14.777671899999998,
+  photoName: 'places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2dZGXGJDRjbwwEnidBp4X_WEwQJjwMVqnlrmRg69ywC3oE5o6N7XO5PDOtW0WhhUBGsZDNz3fefErdWEqNATtoM7GFilEA2mQwpCvMRz1UWTn9B1E6oyBjzuvl-DYgQJPThUA3Pc7CjPTFsbzb3pomqBEJFuP1FwgmLoAKIM7GGtOoakhjIUlYsHQGjK3ghWrdH4WlQsdFXccDyMwfm0I-yWcdIy_UNCZ3q5nB9xK7g5w-B1APz9YjeQ-tYUdScwZHGkffAlYBkakxctjF9dUdOAE_3pQVxOYpSlCf3PPaEni_nQEUjd5OYqOapb65lgT51R0I4AUxdab4iYl6KzCL4G-ruFyIu6v717fylDL8HQIXL9AJCQLhyxBwcLPphGq73cp6x59FMgR5vjcZFnIZZswYdFM41vEjYtvuJzeq2svKK',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2dZGXGJDRjbwwEnidBp4X_WEwQJjwMVqnlrmRg69ywC3oE5o6N7XO5PDOtW0WhhUBGsZDN
+[chat-simple] Chunk was enriched:   <p>Visit <span class="geo-mark" data-geo="true" data-lat="55.25" data-lng="14.65" data-place-name=  ->    <p>Visit <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 175
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Sandvig, Denmark" title="📍 Sandvig">Sandvig</span>
+[EnrichmentPipeline] Extracted place name: Sandvig, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.2333, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Denmark
+[Geocoding] geocodeLocation called with: Sandvig, Denmark API key: present
+[Geocoding] Cache hit for: Sandvig, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cpXgJnBhbXU06_WI1sFsPPkDdEg5eUfedsiiCsL0tSc2OALNk7X9SQhz73euZf3xS7Hblhxr7a1EZrn3YF5Z1XyMFF4LODy5iDn_f8WfPE245go01fpTFrBbpbjuWaY04jhbRpUCDeHPv71xYZd6bkbnKzhwch2oyMA2esdif-8hI4wrxXDzAC1zow3zPRwlit6T4Fb3W0tCy1KM15OzHs7Py9DKgbuxkwrAA6GPcwQS657YmqkCFLmklHl_-yV-irWPM2ITGbZRd0ZaV9yBUS9EJQqlnJW8PbOBR0LTt_YaRQHzo1oei1McE5yBi2af_U1HyzT3VNsjZFkQBXNXO3WVFfelWXzEnPRIUw1Ct8wEuELfVVqS7FHCh3Zn4QyNP6U-WBm0OnUF4z8eliDGVf2dYdosbuZDj4ake083W00OgR',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cpXgJnBhbXU06_WI1sFsPPkDdEg5eUfedsiiCsL0tSc2OALNk7X9SQhz73euZf3xS7Hblh
+[chat-simple] Chunk was enriched:   <p>Stay overnight at <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333"   ->    <p>Stay overnight at <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-n
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 223
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-place-name="Gudhje
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-place-name="Gudhjem, Denmark" title="📍 Gudhjem">Gudhjem</span>
+[EnrichmentPipeline] Extracted place name: Gudhjem, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1833, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Gudhjem, Denmark
+[Geocoding] geocodeLocation called with: Gudhjem, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Gudhjem, Denmark
+[Geocoding] Using proximity bias: 55.1833, 14.6333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Gudhjem, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Gudhjem, Denmark -> 55.2084554, 14.971686499999999, photo: places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2d2HJ_rJehMoSNeaz9xqGXl7yuGorBQ0QBEIk9WzDYHH68ccXAzOjlVI5MxyTJfEIBbI-bIJYadaW__Wuj531zYGvzc7631aZFXpvZ5iYJuJyDYeq6x3N3n-b9ypJG2O9oGj3ZdtIrG4gEoM1aXstdYkrh8kbP39G7My0gfRo9OdwQrb59RgYQTBmPb1KtccbI0yd094X14iLMdUB6hpz54y-BD0VhP_kSyekzroo-btI7JhNmVk_6lfq4xkQe3KnaWR847-DvVdloGC7_4OyhxnYbW4w65GSUJ2O2MZgkzPNA9LT-qUx6KeeTN-NZJQSsFJbQ3EisJ-C0Knr1aXpp5W2eGwGXJ83dvkKkhWIYK9WFAmgEbFHX21fhaq2-cFNOUQgsfx_RGWzokVh572z5aC6fKsb21RNReasjLj6PAPC8u, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2084554,
+  lng: 14.971686499999999,
+  photoName: 'places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2d2HJ_rJehMoSNeaz9xqGXl7yuGorBQ0QBEIk9WzDYHH68ccXAzOjlVI5MxyTJfEIBbI-bIJYadaW__Wuj531zYGvzc7631aZFXpvZ5iYJuJyDYeq6x3N3n-b9ypJG2O9oGj3ZdtIrG4gEoM1aXstdYkrh8kbP39G7My0gfRo9OdwQrb59RgYQTBmPb1KtccbI0yd094X14iLMdUB6hpz54y-BD0VhP_kSyekzroo-btI7JhNmVk_6lfq4xkQe3KnaWR847-DvVdloGC7_4OyhxnYbW4w65GSUJ2O2MZgkzPNA9LT-qUx6KeeTN-NZJQSsFJbQ3EisJ-C0Knr1aXpp5W2eGwGXJ83dvkKkhWIYK9WFAmgEbFHX21fhaq2-cFNOUQgsfx_RGWzokVh572z5aC6fKsb21RNReasjLj6PAPC8u',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2d2HJ_rJehMoSNeaz9xqGXl7yuGorBQ0QBEIk9WzDYHH68ccXAzOjlVI5MxyTJfEIBbI-b
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-plac  ->    <p>Drive to <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 461
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-place-name="Hellig
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-place-name="Helligdomsklipperne, Denmark" title="📍 Helligdomsklippe
+[EnrichmentPipeline] Extracted place name: Helligdomsklipperne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1833, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Helligdomsklipperne, Denmark
+[Geocoding] geocodeLocation called with: Helligdomsklipperne, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Helligdomsklipperne, Denmark
+[Geocoding] Using proximity bias: 55.1833, 14.6333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Helligdomsklipperne, 3760, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Helligdomsklipperne, Denmark -> 55.2241667, 14.9086111, photo: places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2di56GH3HwTYTunxqFuk7Ukyc8kPHTVQMoLQ9N8rWxOUbqHumz7Ytx2bGFq3XuqFUVS1kOb-OOXb0n7_Df87Dz0265Uh6kt4Zhei1ntYGhFjCZ4Kwx1vLD0d-5oKhWwa7537iy5MjvxnVpnDDUOepkDPS2SXHMAAV0jVOElEyVbO3G_0HB9H1XdOKeRXZT4rfwCZ6dfK0taTZdiHXgLE3eVHTS9VinLhxszgyJviRLhB1jclQDRXcEPqAf_lTjjIjbiWuWM83g5mG42gBOm5vtVOoni8tSmPRTJcKBiovWtkmN5gCSJgCcm8mnN8RFCs-RzOsJZiNZZkAxVmW64cyIRTwOtSjnOKi6vF48QFhRlJlGT4Hu47xW_tiLMNf4S5vp6ZpTn-2z-lLrSJgKVi1bZgSgEbCGUuxCBGmxIIgY2Ag, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2241667,
+  lng: 14.9086111,
+  photoName: 'places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2di56GH3HwTYTunxqFuk7Ukyc8kPHTVQMoLQ9N8rWxOUbqHumz7Ytx2bGFq3XuqFUVS1kOb-OOXb0n7_Df87Dz0265Uh6kt4Zhei1ntYGhFjCZ4Kwx1vLD0d-5oKhWwa7537iy5MjvxnVpnDDUOepkDPS2SXHMAAV0jVOElEyVbO3G_0HB9H1XdOKeRXZT4rfwCZ6dfK0taTZdiHXgLE3eVHTS9VinLhxszgyJviRLhB1jclQDRXcEPqAf_lTjjIjbiWuWM83g5mG42gBOm5vtVOoni8tSmPRTJcKBiovWtkmN5gCSJgCcm8mnN8RFCs-RzOsJZiNZZkAxVmW64cyIRTwOtSjnOKi6vF48QFhRlJlGT4Hu47xW_tiLMNf4S5vp6ZpTn-2z-lLrSJgKVi1bZgSgEbCGUuxCBGmxIIgY2Ag',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2di56GH3HwTYTunxqFuk7Ukyc8kPHTVQMoLQ9N8rWxOUbqHumz7Ytx2bGFq3XuqFUVS1kO
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svanek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svaneke, Denmark" title="📍 Svaneke">Svaneke</span>
+[EnrichmentPipeline] Extracted place name: Svaneke, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.6667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Denmark
+[Geocoding] geocodeLocation called with: Svaneke, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Svaneke, Denmark
+[Geocoding] Using proximity bias: 55.1167, 14.6667
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Svaneke, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Svaneke, Denmark -> 55.1364376, 15.1408942, photo: places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4IB-Ce52TGC5pIScTcnGErU_JqK_AQc99ni809atC4W2ui6xc-Fyn9ijuO_akeZ6oercfcvrAFRWMRnapUff4Yr9ewoqUzrf4rWHdZXMaXmG7VoW2bHOdZot-2Pts99kf8NhGxfm2T2Qv5BlyqaCYx7ZFPTtRgbTFikVgDOUhMUImbNVVKdRSARr5df-xT5a9QBY7dDNwkAeegPOs_rNVEqoQVMmQwuEmbsOgu6yYX-H2C0hgXDa7SETf3JPJLfhzZw5GkG9FzhDoRh8vj-yv3w1mJ4yi9TTu7X9hYRN2tNodU8bKT_F0jaWcFQB6uuKhEr31KLAZYEW4c-EKz2SmmVXYSgh2_loN5FfGfQ, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4IB-Ce52TGC5pIScTcnGErU_JqK_AQc99ni809atC4W2ui6xc-Fyn9ijuO_akeZ6oercfcvrAFRWMRnapUff4Yr9ewoqUzrf4rWHdZXMaXmG7VoW2bHOdZot-2Pts99kf8NhGxfm2T2Qv5BlyqaCYx7ZFPTtRgbTFikVgDOUhMUImbNVVKdRSARr5df-xT5a9QBY7dDNwkAeegPOs_rNVEqoQVMmQwuEmbsOgu6yYX-H2C0hgXDa7SETf3JPJLfhzZw5GkG9FzhDoRh8vj-yv3w1mJ4yi9TTu7X9hYRN2tNodU8bKT_F0jaWcFQB6uuKhEr31KLAZYEW4c-EKz2SmmVXYSgh2_loN5FfGfQ',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy
+[chat-simple] Chunk was enriched:   <p>Visit the <span class="geo-mark" data-geo="true" data-lat="55.1833" data-lng="14.6333" data-pla  ->    <p>Visit the <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pl
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 175
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svanek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svaneke, Denmark" title="📍 Svaneke">Svaneke</span>
+[EnrichmentPipeline] Extracted place name: Svaneke, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.6667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Denmark
+[Geocoding] geocodeLocation called with: Svaneke, Denmark API key: present
+[Geocoding] Cache hit for: Svaneke, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4IB-Ce52TGC5pIScTcnGErU_JqK_AQc99ni809atC4W2ui6xc-Fyn9ijuO_akeZ6oercfcvrAFRWMRnapUff4Yr9ewoqUzrf4rWHdZXMaXmG7VoW2bHOdZot-2Pts99kf8NhGxfm2T2Qv5BlyqaCYx7ZFPTtRgbTFikVgDOUhMUImbNVVKdRSARr5df-xT5a9QBY7dDNwkAeegPOs_rNVEqoQVMmQwuEmbsOgu6yYX-H2C0hgXDa7SETf3JPJLfhzZw5GkG9FzhDoRh8vj-yv3w1mJ4yi9TTu7X9hYRN2tNodU8bKT_F0jaWcFQB6uuKhEr31KLAZYEW4c-EKz2SmmVXYSgh2_loN5FfGfQ',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4
+[chat-simple] Chunk was enriched:   <p>Stay overnight in <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667"   ->    <p>Stay overnight in <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-n
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 257
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Almind
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Almindingen, Denmark" title="📍 Almindingen">Almindingen
+[EnrichmentPipeline] Extracted place name: Almindingen, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.6667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Almindingen, Denmark
+[Geocoding] geocodeLocation called with: Almindingen, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Almindingen, Denmark
+[Geocoding] Using proximity bias: 55.1167, 14.6667
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Almindingen, Bornholm, Denmark',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Almindingen, Denmark -> 55.089907399999994, 15.0243437, photo: places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2eAmvFJehZjF-WN5ZwXLNeaV3JaM7P5KnqpC55Pd_4x9pnFDcZo6amJdj7N4oG_AyqQ-KsnZOML-UHDwuVUe6UAY_Ny46GhAj7W8D2Sxp5WePIhMXm9h4qzKxGJxGNjSBZ6LdAuSTOheRbvXtcoMB1nHUvMmPH0g0GCMkuO5dzWdG7owY4De964I4jhVfPRc6jvRiLGH97_yIdt5coAk8dNCh4EtUDd5Ey9PxZ76r7vahjKkHmMMGeoN-sOUk7l95Wt8eDUK4Z_jhkwkQDux1mIOieE1OSXdllVgbhVlhtCNhODqvI3ByxHwCvzjHC1domlvCw5vOV2v67OuOTAyt-n75Eei1lsH5XAwPqSun3mR2ddPPP7ezwCkmTG5jxfR7WKgV5A2SYQySAFf-QD3K1jHI2tHCDOQh8L17jq_vQ, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.089907399999994,
+  lng: 15.0243437,
+  photoName: 'places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2eAmvFJehZjF-WN5ZwXLNeaV3JaM7P5KnqpC55Pd_4x9pnFDcZo6amJdj7N4oG_AyqQ-KsnZOML-UHDwuVUe6UAY_Ny46GhAj7W8D2Sxp5WePIhMXm9h4qzKxGJxGNjSBZ6LdAuSTOheRbvXtcoMB1nHUvMmPH0g0GCMkuO5dzWdG7owY4De964I4jhVfPRc6jvRiLGH97_yIdt5coAk8dNCh4EtUDd5Ey9PxZ76r7vahjKkHmMMGeoN-sOUk7l95Wt8eDUK4Z_jhkwkQDux1mIOieE1OSXdllVgbhVlhtCNhODqvI3ByxHwCvzjHC1domlvCw5vOV2v67OuOTAyt-n75Eei1lsH5XAwPqSun3mR2ddPPP7ezwCkmTG5jxfR7WKgV5A2SYQySAFf-QD3K1jHI2tHCDOQh8L17jq_vQ',
+  description: 'Hiking & biking paths crisscross this vast forest with castle remains & a herd of European bison.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2eAmvFJehZjF-WN5ZwXLNeaV3JaM7P5KnqpC55Pd_4x9pnFDcZo6amJdj7N4oG_AyqQ-Ks
+[chat-simple] Chunk was enriched:   <p>Spend the morning exploring <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng=  ->    <p>Spend the morning exploring <span class="geo-mark" data-geo="true" data-coord-source="google" d
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 181
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svanek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svaneke, Denmark" title="📍 Svaneke">Svaneke</span>
+[EnrichmentPipeline] Extracted place name: Svaneke, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.6667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Denmark
+[Geocoding] geocodeLocation called with: Svaneke, Denmark API key: present
+[Geocoding] Cache hit for: Svaneke, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4IB-Ce52TGC5pIScTcnGErU_JqK_AQc99ni809atC4W2ui6xc-Fyn9ijuO_akeZ6oercfcvrAFRWMRnapUff4Yr9ewoqUzrf4rWHdZXMaXmG7VoW2bHOdZot-2Pts99kf8NhGxfm2T2Qv5BlyqaCYx7ZFPTtRgbTFikVgDOUhMUImbNVVKdRSARr5df-xT5a9QBY7dDNwkAeegPOs_rNVEqoQVMmQwuEmbsOgu6yYX-H2C0hgXDa7SETf3JPJLfhzZw5GkG9FzhDoRh8vj-yv3w1mJ4yi9TTu7X9hYRN2tNodU8bKT_F0jaWcFQB6uuKhEr31KLAZYEW4c-EKz2SmmVXYSgh2_loN5FfGfQ',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4
+[chat-simple] Chunk was enriched:   <p>Return to <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-pla  ->    <p>Return to <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 189
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-place-name="Nexø, 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-place-name="Nexø, Denmark" title="📍 Nexø">Nexø</span>
+[EnrichmentPipeline] Extracted place name: Nexø, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0667, lng: 14.8333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Denmark
+[Geocoding] geocodeLocation called with: Nexø, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Nexø, Denmark
+[Geocoding] Using proximity bias: 55.0667, 14.8333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Nexø, Denmark -> 55.062793299999996, 15.132580599999999, photo: places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2e88Qm85MZKWbieOhAJ-gv3asYJx--EL_Q1uJsY8C-AH9V1_JZ6J2-SpOWv63uUKANuIEnIXjs-HhLTm0qvjDI55qmIl1FlLWeK7BSgXo35KNppto37Qolm4bCTnZFjlQW2vMfJ3GJT6vYgSEPGIrOTkTYfNWj4BJHLJTOVUgdwzqGsuG6vwwJaOj90GTm_019uKqj37OOJilVBWpC7pZjtMpD7y2eBhcoW5Wyxf3S5vPtpxI0DnMpjtkU_ArEGgRuEmfpRAYDVRxUXYE2dTK5kI2XQo60OBfeIiOCostnUru1SSFIVQmhrDEBYNJNMsxsL2CcSGFdxjGzSOOzJvq776TCH9NKZnSuWDRavSHgomYGhRyX411ooykJnxWMftsX_eSNXZrAZLmc_tBuzcNs6aM_9ck_H1e4z2oFj6M2Xxw, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2e88Qm85MZKWbieOhAJ-gv3asYJx--EL_Q1uJsY8C-AH9V1_JZ6J2-SpOWv63uUKANuIEnIXjs-HhLTm0qvjDI55qmIl1FlLWeK7BSgXo35KNppto37Qolm4bCTnZFjlQW2vMfJ3GJT6vYgSEPGIrOTkTYfNWj4BJHLJTOVUgdwzqGsuG6vwwJaOj90GTm_019uKqj37OOJilVBWpC7pZjtMpD7y2eBhcoW5Wyxf3S5vPtpxI0DnMpjtkU_ArEGgRuEmfpRAYDVRxUXYE2dTK5kI2XQo60OBfeIiOCostnUru1SSFIVQmhrDEBYNJNMsxsL2CcSGFdxjGzSOOzJvq776TCH9NKZnSuWDRavSHgomYGhRyX411ooykJnxWMftsX_eSNXZrAZLmc_tBuzcNs6aM_9ck_H1e4z2oFj6M2Xxw',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2e88Qm85MZKWbieOhAJ-gv3asYJx--EL_Q1uJsY8C-AH9V1_JZ6J2-SpOWv63uUKANuIEn
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-plac  ->    <p>Drive to <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 251
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodd
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodde, Denmark" title="📍 Dueodde">Dueodde</span>
+[EnrichmentPipeline] Extracted place name: Dueodde, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0333, lng: 14.8333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde, Denmark
+[Geocoding] geocodeLocation called with: Dueodde, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Dueodde, Denmark
+[Geocoding] Using proximity bias: 55.0333, 14.8333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Dueodde, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Dueodde, Denmark -> 54.9952841, 15.087516199999998, photo: places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2cozZ5mxMQ7Ukhk0yo5fWLT8lIvuRVgXpOqQg0_av9MF_5TK0ntG9TbaY2jmluPKWUP2DHHSZX6GIPjAVQXrkm-9HG9wxgUy1l4ZQ_NwzHXhtSeliRfQJf-msIeXF9i1q_O3x5D_JMpRcpmuXT3-3lu5l96lkd4ry8x1U_aaXmuhDy6wtSAuEuA7WP4QRfVvVNi8P_7nhyJO9o7eJXj2iToL7ihUShGmSD0v2GyEmZ83IMU4MuaGhyK_gluu7Pat5udQvD9SK4a05jS8n5KnWzOpP1N1MGlhL2zf6Qudt_2OZ8cvZlz0B1xyM9t29idlK91OQ_wEZl4LynqZGgEzwXQD73GCP0OnC5mZ8byv1goTwfskkA7kwm4SQV62OlNPSlEcEPBEqdtigO-VUQnMlBZkNYlfHinJLRadyFdqgKPug, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 54.9952841,
+  lng: 15.087516199999998,
+  photoName: 'places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2cozZ5mxMQ7Ukhk0yo5fWLT8lIvuRVgXpOqQg0_av9MF_5TK0ntG9TbaY2jmluPKWUP2DHHSZX6GIPjAVQXrkm-9HG9wxgUy1l4ZQ_NwzHXhtSeliRfQJf-msIeXF9i1q_O3x5D_JMpRcpmuXT3-3lu5l96lkd4ry8x1U_aaXmuhDy6wtSAuEuA7WP4QRfVvVNi8P_7nhyJO9o7eJXj2iToL7ihUShGmSD0v2GyEmZ83IMU4MuaGhyK_gluu7Pat5udQvD9SK4a05jS8n5KnWzOpP1N1MGlhL2zf6Qudt_2OZ8cvZlz0B1xyM9t29idlK91OQ_wEZl4LynqZGgEzwXQD73GCP0OnC5mZ8byv1goTwfskkA7kwm4SQV62OlNPSlEcEPBEqdtigO-VUQnMlBZkNYlfHinJLRadyFdqgKPug',
+  description: 'Known for its ultra-fine sand, this beach with a lighthouse on its southern tip stretches for miles.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2cozZ5mxMQ7Ukhk0yo5fWLT8lIvuRVgXpOqQg0_av9MF_5TK0ntG9TbaY2jmluPKWUP2DH
+[chat-simple] Chunk was enriched:   <p>Visit <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-n  ->    <p>Visit <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 177
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodd
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodde, Denmark" title="📍 Dueodde">Dueodde</span>
+[EnrichmentPipeline] Extracted place name: Dueodde, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0333, lng: 14.8333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde, Denmark
+[Geocoding] geocodeLocation called with: Dueodde, Denmark API key: present
+[Geocoding] Cache hit for: Dueodde, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 54.9952841,
+  lng: 15.087516199999998,
+  photoName: 'places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2cozZ5mxMQ7Ukhk0yo5fWLT8lIvuRVgXpOqQg0_av9MF_5TK0ntG9TbaY2jmluPKWUP2DHHSZX6GIPjAVQXrkm-9HG9wxgUy1l4ZQ_NwzHXhtSeliRfQJf-msIeXF9i1q_O3x5D_JMpRcpmuXT3-3lu5l96lkd4ry8x1U_aaXmuhDy6wtSAuEuA7WP4QRfVvVNi8P_7nhyJO9o7eJXj2iToL7ihUShGmSD0v2GyEmZ83IMU4MuaGhyK_gluu7Pat5udQvD9SK4a05jS8n5KnWzOpP1N1MGlhL2zf6Qudt_2OZ8cvZlz0B1xyM9t29idlK91OQ_wEZl4LynqZGgEzwXQD73GCP0OnC5mZ8byv1goTwfskkA7kwm4SQV62OlNPSlEcEPBEqdtigO-VUQnMlBZkNYlfHinJLRadyFdqgKPug',
+  description: 'Known for its ultra-fine sand, this beach with a lighthouse on its southern tip stretches for miles.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2cozZ5mxMQ7Ukhk0yo5fWLT8lIvuRVgXpOqQg0_av9MF_5TK0ntG9TbaY2jmluPKWUP2DHH
+[chat-simple] Chunk was enriched:   <p>Stay overnight near <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333  ->    <p>Stay overnight near <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 203
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0167" data-lng="14.45" data-place-name="Hasle, D
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0167" data-lng="14.45" data-place-name="Hasle, Denmark" title="📍 Hasle">Hasle</span>
+[EnrichmentPipeline] Extracted place name: Hasle, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0167, lng: 14.45 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hasle, Denmark
+[Geocoding] geocodeLocation called with: Hasle, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Hasle, Denmark
+[Geocoding] Using proximity bias: 55.0167, 14.45
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Hasle, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Hasle, Denmark -> 55.1819347, 14.708554200000002, photo: places/ChIJT2wCrl8EVUYRkAtSHcyvAAo/photos/AciIO2fkzzMx6hezYWtW6MNjO6ChxWCn8MvQy9Bvg3gnlwOZumh4KfipdTC-0fjnbCNL6h7qmGNpQy0UJi6opW84x76gFfSq2aDkh-KS8Ys6U2XwwG7MnylLbJbQ6XpNLUAyRyZbvteJ768AG_SgFM-H98i1cbBlyjMR4hGArdc5WsU0DEZ7b39fqfYvrHfQ5tzyC-mz1lOq8jLuGarbpE9lNR62x8Zd-daiLQKQ05N0ux4DtPRMHeOpXciS8ViSxDFXipSheYH6HEb6pbkM19lNBh3TYf_wWgAd7mK6PmZCQw97VBfE6LYXBlKLT_VJwYmzG0TQoCXXi94ietEJqHayE5fdwKbdH9C9DlO6dvty0yYFWhGydzph3Cy2IBw5kRSDDkgvmDCHymvFpC4OKQDJBGgRNQe7fwMzaQnA50ykY4JZq0Ak, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1819347,
+  lng: 14.708554200000002,
+  photoName: 'places/ChIJT2wCrl8EVUYRkAtSHcyvAAo/photos/AciIO2fkzzMx6hezYWtW6MNjO6ChxWCn8MvQy9Bvg3gnlwOZumh4KfipdTC-0fjnbCNL6h7qmGNpQy0UJi6opW84x76gFfSq2aDkh-KS8Ys6U2XwwG7MnylLbJbQ6XpNLUAyRyZbvteJ768AG_SgFM-H98i1cbBlyjMR4hGArdc5WsU0DEZ7b39fqfYvrHfQ5tzyC-mz1lOq8jLuGarbpE9lNR62x8Zd-daiLQKQ05N0ux4DtPRMHeOpXciS8ViSxDFXipSheYH6HEb6pbkM19lNBh3TYf_wWgAd7mK6PmZCQw97VBfE6LYXBlKLT_VJwYmzG0TQoCXXi94ietEJqHayE5fdwKbdH9C9DlO6dvty0yYFWhGydzph3Cy2IBw5kRSDDkgvmDCHymvFpC4OKQDJBGgRNQe7fwMzaQnA50ykY4JZq0Ak',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJT2wCrl8EVUYRkAtSHcyvAAo/photos/AciIO2fkzzMx6hezYWtW6MNjO6ChxWCn8MvQy9Bvg3gnlwOZumh4KfipdTC-0fjnbCNL6h7qmGN
+[chat-simple] Chunk was enriched:   <p>Visit <span class="geo-mark" data-geo="true" data-lat="55.0167" data-lng="14.45" data-place-nam  ->    <p>Visit <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 172
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-place-name="Nexø, 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-place-name="Nexø, Denmark" title="📍 Nexø">Nexø</span>
+[EnrichmentPipeline] Extracted place name: Nexø, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0667, lng: 14.8333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Denmark
+[Geocoding] geocodeLocation called with: Nexø, Denmark API key: present
+[Geocoding] Cache hit for: Nexø, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2e88Qm85MZKWbieOhAJ-gv3asYJx--EL_Q1uJsY8C-AH9V1_JZ6J2-SpOWv63uUKANuIEnIXjs-HhLTm0qvjDI55qmIl1FlLWeK7BSgXo35KNppto37Qolm4bCTnZFjlQW2vMfJ3GJT6vYgSEPGIrOTkTYfNWj4BJHLJTOVUgdwzqGsuG6vwwJaOj90GTm_019uKqj37OOJilVBWpC7pZjtMpD7y2eBhcoW5Wyxf3S5vPtpxI0DnMpjtkU_ArEGgRuEmfpRAYDVRxUXYE2dTK5kI2XQo60OBfeIiOCostnUru1SSFIVQmhrDEBYNJNMsxsL2CcSGFdxjGzSOOzJvq776TCH9NKZnSuWDRavSHgomYGhRyX411ooykJnxWMftsX_eSNXZrAZLmc_tBuzcNs6aM_9ck_H1e4z2oFj6M2Xxw',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2e88Qm85MZKWbieOhAJ-gv3asYJx--EL_Q1uJsY8C-AH9V1_JZ6J2-SpOWv63uUKANuIEnI
+[chat-simple] Chunk was enriched:   <p>Return to <span class="geo-mark" data-geo="true" data-lat="55.0667" data-lng="14.8333" data-pla  ->    <p>Return to <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="pla
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 209
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne, Denmark" title="📍 Rønne">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Denmark
+[Geocoding] geocodeLocation called with: Rønne, Denmark API key: present
+[Geocoding] Cache hit for: Rønne, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xu
+[chat-simple] Chunk was enriched:   <p>Drive back to <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data  ->    <p>Drive back to <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name=
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 206
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne, Denmark" title="📍 Rønne">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Denmark
+[Geocoding] geocodeLocation called with: Rønne, Denmark API key: present
+[Geocoding] Cache hit for: Rønne, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xu
+[chat-simple] Chunk was enriched:   <p>Enjoy a farewell dinner in <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="  ->    <p>Enjoy a farewell dinner in <span class="geo-mark" data-geo="true" data-coord-source="cache" dat
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 210
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="DCU-Ca
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="DCU-Camping Rønne Strand, Denmark" title="📍 DCU-Camping
+[EnrichmentPipeline] Extracted place name: DCU-Camping Rønne Strand, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: DCU-Camping Rønne Strand, Denmark
+[Geocoding] geocodeLocation called with: DCU-Camping Rønne Strand, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: DCU-Camping Rønne Strand, Denmark
+[Geocoding] Using proximity bias: 55.0833, 14.7667
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Strandvejen 4, 3700 Rønne, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: DCU-Camping Rønne Strand, Denmark -> 55.089107, 14.705090999999998, photo: places/ChIJmwnk61caVUYR2BZnacvZtFI/photos/AciIO2dVQ7SqQVmOE67WUJDMOY8hpMtAcbaVso6teY6ALnuI402rwHyUfKJj3YvBRBPCuTZd0Fp8GigEhc6duwvm3gKCyp_iHaezFSHOiolXn1A8tDu1f8gVj_G-kxFNhmO39Yxd76RMIbICdGj3SD1uI4So_6K5gK9EFZPuKWWywFPIZ2BK2iKAI_eGFMNp-KpptsuhoPIQp7afAs_OJkYE4pMquUWwqcwKj1b7nZ7aCrVMNkn4kr42tjxSLnXhin7G_rvvcmt2p-dKfRDsDHibzTeakHTCbV56bChAQbOu-KZvfg, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.089107,
+  lng: 14.705090999999998,
+  photoName: 'places/ChIJmwnk61caVUYR2BZnacvZtFI/photos/AciIO2dVQ7SqQVmOE67WUJDMOY8hpMtAcbaVso6teY6ALnuI402rwHyUfKJj3YvBRBPCuTZd0Fp8GigEhc6duwvm3gKCyp_iHaezFSHOiolXn1A8tDu1f8gVj_G-kxFNhmO39Yxd76RMIbICdGj3SD1uI4So_6K5gK9EFZPuKWWywFPIZ2BK2iKAI_eGFMNp-KpptsuhoPIQp7afAs_OJkYE4pMquUWwqcwKj1b7nZ7aCrVMNkn4kr42tjxSLnXhin7G_rvvcmt2p-dKfRDsDHibzTeakHTCbV56bChAQbOu-KZvfg',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJmwnk61caVUYR2BZnacvZtFI/photos/AciIO2dVQ7SqQVmOE67WUJDMOY8hpMtAcbaVso6teY6ALnuI402rwHyUfKJj3YvBRBPCuTZd0Fp
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name  ->      <li><span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/Ch
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 189
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Hulleh
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name="Hullehavn Camping, Denmark" title="📍 Hullehavn Camping"
+[EnrichmentPipeline] Extracted place name: Hullehavn Camping, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.2333, lng: 14.6333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hullehavn Camping, Denmark
+[Geocoding] geocodeLocation called with: Hullehavn Camping, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Hullehavn Camping, Denmark
+[Geocoding] Using proximity bias: 55.2333, 14.6333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Sydskovvej 9, 3740 Svaneke, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Hullehavn Camping, Denmark -> 55.130796999999994, 15.150707200000001, photo: places/ChIJlbY1lv4aVUYRAPr1y2Ix50M/photos/AciIO2dryjepZaREeUtMo8r56-Zc0l90Tqa_PlP8_VDY6zKnH_snEnxX-iKbWCLPJFbrr9hnMA_gC-pdXORUTfD3G4lraHWIrDyxgv4SNUIFe2bhAVsQic_NefIKHavlX0VS0_YLAC5VrRCcLpd-RjHDqPA4wzVAKOIRPTpn_1Bd1gqgYBqBjDSoLiVWorR6nLwo4FzIIjfvyoZB-0Kfub3zire28wO959_xTeRevMJQvKpnPUM2PmPOCZEXFcBJIldoTz7-unpUUeuAlXSTbW6YkK2_dZgtlv84SMMoSvZV2XMijQ, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.130796999999994,
+  lng: 15.150707200000001,
+  photoName: 'places/ChIJlbY1lv4aVUYRAPr1y2Ix50M/photos/AciIO2dryjepZaREeUtMo8r56-Zc0l90Tqa_PlP8_VDY6zKnH_snEnxX-iKbWCLPJFbrr9hnMA_gC-pdXORUTfD3G4lraHWIrDyxgv4SNUIFe2bhAVsQic_NefIKHavlX0VS0_YLAC5VrRCcLpd-RjHDqPA4wzVAKOIRPTpn_1Bd1gqgYBqBjDSoLiVWorR6nLwo4FzIIjfvyoZB-0Kfub3zire28wO959_xTeRevMJQvKpnPUM2PmPOCZEXFcBJIldoTz7-unpUUeuAlXSTbW6YkK2_dZgtlv84SMMoSvZV2XMijQ',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJlbY1lv4aVUYRAPr1y2Ix50M/photos/AciIO2dryjepZaREeUtMo8r56-Zc0l90Tqa_PlP8_VDY6zKnH_snEnxX-iKbWCLPJFbrr9hnMA_
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo="true" data-lat="55.2333" data-lng="14.6333" data-place-name  ->      <li><span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/Ch
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 204
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodd
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name="Dueodde Family Camping, Denmark" title="📍 Dueodde Famil
+[EnrichmentPipeline] Extracted place name: Dueodde Family Camping, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0333, lng: 14.8333 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde Family Camping, Denmark
+[Geocoding] geocodeLocation called with: Dueodde Family Camping, Denmark API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Dueodde Family Camping, Denmark
+[Geocoding] Using proximity bias: 55.0333, 14.8333
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Krogegårdsvejen 8, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Skrokkegårdsvejen 17, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Duegårdsvej 2, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Krogegårdsvejen 2, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Skrokkegårdsvejen 17, 3730 Nexø, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Dueodde Family Camping, Denmark -> 55.0035515, 15.096841299999998, photo: places/ChIJnVXhsQ5sVUYRqxByJPqjM0s/photos/AciIO2ewl3gWqZ4Tf6W0jDJ3iiHBc6ZS69hFxzJ09hIBr35NY3rlSS6Oyxtd-eSN49CWFTJTasqVcrAHNYuKflSwqW1QRCX-nk_HrAxlV3MvleADXfVmN-cgHa6SdmvapHuO6uZVM0cGuZEL86osRl5y1JDrfS4HDRgyCztwd-9P3O_Bn7iR-e3mDgrFgu9g4taeSjHMO3gzM5Uw2_rNufBK5i-UVF1MUpeacjhjBbUD2Bi2i8BXYT21PefZciyiwODbgdwfb915EIHiNoc2DtusnEAvh5xFlObEiIrnzu7bQDWrxQ, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.0035515,
+  lng: 15.096841299999998,
+  photoName: 'places/ChIJnVXhsQ5sVUYRqxByJPqjM0s/photos/AciIO2ewl3gWqZ4Tf6W0jDJ3iiHBc6ZS69hFxzJ09hIBr35NY3rlSS6Oyxtd-eSN49CWFTJTasqVcrAHNYuKflSwqW1QRCX-nk_HrAxlV3MvleADXfVmN-cgHa6SdmvapHuO6uZVM0cGuZEL86osRl5y1JDrfS4HDRgyCztwd-9P3O_Bn7iR-e3mDgrFgu9g4taeSjHMO3gzM5Uw2_rNufBK5i-UVF1MUpeacjhjBbUD2Bi2i8BXYT21PefZciyiwODbgdwfb915EIHiNoc2DtusnEAvh5xFlObEiIrnzu7bQDWrxQ',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/ChIJnVXhsQ5sVUYRqxByJPqjM0s/photos/AciIO2ewl3gWqZ4Tf6W0jDJ3iiHBc6ZS69hFxzJ09hIBr35NY3rlSS6Oyxtd-eSN49CWFTJTasq
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo="true" data-lat="55.0333" data-lng="14.8333" data-place-name  ->      <li><span class="geo-mark" data-geo="true" data-coord-source="google" data-photo-name="places/Ch
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 391
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svanek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.1167" data-lng="14.6667" data-place-name="Svaneke, Denmark" title="📍 Svaneke">Svaneke</span>
+[EnrichmentPipeline] Extracted place name: Svaneke, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1167, lng: 14.6667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Denmark
+[Geocoding] geocodeLocation called with: Svaneke, Denmark API key: present
+[Geocoding] Cache hit for: Svaneke, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4IB-Ce52TGC5pIScTcnGErU_JqK_AQc99ni809atC4W2ui6xc-Fyn9ijuO_akeZ6oercfcvrAFRWMRnapUff4Yr9ewoqUzrf4rWHdZXMaXmG7VoW2bHOdZot-2Pts99kf8NhGxfm2T2Qv5BlyqaCYx7ZFPTtRgbTFikVgDOUhMUImbNVVKdRSARr5df-xT5a9QBY7dDNwkAeegPOs_rNVEqoQVMmQwuEmbsOgu6yYX-H2C0hgXDa7SETf3JPJLfhzZw5GkG9FzhDoRh8vj-yv3w1mJ4yi9TTu7X9hYRN2tNodU8bKT_F0jaWcFQB6uuKhEr31KLAZYEW4c-EKz2SmmVXYSgh2_loN5FfGfQ',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2fSZ1nxUVx5XTvAJFrd9UsWJ6CQEe4pvuWAljlmckDuD_P0D0fYTct_NBAj33j2FSquPHy4
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo="true" data-lat="55.0833" data-lng="14.7667" data-place-name="Rønne, Denmark" title="📍 Rønne">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Denmark
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.0833, lng: 14.7667 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Denmark
+[Geocoding] geocodeLocation called with: Rønne, Denmark API key: present
+[Geocoding] Cache hit for: Rønne, Denmark
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xulI1BKK4_UwnzM1LL8nNIrfSFYXwGz9xD-gKOeJ6JKzG_5fq2ZRh4bfn99G_Kse4LVDaAGz7a1ClM4toW9mp6v_We3Aee2DOmD8wabyXVgrMGAhN4lVw4xtwvO70P1GOIG76J2L-VXqfazF-yuaOEtqFYCX-W61s1TZr9UQ3tL-K_jXn8jYzfIpPbJrFcJP3vOyxMaNMTJ-zlXT03E-Va6J98_VSV0dXsR9mk7a40wgsAyT0sq_9bMuZMj_rw8pjCJe02j8O2lryEvf9bcHesPqcj6M8DhyQo8xvWQiOQFF0UlDcp1JbALx1DBSbwsgPmRtkAVhAe5LTD0eZBt-4mO5yas9_7zcT1U5FctU8',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-geo="true" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2fVR6qDdCBZZOXt9-DAY3of7XmUiOVRBXDgzna0avq9iLRAa-EOzuD0944HaISLdmCg52xu
+[chat-simple] Chunk was enriched:   <p>Don't forget to try local specialties like smoked herring, <span class="geo-mark" data-geo="tru  ->    <p>Don't forget to try local specialties like smoked herring, <span class="geo-mark" data-geo="tru
+Stream finished, messages count: 1
+ POST /api/chat-simple 200 in 31647ms

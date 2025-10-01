@@ -98,7 +98,7 @@ export default function LocationDetailScreen() {
                 <Ionicons
                   name={bookmarked ? 'bookmark' : 'bookmark-outline'}
                   size={24}
-                  color="#fff"}
+                  color="#fff"
                 />
               </TouchableOpacity>
               <TouchableOpacity
