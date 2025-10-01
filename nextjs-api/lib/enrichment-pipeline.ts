@@ -119,12 +119,19 @@ export class EnrichmentPipeline {
     enriched = enriched.replace(/data-lng="[^"]*"/, `data-lng="${coords.lng}"`);
 
     // Add a data attribute to indicate the source
+    let sourceAttrs = `data-coord-source="${coords.source}"`;
+
+    // Add photo name if available
+    if (coords.photoName) {
+      sourceAttrs += ` data-photo-name="${coords.photoName}"`;
+    }
+
     enriched = enriched.replace(
       'data-geo="true"',
-      `data-geo="true" data-coord-source="${coords.source}"`
+      `data-geo="true" ${sourceAttrs}`
     );
 
-    console.log('[EnrichmentPipeline] Enriched geo-mark:', enriched.substring(0, 150));
+    console.log('[EnrichmentPipeline] Enriched geo-mark:', enriched.substring(0, 200));
     return enriched;
   }
 

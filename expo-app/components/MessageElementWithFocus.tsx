@@ -21,6 +21,7 @@ export type FlatElement = {
     color?: string; // Assigned color when active
     lat?: string | null;
     lng?: string | null;
+    photoName?: string | null;
   }>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
@@ -35,6 +36,7 @@ export interface Location {
   colorIndex?: number;
   yPosition?: number;
   height?: number;
+  photoName?: string;
 }
 
 interface MessageElementWithFocusProps {
@@ -250,7 +252,7 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                     }}>● </Animated.Text>
                     <Animated.Text style={[
                       styles.locationText,
-                      { color: textColor, textDecorationLine: 'underline' }
+                      { color: textColor }
                     ]}>{item.text}</Animated.Text>
                     {idx < element.parsedContent!.length - 1 ? <Text> </Text> : null}
                   </TouchableOpacity>

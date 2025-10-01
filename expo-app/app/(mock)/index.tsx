@@ -45,8 +45,8 @@ function getColorIndex(color?: string): number {
 }
 
 // Helper to parse itinerary content with geo-marks
-const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
-  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
   let colorIndex = 0;
   const locationColors = new Map<string, string>();
 
@@ -66,7 +66,7 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
 
     // Combine all paragraphs in the group
     const combinedContent = currentParagraphGroup.join(' ');
-    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null}> = [];
+    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null}> = [];
 
     // Process the combined content for geo-marks
     const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
@@ -82,13 +82,23 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         }
       }
 
-      // Extract coordinates from the geo-mark
+      // Extract coordinates and photo from the geo-mark
       const fullMatch = match[0];
       const locationName = match[1];
       const latMatch = fullMatch.match(/data-lat="([^"]+)"/);
       const lngMatch = fullMatch.match(/data-lng="([^"]+)"/);
+      const photoNameMatch = fullMatch.match(/data-photo-name="([^"]+)"/);
       const lat = latMatch ? latMatch[1] : null;
       const lng = lngMatch ? lngMatch[1] : null;
+      const photoName = photoNameMatch ? photoNameMatch[1] : null;
+
+      console.log('[parseItineraryContent] Extracted geo-mark:', {
+        locationName,
+        lat,
+        lng,
+        photoName,
+        fullMatch: fullMatch.substring(0, 200) + '...'
+      });
 
       // Add the geo-mark with color
       if (!locationColors.has(locationName)) {
@@ -100,7 +110,8 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         text: locationName,
         color: locationColors.get(locationName),
         lat,
-        lng
+        lng,
+        photoName
       });
 
       lastIndex = geoMarkRegex.lastIndex;
@@ -208,12 +219,12 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
 
 // Extract all locations from elements for map with their assigned colors
 function extractAllLocations(elements: FlatElement[]) {
-  const locations: Array<{name: string, lat: number, lng: number, color?: string}> = [];
+  const locations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}> = [];
   const seen = new Set<string>();
 
   elements.forEach(element => {
     if (element.parsedContent) {
-      element.parsedContent.forEach(item => {
+      element.parsedContent.forEach((item: any) => {
         if (item.type === 'geo-mark' && item.lat && item.lng) {
           const key = `${item.text}-${item.lat}-${item.lng}`;
           if (!seen.has(key)) {
@@ -221,12 +232,15 @@ function extractAllLocations(elements: FlatElement[]) {
             const lat = parseFloat(item.lat);
             const lng = parseFloat(item.lng);
             if (!isNaN(lat) && !isNaN(lng) && item.lat !== 'PENDING' && item.lng !== 'PENDING') {
-              locations.push({
+              const location = {
                 name: item.text,
                 lat,
                 lng,
-                color: item.color // Preserve the color from parsedContent
-              });
+                color: item.color, // Preserve the color from parsedContent
+                photoName: item.photoName || undefined
+              };
+              console.log('[extractAllLocations] Adding location:', location);
+              locations.push(location);
             }
           }
         }
@@ -234,6 +248,7 @@ function extractAllLocations(elements: FlatElement[]) {
     }
   });
 
+  console.log('[extractAllLocations] Total locations extracted:', locations.length);
   return locations;
 }
 
@@ -387,11 +402,11 @@ export default function MockChatScreen() {
   const [elementPositions, setElementPositions] = useState<Map<string, {top: number, bottom: number}>>(new Map());
 
   // Track visible locations based on scroll
-  const [visibleLocations, setVisibleLocations] = useState<Array<{name: string, lat: number, lng: number, color?: string}>>([]);
+  const [visibleLocations, setVisibleLocations] = useState<Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}>>([]);
 
   // Update visible locations as a side effect of scroll
   useEffect(() => {
-    const newVisibleLocations: Array<{name: string, lat: number, lng: number, color?: string}> = [];
+    const newVisibleLocations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}> = [];
     const seenLocations = new Set<string>();
 
     flatElements.forEach(element => {
@@ -404,7 +419,7 @@ export default function MockChatScreen() {
         if (itemTop < containerHeight && itemBottom > 0) {
           if (element.type === 'content' && element.parsedContent) {
             // Extract geo-marks from visible elements
-            element.parsedContent.forEach(item => {
+            element.parsedContent.forEach((item: any) => {
               if (item.type === 'geo-mark' && item.lat && item.lng) {
                 const lat = parseFloat(item.lat);
                 const lng = parseFloat(item.lng);
@@ -412,12 +427,15 @@ export default function MockChatScreen() {
                   const locationKey = `${item.text}-${lat}-${lng}`;
                   if (!seenLocations.has(locationKey)) {
                     seenLocations.add(locationKey);
-                    newVisibleLocations.push({
+                    const location = {
                       name: item.text,
                       lat,
                       lng,
-                      color: item.color
-                    });
+                      color: item.color,
+                      photoName: item.photoName || undefined
+                    };
+                    console.log('[visibleLocations] Adding visible location:', location);
+                    newVisibleLocations.push(location);
                   }
                 }
               }
@@ -427,17 +445,21 @@ export default function MockChatScreen() {
       }
     });
 
+    console.log('[visibleLocations] Total visible locations:', newVisibleLocations.length);
     setVisibleLocations(newVisibleLocations);
     // Only update context if we have locations to show
     if (newVisibleLocations.length > 0) {
-      updateVisibleLocations(newVisibleLocations.map((loc, idx) => ({
+      const mappedLocations = newVisibleLocations.map((loc, idx) => ({
         id: `loc-${idx}`,
         name: loc.name,
         lat: loc.lat,
         lng: loc.lng,
         color: loc.color,
-        colorIndex: getColorIndex(loc.color)
-      })));
+        colorIndex: getColorIndex(loc.color),
+        photoName: loc.photoName
+      }));
+      console.log('[updateVisibleLocations] Passing to context:', mappedLocations);
+      updateVisibleLocations(mappedLocations);
     }
   }, [scrollOffset, elementPositions, flatElements, containerHeight, updateVisibleLocations]);
 

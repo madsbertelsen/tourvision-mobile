@@ -4,6 +4,7 @@ export interface Location {
   lat: number;
   lng: number;
   colorIndex?: number;
+  photoName?: string;
 }
 
 export interface Hexagon {
@@ -25,6 +26,7 @@ export interface HexLabel {
   color: string;
   connectionPointX: number;
   connectionPointY: number;
+  photoName?: string;
 }
 
 const LABEL_WIDTH = 120;
@@ -338,6 +340,7 @@ export function calculateHexagonalLabels(
         color,
         connectionPointX: connectionPoint.x,
         connectionPointY: connectionPoint.y,
+        photoName: location.photoName,
       });
       usedHexagonIds.add(nearestHex.id);
     }

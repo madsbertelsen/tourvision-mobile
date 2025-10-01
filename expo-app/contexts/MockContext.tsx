@@ -8,6 +8,7 @@ interface Location {
   description?: string;
   colorIndex?: number;
   color?: string;
+  photoName?: string;
 }
 
 interface MockContextType {

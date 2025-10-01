@@ -59,6 +59,7 @@ function MockLayoutContent() {
               lat: loc.lat,
               lng: loc.lng,
               colorIndex: loc.colorIndex || getColorIndex(loc.color),
+              photoName: loc.photoName,
             }))}
             height={mapHeight}
             center={{ lat: 0, lng: 0 }}

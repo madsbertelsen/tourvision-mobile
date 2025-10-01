@@ -7,6 +7,7 @@ export interface ParsedElement {
     dataLat?: string;
     dataLng?: string;
     dataPlaceName?: string;
+    dataPhotoName?: string;
     title?: string;
   };
 }
@@ -137,12 +138,14 @@ function parseHTMLContent(html: string): ParsedElement[] {
           const dataLatMatch = attributes.match(/data-lat="([^"]*)"/);
           const dataLngMatch = attributes.match(/data-lng="([^"]*)"/);
           const dataPlaceNameMatch = attributes.match(/data-place-name="([^"]*)"/);
+          const dataPhotoNameMatch = attributes.match(/data-photo-name="([^"]*)"/);
           const titleMatch = attributes.match(/title="([^"]*)"/);
 
           if (dataGeoMatch) geoMark.attributes!.dataGeo = dataGeoMatch[1];
           if (dataLatMatch) geoMark.attributes!.dataLat = dataLatMatch[1];
           if (dataLngMatch) geoMark.attributes!.dataLng = dataLngMatch[1];
           if (dataPlaceNameMatch) geoMark.attributes!.dataPlaceName = dataPlaceNameMatch[1];
+          if (dataPhotoNameMatch) geoMark.attributes!.dataPhotoName = dataPhotoNameMatch[1];
           if (titleMatch) geoMark.attributes!.title = titleMatch[1];
 
           result.push(geoMark);

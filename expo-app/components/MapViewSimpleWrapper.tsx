@@ -19,6 +19,7 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+  photoName?: string;
 }
 
 export function MapViewSimpleWrapper({
@@ -27,6 +28,8 @@ export function MapViewSimpleWrapper({
   center = { lat: 0, lng: 0 },
   zoom = 2,
 }: MapViewSimpleWrapperProps) {
+  console.log('[MapViewSimpleWrapper] Received locations:', locations);
+
   // Get focusedLocation and followMode from context
   let focusedLocation = null;
   let followMode = false;

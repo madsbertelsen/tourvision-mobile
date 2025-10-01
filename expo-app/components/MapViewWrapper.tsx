@@ -19,6 +19,7 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+  photoName?: string;
 }
 
 // Extract all geo-marks from parsed elements
@@ -29,7 +30,7 @@ function extractLocations(elements: ParsedElement[]): Location[] {
 
   const traverse = (element: ParsedElement) => {
     if (element.type === 'geo-mark' && element.attributes) {
-      const { dataLat, dataLng, dataPlaceName } = element.attributes;
+      const { dataLat, dataLng, dataPlaceName, dataPhotoName } = element.attributes;
       const name = element.content || dataPlaceName || 'Unknown';
 
       // Skip if coordinates are pending or invalid
@@ -54,6 +55,7 @@ function extractLocations(elements: ParsedElement[]): Location[] {
           lat,
           lng,
           colorIndex: colorIndex % 10, // Cycle through 10 colors
+          photoName: dataPhotoName
         });
         colorIndex++;
       }

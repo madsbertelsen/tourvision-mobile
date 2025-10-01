@@ -12,6 +12,7 @@ interface Location {
   lng: number;
   description?: string;
   colorIndex?: number;
+  photoName?: string;
 }
 
 interface FocusedLocation {
@@ -105,31 +106,24 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
 
   return (
     <>
-      {/* Small dots at actual locations */}
-      {locations.map((location, index) => {
-        const colorIndex = location.colorIndex ?? index;
-        const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-
-        return (
-          <Marker
-            key={location.id}
-            longitude={location.lng}
-            latitude={location.lat}
-            anchor="center"
-          >
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: markerColor,
-                border: '2px solid white',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              }}
-            />
-          </Marker>
-        );
-      })}
+      {/* Location markers - small black dots */}
+      {locations.map((location) => (
+        <Marker
+          key={location.id}
+          longitude={location.lng}
+          latitude={location.lat}
+          anchor="center"
+        >
+          <div
+            style={{
+              width: '4px',
+              height: '4px',
+              borderRadius: '50%',
+              backgroundColor: 'black',
+            }}
+          />
+        </Marker>
+      ))}
 
       {/* Hexagonal grid, labels and connection lines - only show when not animating */}
       {!isAnimating && (
@@ -157,44 +151,104 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
             })}
 
             {/* Connection lines from labels to locations */}
-            {hexGridData.labels.map(label => (
-              <line
-                key={`line-${label.id}`}
-                x1={label.locationX}
-                y1={label.locationY}
-                x2={label.connectionPointX}
-                y2={label.connectionPointY}
-                stroke={label.color}
-                strokeWidth="2"
-                strokeOpacity="0.8"
-              />
-            ))}
+            {hexGridData.labels.map(label => {
+              // Calculate perpendicular offsets for tapering
+              const dx = label.connectionPointX - label.locationX;
+              const dy = label.connectionPointY - label.locationY;
+              const length = Math.sqrt(dx * dx + dy * dy);
+
+              // Normalize direction
+              const nx = dx / length;
+              const ny = dy / length;
+
+              // Perpendicular direction (rotate 90 degrees)
+              const px = -ny;
+              const py = nx;
+
+              // Width at each end
+              const thinWidth = 0.5; // Thin end at location (1px total width)
+              const thickWidth = 1.5; // Thick end at hexagon (3px total width)
+
+              // Calculate polygon points for tapered line
+              const x1 = label.locationX + px * thinWidth;
+              const y1 = label.locationY + py * thinWidth;
+              const x2 = label.locationX - px * thinWidth;
+              const y2 = label.locationY - py * thinWidth;
+              const x3 = label.connectionPointX - px * thickWidth;
+              const y3 = label.connectionPointY - py * thickWidth;
+              const x4 = label.connectionPointX + px * thickWidth;
+              const y4 = label.connectionPointY + py * thickWidth;
+
+              return (
+                <polygon
+                  key={`connection-${label.id}`}
+                  points={`${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`}
+                  fill={label.color}
+                  fillOpacity="0.8"
+                />
+              );
+            })}
           </svg>
 
-          {/* Text labels on hexagons */}
-          {hexGridData.labels.map(label => (
-          <div
-            key={`label-${label.id}`}
-            style={{
-              position: 'absolute',
-              left: `${label.x}px`,
-              top: `${label.y}px`,
-              transform: 'translate(-50%, -50%)',
-              fontSize: '11px',
-              fontWeight: '600',
-              color: '#1f2937',
-              textAlign: 'center',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              pointerEvents: 'auto',
-              cursor: 'pointer',
-              maxWidth: '100px',
-            }}
-          >
-            {label.name}
-          </div>
-        ))}
+          {/* Photos on hexagons */}
+          {hexGridData.labels.map(label => {
+            const photoUrl = label.photoName
+              ? `https://places.googleapis.com/v1/${label.photoName}/media?maxHeightPx=400&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
+              : null;
+
+            // Photo size - larger to fill more of the hexagon while keeping border visible
+            const photoSize = hexGridData.hexSize * 0.85;
+
+            return photoUrl ? (
+              <div
+                key={`label-${label.id}`}
+                style={{
+                  position: 'absolute',
+                  left: `${label.x}px`,
+                  top: `${label.y}px`,
+                  transform: 'translate(-50%, -50%)',
+                  width: `${photoSize * 2}px`,
+                  height: `${photoSize * 2}px`,
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                }}
+              >
+                {/* Photo hexagon */}
+                <img
+                  src={photoUrl}
+                  alt={label.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    clipPath: 'polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%)',
+                    display: 'block',
+                  }}
+                />
+                {/* Name label overlaid on bottom of photo */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '10%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  color: 'white',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  maxWidth: '90%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
+                }}>
+                  {label.name}
+                </div>
+              </div>
+            ) : null;
+          })}
         </div>
       )}
     </>

@@ -1,11 +1,12 @@
 // Cache for geocoding results
-const geocodeCache = new Map<string, { lat: number; lng: number; timestamp: number }>();
+const geocodeCache = new Map<string, { lat: number; lng: number; photoName?: string; timestamp: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface GeocodingResult {
   lat: number;
   lng: number;
   source: 'google' | 'cache' | 'llm-fallback';
+  photoName?: string;
 }
 
 export interface ProximityCoords {
@@ -37,7 +38,7 @@ export async function geocodeLocation(
   const cached = geocodeCache.get(normalizedName);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log(`[Geocoding] Cache hit for: ${placeName}`);
-    return { lat: cached.lat, lng: cached.lng, source: 'cache' };
+    return { lat: cached.lat, lng: cached.lng, photoName: cached.photoName, source: 'cache' };
   }
 
   // Try Google Places API
@@ -79,7 +80,7 @@ export async function geocodeLocation(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': googleApiKey,
-        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location',
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.photos',
       },
       body: JSON.stringify(requestBody),
     });
@@ -90,9 +91,11 @@ export async function geocodeLocation(
     if (data.places && data.places.length > 0) {
       const place = data.places[0];
       const location = place.location;
-      const result = { lat: location.latitude, lng: location.longitude };
+      const photoName = place.photos && place.photos.length > 0 ? place.photos[0].name : undefined;
 
-      console.log(`[Geocoding] Google API found: ${placeName} -> ${result.lat}, ${result.lng}`);
+      const result = { lat: location.latitude, lng: location.longitude, photoName };
+
+      console.log(`[Geocoding] Google API found: ${placeName} -> ${result.lat}, ${result.lng}, photo: ${photoName || 'none'}`);
 
       // Cache the result
       geocodeCache.set(normalizedName, { ...result, timestamp: Date.now() });
