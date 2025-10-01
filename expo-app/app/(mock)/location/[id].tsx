@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useBookmark } from '@/hooks/useBookmark';
 
 export default function LocationDetailScreen() {
   const router = useRouter();
@@ -24,7 +25,15 @@ export default function LocationDetailScreen() {
     photoName?: string;
   };
 
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  // Use bookmark hook
+  const { bookmarked, isToggling, toggle: handleToggleBookmark } = useBookmark({
+    id,
+    name,
+    lat,
+    lng,
+    description,
+    photoName,
+  });
 
   // Format coordinates for display
   const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
@@ -83,10 +92,11 @@ export default function LocationDetailScreen() {
             <View style={styles.photoActions}>
               <TouchableOpacity
                 style={styles.iconButton}
-                onPress={() => setIsBookmarked(!isBookmarked)}
+                onPress={handleToggleBookmark}
+                disabled={isToggling}
               >
                 <Ionicons
-                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                  name={bookmarked ? 'bookmark' : 'bookmark-outline'}
                   size={24}
                   color="#fff"}
                 />
@@ -113,12 +123,13 @@ export default function LocationDetailScreen() {
           {!photoUrl && (
             <TouchableOpacity
               style={styles.headerBookmark}
-              onPress={() => setIsBookmarked(!isBookmarked)}
+              onPress={handleToggleBookmark}
+              disabled={isToggling}
             >
               <Ionicons
-                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
                 size={24}
-                color={isBookmarked ? '#3B82F6' : '#6b7280'}
+                color={bookmarked ? '#3B82F6' : '#6b7280'}
               />
             </TouchableOpacity>
           )}
