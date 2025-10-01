@@ -6,7 +6,7 @@ import { useMockContext } from '@/contexts/MockContext';
 // Enhanced type definitions with focus support
 export type FlatElement = {
   id: string;
-  type: 'header' | 'content' | 'footer' | 'gap';
+  type: 'header' | 'content' | 'footer' | 'gap' | 'toggle';
   messageId: string;
   messageColor: string;
   text?: string;
@@ -48,6 +48,7 @@ interface MessageElementWithFocusProps {
   onLocationsUpdate?: (locations: Location[]) => void;
   onLocationClick?: (location: string, lat: string, lng: string) => void;
   onFocus?: (locations: Array<{name: string, lat: number, lng: number}>) => void;
+  onToggleCollapse?: (messageId: string) => void;
   scrollOffset?: number;
   containerHeight?: number;
   styles: any;
@@ -67,6 +68,7 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
   onLocationsUpdate,
   onLocationClick,
   onFocus,
+  onToggleCollapse,
   scrollOffset,
   containerHeight,
   styles,
@@ -134,6 +136,18 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
 
   if (element.type === 'gap') {
     return <View style={styles.gapBox} />;
+  }
+
+  // Handle toggle button
+  if (element.type === 'toggle') {
+    return (
+      <TouchableOpacity
+        onPress={() => onToggleCollapse?.(element.messageId)}
+        style={styles.toggleButton}
+      >
+        <Text style={styles.toggleText}>{element.text}</Text>
+      </TouchableOpacity>
+    );
   }
 
   // Determine message role for left border color
@@ -361,5 +375,17 @@ export const messageElementWithFocusStyles = StyleSheet.create({
     color: '#4B5563',
     marginBottom: 2,
     marginTop: 6,
+  },
+  toggleButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginVertical: 4,
+    alignSelf: 'flex-start',
+    marginLeft: 16,
+  },
+  toggleText: {
+    fontSize: 13,
+    color: '#3B82F6',
+    fontWeight: '600',
   },
 });
