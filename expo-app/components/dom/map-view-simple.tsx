@@ -3,7 +3,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Map, { Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
-import { calculateEdgeLabels, type EdgeLabel } from './edge-label-layout';
+import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
 
 interface Location {
   id: string;
@@ -73,9 +73,17 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
     };
   }, [map]);
 
-  // Calculate edge labels - recalculate when viewState changes
-  const edgeLabels = useMemo(() => {
-    if (!map || !locations.length || viewportSize.width === 0) return [];
+  // Calculate hexagonal grid and labels - recalculate when viewState changes
+  const hexGridData = useMemo(() => {
+    if (!map || !locations.length || viewportSize.width === 0) {
+      return {
+        labels: [],
+        hexagons: [],
+        hexSize: 0,
+        availableHexagons: [],
+        usedHexagonIds: new Set<string>(),
+      };
+    }
 
     const mapProjection = (lng: number, lat: number) => {
       try {
@@ -86,7 +94,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
       }
     };
 
-    return calculateEdgeLabels(
+    return calculateHexagonalLabels(
       locations,
       mapProjection,
       viewportSize.width,
@@ -123,28 +131,48 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
         );
       })}
 
-      {/* Edge labels and connection lines - only show when not animating */}
+      {/* Hexagonal grid, labels and connection lines - only show when not animating */}
       {!isAnimating && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          {/* SVG for connection lines */}
           <svg style={{ width: '100%', height: '100%', position: 'absolute' }}>
-            {edgeLabels.map(label => (
+            {/* Render hexagonal grid */}
+            {hexGridData.hexagons.map(hex => {
+              const isUsed = hexGridData.usedHexagonIds.has(hex.id);
+              const isAvailable = hexGridData.availableHexagons.some(h => h.id === hex.id);
+
+              // Find the label for this hexagon if it's used
+              const hexLabel = isUsed ? hexGridData.labels.find(l => l.hexagonId === hex.id) : null;
+
+              return (
+                <path
+                  key={hex.id}
+                  d={getHexagonPath(hex.x, hex.y, hexGridData.hexSize)}
+                  fill={hexLabel ? 'white' : 'none'}
+                  fillOpacity={hexLabel ? 0.9 : 0}
+                  stroke={hexLabel ? hexLabel.color : (isAvailable ? '#D1D5DB' : '#EF4444')}
+                  strokeWidth={hexLabel ? 2 : 1}
+                  strokeOpacity={hexLabel ? 0.8 : 0.2}
+                />
+              );
+            })}
+
+            {/* Connection lines from labels to locations */}
+            {hexGridData.labels.map(label => (
               <line
                 key={`line-${label.id}`}
                 x1={label.locationX}
                 y1={label.locationY}
-                x2={label.x}
-                y2={label.y}
+                x2={label.connectionPointX}
+                y2={label.connectionPointY}
                 stroke={label.color}
-                strokeWidth="1.5"
-                strokeOpacity="0.6"
-                strokeDasharray="3,3"
+                strokeWidth="2"
+                strokeOpacity="0.8"
               />
             ))}
           </svg>
 
-          {/* Edge labels */}
-          {edgeLabels.map(label => (
+          {/* Text labels on hexagons */}
+          {hexGridData.labels.map(label => (
           <div
             key={`label-${label.id}`}
             style={{
@@ -152,53 +180,19 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
               left: `${label.x}px`,
               top: `${label.y}px`,
               transform: 'translate(-50%, -50%)',
-              backgroundColor: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              border: `2px solid ${label.color}`,
-              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
               fontSize: '11px',
               fontWeight: '600',
-              color: '#333',
-              width: '120px',
+              color: '#1f2937',
               textAlign: 'center',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               pointerEvents: 'auto',
               cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.05)';
-              e.currentTarget.style.zIndex = '10';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translate(-50%, -50%)';
-              e.currentTarget.style.zIndex = '1';
+              maxWidth: '100px',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-              }}
-            >
-              <div
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: label.color,
-                  flexShrink: 0,
-                }}
-              />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {label.name}
-              </span>
-            </div>
+            {label.name}
           </div>
         ))}
         </div>
