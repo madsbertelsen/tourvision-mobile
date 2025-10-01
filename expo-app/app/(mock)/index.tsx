@@ -243,6 +243,7 @@ export default function MockChatScreen() {
   const [containerHeight, setContainerHeight] = useState(0);
   const messagesScrollRef = useRef<ScrollView>(null);
   const [focusedElementId, setFocusedElementId] = useState<string | null>(null);
+  const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set());
 
   // API URL for chat with Firecrawl tool support
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -267,12 +268,26 @@ export default function MockChatScreen() {
 
   const isLoading = status === ('in_progress' as any);
 
+  // Toggle collapse state for a message
+  const toggleMessageCollapse = useCallback((messageId: string) => {
+    setCollapsedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  }, []);
+
   // Convert messages to flat element structure
   const flatElements = useMemo(() => {
     const elements: FlatElement[] = [];
 
     messages.forEach((message, msgIndex) => {
       const messageColor = 'transparent';
+      const isCollapsed = collapsedMessages.has(message.id);
 
       // Check if message contains HTML content (itinerary)
       // Look for common HTML patterns that indicate itinerary content
@@ -301,37 +316,53 @@ export default function MockChatScreen() {
         });
       }
 
-      // Add content elements
-      if (hasHTMLContent) {
-        // Parse itinerary HTML into chunks
-        const chunks = parseItineraryContent(textContent);
-        console.log('Parsing HTML content, chunks:', chunks);
-        chunks.forEach((chunk, i) => {
+      // Add collapse toggle button for assistant messages
+      if (message.role === 'assistant' && textContent) {
+        elements.push({
+          id: `${message.id}-toggle`,
+          type: 'toggle',
+          messageId: message.id,
+          messageColor: messageColor,
+          text: isCollapsed ? 'Show response' : 'Hide response',
+          height: 32,
+          role: message.role as 'user' | 'assistant',
+        });
+      }
+
+      // Only show content if not collapsed
+      if (!isCollapsed) {
+        // Add content elements
+        if (hasHTMLContent) {
+          // Parse itinerary HTML into chunks
+          const chunks = parseItineraryContent(textContent);
+          console.log('Parsing HTML content, chunks:', chunks);
+          chunks.forEach((chunk, i) => {
+            elements.push({
+              id: `${message.id}-content-${i}`,
+              type: 'content',
+              messageId: message.id,
+              messageColor: messageColor,
+              text: chunk.text,
+              parsedContent: chunk.parsedContent,
+              height: 0, // Let content grow naturally
+              isItineraryContent: true,
+              isHeading: chunk.isHeading,
+              headingLevel: chunk.headingLevel,
+              role: message.role as 'user' | 'assistant',
+            });
+          });
+        } else if (textContent) {
+          // Regular text message
           elements.push({
-            id: `${message.id}-content-${i}`,
+            id: `${message.id}-content-0`,
             type: 'content',
             messageId: message.id,
             messageColor: messageColor,
-            text: chunk.text,
-            parsedContent: chunk.parsedContent,
-            height: 0, // Let content grow naturally
-            isItineraryContent: true,
-            isHeading: chunk.isHeading,
-            headingLevel: chunk.headingLevel,
+            text: textContent,
+            height: 0,
             role: message.role as 'user' | 'assistant',
           });
-        });
-      } else if (textContent) {
-        // Regular text message
-        elements.push({
-          id: `${message.id}-content-0`,
-          type: 'content',
-          messageId: message.id,
-          messageColor: messageColor,
-          text: textContent,
-          height: 0,
-          role: message.role as 'user' | 'assistant',
-        });
+        }
       }
 
       // Add gap between messages (except after last)
@@ -341,13 +372,13 @@ export default function MockChatScreen() {
           type: 'gap',
           messageId: '',
           messageColor: '',
-          height: 20,
+          height: 8,
         });
       }
     });
 
     return elements;
-  }, [messages]);
+  }, [messages, collapsedMessages]);
 
   // Get context for sharing locations with layout
   const { updateVisibleLocations } = useMockContext();
@@ -460,8 +491,8 @@ export default function MockChatScreen() {
     },
     messagesContent: {
       paddingHorizontal: 12,
-      paddingTop: 16,
-      paddingBottom: 20, // Reduced padding since we want content to go closer to input
+      paddingTop: 8,
+      paddingBottom: 8,
     },
     messagesContentEmpty: {
       flex: 1,
@@ -577,10 +608,7 @@ export default function MockChatScreen() {
                   </View>
                 )}
 
-                {flatElements.map((element, index) => {
-                  const isFirstElement = index === 0 || flatElements[index - 1]?.type === 'gap';
-                  const isLastElement = index === flatElements.length - 1 || flatElements[index + 1]?.type === 'gap';
-
+                {flatElements.map((element) => {
                   if (element.type === 'gap') {
                     return <View key={element.id} style={{ height: element.height }} />;
                   }
@@ -596,26 +624,6 @@ export default function MockChatScreen() {
                           return newMap;
                         });
                       }}
-                      style={[
-                        styles.messageWrapper,
-                        {
-                          backgroundColor: 'white',
-                          borderTopLeftRadius: isFirstElement ? 12 : 0,
-                          borderTopRightRadius: isFirstElement ? 12 : 0,
-                          borderBottomLeftRadius: isLastElement ? 12 : 0,
-                          borderBottomRightRadius: isLastElement ? 12 : 0,
-                          marginHorizontal: 8,
-                          // Add shadow to the white sheet
-                          shadowColor: '#000',
-                          shadowOffset: {
-                            width: 0,
-                            height: 4,
-                          },
-                          shadowOpacity: 0.15,
-                          shadowRadius: 12,
-                          elevation: 8,
-                        }
-                      ]}
                     >
                       <MessageElementWithFocus
                         element={element}
@@ -635,6 +643,7 @@ export default function MockChatScreen() {
                         backgroundColor="transparent"
                         styles={styles}
                         onFocus={handleLocationFocus}
+                        onToggleCollapse={toggleMessageCollapse}
                         transitionDuration={300}
                       />
                     </View>

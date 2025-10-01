@@ -27,13 +27,15 @@ export function MapViewSimpleWrapper({
   center = { lat: 0, lng: 0 },
   zoom = 2,
 }: MapViewSimpleWrapperProps) {
-  // Get focusedLocation from context
+  // Get focusedLocation and followMode from context
   let focusedLocation = null;
+  let followMode = false;
   try {
     const context = useMockContext();
     focusedLocation = context.focusedLocation;
+    followMode = context.followMode;
   } catch (error) {
-    // Context not available, focusedLocation stays null
+    // Context not available, defaults stay
   }
 
   // If height is a string percentage, use flex: 1 to fill parent
@@ -49,6 +51,7 @@ export function MapViewSimpleWrapper({
           center={center}
           zoom={zoom}
           focusedLocation={focusedLocation}
+          followMode={followMode}
           style={{ width: '100%', height: '100%' }}
         />
       </React.Suspense>

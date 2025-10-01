@@ -289,8 +289,8 @@ export const messageElementWithFocusStyles = StyleSheet.create({
   box: {
     marginBottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     // Remove shadows since we're in a unified sheet
   },
   gapBox: {
@@ -334,7 +334,7 @@ export const messageElementWithFocusStyles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
     lineHeight: 20,
-    paddingVertical: 8,
+    paddingVertical: 2,
   },
   locationText: {
     fontWeight: '700',
@@ -343,21 +343,21 @@ export const messageElementWithFocusStyles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 8,
-    marginTop: 4,
+    marginBottom: 4,
+    marginTop: 12,
   },
   heading2: {
     fontSize: 18,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 6,
-    marginTop: 4,
+    marginBottom: 4,
+    marginTop: 10,
   },
   heading3: {
     fontSize: 16,
     fontWeight: '600',
     color: '#4B5563',
-    marginBottom: 4,
-    marginTop: 2,
+    marginBottom: 2,
+    marginTop: 6,
   },
 });
