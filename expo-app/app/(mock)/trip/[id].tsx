@@ -312,12 +312,21 @@ export default function MockChatScreen() {
 
   const {
     messages = [],
+    setMessages,
     sendMessage,
     status = 'idle',
     error
   } = chatHelpers;
 
   const isLoading = status === ('in_progress' as any);
+
+  // Restore messages when trip loads
+  useEffect(() => {
+    if (currentTrip && currentTrip.messages.length > 0 && messages.length === 0) {
+      console.log('[TripChat] Restoring messages from trip:', currentTrip.messages.length);
+      setMessages(currentTrip.messages);
+    }
+  }, [currentTrip, messages.length, setMessages]);
 
   // Toggle collapse state for a message
   const toggleMessageCollapse = useCallback((messageId: string) => {
