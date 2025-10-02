@@ -4906,3 +4906,116 @@ Stream finished, messages count: 1
 [chat-simple] Chunk was enriched:     <li>7. nat: <span class="geo-mark" data-geo-id="loc-15" data-lat="55.1" data-lng="14.7" data-pla  ->      <li>7. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuM
 Stream finished, messages count: 1
  POST /api/chat-simple 200 in 23126ms
+ OPTIONS /api/route?waypoints=14.708328999999999%2C55.101017%3B14.6955952%2C55.104445899999995&profile=driving 200 in 201ms
+ OPTIONS /api/route?waypoints=14.7048284%2C55.1194438%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 197ms
+ OPTIONS /api/route?waypoints=14.761053299999999%2C55.2828149%3B14.7553955%2C55.2713045&profile=walking 200 in 143ms
+ OPTIONS /api/route?waypoints=14.773530800000001%2C55.297277%3B14.761053299999999%2C55.2828149&profile=walking 200 in 151ms
+ OPTIONS /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B14.773530800000001%2C55.297277&profile=walking 200 in 215ms
+ OPTIONS /api/route?waypoints=14.6955952%2C55.104445899999995%3B14.7048284%2C55.1194438&profile=driving 200 in 220ms
+ OPTIONS /api/route?waypoints=14.7553955%2C55.2713045%3B14.777671899999998%2C55.2900023&profile=walking 200 in 241ms
+ OPTIONS /api/route?waypoints=15.1408942%2C55.1364376%3B14.971686499999999%2C55.2084554&profile=driving 200 in 306ms
+ OPTIONS /api/route?waypoints=14.777671899999998%2C55.2900023%3B15.1408942%2C55.1364376&profile=driving 200 in 467ms
+ OPTIONS /api/route?waypoints=14.971686499999999%2C55.2084554%3B14.9086111%2C55.2241667&profile=walking 200 in 481ms
+ OPTIONS /api/route?waypoints=14.9086111%2C55.2241667%3B15.0243437%2C55.089907399999994&profile=driving 200 in 526ms
+ OPTIONS /api/route?waypoints=15.0243437%2C55.089907399999994%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 552ms
+ OPTIONS /api/route?waypoints=15.132580599999999%2C55.062793299999996%3B15.087516199999998%2C54.9952841&profile=driving 200 in 157ms
+ GET /api/route?waypoints=14.761053299999999%2C55.2828149%3B14.7553955%2C55.2713045&profile=walking 200 in 216ms
+ GET /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B14.773530800000001%2C55.297277&profile=walking 200 in 178ms
+ GET /api/route?waypoints=14.708328999999999%2C55.101017%3B14.6955952%2C55.104445899999995&profile=driving 200 in 278ms
+ GET /api/route?waypoints=14.773530800000001%2C55.297277%3B14.761053299999999%2C55.2828149&profile=walking 200 in 220ms
+ GET /api/route?waypoints=14.7048284%2C55.1194438%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 256ms
+ GET /api/route?waypoints=14.6955952%2C55.104445899999995%3B14.7048284%2C55.1194438&profile=driving 200 in 167ms
+ GET /api/route?waypoints=14.7553955%2C55.2713045%3B14.777671899999998%2C55.2900023&profile=walking 200 in 121ms
+ GET /api/route?waypoints=14.971686499999999%2C55.2084554%3B14.9086111%2C55.2241667&profile=walking 200 in 124ms
+ GET /api/route?waypoints=15.1408942%2C55.1364376%3B14.971686499999999%2C55.2084554&profile=driving 200 in 167ms
+ GET /api/route?waypoints=15.0243437%2C55.089907399999994%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 119ms
+ GET /api/route?waypoints=14.9086111%2C55.2241667%3B15.0243437%2C55.089907399999994&profile=driving 200 in 153ms
+ GET /api/route?waypoints=14.777671899999998%2C55.2900023%3B15.1408942%2C55.1364376&profile=driving 200 in 208ms
+ GET /api/route?waypoints=15.132580599999999%2C55.062793299999996%3B15.087516199999998%2C54.9952841&profile=driving 200 in 115ms
+ OPTIONS /api/chat-simple 200 in 120ms
+[chat-simple] Google API Key configured: Yes (AIzaSyBQPF...)
+[EnrichmentPipeline] Initialized with API key: Yes
+[Firecrawl Tool] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracted 70 locations from content
+[Firecrawl Tool] Successfully extracted 70 locations
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 411
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, B
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:   <p>Din rejse begynder i <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7"  ->    <p>Din rejse begynder i <span class="geo-mark" data-coord-source="cache" data-photo-name="places/C
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 401
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.6" data-lng="14.6" data-place-name="Sandvig,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.6" data-lng="14.6" data-place-name="Sandvig, Bornholm" data-transport-from="loc-1" data-transp
+[EnrichmentPipeline] Extracted place name: Sandvig, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.6, lng: 14.6 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2UX5kB18n-s5wC0udADhh3teUbpASImxCoupL5VZhMW4HMB-sXTaTBD6OIgbreB82sSdW_jJZIs0Q1yPe5ExrBCPZwmeZbSjjqioOhX8lyU64CZOt9GSvFrClKDBa6vKB4GtQCh3okE_zbpeNziVo_QJW545Iyt9tKmdSwqDCOpKqC32e8VxF540jP5zaqHe-w9Q6ubvyPJlzTGueQ92RebWprHsfGBv7F8CJas3W4L38c17gifyjgcA6yG8wyNlySZm3_sjuZO2XAfUFcx8YNxOiIX50o3fHJLUd-oksXOzDdrZV-O3m3tdEX6FW2Iy6JmUE7Sn_oz76LtOgKGZuk8u1n',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2U
+[chat-simple] Chunk was enriched:   <p>Byen <span class="geo-mark" data-geo-id="loc-2" data-lat="55.6" data-lng="14.6" data-place-name  ->    <p>Byen <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRl
+ OPTIONS /api/route?waypoints=14.708328999999999%2C55.101017%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 28ms
+ GET /api/route?waypoints=14.708328999999999%2C55.101017%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 231ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 553
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.1" data-lng="14.9" data-place-name="Svaneke,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.1" data-lng="14.9" data-place-name="Svaneke, Bornholm" data-transport-from="loc-2" data-transp
+[EnrichmentPipeline] Extracted place name: Svaneke, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.9 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Bornholm
+[Geocoding] geocodeLocation called with: Svaneke, Bornholm API key: present
+[Geocoding] Cache hit for: Svaneke, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMalgqlAWzxOvax-FcTLp1ob2tnpAiYkIoti5KbA3JXKhXr9vT6EfVmIcVRYPngplPt2UZsa4vWOr9qpp1VqHKRI9NXu3R13feH9BoX5_K4dhQjGHJvuiIgUmCvnWaUTRfkJT9AJQVM2aPfk4q17AfuQKpRiwXY1fjcs0c45BOb-GrLvZPEItuo3If0xQNvwxBvjuvu6gFyBr6yJ8zA8I45Fejwsm1GT9dgSuT9wG5Q7m1nx6PNRhyegTvOTQNzcGUcS94I12qLovHGa8Bd3gz-T9ayd9HuA-XGbGg20olrfhGtKTlB7WnB9luhi-Im0hcL_kBWteim-WGGNeoQlyJ3U6g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMal
+[chat-simple] Chunk was enriched:   <p>Derefter fortsætter du til <span class="geo-mark" data-geo-id="loc-3" data-lat="55.1" data-lng=  ->    <p>Derefter fortsætter du til <span class="geo-mark" data-coord-source="cache" data-photo-name="pl
+ OPTIONS /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B15.1408942%2C55.1364376&profile=driving 200 in 39ms
+ GET /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B15.1408942%2C55.1364376&profile=driving 200 in 147ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 530
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.0" data-lng="16.4" data-place-name="Nexø, Bo
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.0" data-lng="16.4" data-place-name="Nexø, Bornholm" data-transport-from="loc-3" data-transport
+[EnrichmentPipeline] Extracted place name: Nexø, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55, lng: 16.4 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Bornholm
+[Geocoding] geocodeLocation called with: Nexø, Bornholm API key: present
+[Geocoding] Cache hit for: Nexø, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfxQrM47bvpYH0_wMQU1Pzpw7Y4riCkDPHyULdQMIPAZGC7-1t3guSrpxc5eCOxsxNwvV3lC87SkCfP83066jjJWH7ElroQuR7tK_d4XZKa2Qu0WavE-hWHHJuYCVbc7bfTNFqf7VLtNbyp7gvNcaPjTVdZEeORzN6-1bqfEwjqJbzTzLOPC1t-aGUl8247GPszjDTcat3_ljQUMMIDbKBGMQTiFVDZTGc9eov9h8_BmkMoIlWmcOTvxMpvmZk2IqudXGI1x5vXTVlDlywpR5JRRjlxrTML1LRybSyCzZ7dMhMdm2pjgW_ObNFBbWDkC8sKdxC1QCJJcIHFisYWg0dUmA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfx
+[chat-simple] Chunk was enriched:   <p>Den sidste etape tager dig til <span class="geo-mark" data-geo-id="loc-4" data-lat="55.0" data-  ->    <p>Den sidste etape tager dig til <span class="geo-mark" data-coord-source="cache" data-photo-name
+ OPTIONS /api/route?waypoints=15.1408942%2C55.1364376%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 25ms
+ GET /api/route?waypoints=15.1408942%2C55.1364376%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 168ms
+Stream finished, messages count: 1
+ POST /api/chat-simple 200 in 13342ms
