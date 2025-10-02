@@ -1,35 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { MessageActionSheet } from '@/components/MessageActionSheet';
+import { FlatElement, MessageElementWithFocus, messageElementWithFocusStyles } from '@/components/MessageElementWithFocus';
+import type { RouteWithMetadata } from '@/contexts/MockContext';
+import { useMockContext } from '@/contexts/MockContext';
+import { generateAPIUrl } from '@/lib/ai-sdk-config';
+import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
+import { parseHTMLToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
+import { deleteNodeByIndex, stateToJSON, stateFromJSON, updateNodeTextByIndex } from '@/utils/prosemirror-transactions';
+import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
+import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
+import { useChat } from '@ai-sdk/react';
+import { Ionicons } from '@expo/vector-icons';
+import { DefaultChatTransport } from 'ai';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { fetch as expoFetch } from 'expo/fetch';
+import { EditorState } from 'prosemirror-state';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
-  ScrollView,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
-  Animated,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { MessageElementWithFocus, FlatElement, messageElementWithFocusStyles } from '@/components/MessageElementWithFocus';
-import { MessageActionSheet } from '@/components/MessageActionSheet';
-import { useMockContext } from '@/contexts/MockContext';
-import { EditorState } from 'prosemirror-state';
-import { parseHTMLToProseMirror, parseJSONToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
-import { deleteNodeByIndex, updateNodeTextByIndex, stateToJSON } from '@/utils/prosemirror-transactions';
-import { generateAPIUrl } from '@/lib/ai-sdk-config';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { fetch as expoFetch } from 'expo/fetch';
-import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
-import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
-import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
-import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -360,6 +358,58 @@ export default function MockChatScreen() {
     }
   }, [currentTrip, messages.length, setMessages]);
 
+  // Restore ProseMirror document when trip loads
+  useEffect(() => {
+    if (currentTrip && currentTrip.itinerary_document && !editorState) {
+      console.log('[TripChat] Restoring ProseMirror document from trip');
+      const restoredState = stateFromJSON(currentTrip.itinerary_document);
+      setEditorState(restoredState);
+      setHasEdited(true); // Mark as edited since we have a saved document
+    }
+  }, [currentTrip, editorState]);
+
+  // Save messages whenever they change
+  useEffect(() => {
+    if (!currentTrip || messages.length === 0) return;
+
+    // Save messages immediately when they change
+    console.log('[TripChat] Saving messages:', messages.length);
+    const updatedTrip = {
+      ...currentTrip,
+      messages: messages,
+      itinerary_document: currentTrip.itinerary_document,
+      modifications: currentTrip.modifications || [],
+    };
+
+    saveTrip(updatedTrip).then(() => {
+      console.log('[TripChat] Messages saved successfully');
+    }).catch(error => {
+      console.error('[TripChat] Failed to save messages:', error);
+    });
+  }, [messages]); // Only depend on messages, not on currentTrip to avoid loops
+
+  // Save itinerary document when streaming completes (messages are saved separately)
+  const previousIsLoading = useRef(isLoading);
+  useEffect(() => {
+    // Detect transition from loading to not loading (streaming completed)
+    if (previousIsLoading.current && !isLoading && currentTrip && editorState) {
+      console.log('[TripChat] Streaming completed, saving itinerary document');
+      const updatedTrip = {
+        ...currentTrip,
+        messages: messages, // Include current messages
+        itinerary_document: stateToJSON(editorState),
+        modifications: currentTrip.modifications || [],
+      };
+      saveTrip(updatedTrip).then(() => {
+        console.log('[TripChat] Successfully saved itinerary document after streaming');
+        setCurrentTrip(updatedTrip);
+      }).catch(error => {
+        console.error('[TripChat] Failed to save itinerary document:', error);
+      });
+    }
+    previousIsLoading.current = isLoading;
+  }, [isLoading, currentTrip, editorState, messages]);
+
   // Toggle collapse state for a message
   const toggleMessageCollapse = useCallback((messageId: string) => {
     setCollapsedMessages(prev => {
@@ -397,34 +447,96 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Find the element with its document index
+    // Find the element
     const element = flatElements.find(el => el.id === elementId);
-    if (!element || element.documentPos === undefined) {
-      console.error('Element not found or missing document index:', elementId);
+    if (!element) {
+      console.error('Element not found:', elementId);
       return;
     }
 
-    // Apply ProseMirror transaction using index
-    const newState = updateNodeTextByIndex(editorState, element.documentPos, newText);
+    // Find the actual current index in the document
+    let actualIndex = -1;
+
+    if (!hasEdited && element.documentPos !== undefined) {
+      // If we haven't edited, documentPos should still be accurate
+      actualIndex = element.documentPos;
+      console.log('[handleEditSave] Using original documentPos:', actualIndex);
+    } else {
+      // After edits, we need to find by matching content
+      let currentIndex = 0;
+
+      editorState.doc.descendants((node, pos) => {
+        if (node.isBlock && node.type.name !== 'doc') {
+          // Try different matching strategies
+          const nodeText = node.textContent.trim();
+          const elementText = element.text?.trim();
+
+          // Match if the texts are equal or if one starts with the other
+          if (nodeText === elementText ||
+              (elementText && nodeText.startsWith(elementText)) ||
+              (elementText && elementText.startsWith(nodeText))) {
+            actualIndex = currentIndex;
+            console.log('[handleEditSave] Found matching node at index:', actualIndex);
+            return false; // Stop searching
+          }
+          currentIndex++;
+        }
+      });
+    }
+
+    if (actualIndex === -1) {
+      console.error('[handleEditSave] Could not find node in document with text:', element.text);
+      return;
+    }
+
+    console.log('[handleEditSave] Found node at actual index:', actualIndex, 'originally reported as:', element.documentPos);
+
+    // Apply ProseMirror transaction using the actual index
+    const newState = updateNodeTextByIndex(editorState, actualIndex, newText);
     if (!newState) {
       console.error('Failed to update node text');
       return;
     }
 
+    // Mark that we've edited the document immediately
+    setHasEdited(true);
+
+    // Update the editor state
     setEditorState(newState);
 
-    // Convert updated document to elements with the same message ID
-    const messageId = element.messageId;
-    const updatedElements = proseMirrorToElements(newState.doc, messageId);
+    // Force useEffect to trigger
+    setUpdateCounter(prev => prev + 1);
 
-    // Merge with existing non-ProseMirror elements
-    const nonPMElements = flatElements.filter(el => !el.id.startsWith('pm-element-'));
-    setFlatElements([...nonPMElements, ...updatedElements]);
+    // Rebuild the elements from the new ProseMirror state immediately
+    setFlatElements(prev => {
+      // Keep non-itinerary elements
+      const nonItineraryElements = prev.filter(el => !el.isItineraryContent);
+
+      // Find the message ID for itinerary content
+      const messageId = element.messageId;
+
+      // Rebuild itinerary elements from the new state
+      const pmElements = proseMirrorToElements(newState.doc, messageId);
+      const formattedElements = pmElements.map((el, index) => ({
+        ...el,
+        id: `${messageId}-pm-${index}`,
+        messageId: messageId,
+        messageColor: element.messageColor,
+        role: element.role,
+        isItineraryContent: true,
+      }));
+
+      console.log('[handleEditSave] Rebuilt elements - non-itinerary:', nonItineraryElements.length, 'itinerary:', formattedElements.length);
+
+      return [...nonItineraryElements, ...formattedElements];
+    });
 
     // Save to local storage
     if (currentTrip) {
+      console.log('[handleEditSave] Saving trip to local storage');
       const updatedTrip = {
         ...currentTrip,
+        messages: messages, // Include messages to persist chat history
         itinerary_document: stateToJSON(newState),
         modifications: [
           ...(currentTrip.modifications || []),
@@ -440,102 +552,181 @@ export default function MockChatScreen() {
       await saveTrip(updatedTrip);
       setCurrentTrip(updatedTrip);
     }
-  }, [editorState, flatElements, currentTrip]);
+  }, [editorState, flatElements, currentTrip, messages]);
 
   // Handle delete element using ProseMirror transactions
   const handleDeleteElement = useCallback(async (elementId: string) => {
-    if (!editorState) {
-      // Fallback to direct manipulation if no ProseMirror state
-      setFlatElements(prev => prev.map(el => {
-        if (el.id === elementId) {
-          return {
-            ...el,
-            isDeleted: true,
-          };
-        }
-        return el;
-      }));
+    console.log('[handleDeleteElement] Deleting element:', elementId);
+    console.log('[handleDeleteElement] Current flatElements count:', flatElements.length);
+    console.log('[handleDeleteElement] EditorState exists:', !!editorState);
+
+    // Find the element to delete
+    const elementToDelete = flatElements.find(el => el.id === elementId);
+    if (!elementToDelete) {
+      console.error('[handleDeleteElement] Element not found:', elementId);
       setActionSheetVisible(false);
       return;
     }
 
-    // Find the element with its document index
-    const element = flatElements.find(el => el.id === elementId);
-    if (!element || element.documentPos === undefined) {
-      console.error('Element not found or missing document index:', elementId);
-      return;
-    }
+    console.log('[handleDeleteElement] Element to delete:', {
+      id: elementToDelete.id,
+      documentPos: elementToDelete.documentPos,
+      isItineraryContent: elementToDelete.isItineraryContent,
+      text: elementToDelete.text?.substring(0, 50)
+    });
 
-    // Apply ProseMirror transaction using index
-    const newState = deleteNodeByIndex(editorState, element.documentPos);
-    if (!newState) {
-      console.error('Failed to delete node');
-      return;
-    }
+    // Check if this is itinerary content that should be managed by ProseMirror
+    if (elementToDelete.isItineraryContent && editorState) {
+      // Find the actual current index in the document
+      // Use the documentPos directly if we haven't edited yet, or search by content
+      let actualIndex = -1;
 
-    setEditorState(newState);
+      if (!hasEdited && elementToDelete.documentPos !== undefined) {
+        // If we haven't edited, documentPos should still be accurate
+        actualIndex = elementToDelete.documentPos;
+        console.log('[handleDeleteElement] Using original documentPos:', actualIndex);
+      } else {
+        // After edits, we need to find by matching content
+        let currentIndex = 0;
 
-    // Convert updated document to elements with the same message ID
-    const messageId = element.messageId;
-    const updatedElements = proseMirrorToElements(newState.doc, messageId);
+        editorState.doc.descendants((node, pos) => {
+          if (node.isBlock && node.type.name !== 'doc') {
+            // Try different matching strategies
+            const nodeText = node.textContent.trim();
+            const elementText = elementToDelete.text?.trim();
 
-    // Merge with existing non-ProseMirror elements
-    const nonPMElements = flatElements.filter(el => !el.id.startsWith('pm-element-'));
-    setFlatElements([...nonPMElements, ...updatedElements]);
-
-    // Save to local storage
-    if (currentTrip) {
-      const updatedTrip = {
-        ...currentTrip,
-        itinerary_document: stateToJSON(newState),
-        modifications: [
-          ...(currentTrip.modifications || []),
-          {
-            elementId,
-            type: 'delete' as const,
-            originalText: element.text,
-            timestamp: Date.now(),
+            // Match if the texts are equal or if one starts with the other
+            if (nodeText === elementText ||
+                (elementText && nodeText.startsWith(elementText)) ||
+                (elementText && elementText.startsWith(nodeText))) {
+              actualIndex = currentIndex;
+              console.log('[handleDeleteElement] Found matching node at index:', actualIndex);
+              return false; // Stop searching
+            }
+            currentIndex++;
           }
-        ]
-      };
-      await saveTrip(updatedTrip);
-      setCurrentTrip(updatedTrip);
+        });
+      }
+
+      if (actualIndex === -1) {
+        console.error('[handleDeleteElement] Could not find node in document with text:', elementToDelete.text);
+        console.error('[handleDeleteElement] Document has these texts:',
+          Array.from({ length: editorState.doc.content.childCount }, (_, i) => {
+            const child = editorState.doc.content.child(i);
+            return child.textContent.substring(0, 50);
+          })
+        );
+        setActionSheetVisible(false);
+        return;
+      }
+
+      console.log('[handleDeleteElement] Found node at actual index:', actualIndex, 'originally reported as:', elementToDelete.documentPos);
+
+      // Apply ProseMirror transaction using the actual index
+      const newState = deleteNodeByIndex(editorState, actualIndex);
+
+      if (!newState) {
+        console.error('[handleDeleteElement] Failed to delete node from ProseMirror document');
+        setActionSheetVisible(false);
+        return;
+      }
+
+      console.log('[handleDeleteElement] Successfully deleted from ProseMirror');
+      console.log('[handleDeleteElement] Old doc size:', editorState.doc.content.size);
+      console.log('[handleDeleteElement] New doc size:', newState.doc.content.size);
+
+      // Set hasEdited immediately so the useEffect knows to use editorState
+      setHasEdited(true);
+
+      // Update the editor state and force a re-render
+      setEditorState(newState);
+      setUpdateCounter(prev => {
+        console.log('[handleDeleteElement] Incrementing counter from', prev, 'to', prev + 1);
+        return prev + 1;
+      });
+
+      console.log('[handleDeleteElement] States updated, should trigger useEffect');
+      console.log('[handleDeleteElement] New doc has', newState.doc.content.childCount, 'children');
+
+      // Force immediate UI update by clearing elements first
+      setFlatElements([]);
+
+      // Save to local storage
+      if (currentTrip) {
+        console.log('[handleDeleteElement] Saving trip to local storage');
+        const existingMods = currentTrip.modifications || [];
+        const newMod = {
+          elementId,
+          type: 'delete' as const,
+          originalText: elementToDelete.text,
+          timestamp: Date.now(),
+        };
+        const allMods = [...existingMods, newMod];
+
+        const updatedTrip = {
+          ...currentTrip,
+          messages: messages, // Include the actual chat messages
+          itinerary_document: stateToJSON(newState),
+          modifications: allMods
+        };
+
+        console.log('[handleDeleteElement] Saving modifications:', allMods.length, 'total');
+        console.log('[handleDeleteElement] Latest modification:', newMod);
+
+        await saveTrip(updatedTrip);
+        setCurrentTrip(updatedTrip);
+
+        // Verify save
+        setTimeout(async () => {
+          const savedTrip = await getTrip(currentTrip.id);
+          console.log('[handleDeleteElement] Verification - saved trip has modifications:', savedTrip?.modifications?.length);
+        }, 100);
+      }
+    } else {
+      // For non-ProseMirror elements, just filter them out
+      console.log('[handleDeleteElement] Deleting non-ProseMirror element');
+      setFlatElements(prev => prev.filter(el => el.id !== elementId));
     }
 
     setActionSheetVisible(false);
   }, [editorState, flatElements, currentTrip]);
 
-  // Process messages and update flat elements when messages or editor state changes
+  // Track if we've made any edits to the document
+  const [hasEdited, setHasEdited] = useState(false);
+  // Force re-render counter for triggering useEffect
+  const [updateCounter, setUpdateCounter] = useState(0);
+  // Counter for generating unique IDs that won't be reused
+
+  // Process messages and update flat elements when messages or collapse state changes
   useEffect(() => {
+    console.log('[useEffect] Running with updateCounter:', updateCounter, 'hasEdited:', hasEdited);
     const elements: FlatElement[] = [];
 
     messages.forEach((message, msgIndex) => {
       const messageColor = 'transparent';
       const isCollapsed = collapsedMessages.has(message.id);
 
-      // Check if message contains HTML content (itinerary)
-      // Look for common HTML patterns that indicate itinerary content
-      const hasHTMLContent = message.parts?.some((part: any) =>
-        part.type === 'text' && (
-          part.text?.includes('<itinerary>') ||
-          part.text?.includes('<h1>') ||
-          part.text?.includes('<h2>') ||
-          part.text?.includes('<h3>') ||
-          part.text?.includes('<ul>') ||
-          part.text?.includes('geo-mark') ||
-          (part.text?.includes('<p>') && part.text?.includes('</p>'))
-        )
-      );
-
+      // Check if message contains itinerary content (complete or partial)
       const textContent = message.parts?.filter((part: any) => part.type === 'text')
         .map((part: any) => part.text)
         .join('') || (message as any).content || '';
 
-      // Debug logging for HTML detection
-      if (textContent.includes('<')) {
-        console.log('Message contains HTML-like content:', {
+      // Check for complete itinerary (has both opening and closing tags)
+      const hasCompleteItinerary = textContent.includes('<itinerary>') &&
+                                   textContent.includes('</itinerary>');
+
+      // Check for partial itinerary (streaming, only has opening tag)
+      const hasPartialItinerary = textContent.includes('<itinerary>') &&
+                                  !textContent.includes('</itinerary>');
+
+      // Consider it itinerary content if complete OR partial (for streaming)
+      const hasItineraryContent = hasCompleteItinerary || hasPartialItinerary;
+
+      // Debug logging for itinerary detection
+      if (textContent.includes('<itinerary>')) {
+        console.log('Message contains itinerary content:', {
           messageId: message.id,
-          hasHTMLContent,
+          hasItineraryContent,
           contentPreview: textContent.substring(0, 200)
         });
       }
@@ -556,31 +747,99 @@ export default function MockChatScreen() {
       // Only show content if not collapsed
       if (!isCollapsed) {
         // Add content elements
-        if (hasHTMLContent) {
-          // Parse HTML content using ProseMirror
-          const { state, doc } = parseHTMLToProseMirror(textContent);
+        if (hasItineraryContent) {
+          // Extract the content between <itinerary> tags
+          let itineraryHTML: string;
 
-          // Store the ProseMirror state for this message
-          // Note: We'll need to manage this properly in a useEffect
+          if (hasCompleteItinerary) {
+            // Complete itinerary: extract content between tags
+            const itineraryMatch = textContent.match(/<itinerary>([\s\S]*?)<\/itinerary>/);
+            itineraryHTML = itineraryMatch ? itineraryMatch[1] : '';
+          } else if (hasPartialItinerary) {
+            // Partial itinerary (streaming): extract everything after opening tag
+            const openTagIndex = textContent.indexOf('<itinerary>');
+            itineraryHTML = textContent.substring(openTagIndex + '<itinerary>'.length);
+            // Add a closing tag to make it parseable (will be incomplete but renderable)
+            if (!itineraryHTML.includes('</itinerary>')) {
+              // Close any open tags to make partial content valid
+              itineraryHTML = itineraryHTML.trim();
+            }
+          } else {
+            itineraryHTML = '';
+          }
+          let doc;
+          let state;
 
-          // Convert ProseMirror document to renderable elements
-          const pmElements = proseMirrorToElements(doc, message.id);
+          // If we have edited the document, use the editorState as source of truth
+          // Otherwise, parse the HTML content (important for streaming)
+          if (hasEdited && editorState) {
+            console.log('[useEffect] Using editorState as source, doc children:', editorState.doc.content.childCount);
+            doc = editorState.doc;
+            state = editorState;
+          } else if (itineraryHTML && itineraryHTML.trim().length > 0) {
+            // Only try to parse if we have non-empty HTML content
+            try {
+              // Parse only the itinerary HTML content (not the wrapping tags or other text)
+              const parsed = parseHTMLToProseMirror(itineraryHTML);
+              doc = parsed.doc;
+              state = parsed.state;
 
-          console.log('Parsed HTML to ProseMirror, elements:', pmElements.length);
+              // Store the state if we don't have one yet and it's complete
+              if (!editorState && hasCompleteItinerary) {
+                setEditorState(state);
+                // The save will be handled by the streaming completion effect
+                console.log('[useEffect] EditorState created from parsed itinerary');
+              }
+            } catch (parseError) {
+              console.warn('[useEffect] Failed to parse partial itinerary HTML:', parseError);
+              // Fall back to showing as text during streaming
+              doc = null;
+              state = null;
+            }
+          } else {
+            // No content to parse yet (early streaming state)
+            doc = null;
+            state = null;
+          }
 
-          // Add elements with message context, preserving their IDs
-          pmElements.forEach((pmElement, index) => {
+          // Only render ProseMirror elements if we have a valid document
+          if (doc && state) {
+            // Convert ProseMirror document to renderable elements
+            const pmElements = proseMirrorToElements(doc, message.id);
+
+            console.log('[useEffect] Rendering ProseMirror elements:', pmElements.length, 'hasEdited:', hasEdited);
+            console.log('[useEffect] First few elements:', pmElements.slice(0, 3).map(el => ({ id: el.id, text: el.text?.substring(0, 30) })));
+
+            // Add elements with message context
+            // When edited, use unique IDs to force React to re-render
+            pmElements.forEach((pmElement, index) => {
+              const elementId = hasEdited
+                ? `${message.id}-pm-${updateCounter}-${index}` // Include updateCounter for uniqueness
+                : `${message.id}-pm-${index}`; // Original ID for streaming
+
+              elements.push({
+                ...pmElement,
+                id: elementId,
+                messageId: message.id,
+                messageColor: messageColor,
+                role: message.role as 'user' | 'assistant',
+                isItineraryContent: true,
+              });
+            });
+          } else if (hasPartialItinerary) {
+            // During streaming, show a loading message instead of raw HTML
             elements.push({
-              ...pmElement,
-              id: `${message.id}-pm-${index}`, // Unique ID combining message and element index
+              id: `${message.id}-loading`,
+              type: 'content',
               messageId: message.id,
               messageColor: messageColor,
+              text: 'Loading itinerary...',
+              height: 0,
               role: message.role as 'user' | 'assistant',
-              isItineraryContent: true,
             });
-          });
-        } else if (textContent) {
-          // Regular text message
+          }
+        } else if (textContent && !hasItineraryContent) {
+          // Regular text message (not itinerary)
           elements.push({
             id: `${message.id}-content-0`,
             type: 'content',
@@ -606,24 +865,10 @@ export default function MockChatScreen() {
     });
 
     // Update state with the processed elements
+    console.log('[useEffect] Setting flatElements with', elements.length, 'total elements');
+    console.log('[useEffect] Element IDs:', elements.map(el => el.id));
     setFlatElements(elements);
-
-    // If we have HTML content and no editor state yet, create it
-    const hasItineraryContent = elements.some(el => el.isItineraryContent);
-    if (hasItineraryContent && !editorState) {
-      // Find the last HTML message and parse it
-      const lastHTMLMessage = messages.findLast((msg: any) => {
-        const content = msg.parts?.find((part: any) => part.type === 'text')?.text || '';
-        return content.includes('geo-mark') || content.includes('<p>');
-      });
-
-      if (lastHTMLMessage) {
-        const htmlContent = lastHTMLMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
-        const { state } = parseHTMLToProseMirror(htmlContent);
-        setEditorState(state);
-      }
-    }
-  }, [messages, collapsedMessages, editorState]);
+  }, [messages, collapsedMessages, hasEdited, editorState, updateCounter]); // Dependencies for proper updates
 
   // Get context for sharing locations with layout
   const { updateVisibleLocations, setRoutes } = useMockContext();
@@ -695,7 +940,7 @@ export default function MockChatScreen() {
     }
   }, [scrollOffset, elementPositions, flatElements, containerHeight, updateVisibleLocations]);
 
-  // Auto-save trip when messages or locations change
+  // Process location graph when flatElements change (but don't auto-save)
   useEffect(() => {
     if (!currentTrip || isLoadingTrip) return;
 
@@ -722,42 +967,9 @@ export default function MockChatScreen() {
       console.log('[TripChat] Location Graph:', summarizeGraph(graph));
     }
 
-    // Collect modifications from flatElements
-    const modifications: SavedTrip['modifications'] = [];
-    flatElements.forEach(element => {
-      if (element.isEdited) {
-        modifications.push({
-          elementId: element.id,
-          type: 'edit',
-          originalText: element.originalText,
-          newText: element.text,
-          timestamp: Date.now(),
-        });
-      }
-      if (element.isDeleted) {
-        modifications.push({
-          elementId: element.id,
-          type: 'delete',
-          originalText: element.text,
-          timestamp: Date.now(),
-        });
-      }
-    });
-
-    const updatedTrip: SavedTrip = {
-      ...currentTrip,
-      messages,
-      locations: locationsWithDescription,
-      modifications: modifications.length > 0 ? modifications : undefined,
-    };
-
-    // Debounce save to avoid too frequent writes
-    const timeoutId = setTimeout(() => {
-      saveTrip(updatedTrip).catch(err => console.error('Error auto-saving trip:', err));
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [messages, flatElements, currentTrip, isLoadingTrip]);
+    // AUTO-SAVE DISABLED - was overwriting modifications
+    // Saving is now only done explicitly in handleDeleteElement and handleEditSave
+  }, [flatElements, currentTrip, isLoadingTrip]);
 
   // Fetch routes when location graph changes
   useEffect(() => {
@@ -925,20 +1137,6 @@ export default function MockChatScreen() {
       shadowRadius: 8,
       overflow: 'hidden',
     },
-    loadingContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 12,
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      borderRadius: 8,
-      marginTop: 8,
-      marginHorizontal: 12,
-    },
-    loadingText: {
-      marginLeft: 8,
-      fontSize: 14,
-      color: '#6b7280',
-    },
     errorContainer: {
       padding: 12,
       backgroundColor: '#fee2e2',
@@ -1022,7 +1220,7 @@ export default function MockChatScreen() {
 
             {/* Messages scrollable area with transparency and perspective */}
             <View
-              style={[styles.messagesWrapper, { perspective: 1000 }]}
+              style={[styles.messagesWrapper, { perspective: '1000' }]}
               onLayout={(event) => setContainerHeight(event.nativeEvent.layout.height)}
             >
               <ScrollView

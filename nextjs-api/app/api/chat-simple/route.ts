@@ -69,32 +69,38 @@ export async function POST(req: Request) {
 IMPORTANT: When users share URLs in their messages, use the extractUrlContent tool to get detailed information about the travel destination or content from the URL. This will help you provide more accurate and specific travel recommendations.
 
 When users ask about trip planning or itineraries:
-1. FIRST respond conversationally with regular text (e.g., "That sounds like a wonderful trip! Paris is...")
-2. THEN present the detailed itinerary wrapped in <itinerary> tags
-3. Inside <itinerary> tags, use ONLY HTML formatting (no markdown)
+- Output ONLY the itinerary content wrapped in <itinerary> tags
+- Do NOT include any conversational text before or after the itinerary
+- The entire response should be the <itinerary>...</itinerary> block
+- Inside <itinerary> tags, use ONLY HTML formatting (no markdown)
 
-Example response format:
-That sounds like a wonderful trip! Paris is a city full of romance and history. Here's a detailed 3-day itinerary for you:
-
+Example response format (entire message):
 <itinerary>
-  <h1>Paris in 3 Days</h1>
-  <p>Experience the best of Paris...</p>
-  <h2>Day 1: Iconic Landmarks</h2>
+  <h1>Bornholm in 7 Days</h1>
+  <p>Explore the Pearl of the Baltic with this comprehensive week-long itinerary covering Bornholm's stunning nature, charming villages, and rich history.</p>
+
+  <h2>Day 1: Arrival and Rønne</h2>
   <h3>Morning</h3>
-  <p>Start your day at...</p>
+  <p>Arrive in <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>, Bornholm's largest town. Pick up your rental car and check into your accommodation.</p>
+  <h3>Afternoon</h3>
+  <p>Explore Rønne's charming streets, visit the local museum, and enjoy fresh seafood at the harbor.</p>
+
+  <h2>Day 2: Northern Coastline</h2>
+  <h3>Morning</h3>
+  <p>Visit <span class="geo-mark" data-geo-id="loc-2" data-lat="55.27" data-lng="14.92" data-place-name="Hammershus, Bornholm">Hammershus</span>, Northern Europe's largest castle ruin.</p>
   <!-- etc -->
 </itinerary>
 
-I hope this itinerary helps you make the most of your time in Paris!
+HTML structure guidelines for inside <itinerary>:
+- <h1> for the main title only (e.g., "Bornholm in 7 Days" or "3 Days in Paris")
+- <h2> for day headers only (e.g., "Day 1: Arrival", "Day 2: Exploration", NOT full sentences)
+- <h3> for time periods only (e.g., "Morning", "Afternoon", "Evening") or major attractions
+- <p> for ALL descriptive text and details - this is where the content goes
+- <ul> and <li> for lists of tips or multiple attractions
+- <strong> for emphasis on important details
+- <em> for subtle emphasis
 
-HTML tags to use inside <itinerary>:
-- <h1> for the main title
-- <h2> for day headers
-- <h3> for time periods (Morning, Afternoon, Evening)
-- <p> for paragraphs
-- <ul> and <li> for lists
-- <strong> for bold text
-- <em> for italic text
+IMPORTANT: Keep headings SHORT and descriptive. Put the actual content in <p> tags, not in headings.
 
 NEVER use markdown (no #, ##, **, *, etc.) inside <itinerary> tags.
 NEVER include <html>, <body>, <head> or other document-level tags.
@@ -126,7 +132,7 @@ Create rich, detailed itineraries with:
 - Time estimates for activities
 - Transportation recommendations
 
-Be conversational and helpful in your responses.`,
+For non-itinerary questions, be conversational and helpful. For itinerary requests, output ONLY the <itinerary> block.`,
       });
 
       // Consume the stream
