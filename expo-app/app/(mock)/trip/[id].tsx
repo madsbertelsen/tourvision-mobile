@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageElementWithFocus, FlatElement, messageElementWithFocusStyles } from '@/components/MessageElementWithFocus';
+import { MessageActionSheet } from '@/components/MessageActionSheet';
 import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
@@ -24,6 +25,8 @@ import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
+import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
+import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -244,6 +247,9 @@ function extractAllLocations(elements: FlatElement[]) {
   const seen = new Set<string>();
 
   elements.forEach(element => {
+    // Skip deleted elements
+    if (element.isDeleted) return;
+
     if (element.parsedContent) {
       element.parsedContent.forEach((item: any) => {
         if (item.type === 'geo-mark' && item.lat && item.lng) {
@@ -290,6 +296,9 @@ export default function MockChatScreen() {
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
   const [locationGraph, setLocationGraph] = useState<LocationGraph | null>(null);
+  const lastFetchedGraphKey = useRef<string>('');
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<FlatElement | null>(null);
 
   // Load trip on mount first
   useEffect(() => {
@@ -357,6 +366,41 @@ export default function MockChatScreen() {
       }
       return newSet;
     });
+  }, []);
+
+  // Handle long press on element
+  const handleElementLongPress = useCallback((element: FlatElement) => {
+    setSelectedElement(element);
+    setActionSheetVisible(true);
+  }, []);
+
+  // Handle edit save
+  const handleEditSave = useCallback((elementId: string, newText: string) => {
+    setFlatElements(prev => prev.map(el => {
+      if (el.id === elementId) {
+        return {
+          ...el,
+          text: newText,
+          isEdited: true,
+          originalText: el.originalText || el.text,
+        };
+      }
+      return el;
+    }));
+  }, []);
+
+  // Handle delete element
+  const handleDeleteElement = useCallback((elementId: string) => {
+    setFlatElements(prev => prev.map(el => {
+      if (el.id === elementId) {
+        return {
+          ...el,
+          isDeleted: true,
+        };
+      }
+      return el;
+    }));
+    setActionSheetVisible(false);
   }, []);
 
   // Convert messages to flat element structure
@@ -459,7 +503,7 @@ export default function MockChatScreen() {
   }, [messages, collapsedMessages]);
 
   // Get context for sharing locations with layout
-  const { updateVisibleLocations } = useMockContext();
+  const { updateVisibleLocations, setRoutes } = useMockContext();
 
   // Track element positions
   const [elementPositions, setElementPositions] = useState<Map<string, {top: number, bottom: number}>>(new Map());
@@ -478,8 +522,8 @@ export default function MockChatScreen() {
         const itemTop = position.top - scrollOffset;
         const itemBottom = position.bottom - scrollOffset;
 
-        // Check if this element is in view
-        if (itemTop < containerHeight && itemBottom > 0) {
+        // Check if this element is in view and not deleted
+        if (itemTop < containerHeight && itemBottom > 0 && !element.isDeleted) {
           if (element.type === 'content' && element.parsedContent) {
             // Extract geo-marks from visible elements
             element.parsedContent.forEach((item: any) => {
@@ -495,7 +539,8 @@ export default function MockChatScreen() {
                       lat,
                       lng,
                       color: item.color,
-                      photoName: item.photoName || undefined
+                      photoName: item.photoName || undefined,
+                      geoId: item.geoId || undefined
                     };
                     console.log('[visibleLocations] Adding visible location:', location);
                     newVisibleLocations.push(location);
@@ -512,14 +557,15 @@ export default function MockChatScreen() {
     setVisibleLocations(newVisibleLocations);
     // Only update context if we have locations to show
     if (newVisibleLocations.length > 0) {
-      const mappedLocations = newVisibleLocations.map((loc, idx) => ({
-        id: `loc-${idx}`,
+      const mappedLocations = newVisibleLocations.map((loc: any, idx) => ({
+        id: loc.geoId || `loc-${idx}`,
         name: loc.name,
         lat: loc.lat,
         lng: loc.lng,
         color: loc.color,
         colorIndex: getColorIndex(loc.color),
-        photoName: loc.photoName
+        photoName: loc.photoName,
+        geoId: loc.geoId
       }));
       console.log('[updateVisibleLocations] Passing to context:', mappedLocations);
       updateVisibleLocations(mappedLocations);
@@ -553,10 +599,33 @@ export default function MockChatScreen() {
       console.log('[TripChat] Location Graph:', summarizeGraph(graph));
     }
 
+    // Collect modifications from flatElements
+    const modifications: SavedTrip['modifications'] = [];
+    flatElements.forEach(element => {
+      if (element.isEdited) {
+        modifications.push({
+          elementId: element.id,
+          type: 'edit',
+          originalText: element.originalText,
+          newText: element.text,
+          timestamp: Date.now(),
+        });
+      }
+      if (element.isDeleted) {
+        modifications.push({
+          elementId: element.id,
+          type: 'delete',
+          originalText: element.text,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
     const updatedTrip: SavedTrip = {
       ...currentTrip,
       messages,
       locations: locationsWithDescription,
+      modifications: modifications.length > 0 ? modifications : undefined,
     };
 
     // Debounce save to avoid too frequent writes
@@ -566,6 +635,66 @@ export default function MockChatScreen() {
 
     return () => clearTimeout(timeoutId);
   }, [messages, flatElements, currentTrip, isLoadingTrip]);
+
+  // Fetch routes when location graph changes
+  useEffect(() => {
+    if (!locationGraph || locationGraph.edges.length === 0) {
+      return;
+    }
+
+    // Create a stable key for the current graph edges to detect real changes
+    const graphKey = locationGraph.edges
+      .map(e => `${e.from}-${e.to}-${e.profile}`)
+      .sort()
+      .join('|');
+
+    // Only fetch if the graph has actually changed
+    if (lastFetchedGraphKey.current === graphKey) {
+      return;
+    }
+
+    console.log('[TripChat] Graph changed, fetching routes...');
+    lastFetchedGraphKey.current = graphKey;
+
+    const fetchRoutes = async () => {
+      const routePromises: Promise<RouteWithMetadata | null>[] = [];
+
+      locationGraph.edges.forEach(edge => {
+        const fromNode = locationGraph.getNode(edge.from);
+        const toNode = locationGraph.getNode(edge.to);
+
+        if (fromNode && toNode) {
+          const waypoints: Waypoint[] = [
+            { lat: fromNode.lat, lng: fromNode.lng },
+            { lat: toNode.lat, lng: toNode.lng }
+          ];
+
+          const fetchPromise = fetchRouteWithCache(edge.profile, waypoints)
+            .then(routeData => ({
+              ...routeData,
+              id: `${edge.from}-to-${edge.to}`,
+              fromId: edge.from,
+              toId: edge.to,
+              profile: edge.profile
+            } as RouteWithMetadata))
+            .catch(error => {
+              console.error(`Failed to fetch route from ${edge.from} to ${edge.to}:`, error);
+              return null;
+            });
+
+          routePromises.push(fetchPromise);
+        }
+      });
+
+      const fetchedRoutes = await Promise.all(routePromises);
+      const validRoutes = fetchedRoutes.filter((r): r is RouteWithMetadata => r !== null);
+
+      console.log('[TripChat] Fetched routes:', validRoutes.length);
+      setRoutes(validRoutes);
+    };
+
+    fetchRoutes();
+  }, [locationGraph, setRoutes]);
 
   // No longer needed - we track visible locations instead of focused location
   const handleLocationFocus = useCallback((locations: Array<{name: string, lat: number, lng: number}>) => {
@@ -829,6 +958,9 @@ export default function MockChatScreen() {
                         styles={styles}
                         onFocus={handleLocationFocus}
                         onToggleCollapse={toggleMessageCollapse}
+                        onLongPress={handleElementLongPress}
+                        onEditSave={handleEditSave}
+                        onDelete={handleDeleteElement}
                         transitionDuration={300}
                       />
                     </View>
@@ -874,6 +1006,33 @@ export default function MockChatScreen() {
             </TouchableOpacity>
           </View>
       </KeyboardAvoidingView>
+
+      {/* Message Action Sheet */}
+      <MessageActionSheet
+        visible={actionSheetVisible}
+        onClose={() => setActionSheetVisible(false)}
+        messagePreview={selectedElement?.text}
+        actions={[
+          {
+            icon: '✏️',
+            text: 'Edit',
+            onPress: () => {
+              // Will be handled by the inline edit mode in MessageElementWithFocus
+              setActionSheetVisible(false);
+            },
+          },
+          {
+            icon: '🗑️',
+            text: 'Delete',
+            destructive: true,
+            onPress: () => {
+              if (selectedElement) {
+                handleDeleteElement(selectedElement.id);
+              }
+            },
+          },
+        ]}
+      />
     </View>
   );
 }

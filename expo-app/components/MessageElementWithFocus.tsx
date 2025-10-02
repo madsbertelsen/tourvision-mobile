@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Text, View, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Text, View, StyleSheet, Animated, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMockContext } from '@/contexts/MockContext';
 
@@ -29,6 +29,9 @@ export type FlatElement = {
   }>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
+  isDeleted?: boolean; // Track if element is deleted
+  isEdited?: boolean; // Track if element has been edited
+  originalText?: string; // Store original text for undo
 };
 
 export interface Location {
@@ -53,6 +56,9 @@ interface MessageElementWithFocusProps {
   onLocationClick?: (location: string, lat: string, lng: string) => void;
   onFocus?: (locations: Array<{name: string, lat: number, lng: number}>) => void;
   onToggleCollapse?: (messageId: string) => void;
+  onLongPress?: (element: FlatElement) => void; // Handle long press for actions
+  onEditSave?: (elementId: string, newText: string) => void; // Save edited text
+  onDelete?: (elementId: string) => void; // Delete element
   scrollOffset?: number;
   containerHeight?: number;
   styles: any;
@@ -73,12 +79,32 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
   onLocationClick,
   onFocus,
   onToggleCollapse,
+  onLongPress,
+  onEditSave,
+  onDelete,
   scrollOffset,
   containerHeight,
   styles,
   transitionDuration = 300,
 }) => {
   const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedText, setEditedText] = useState(element.text || '');
+
+  // Handle save edit
+  const handleSaveEdit = () => {
+    if (onEditSave && editedText !== element.text) {
+      onEditSave(element.id, editedText);
+    }
+    setIsEditing(false);
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditedText(element.text || '');
+    setIsEditing(false);
+  };
+
   let mockContext = null;
   try {
     mockContext = useMockContext();
@@ -187,7 +213,13 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
 
   // Handle content rendering with focus-aware geo-marks
   if (element.type === 'content') {
+    // Don't render if deleted
+    if (element.isDeleted) {
+      return null;
+    }
+
     console.log('Rendering element with parsedContent:', element.id, element.parsedContent);
+
     // Check if it's a heading
     if (element.isHeading && element.headingLevel) {
       const headingStyles = {
@@ -195,26 +227,74 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
         2: styles.heading2,
         3: styles.heading3,
       };
+
+      if (isEditing) {
+        return (
+          <Animated.View style={baseStyle}>
+            <TextInput
+              style={[headingStyles[element.headingLevel], styles.editInput]}
+              value={editedText}
+              onChangeText={setEditedText}
+              onBlur={handleSaveEdit}
+              onSubmitEditing={handleSaveEdit}
+              autoFocus
+              multiline
+            />
+          </Animated.View>
+        );
+      }
+
+      return (
+        <TouchableOpacity
+          onLongPress={() => onLongPress?.(element)}
+          activeOpacity={0.9}
+        >
+          <Animated.View style={baseStyle}>
+            <Text style={[
+              headingStyles[element.headingLevel],
+              { opacity: textOpacity },
+              element.isEdited && styles.editedText
+            ]}>
+              {element.text}
+            </Text>
+          </Animated.View>
+        </TouchableOpacity>
+      );
+    }
+
+    // Regular content with edit mode
+    if (isEditing) {
       return (
         <Animated.View style={baseStyle}>
-          <Text style={[headingStyles[element.headingLevel], { opacity: textOpacity }]}>
-            {element.text}
-          </Text>
+          <TextInput
+            style={[styles.messageText, styles.editInput]}
+            value={editedText}
+            onChangeText={setEditedText}
+            onBlur={handleSaveEdit}
+            onSubmitEditing={handleSaveEdit}
+            autoFocus
+            multiline
+          />
         </Animated.View>
       );
     }
 
     return (
-      <Animated.View style={baseStyle}>
-        {element.parsedContent ? (
-          <Text style={[
-            styles.messageText,
-            {
-              opacity: textOpacity,
-              fontWeight: messageRole === 'user' ? '500' : '400',
-              fontStyle: messageRole === 'user' ? 'italic' : 'normal',
-            }
-          ]}>
+      <TouchableOpacity
+        onLongPress={() => onLongPress?.(element)}
+        activeOpacity={0.9}
+      >
+        <Animated.View style={baseStyle}>
+          {element.parsedContent ? (
+            <Text style={[
+              styles.messageText,
+              {
+                opacity: textOpacity,
+                fontWeight: messageRole === 'user' ? '500' : '400',
+                fontStyle: messageRole === 'user' ? 'italic' : 'normal',
+              },
+              element.isEdited && styles.editedText
+            ]}>
             {element.parsedContent.map((item, idx) => {
               if (item.type === 'geo-mark') {
                 const key = `${element.id}-${idx}`;
@@ -393,5 +473,16 @@ export const messageElementWithFocusStyles = StyleSheet.create({
     fontSize: 13,
     color: '#3B82F6',
     fontWeight: '600',
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    borderRadius: 4,
+    padding: 4,
+    backgroundColor: '#F9FAFB',
+  },
+  editedText: {
+    fontStyle: 'italic' as const,
+    opacity: 0.9,
   },
 });

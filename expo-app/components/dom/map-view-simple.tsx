@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Map as MapGL, Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
 import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
+import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 interface Location {
   id: string;
@@ -36,6 +37,23 @@ const MARKER_COLORS = [
   '#6366F1', // Indigo
 ];
 
+// Route colors based on transport profile
+const ROUTE_COLORS = {
+  walking: '#10B981', // Green
+  driving: '#3B82F6', // Blue
+  cycling: '#F59E0B', // Amber/Orange
+  transit: '#8B5CF6', // Purple
+};
+
+// Get route style based on profile
+function getRouteStyle(profile: string) {
+  return {
+    color: ROUTE_COLORS[profile as keyof typeof ROUTE_COLORS] || '#6B7280',
+    width: profile === 'walking' ? 3 : 4,
+    dasharray: profile === 'walking' ? [2, 2] : profile === 'cycling' ? [4, 2] : undefined,
+  };
+}
+
 interface MapViewSimpleProps {
   locations?: Location[];
   center?: { lat: number; lng: number };
@@ -43,6 +61,8 @@ interface MapViewSimpleProps {
   style?: React.CSSProperties;
   focusedLocation?: FocusedLocation | null;
   followMode?: boolean;
+  routes?: RouteWithMetadata[];
+  selectedRoute?: string | null;
 }
 
 // Inner component to access map instance
@@ -392,6 +412,8 @@ export default function MapViewSimple({
   style = { width: '100%', height: '400px' },
   focusedLocation = null,
   followMode = false,
+  routes = [],
+  selectedRoute = null,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -785,6 +807,46 @@ export default function MapViewSimple({
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
       >
+        {/* Render route layers */}
+        {routes.map((route) => {
+          if (!route.geometry || !route.geometry.coordinates) return null;
+
+          const routeStyle = getRouteStyle(route.profile);
+          const isSelected = selectedRoute === route.id;
+
+          return (
+            <Source
+              key={`route-${route.id}`}
+              id={`route-${route.id}`}
+              type="geojson"
+              data={{
+                type: 'Feature',
+                properties: {
+                  profile: route.profile,
+                  distance: route.distance,
+                  duration: route.duration,
+                },
+                geometry: route.geometry
+              }}
+            >
+              <Layer
+                id={`route-line-${route.id}`}
+                type="line"
+                paint={{
+                  'line-color': routeStyle.color,
+                  'line-width': isSelected ? routeStyle.width + 2 : routeStyle.width,
+                  'line-opacity': isSelected ? 1 : 0.7,
+                  'line-dasharray': routeStyle.dasharray || [1, 0],
+                }}
+                layout={{
+                  'line-cap': 'round',
+                  'line-join': 'round',
+                }}
+              />
+            </Source>
+          );
+        })}
+
         {/* Tail trail as GeoJSON line */}
         {markerTrail.length > 1 && (
           <Source

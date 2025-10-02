@@ -17,9 +17,15 @@ export interface RouteDetails {
   distance: number;
   duration: number;
   legs?: any[];
+  profile?: string;
 }
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+export interface Waypoint {
+  lat: number;
+  lng: number;
+}
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_NEXTJS_API_URL || 'http://localhost:3001';
 
 /**
  * Fetch transportation options between two locations
@@ -118,4 +124,74 @@ export async function fetchRouteDetailsWithCache(routeUrl: string): Promise<Rout
  */
 export function clearRouteCache() {
   routeCache.clear();
+}
+
+/**
+ * Fetch route with multiple waypoints
+ */
+export async function fetchRoute(
+  profile: 'walking' | 'driving' | 'cycling' | 'transit',
+  waypoints: Waypoint[]
+): Promise<RouteDetails> {
+  try {
+    if (waypoints.length < 2) {
+      throw new Error('At least 2 waypoints are required for a route');
+    }
+
+    // Convert waypoints to Mapbox format: lng,lat;lng,lat;...
+    const waypointsStr = waypoints
+      .map(wp => `${wp.lng},${wp.lat}`)
+      .join(';');
+
+    const params = new URLSearchParams({
+      waypoints: waypointsStr,
+      profile: profile,
+    });
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/route?${params}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch route: ${response.statusText}`);
+    }
+
+    const routeData = await response.json();
+    return routeData;
+  } catch (error) {
+    console.error('Error fetching route:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch route with caching
+ */
+export async function fetchRouteWithCache(
+  profile: 'walking' | 'driving' | 'cycling' | 'transit',
+  waypoints: Waypoint[]
+): Promise<RouteDetails> {
+  // Create a cache key from profile and waypoints
+  const cacheKey = `${profile}-${waypoints.map(w => `${w.lat},${w.lng}`).join('|')}`;
+
+  // Check cache first
+  if (routeCache.has(cacheKey)) {
+    return routeCache.get(cacheKey)!;
+  }
+
+  // Fetch and cache
+  const details = await fetchRoute(profile, waypoints);
+  routeCache.set(cacheKey, details);
+
+  // Clear cache after 1 hour
+  setTimeout(() => {
+    routeCache.delete(cacheKey);
+  }, 60 * 60 * 1000);
+
+  return details;
 }

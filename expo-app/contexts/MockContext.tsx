@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type { RouteDetails } from '@/utils/transportation-api';
 
 interface Location {
   id: string;
@@ -11,6 +12,13 @@ interface Location {
   photoName?: string;
 }
 
+export interface RouteWithMetadata extends RouteDetails {
+  id: string; // Unique route ID (e.g., "loc-1-to-loc-2")
+  fromId: string; // Origin location ID
+  toId: string; // Destination location ID
+  profile: 'walking' | 'driving' | 'cycling' | 'transit';
+}
+
 interface MockContextType {
   visibleLocations: Location[];
   updateVisibleLocations: (locations: Location[]) => void;
@@ -20,6 +28,10 @@ interface MockContextType {
   setFocusedLocation: (location: Location | null) => void;
   followMode: boolean;
   setFollowMode: (enabled: boolean) => void;
+  routes: RouteWithMetadata[];
+  setRoutes: (routes: RouteWithMetadata[]) => void;
+  selectedRoute: string | null; // Route ID
+  setSelectedRoute: (routeId: string | null) => void;
 }
 
 const MockContext = createContext<MockContextType | undefined>(undefined);
@@ -29,6 +41,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [focusedLocation, setFocusedLocation] = useState<Location | null>(null);
   const [followMode, setFollowMode] = useState<boolean>(false);
+  const [routes, setRoutes] = useState<RouteWithMetadata[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
 
   return (
     <MockContext.Provider
@@ -40,7 +54,11 @@ export function MockProvider({ children }: { children: ReactNode }) {
         focusedLocation,
         setFocusedLocation,
         followMode,
-        setFollowMode
+        setFollowMode,
+        routes,
+        setRoutes,
+        selectedRoute,
+        setSelectedRoute
       }}
     >
       {children}

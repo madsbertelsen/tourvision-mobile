@@ -16,18 +16,28 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const coordinates = searchParams.get('coordinates');
-    const mode = searchParams.get('mode') || 'driving';
 
-    if (!coordinates) {
+    // Support both old 'coordinates' param and new 'waypoints' param
+    const coordinates = searchParams.get('coordinates');
+    const waypoints = searchParams.get('waypoints') || coordinates;
+    const profile = searchParams.get('profile') || searchParams.get('mode') || 'driving';
+
+    if (!waypoints) {
       return NextResponse.json(
-        { error: 'Coordinates are required' },
+        { error: 'Waypoints are required' },
         { status: 400 }
       );
     }
 
-    // Map mode to Mapbox profile
-    const profile = mode === 'driving' ? 'driving-traffic' : mode;
+    // Map transport profiles to Mapbox profiles
+    const mapboxProfile = {
+      'walking': 'walking',
+      'driving': 'driving-traffic',
+      'cycling': 'cycling',
+      'transit': 'walking', // Use walking as approximation for transit
+      'car': 'driving-traffic',
+      'bike': 'cycling',
+    }[profile] || profile;
     
     // Mapbox Directions API
     const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -39,7 +49,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${waypoints}?geometries=geojson&access_token=${mapboxToken}`;
 
     const response = await fetch(url);
     
@@ -65,6 +75,7 @@ export async function GET(request: NextRequest) {
         distance: route.distance, // in meters
         duration: route.duration, // in seconds
         legs: route.legs, // detailed segments if there are waypoints
+        profile: profile, // Include the requested profile
       },
       {
         headers: {

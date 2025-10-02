@@ -19,6 +19,13 @@ export interface SavedTrip {
     transportFrom?: string; // ID of origin location
     transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'; // Transportation mode
   }>;
+  modifications?: Array<{
+    elementId: string;
+    type: 'edit' | 'delete';
+    originalText?: string;
+    newText?: string;
+    timestamp: number;
+  }>;
   createdAt: number;
   updatedAt: number;
 }
