@@ -952,9 +952,9 @@ export default function MockChatScreen() {
               isItineraryContent: true,
             });
           });
-        } else if (hasItineraryContent && !itineraryPart) {
-          // Fallback: Parse HTML content if no itinerary-document part exists yet
-          // This handles backwards compatibility and streaming states
+        } else if (hasItineraryContent && !messageItinerary) {
+          // Fallback: Parse HTML content if no itinerary in array exists yet
+          // This handles streaming states before itinerary is saved
           let itineraryHTML: string;
 
           if (hasCompleteItinerary) {
