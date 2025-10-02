@@ -65,44 +65,38 @@ export function parseJSONToProseMirror(json: any): {
 
 /**
  * Convert ProseMirror document to renderable UI elements
+ * This processes only direct children of the document
  */
 export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string): FlatElement[] {
   const elements: FlatElement[] = [];
-  let elementIndex = 0;
 
   // Track message context for grouping
   let currentMessageId = messageId || 'msg-1';
   let currentMessageColor = '#3B82F6';
 
-  doc.descendants((node, pos) => {
-    // Skip the doc node itself
-    if (node.type === schema.nodes.doc) {
-      return;
-    }
-
+  // Process only direct children of the document
+  doc.content.forEach((node, offset, index) => {
     // Handle different node types
     if (node.type === schema.nodes.paragraph) {
       const parsedContent = parseNodeContent(node);
 
       elements.push({
-        id: `pm-element-${elementIndex}`,
+        id: `pm-element-${index}`,
         type: 'content',
         messageId: currentMessageId,
         messageColor: currentMessageColor,
         text: node.textContent,
         parsedContent,
         height: 50, // Default height, will be measured
-        // Store the index in the document, not the position
-        // We'll find the actual position when needed
-        documentPos: elementIndex,
+        // Store the actual child index, which matches what deleteNodeByIndex expects
+        documentPos: index,
         nodeSize: node.nodeSize,
         isDeleted: false,
         isEdited: false
       });
-      elementIndex++;
     } else if (node.type === schema.nodes.heading) {
       elements.push({
-        id: `pm-element-${elementIndex}`,
+        id: `pm-element-${index}`,
         type: 'content',
         messageId: currentMessageId,
         messageColor: currentMessageColor,
@@ -110,27 +104,50 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
         height: 60, // Slightly taller for headings
         isHeading: true,
         headingLevel: node.attrs.level as 1 | 2 | 3,
-        documentPos: elementIndex,
+        documentPos: index,
         nodeSize: node.nodeSize,
         isDeleted: false,
         isEdited: false
       });
-      elementIndex++;
     } else if (node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList) {
-      // Process list as a single element for now
+      // Process list items
+      const listItems: string[] = [];
+      node.forEach(listItem => {
+        if (listItem.type === schema.nodes.listItem) {
+          listItem.forEach(para => {
+            if (para.type === schema.nodes.paragraph) {
+              listItems.push(para.textContent);
+            }
+          });
+        }
+      });
+
       elements.push({
-        id: `pm-element-${elementIndex}`,
+        id: `pm-element-${index}`,
+        type: 'content',
+        messageId: currentMessageId,
+        messageColor: currentMessageColor,
+        text: listItems.join('\n• '),
+        height: 40 * node.childCount,
+        documentPos: index,
+        nodeSize: node.nodeSize,
+        isDeleted: false,
+        isEdited: false
+      });
+    } else {
+      // Handle any other block nodes
+      elements.push({
+        id: `pm-element-${index}`,
         type: 'content',
         messageId: currentMessageId,
         messageColor: currentMessageColor,
         text: node.textContent,
-        height: 40 * node.childCount,
-        documentPos: elementIndex,
+        height: 50,
+        documentPos: index,
         nodeSize: node.nodeSize,
         isDeleted: false,
         isEdited: false
       });
-      elementIndex++;
     }
   });
 
