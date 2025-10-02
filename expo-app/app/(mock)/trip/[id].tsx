@@ -384,7 +384,8 @@ export default function MockChatScreen() {
         }
 
         setEditorState(restoredState);
-        setHasEdited(true);
+        // No longer needed - we use node IDs
+        // setHasEdited(true);
       }
     }
   }, [currentTrip, editorState]);
