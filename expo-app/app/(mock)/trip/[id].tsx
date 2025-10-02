@@ -575,32 +575,25 @@ export default function MockChatScreen() {
       console.log('[handleEditSave] Using node ID for update:', element.nodeId);
       newState = updateNodeTextById(editorState, element.nodeId, newText);
     } else {
-      // Fallback: Find the actual current index in the document
-      console.log('[handleEditSave] No node ID, falling back to index-based update');
+      // Fallback: Find node by matching content (should rarely be needed)
+      console.log('[handleEditSave] No node ID, attempting to find by content');
       let actualIndex = -1;
 
-      if (!hasEdited && element.documentPos !== undefined) {
-        // If we haven't edited, documentPos should still be accurate
-        actualIndex = element.documentPos;
-        console.log('[handleEditSave] Using original documentPos:', actualIndex);
-      } else {
-        // After edits, we need to find by matching content
-        // IMPORTANT: We must iterate only through direct children, not descendants!
-        const childCount = editorState.doc.content.childCount;
+      // Always search by content - never trust documentPos as it becomes stale
+      const childCount = editorState.doc.content.childCount;
 
-        for (let i = 0; i < childCount; i++) {
-          const node = editorState.doc.content.child(i);
-          const nodeText = node.textContent.trim();
-          const elementText = element.text?.trim();
+      for (let i = 0; i < childCount; i++) {
+        const node = editorState.doc.content.child(i);
+        const nodeText = node.textContent.trim();
+        const elementText = element.text?.trim();
 
-          // Match if the texts are equal or if one starts with the other
-          if (nodeText === elementText ||
-              (elementText && nodeText.startsWith(elementText)) ||
-              (elementText && elementText.startsWith(nodeText))) {
-            actualIndex = i;
-            console.log('[handleEditSave] Found matching node at direct child index:', actualIndex);
-            break;
-          }
+        // Match if the texts are equal or if one starts with the other
+        if (nodeText === elementText ||
+            (elementText && nodeText.startsWith(elementText)) ||
+            (elementText && elementText.startsWith(nodeText))) {
+          actualIndex = i;
+          console.log('[handleEditSave] Found matching node at index:', actualIndex);
+          break;
         }
       }
 
@@ -608,8 +601,6 @@ export default function MockChatScreen() {
         console.error('[handleEditSave] Could not find node in document with text:', element.text);
         return;
       }
-
-      console.log('[handleEditSave] Found node at actual index:', actualIndex, 'originally reported as:', element.documentPos);
 
       // Apply ProseMirror transaction using the actual index
       newState = updateNodeTextByIndex(editorState, actualIndex, newText);
@@ -619,8 +610,8 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Mark that we've edited the document immediately
-    setHasEdited(true);
+    // No longer needed since we use node IDs
+    // setHasEdited(true);
 
     // Update the editor state
     setEditorState(newState);
@@ -721,32 +712,25 @@ export default function MockChatScreen() {
         console.log('[handleDeleteElement] Using node ID for deletion:', elementToDelete.nodeId);
         newState = deleteNodeById(editorState, elementToDelete.nodeId);
       } else {
-        // Fallback: Find the actual current index in the document
-        console.log('[handleDeleteElement] No node ID, falling back to index-based deletion');
+        // Fallback: Find node by matching content (should rarely be needed)
+        console.log('[handleDeleteElement] No node ID, attempting to find by content');
         let actualIndex = -1;
 
-        if (!hasEdited && elementToDelete.documentPos !== undefined) {
-          // If we haven't edited, documentPos should still be accurate
-          actualIndex = elementToDelete.documentPos;
-          console.log('[handleDeleteElement] Using original documentPos:', actualIndex);
-        } else {
-          // After edits, we need to find by matching content
-          // IMPORTANT: We must iterate only through direct children, not descendants!
-          const childCount = editorState.doc.content.childCount;
+        // Always search by content - never trust documentPos as it becomes stale
+        const childCount = editorState.doc.content.childCount;
 
-          for (let i = 0; i < childCount; i++) {
-            const node = editorState.doc.content.child(i);
-            const nodeText = node.textContent.trim();
-            const elementText = elementToDelete.text?.trim();
+        for (let i = 0; i < childCount; i++) {
+          const node = editorState.doc.content.child(i);
+          const nodeText = node.textContent.trim();
+          const elementText = elementToDelete.text?.trim();
 
-            // Match if the texts are equal or if one starts with the other
-            if (nodeText === elementText ||
-                (elementText && nodeText.startsWith(elementText)) ||
-                (elementText && elementText.startsWith(nodeText))) {
-              actualIndex = i;
-              console.log('[handleDeleteElement] Found matching node at direct child index:', actualIndex);
-              break;
-            }
+          // Match if the texts are equal or if one starts with the other
+          if (nodeText === elementText ||
+              (elementText && nodeText.startsWith(elementText)) ||
+              (elementText && elementText.startsWith(nodeText))) {
+            actualIndex = i;
+            console.log('[handleDeleteElement] Found matching node at index:', actualIndex);
+            break;
           }
         }
 
@@ -762,8 +746,6 @@ export default function MockChatScreen() {
           return;
         }
 
-        console.log('[handleDeleteElement] Found node at actual index:', actualIndex, 'originally reported as:', elementToDelete.documentPos);
-
         // Apply ProseMirror transaction using the actual index
         newState = deleteNodeByIndex(editorState, actualIndex);
       }
@@ -778,8 +760,8 @@ export default function MockChatScreen() {
       console.log('[handleDeleteElement] Old doc size:', editorState.doc.content.size);
       console.log('[handleDeleteElement] New doc size:', newState.doc.content.size);
 
-      // Set hasEdited immediately so the useEffect knows to use editorState
-      setHasEdited(true);
+      // No longer needed since we use node IDs
+      // setHasEdited(true);
 
       // Update the editor state and force a re-render
       setEditorState(newState);
@@ -864,14 +846,15 @@ export default function MockChatScreen() {
   }, [editorState, flatElements, currentTrip]);
 
   // Track if we've made any edits to the document
-  const [hasEdited, setHasEdited] = useState(false);
+  // No longer needed - we use node IDs for reliable tracking
+  // const [hasEdited, setHasEdited] = useState(false);
   // Force re-render counter for triggering useEffect
   const [updateCounter, setUpdateCounter] = useState(0);
   // Counter for generating unique IDs that won't be reused
 
   // Process messages and update flat elements when messages or collapse state changes
   useEffect(() => {
-    console.log('[useEffect] Running with updateCounter:', updateCounter, 'hasEdited:', hasEdited);
+    console.log('[useEffect] Running with updateCounter:', updateCounter);
     const elements: FlatElement[] = [];
 
     messages.forEach((message, msgIndex) => {
@@ -930,7 +913,7 @@ export default function MockChatScreen() {
           let state;
 
           // If we have edited the document, use the editorState as source of truth
-          if (hasEdited && editorState) {
+          if (editorState) {
             console.log('[useEffect] Using edited editorState as source, doc children:', editorState.doc.content.childCount);
             doc = editorState.doc;
             state = editorState;
@@ -951,7 +934,7 @@ export default function MockChatScreen() {
           // Convert ProseMirror document to renderable elements
           const pmElements = proseMirrorToElements(doc, message.id);
 
-          console.log('[useEffect] Rendering ProseMirror elements:', pmElements.length, 'hasEdited:', hasEdited);
+          console.log('[useEffect] Rendering ProseMirror elements:', pmElements.length);
 
           // Add elements with message context
           pmElements.forEach((pmElement, index) => {
@@ -1077,7 +1060,7 @@ export default function MockChatScreen() {
     console.log('[useEffect] Setting flatElements with', elements.length, 'total elements');
     console.log('[useEffect] Element IDs:', elements.map(el => el.id));
     setFlatElements(elements);
-  }, [messages, collapsedMessages, hasEdited, editorState, updateCounter]); // Dependencies for proper updates
+  }, [messages, collapsedMessages, editorState, updateCounter]); // Dependencies for proper updates
 
   // Get context for sharing locations with layout
   const { updateVisibleLocations, setRoutes } = useMockContext();
