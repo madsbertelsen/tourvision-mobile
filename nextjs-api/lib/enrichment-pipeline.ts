@@ -85,6 +85,11 @@ export class EnrichmentPipeline {
     const latMatch = geoMarkHtml.match(/data-lat="([^"]*)"/);
     const lngMatch = geoMarkHtml.match(/data-lng="([^"]*)"/);
 
+    // Extract transport-related attributes to preserve them
+    const geoIdMatch = geoMarkHtml.match(/data-geo-id="([^"]*)"/);
+    const transportFromMatch = geoMarkHtml.match(/data-transport-from="([^"]*)"/);
+    const transportProfileMatch = geoMarkHtml.match(/data-transport-profile="([^"]*)"/);
+
     // Extract place name
     const placeName = placeNameMatch ? placeNameMatch[1] : null;
     console.log('[EnrichmentPipeline] Extracted place name:', placeName);
@@ -118,7 +123,7 @@ export class EnrichmentPipeline {
     enriched = enriched.replace(/data-lat="[^"]*"/, `data-lat="${coords.lat}"`);
     enriched = enriched.replace(/data-lng="[^"]*"/, `data-lng="${coords.lng}"`);
 
-    // Add a data attribute to indicate the source
+    // Build attributes to add
     let sourceAttrs = `data-coord-source="${coords.source}"`;
 
     // Add photo name if available
@@ -132,9 +137,12 @@ export class EnrichmentPipeline {
       sourceAttrs += ` data-description="${escapedDescription}"`;
     }
 
+    // Insert attributes after class="geo-mark"
+    // Note: transport attributes (data-geo-id, data-transport-from, data-transport-profile)
+    // are already in the original HTML and will be preserved
     enriched = enriched.replace(
-      'data-geo="true"',
-      `data-geo="true" ${sourceAttrs}`
+      'class="geo-mark"',
+      `class="geo-mark" ${sourceAttrs}`
     );
 
     console.log('[EnrichmentPipeline] Enriched geo-mark:', enriched.substring(0, 200));

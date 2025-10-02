@@ -23,6 +23,7 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
+import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -48,8 +49,8 @@ function getColorIndex(color?: string): number {
 }
 
 // Helper to parse itinerary content with geo-marks
-const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
-  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
+const parseItineraryContent = (htmlContent: string): Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null, geoId?: string, transportFrom?: string, transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> => {
+  const chunks: Array<{text: string, parsedContent: Array<{type: 'text' | 'geo-mark' | 'h1' | 'h2' | 'h3', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null, geoId?: string, transportFrom?: string, transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'}>, isHeading?: boolean, headingLevel?: 1 | 2 | 3}> = [];
   let colorIndex = 0;
   const locationColors = new Map<string, string>();
 
@@ -69,7 +70,7 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
 
     // Combine all paragraphs in the group
     const combinedContent = currentParagraphGroup.join(' ');
-    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null}> = [];
+    const parsedContent: Array<{type: 'text' | 'geo-mark', text: string, color?: string, lat?: string | null, lng?: string | null, photoName?: string | null, description?: string | null, geoId?: string, transportFrom?: string, transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'}> = [];
 
     // Process the combined content for geo-marks
     const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>([^<]+)<\/span>/g;
@@ -85,17 +86,24 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         }
       }
 
-      // Extract coordinates, photo, and description from the geo-mark
+      // Extract coordinates, photo, description, and transport attributes from the geo-mark
       const fullMatch = match[0];
       const locationName = match[1];
       const latMatch = fullMatch.match(/data-lat="([^"]+)"/);
       const lngMatch = fullMatch.match(/data-lng="([^"]+)"/);
       const photoNameMatch = fullMatch.match(/data-photo-name="([^"]+)"/);
       const descriptionMatch = fullMatch.match(/data-description="([^"]+)"/);
+      const geoIdMatch = fullMatch.match(/data-geo-id="([^"]+)"/);
+      const transportFromMatch = fullMatch.match(/data-transport-from="([^"]+)"/);
+      const transportProfileMatch = fullMatch.match(/data-transport-profile="([^"]+)"/);
+
       const lat = latMatch ? latMatch[1] : null;
       const lng = lngMatch ? lngMatch[1] : null;
       const photoName = photoNameMatch ? photoNameMatch[1] : null;
       const description = descriptionMatch ? descriptionMatch[1].replace(/&quot;/g, '"') : null;
+      const geoId = geoIdMatch ? geoIdMatch[1] : undefined;
+      const transportFrom = transportFromMatch ? transportFromMatch[1] : undefined;
+      const transportProfile = transportProfileMatch ? transportProfileMatch[1] as 'walking' | 'driving' | 'cycling' | 'transit' : undefined;
 
       console.log('[parseItineraryContent] Extracted geo-mark:', {
         locationName,
@@ -103,6 +111,9 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         lng,
         photoName,
         description: description ? description.substring(0, 50) + '...' : null,
+        geoId,
+        transportFrom,
+        transportProfile,
         fullMatch: fullMatch.substring(0, 200) + '...'
       });
 
@@ -118,7 +129,10 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         lat,
         lng,
         photoName,
-        description
+        description,
+        geoId,
+        transportFrom,
+        transportProfile
       });
 
       lastIndex = geoMarkRegex.lastIndex;
@@ -224,9 +238,9 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
   return chunks;
 };
 
-// Extract all locations from elements for map with their assigned colors
+// Extract all locations from elements for map with their assigned colors and transport data
 function extractAllLocations(elements: FlatElement[]) {
-  const locations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}> = [];
+  const locations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string, geoId?: string, transportFrom?: string, transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'}> = [];
   const seen = new Set<string>();
 
   elements.forEach(element => {
@@ -244,7 +258,10 @@ function extractAllLocations(elements: FlatElement[]) {
                 lat,
                 lng,
                 color: item.color, // Preserve the color from parsedContent
-                photoName: item.photoName || undefined
+                photoName: item.photoName || undefined,
+                geoId: item.geoId,
+                transportFrom: item.transportFrom,
+                transportProfile: item.transportProfile
               };
               console.log('[extractAllLocations] Adding location:', location);
               locations.push(location);
@@ -272,6 +289,7 @@ export default function MockChatScreen() {
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set());
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
+  const [locationGraph, setLocationGraph] = useState<LocationGraph | null>(null);
 
   // Load trip on mount first
   useEffect(() => {
@@ -520,7 +538,20 @@ export default function MockChatScreen() {
       lng: loc.lng,
       photoName: loc.photoName,
       colorIndex: getColorIndex(loc.color),
+      geoId: loc.geoId,
+      transportFrom: loc.transportFrom,
+      transportProfile: loc.transportProfile,
     }));
+
+    // Build location graph from the locations
+    if (locationsWithDescription.length > 0) {
+      const graph = buildLocationGraph(locationsWithDescription);
+      enhanceGraphWithDistances(graph);
+      setLocationGraph(graph);
+
+      // Log the graph summary for debugging
+      console.log('[TripChat] Location Graph:', summarizeGraph(graph));
+    }
 
     const updatedTrip: SavedTrip = {
       ...currentTrip,

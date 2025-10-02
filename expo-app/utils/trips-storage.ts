@@ -15,6 +15,9 @@ export interface SavedTrip {
     description?: string;
     photoName?: string;
     colorIndex?: number;
+    geoId?: string; // Unique ID for this location
+    transportFrom?: string; // ID of origin location
+    transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'; // Transportation mode
   }>;
   createdAt: number;
   updatedAt: number;

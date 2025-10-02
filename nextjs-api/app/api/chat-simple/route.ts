@@ -99,20 +99,23 @@ HTML tags to use inside <itinerary>:
 NEVER use markdown (no #, ##, **, *, etc.) inside <itinerary> tags.
 NEVER include <html>, <body>, <head> or other document-level tags.
 
-For locations inside itineraries, use this special format to enable map visualization:
-<span class="geo-mark" data-geo="true" data-lat="PENDING" data-lng="PENDING" data-place-name="Location Name, City" title="📍 Location Name">Location Name</span>
+For locations inside itineraries, use this special format to enable map visualization and routing:
+<span class="geo-mark" data-geo-id="loc-1" data-lat="APPROXIMATE_LAT" data-lng="APPROXIMATE_LNG" data-place-name="Location Name, City" title="📍 Location Name">Location Name</span>
 
 CRITICAL RULES for geo-marks:
 1. You MUST wrap EVERY location name (cities, attractions, stations, restaurants, etc.) in geo-mark spans
-2. This applies to locations in ALL contexts: paragraphs (<p>), lists (<li>), headings, etc.
-3. Provide APPROXIMATE coordinates (data-lat and data-lng) based on your knowledge - these help disambiguate locations
-4. The data-place-name should include city/country context (e.g., "Eiffel Tower, Paris, France")
-5. The system will fetch accurate coordinates from Google Places API using your approximate coords to disambiguate
+2. Assign each location a unique ID: data-geo-id="loc-1", "loc-2", etc. (sequential within the response)
+3. For destinations, reference the origin using: data-transport-from="loc-1" (the ID of the starting location)
+4. Specify transport mode: data-transport-profile="walking|driving|cycling|transit"
+5. Provide APPROXIMATE coordinates (data-lat and data-lng) based on your knowledge - these help disambiguate locations
+6. The data-place-name should include city/country context (e.g., "Eiffel Tower, Paris, France")
+7. The system will fetch accurate coordinates from Google Places API using your approximate coords to disambiguate
 
 Examples:
-- In paragraphs: Visit <span class="geo-mark" data-geo="true" data-lat="48.8584" data-lng="2.2945" data-place-name="Eiffel Tower, Paris">Eiffel Tower</span> in the morning.
-- In lists: <li><span class="geo-mark" data-geo="true" data-lat="55.6414" data-lng="12.0803" data-place-name="Roskilde Station, Denmark">Roskilde Station</span>: Departure at 12:20</li>
-- Multiple per line: Travel from <span class="geo-mark" data-geo="true" data-lat="55.6761" data-lng="12.5683" data-place-name="Copenhagen Central Station, Denmark">Copenhagen</span> to <span class="geo-mark" data-geo="true" data-lat="59.9111" data-lng="10.7500" data-place-name="Oslo Central Station, Norway">Oslo</span>.
+- First location: Start at <span class="geo-mark" data-geo-id="loc-1" data-lat="48.8566" data-lng="2.3522" data-place-name="Louvre Museum, Paris">Louvre Museum</span>.
+- With transport: Walk to <span class="geo-mark" data-geo-id="loc-2" data-lat="48.8584" data-lng="2.2945" data-place-name="Eiffel Tower, Paris" data-transport-from="loc-1" data-transport-profile="walking">Eiffel Tower</span> (25 min walk).
+- Next destination: Then take a taxi to <span class="geo-mark" data-geo-id="loc-3" data-lat="48.8606" data-lng="2.3376" data-place-name="Place de la Concorde, Paris" data-transport-from="loc-2" data-transport-profile="driving">Place de la Concorde</span>.
+- In lists: <li><span class="geo-mark" data-geo-id="loc-4" data-lat="55.6414" data-lng="12.0803" data-place-name="Roskilde Station, Denmark">Roskilde Station</span>: Departure at 12:20</li>
 
 Your approximate coordinates don't need to be perfect - they're used to help Google Places API choose the correct location when multiple matches exist.
 

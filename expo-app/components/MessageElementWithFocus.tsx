@@ -23,6 +23,9 @@ export type FlatElement = {
     lng?: string | null;
     photoName?: string | null;
     description?: string | null;
+    geoId?: string; // Unique ID for this location
+    transportFrom?: string; // ID of origin location
+    transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'; // Transportation mode
   }>;
   isHeading?: boolean;
   headingLevel?: 1 | 2 | 3;
