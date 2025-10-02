@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Text, View, StyleSheet, Animated, TouchableOpacity, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useMockContext } from '@/contexts/MockContext';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // Enhanced type definitions with focus support
 export type FlatElement = {
@@ -32,6 +32,8 @@ export type FlatElement = {
   isDeleted?: boolean; // Track if element is deleted
   isEdited?: boolean; // Track if element has been edited
   originalText?: string; // Store original text for undo
+  documentPos?: number; // Position in ProseMirror document
+  nodeSize?: number; // Size of node in ProseMirror document
 };
 
 export interface Location {
@@ -374,7 +376,8 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
           </Text>
         )}
       </Animated.View>
-    );
+    </TouchableOpacity>
+  );
   }
 
   // Skip footer rendering - we're using a unified sheet

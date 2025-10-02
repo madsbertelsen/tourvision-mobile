@@ -19,6 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { MessageElementWithFocus, FlatElement, messageElementWithFocusStyles } from '@/components/MessageElementWithFocus';
 import { MessageActionSheet } from '@/components/MessageActionSheet';
 import { useMockContext } from '@/contexts/MockContext';
+import { EditorState } from 'prosemirror-state';
+import { parseHTMLToProseMirror, parseJSONToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
+import { deleteNode, updateNodeText, stateToJSON } from '@/utils/prosemirror-transactions';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
@@ -299,6 +302,8 @@ export default function MockChatScreen() {
   const lastFetchedGraphKey = useRef<string>('');
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [selectedElement, setSelectedElement] = useState<FlatElement | null>(null);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
+  const [flatElements, setFlatElements] = useState<FlatElement[]>([]);
 
   // Load trip on mount first
   useEffect(() => {
@@ -374,37 +379,116 @@ export default function MockChatScreen() {
     setActionSheetVisible(true);
   }, []);
 
-  // Handle edit save
-  const handleEditSave = useCallback((elementId: string, newText: string) => {
-    setFlatElements(prev => prev.map(el => {
-      if (el.id === elementId) {
-        return {
-          ...el,
-          text: newText,
-          isEdited: true,
-          originalText: el.originalText || el.text,
-        };
-      }
-      return el;
-    }));
-  }, []);
+  // Handle edit save using ProseMirror transactions
+  const handleEditSave = useCallback(async (elementId: string, newText: string) => {
+    if (!editorState) {
+      // Fallback to direct manipulation if no ProseMirror state
+      setFlatElements(prev => prev.map(el => {
+        if (el.id === elementId) {
+          return {
+            ...el,
+            text: newText,
+            isEdited: true,
+            originalText: el.originalText || el.text,
+          };
+        }
+        return el;
+      }));
+      return;
+    }
 
-  // Handle delete element
-  const handleDeleteElement = useCallback((elementId: string) => {
-    setFlatElements(prev => prev.map(el => {
-      if (el.id === elementId) {
-        return {
-          ...el,
-          isDeleted: true,
-        };
-      }
-      return el;
-    }));
+    // Find the element with its document position
+    const element = flatElements.find(el => el.id === elementId);
+    if (!element || element.documentPos === undefined || element.nodeSize === undefined) {
+      console.error('Element not found or missing document position:', elementId);
+      return;
+    }
+
+    // Apply ProseMirror transaction
+    const newState = updateNodeText(editorState, element.documentPos, element.nodeSize, newText);
+    setEditorState(newState);
+
+    // Convert updated document to elements
+    const updatedElements = proseMirrorToElements(newState.doc);
+    setFlatElements(updatedElements);
+
+    // Save to local storage
+    if (currentTrip) {
+      const updatedTrip = {
+        ...currentTrip,
+        itinerary_document: stateToJSON(newState),
+        modifications: [
+          ...(currentTrip.modifications || []),
+          {
+            elementId,
+            type: 'edit' as const,
+            originalText: element.text,
+            newText,
+            timestamp: Date.now(),
+          }
+        ]
+      };
+      await saveTrip(updatedTrip);
+      setCurrentTrip(updatedTrip);
+    }
+  }, [editorState, flatElements, currentTrip]);
+
+  // Handle delete element using ProseMirror transactions
+  const handleDeleteElement = useCallback(async (elementId: string) => {
+    if (!editorState) {
+      // Fallback to direct manipulation if no ProseMirror state
+      setFlatElements(prev => prev.map(el => {
+        if (el.id === elementId) {
+          return {
+            ...el,
+            isDeleted: true,
+          };
+        }
+        return el;
+      }));
+      setActionSheetVisible(false);
+      return;
+    }
+
+    // Find the element with its document position
+    const element = flatElements.find(el => el.id === elementId);
+    if (!element || element.documentPos === undefined || element.nodeSize === undefined) {
+      console.error('Element not found or missing document position:', elementId);
+      return;
+    }
+
+    // Apply ProseMirror transaction
+    const newState = deleteNode(editorState, element.documentPos, element.nodeSize);
+    setEditorState(newState);
+
+    // Convert updated document to elements
+    const updatedElements = proseMirrorToElements(newState.doc);
+    setFlatElements(updatedElements);
+
+    // Save to local storage
+    if (currentTrip) {
+      const updatedTrip = {
+        ...currentTrip,
+        itinerary_document: stateToJSON(newState),
+        modifications: [
+          ...(currentTrip.modifications || []),
+          {
+            elementId,
+            type: 'delete' as const,
+            originalText: element.text,
+            timestamp: Date.now(),
+          }
+        ]
+      };
+      await saveTrip(updatedTrip);
+      setCurrentTrip(updatedTrip);
+    }
+
     setActionSheetVisible(false);
-  }, []);
+  }, [editorState, flatElements, currentTrip]);
 
-  // Convert messages to flat element structure
-  const flatElements = useMemo(() => {
+  // Process messages and update flat elements when messages or editor state changes
+  useEffect(() => {
     const elements: FlatElement[] = [];
 
     messages.forEach((message, msgIndex) => {
@@ -455,22 +539,26 @@ export default function MockChatScreen() {
       if (!isCollapsed) {
         // Add content elements
         if (hasHTMLContent) {
-          // Parse itinerary HTML into chunks
-          const chunks = parseItineraryContent(textContent);
-          console.log('Parsing HTML content, chunks:', chunks);
-          chunks.forEach((chunk, i) => {
+          // Parse HTML content using ProseMirror
+          const { state, doc } = parseHTMLToProseMirror(textContent);
+
+          // Store the ProseMirror state for this message
+          // Note: We'll need to manage this properly in a useEffect
+
+          // Convert ProseMirror document to renderable elements
+          const pmElements = proseMirrorToElements(doc);
+
+          console.log('Parsed HTML to ProseMirror, elements:', pmElements.length);
+
+          // Add elements with message context
+          pmElements.forEach(pmElement => {
             elements.push({
-              id: `${message.id}-content-${i}`,
-              type: 'content',
+              ...pmElement,
+              id: `${message.id}-${pmElement.id}`,
               messageId: message.id,
               messageColor: messageColor,
-              text: chunk.text,
-              parsedContent: chunk.parsedContent,
-              height: 0, // Let content grow naturally
-              isItineraryContent: true,
-              isHeading: chunk.isHeading,
-              headingLevel: chunk.headingLevel,
               role: message.role as 'user' | 'assistant',
+              isItineraryContent: true,
             });
           });
         } else if (textContent) {
@@ -499,8 +587,25 @@ export default function MockChatScreen() {
       }
     });
 
-    return elements;
-  }, [messages, collapsedMessages]);
+    // Update state with the processed elements
+    setFlatElements(elements);
+
+    // If we have HTML content and no editor state yet, create it
+    const hasItineraryContent = elements.some(el => el.isItineraryContent);
+    if (hasItineraryContent && !editorState) {
+      // Find the last HTML message and parse it
+      const lastHTMLMessage = messages.findLast((msg: any) => {
+        const content = msg.parts?.find((part: any) => part.type === 'text')?.text || '';
+        return content.includes('geo-mark') || content.includes('<p>');
+      });
+
+      if (lastHTMLMessage) {
+        const htmlContent = lastHTMLMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
+        const { state } = parseHTMLToProseMirror(htmlContent);
+        setEditorState(state);
+      }
+    }
+  }, [messages, collapsedMessages, editorState]);
 
   // Get context for sharing locations with layout
   const { updateVisibleLocations, setRoutes } = useMockContext();
