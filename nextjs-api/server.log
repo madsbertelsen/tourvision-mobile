@@ -5595,3 +5595,716 @@ Stream finished, messages count: 1
 [chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo-id="loc-18" data-lat="55.03" data-lng="15.15" data-place-nam  ->      <li><span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJnVXhsQ5sVUYRqxB
 Stream finished, messages count: 1
  POST /api/chat-simple 200 in 27111ms
+[chat-simple] Google API Key configured: Yes (AIzaSyBQPF...)
+[EnrichmentPipeline] Initialized with API key: Yes
+[Firecrawl Tool] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracted 70 locations from content
+[Firecrawl Tool] Successfully extracted 70 locations
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 792
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, B
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.12" data-lng="14.72" data-place-name="Nørrek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.12" data-lng="14.72" data-place-name="Nørrekås strand, Bornholm" data-transport-from="loc-1" d
+[EnrichmentPipeline] Extracted place name: Nørrekås strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.12, lng: 14.72 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nørrekås strand, Bornholm
+[Geocoding] geocodeLocation called with: Nørrekås strand, Bornholm API key: present
+[Geocoding] Cache hit for: Nørrekås strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.104445899999995,
+  lng: 14.6955952,
+  photoName: 'places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fDh7c2AvklHdr9NN9tMRcwdSNIOikpuYMs22qO48TQGRFjF_Jqtnb-MWV9zjSKgT8XzEtKu7IqH7EmUAnmJkWfJPk2kuv0pdWELx3A7tFdFqPD9fEMr9sb78QFMc4ZYb0T--2P1knw8kDlfpnFhVFWnHMXkTunxfjarL_hbZZgRB4tM0rzItBKhpAJz9OxJ1l65SiF8drH_rg_bIhfXORLVVh_E-Sx5KBARQaTMPrvjjnSALCTmufcDmrIJSwWz4UpnaKAltdhQ1ojzoTJ8BmehOQkVQNH9Bhn6ePwJONZ4heHhQ11X6VEZCfAzvOgTzyABIfj8IaY1sncYUQk5g1Z6u3lxFguWnVvnsiajZ5RVUyK9M24fN4IKiKOw8CuD2Rn4eiQ_phhXl2dl-U7dryw0hCUNbAeVLdwTYxJlRnZ9g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fDh7c2AvklHdr9NN9tMRcwdSNIOikpuYMs22qO48TQGRFjF_Jqtnb-MWV9zjSKgT8XzEtKu7IqH7EmUAnmJkWf
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.15" data-lng="14.75" data-place-name="Antoin
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.15" data-lng="14.75" data-place-name="Antoinettes strand, Bornholm" data-transport-from="loc-2
+[EnrichmentPipeline] Extracted place name: Antoinettes strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.15, lng: 14.75 }
+[EnrichmentPipeline] Calling geocodeLocation for: Antoinettes strand, Bornholm
+[Geocoding] geocodeLocation called with: Antoinettes strand, Bornholm API key: present
+[Geocoding] Cache hit for: Antoinettes strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1194438,
+  lng: 14.7048284,
+  photoName: 'places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2eLrZYR50YW8fktgfItK7qsc5aqKYShsiqAPM_UuEPrESStKUR0W2YafKMwJ0oxuXlUFK1Kl6xmIFfilj65LGFW2J983dil5Xoase2zlvF05hoQN_bxB39QKJ_GVJEuw-546Kivqg2D6azy2wdUcpFQ_yQ6ZON2U84C0X5bH3JUwrrCC8Iqb0FgrwkSgD_PJoLhhVxAHE1hFGvrpoSLXO-NrS9eWO2VZq5FlAY23D6z_RM1JgXPHxslcWinuDjk5v2KtQBGo9lmusdZCGTPU28WOMxfDWmYwItCCl07Xk3MRFAe9e3NbyuDauvNUg92ikab8dHwsS1ckqawRass9tVzgGXqhBwC1Y_izuvJSV8rACkHCcIqmz59g5L4T9pnzjYNBHVoHf5zekgYk-0HjIPD3geZ0peehw7nfT-YAJlzbyo7',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2eLrZYR50YW8fktgfItK7qsc5aqKYShsiqAPM_UuEPrESStKUR0W2YafKMwJ0oxuXlUFK1Kl6xmIFfilj65LGFW
+[chat-simple] Chunk was enriched:   <p>Din rejse begynder i <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7"  ->    <p>Din rejse begynder i <span class="geo-mark" data-coord-source="cache" data-photo-name="places/C
+ OPTIONS /api/route?waypoints=14.708328999999999%2C55.101017%3B14.6955952%2C55.104445899999995&profile=driving 200 in 22ms
+ OPTIONS /api/route?waypoints=14.6955952%2C55.104445899999995%3B14.7048284%2C55.1194438&profile=driving 200 in 24ms
+ GET /api/route?waypoints=14.708328999999999%2C55.101017%3B14.6955952%2C55.104445899999995&profile=driving 200 in 132ms
+ GET /api/route?waypoints=14.6955952%2C55.104445899999995%3B14.7048284%2C55.1194438&profile=driving 200 in 158ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 1161
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-place-name="Sandvig, Bornholm" data-transport-from="loc-3" data-tran
+[EnrichmentPipeline] Extracted place name: Sandvig, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2UX5kB18n-s5wC0udADhh3teUbpASImxCoupL5VZhMW4HMB-sXTaTBD6OIgbreB82sSdW_jJZIs0Q1yPe5ExrBCPZwmeZbSjjqioOhX8lyU64CZOt9GSvFrClKDBa6vKB4GtQCh3okE_zbpeNziVo_QJW545Iyt9tKmdSwqDCOpKqC32e8VxF540jP5zaqHe-w9Q6ubvyPJlzTGueQ92RebWprHsfGBv7F8CJas3W4L38c17gifyjgcA6yG8wyNlySZm3_sjuZO2XAfUFcx8YNxOiIX50o3fHJLUd-oksXOzDdrZV-O3m3tdEX6FW2Iy6JmUE7Sn_oz76LtOgKGZuk8u1n',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2U
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-5" data-lat="55.28" data-lng="14.93" data-place-name="Nation
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-5" data-lat="55.28" data-lng="14.93" data-place-name="Nationalpark Hammeren, Bornholm" data-transport-from="lo
+[EnrichmentPipeline] Extracted place name: Nationalpark Hammeren, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.28, lng: 14.93 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nationalpark Hammeren, Bornholm
+[Geocoding] geocodeLocation called with: Nationalpark Hammeren, Bornholm API key: present
+[Geocoding] Cache hit for: Nationalpark Hammeren, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.297277,
+  lng: 14.773530800000001,
+  photoName: 'places/ChIJMY2sFGsHVUYRux5OdrbMxS0/photos/AciIO2eZ_YgmeyX9ySedy4LzpT-QCSRz2WNCEDh2YEqe-8--zHKNHANo9TYV97fxZd5P0kiUYj9PHTbeeL5GBnIo9FsJx_NLhsgznVEaHiJ63kKtQ65UkKcJA8SpuplJ45bIVk5JdoR_wxQvH2wDgpuezPGF3RK_C0if_VJqYZRLEvoMHmSr6HYskZaZXpIM_eJYYZdwvWfQwCf34YrLrFTCSVrhvbvADqERCwAUkeE6J_V8pxxKfGxjKN07KwuxsyCqW9USyBrIQdZJtYUbqrvazKV_dwe0iictYElksesy6q-VtG1Zvt__4dVQSth63uPaxArxDrGE0hPHwr4crWNCHyy5-WNyeJVOtM9UWGvrK3i-ZkdthhGXX52Oxd0OWu8KI4OPIBrEy5pnKc0nXq1XnJ23wvWfS_Kqkx2s6Ld1H8EGf6Q',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJMY2sFGsHVUYRux5OdrbMxS0/photos/AciIO2eZ_YgmeyX9ySedy4LzpT-QCSRz2WNCEDh2YEqe-8--zHKNHANo9TYV97fxZd5P0kiUYj9PHTbeeL5GBnIo9FsJ
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-6" data-lat="55.27" data-lng="14.91" data-place-name="Opalsø
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-6" data-lat="55.27" data-lng="14.91" data-place-name="Opalsøen, Bornholm" data-transport-from="loc-5" data-tra
+[EnrichmentPipeline] Extracted place name: Opalsøen, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.91 }
+[EnrichmentPipeline] Calling geocodeLocation for: Opalsøen, Bornholm
+[Geocoding] geocodeLocation called with: Opalsøen, Bornholm API key: present
+[Geocoding] Cache hit for: Opalsøen, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2828149,
+  lng: 14.761053299999999,
+  photoName: 'places/ChIJo3UPRT4HVUYR3XxsdbIg0vI/photos/AciIO2cuzY97bOdm8nUHtJG8iB4mngjwKW_sxPP9ta60jtdO793eqzmEF2YjjP_KH1yl7drl3LNDoCoJWxKWvOgeu-486T_OXCGTLzyeALE3oeNcOpi19htEEvs9l_wqPStNtjwFCfsnVr-rlRHbXDTP0Iw-nfW1ViTIfN8L1Hh_T0YdBP8vE7FC5BC-ZiXNjIVt_OM9kleCSjdFYs4ONy45hSIwvD7TdQBaSzDB2aGomHtgZABHCzmhzFVbB5XTLu53h_IdNldQi6F0G-vX5EB0CbC0DgWpGhvjx5YjmZ6G_iyeVQ_wbEXXoHtRajenUAdbvhlhb-fqyUZ6X3-c1zSOb_wHcK3rAyEf5Wp9J87iEb05skxSSWlY7-iBtpCIkyA42ATTm9IS0KPsAUwl5g1wEocnJaIQQ7ARTIdUcgsVTyVgFA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJo3UPRT4HVUYR3XxsdbIg0vI/photos/AciIO2cuzY97bOdm8nUHtJG8iB4mngjwKW_sxPP9ta60jtdO793eqzmEF2YjjP_KH1yl7drl3LNDoCoJWxKWvOgeu-48
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-7" data-lat="55.29" data-lng="14.94" data-place-name="Hammer
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-7" data-lat="55.29" data-lng="14.94" data-place-name="Hammershus borgruin, Bornholm" data-transport-from="loc-
+[EnrichmentPipeline] Extracted place name: Hammershus borgruin, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.29, lng: 14.94 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hammershus borgruin, Bornholm
+[Geocoding] geocodeLocation called with: Hammershus borgruin, Bornholm API key: present
+[Geocoding] Cache hit for: Hammershus borgruin, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2713045,
+  lng: 14.7553955,
+  photoName: 'places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2eK3CQdo-SAmkkklLZELLMSJYCFwSsnKWBXqHa1M7Ktli_MqC-14FiNHEa_OeeTVHGnHkVAjFB-r84ruzmxmARB2PtSmyxU10SJ5AAQ5UT0CvSvXYIcBvYOyxixH7TDU4VYlQoD1cDAJX-DP74kvLzKRaS2TvaPTRi8wOzhcy3V_KJbyoEmQF_OSxz3VE2Zfg_UTpbCIBvipMDOMARAw-XvUC1rI5FSxsQoa7mt_XSGss78HFM52hBdNY8YfUekg7PYNTBfEe8o4cq9JEpcUKXpCz2W6L5bLnWcib1gWZa7JO2kwPi1qZCyAmN3KxbfSSG2c1jkxEFppQpAgW8MBwq4112d0DVdH3P-r7XFy_msTE4WZrZkiAC8bOyW2gZUHDazb_Wy61KHYuUU9YvBRN6vvwfLahWyb_RL_cqD3gIIyBkW',
+  description: 'Ruins of an imposing castle, built by the church in 1200, plus an exhibition center with models.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2eK3CQdo-SAmkkklLZELLMSJYCFwSsnKWBXqHa1M7Ktli_MqC-14FiNHEa_OeeTVHGnHkVAjFB-r84ruzmxmARB
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-8" data-lat="55.27" data-lng="14.92" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-8" data-lat="55.27" data-lng="14.92" data-place-name="Sandvig strand, Bornholm" data-transport-from="loc-7" da
+[EnrichmentPipeline] Extracted place name: Sandvig strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig strand, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig strand, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2900023,
+  lng: 14.777671899999998,
+  photoName: 'places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2eyhnMW-Gxlnppo-SFk4RGQgjLe--ZkywzLm0UGaGaJW8Ufz855h4JPQ0blc6fMC0i_SqLqyhweohl-NQYhWtRvygIlTh3ThASYT9DMaWeVU-0k4HS1HD8DuFMSt6XPH6uKavZ-AqGZvMQ59PQUJXlFdj8JM8tIMTS0rfXZOhI23I58d3YxbDXT3sfJVOp88BAD3ayc5wLJtLbfvxKflxqBembff63l1ojg_aF4lBTJghTqfxoGV3EBtlQJrLsPxSJhDu1TRbYI1dPUpJJ4CzKYYRZ5QhXWKCCUTCzsccOAiVmo_J1s-K0RzZ0eysDwi2GALvrxRHJDyFy6BuSCj-w-JQLdUDWsnqsyzGXaUWruFhOmk1p-9SqVBxd3v00hlkstJbwEq_f-7bSP5dfkBW77pgzzjvt08YqfOeFyqwIUZaFI',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2eyhnMW-Gxlnppo-SFk4RGQgjLe--ZkywzLm0UGaGaJW8Ufz855h4JPQ0blc6fMC0i_SqLqyhweohl-NQYhWtRv
+[chat-simple] Chunk was enriched:   <p>Byen <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-place-na  ->    <p>Byen <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRl
+ OPTIONS /api/route?waypoints=14.7048284%2C55.1194438%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 44ms
+ OPTIONS /api/route?waypoints=14.761053299999999%2C55.2828149%3B14.7553955%2C55.2713045&profile=walking 200 in 46ms
+ OPTIONS /api/route?waypoints=14.7553955%2C55.2713045%3B14.777671899999998%2C55.2900023&profile=walking 200 in 47ms
+ OPTIONS /api/route?waypoints=14.773530800000001%2C55.297277%3B14.761053299999999%2C55.2828149&profile=walking 200 in 51ms
+ GET /api/route?waypoints=14.773530800000001%2C55.297277%3B14.761053299999999%2C55.2828149&profile=walking 200 in 111ms
+ GET /api/route?waypoints=14.761053299999999%2C55.2828149%3B14.7553955%2C55.2713045&profile=walking 200 in 118ms
+ GET /api/route?waypoints=14.7048284%2C55.1194438%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 146ms
+ GET /api/route?waypoints=14.7553955%2C55.2713045%3B14.777671899999998%2C55.2900023&profile=walking 200 in 139ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 932
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-9" data-lat="55.15" data-lng="14.95" data-place-name="Svanek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-9" data-lat="55.15" data-lng="14.95" data-place-name="Svaneke, Bornholm" data-transport-from="loc-8" data-tran
+[EnrichmentPipeline] Extracted place name: Svaneke, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.15, lng: 14.95 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Bornholm
+[Geocoding] geocodeLocation called with: Svaneke, Bornholm API key: present
+[Geocoding] Cache hit for: Svaneke, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMalgqlAWzxOvax-FcTLp1ob2tnpAiYkIoti5KbA3JXKhXr9vT6EfVmIcVRYPngplPt2UZsa4vWOr9qpp1VqHKRI9NXu3R13feH9BoX5_K4dhQjGHJvuiIgUmCvnWaUTRfkJT9AJQVM2aPfk4q17AfuQKpRiwXY1fjcs0c45BOb-GrLvZPEItuo3If0xQNvwxBvjuvu6gFyBr6yJ8zA8I45Fejwsm1GT9dgSuT9wG5Q7m1nx6PNRhyegTvOTQNzcGUcS94I12qLovHGa8Bd3gz-T9ayd9HuA-XGbGg20olrfhGtKTlB7WnB9luhi-Im0hcL_kBWteim-WGGNeoQlyJ3U6g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMal
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-10" data-lat="55.13" data-lng="14.90" data-place-name="Gudhj
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-10" data-lat="55.13" data-lng="14.90" data-place-name="Gudhjem, Bornholm" data-transport-from="loc-9" data-tra
+[EnrichmentPipeline] Extracted place name: Gudhjem, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.13, lng: 14.9 }
+[EnrichmentPipeline] Calling geocodeLocation for: Gudhjem, Bornholm
+[Geocoding] geocodeLocation called with: Gudhjem, Bornholm API key: present
+[Geocoding] Cache hit for: Gudhjem, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2084554,
+  lng: 14.971686499999999,
+  photoName: 'places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2cXbBeRQ2q6Cmx-f7D5RN7tKR3x_CUbt8S_1MN41UN7RH1KAUrXsE-OSOqvZKKrv-Kv1uObNss2XiqAK679bVPGcPTVhZDlDVqA7EUcWNdDwTX56DkL4i5o64YXvnPL_v7VZAM6bdXnzwlNGbqu1FoXs-1Wl5NQq7ddoBYUpLA0NtueIpHrtYwWxuGc3dAb-AuC-lkGJqUC2hOWb8RO744ee_G-rTzl0CvTa3bRc5-N_xM41ockZTznB5Ki6v-a5bpGXkKkKIIw8GfP-tCYzBfA0fidVo57eJbYPfoJX64ZINE0VtuVOqKoK7JE-s1VNudu1rvQCL-tWXBweOVp5viqofWRm8W1uIaVXD13bAWkgn-YkEpLuQIltmK4lR5qG6817RYEV6c109XwnbYqFH3EIsFlGGnQJlvybwrz7DAfI9kg',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2cXbBeRQ2q6Cmx-f7D5RN7tKR3x_CUbt8S_1MN41UN7RH1KAUrXsE-OSOqvZKKrv-Kv1uObNss2XiqAK679bVPG
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-11" data-lat="55.14" data-lng="14.91" data-place-name="Helli
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-11" data-lat="55.14" data-lng="14.91" data-place-name="Helligdomsklipperne, Bornholm" data-transport-from="loc
+[EnrichmentPipeline] Extracted place name: Helligdomsklipperne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.14, lng: 14.91 }
+[EnrichmentPipeline] Calling geocodeLocation for: Helligdomsklipperne, Bornholm
+[Geocoding] geocodeLocation called with: Helligdomsklipperne, Bornholm API key: present
+[Geocoding] Cache hit for: Helligdomsklipperne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2241667,
+  lng: 14.9086111,
+  photoName: 'places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2f3Y9KW9ZLBrkAJpMzdyXQfvfvD2S1Hq4gLkm-qHT0PO2DegzJN2gguv--FGbsMZG2f3dQUSRXqkb8Ktlwa1mnJ2vz0paJSk6_gvrZfOu3WsJCttNhpZN0yv3jQqJxPjDECGS-CdVno0_xK5xQcA2OS-WCpKZYv2MBfkbe2Cmz2zbKi-AadajPV_IRg3V755U34A618GYDs8YEm4TPPPIUqODWjfeJclo6dopyDQk2kZqJ2GDfsKn3niBWxEiVsocC0VWvWBea47yqiw2RhAf7MmxdWiiau9-2DbqxxFKSE_pjcMKhKfzp4oARwfKdLNdApgYVq5pE2BFz7dob9uT1QwOkfxcATfoD8jrX1zCh84De_pSW7xpzw-glGtqRbilYHYiUyGJh7SglGSBa9poC9i4m2_1vq6Yhel86ONRmSwg',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2f3Y9KW9ZLBrkAJpMzdyXQfvfvD2S1Hq4gLkm-qHT0PO2DegzJN2gguv--FGbsMZG2f3dQUSRXqkb8Ktlwa1mnJ
+[chat-simple] Chunk was enriched:   <p>Derefter fortsætter du til <span class="geo-mark" data-geo-id="loc-9" data-lat="55.15" data-lng  ->    <p>Derefter fortsætter du til <span class="geo-mark" data-coord-source="cache" data-photo-name="pl
+ OPTIONS /api/route?waypoints=14.777671899999998%2C55.2900023%3B15.1408942%2C55.1364376&profile=driving 200 in 26ms
+ OPTIONS /api/route?waypoints=15.1408942%2C55.1364376%3B14.971686499999999%2C55.2084554&profile=driving 200 in 27ms
+ GET /api/route?waypoints=15.1408942%2C55.1364376%3B14.971686499999999%2C55.2084554&profile=driving 200 in 104ms
+ GET /api/route?waypoints=14.777671899999998%2C55.2900023%3B15.1408942%2C55.1364376&profile=driving 200 in 159ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 471
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-12" data-lat="55.10" data-lng="14.85" data-place-name="Almin
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-12" data-lat="55.10" data-lng="14.85" data-place-name="Almindingen, Bornholm" data-transport-from="loc-11" dat
+[EnrichmentPipeline] Extracted place name: Almindingen, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.85 }
+[EnrichmentPipeline] Calling geocodeLocation for: Almindingen, Bornholm
+[Geocoding] geocodeLocation called with: Almindingen, Bornholm API key: present
+[Geocoding] Cache hit for: Almindingen, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.089907399999994,
+  lng: 15.0243437,
+  photoName: 'places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2c1_GebyRO0qUblFIrHPAC9Oj0uiUD2XRE2nRIAWIMFusPgtScXLUfXELoc17vbfN4l82_7kSoNS1NKjdj6cAfy4SmsZ0rZRYlZWRcRPwaOofY33r6vkD0Hi2Goh9zgcqNFpuTwC2rvqFRuJHfweooHjCRKmiQg8PRo8KHF8g4Oi1B8zUFLMmqad5aNFGyUiFkW8QLlSukJWXs31wJRGRash_l2zCkMIvqlBXIMq4B3BEStWih_MpYGhm2B34MoWmToYE5LLcnqc6dswlmOQVSZ_fMalz5FrgZ4fZuh8rwDxM4JKYhLCoVsNWmgdaUBPDvhdXviJXxahnYVf-faFaN3QP-j2G4MTWTvWkqkkmLSLA2xB9E9-uHUzbHfk7nDNoS51fAr4qYZjkw--SPMUEhFUAvkF-AaRLwb2-D2V3I',
+  description: 'Hiking & biking paths crisscross this vast forest with castle remains & a herd of European bison.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2c1_GebyRO0qUblFIrHPAC9Oj0uiUD2XRE2nRIAWIMFusPgtScXLUfXELoc17vbfN4l82_7kSoNS1NKjdj6cAfy
+[chat-simple] Chunk was enriched:   <p>Før rejsen fortsætter, bør du bruge mindst en halv dag på at udforske skovene i <span class="ge  ->    <p>Før rejsen fortsætter, bør du bruge mindst en halv dag på at udforske skovene i <span class="ge
+ OPTIONS /api/route?waypoints=14.9086111%2C55.2241667%3B15.0243437%2C55.089907399999994&profile=driving 200 in 26ms
+ GET /api/route?waypoints=14.9086111%2C55.2241667%3B15.0243437%2C55.089907399999994&profile=driving 200 in 115ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 896
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-13" data-lat="55.05" data-lng="15.00" data-place-name="Nexø,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-13" data-lat="55.05" data-lng="15.00" data-place-name="Nexø, Bornholm" data-transport-from="loc-12" data-trans
+[EnrichmentPipeline] Extracted place name: Nexø, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.05, lng: 15 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Bornholm
+[Geocoding] geocodeLocation called with: Nexø, Bornholm API key: present
+[Geocoding] Cache hit for: Nexø, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfxQrM47bvpYH0_wMQU1Pzpw7Y4riCkDPHyULdQMIPAZGC7-1t3guSrpxc5eCOxsxNwvV3lC87SkCfP83066jjJWH7ElroQuR7tK_d4XZKa2Qu0WavE-hWHHJuYCVbc7bfTNFqf7VLtNbyp7gvNcaPjTVdZEeORzN6-1bqfEwjqJbzTzLOPC1t-aGUl8247GPszjDTcat3_ljQUMMIDbKBGMQTiFVDZTGc9eov9h8_BmkMoIlWmcOTvxMpvmZk2IqudXGI1x5vXTVlDlywpR5JRRjlxrTML1LRybSyCzZ7dMhMdm2pjgW_ObNFBbWDkC8sKdxC1QCJJcIHFisYWg0dUmA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfx
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-14" data-lat="55.00" data-lng="15.05" data-place-name="Dueod
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-14" data-lat="55.00" data-lng="15.05" data-place-name="Dueodde, Bornholm" data-transport-from="loc-13" data-tr
+[EnrichmentPipeline] Extracted place name: Dueodde, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55, lng: 15.05 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde, Bornholm
+[Geocoding] geocodeLocation called with: Dueodde, Bornholm API key: present
+[Geocoding] Cache hit for: Dueodde, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 54.9952841,
+  lng: 15.087516199999998,
+  photoName: 'places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2f1CSmb2jDEB9AbeA5WYPAzK60p9TOoI12t2_mWfQlpbWXQAqaoyfKtoJ0kvCu6bEpN-GRwsdQBA6HjQVaWck47I-EqWQv9UY_9MMko2oyem1kykldtpbvtFh3JstBFj1iFt1avy300Fu-uMywUHPV4O169BJctq8JbMMcEPip80h0QWJKXCccCUPsSSM6a1zqdXm9Dnplbe-ZLrN-fljV4fVjJU_PxKhqIDHzP2YA98SQN1MLAW3hxeQSrPZWxh7ErRDW_zr9NgGUd_PAsGg0i-rVPG_CjFLzPi-uIsQ9VbYsWCoM_5v1lEKGfC1k7O9pJJ2g8bxOnMu1CaOr-MAmi8AqQJD3j2QKQ2t9_duwLA9xKe5fI1DinuCFQdv9rocaOKl8LU4iWoxtEwQ4E5KlTLel7nGYIF-zLc5ZyzTVHsw',
+  description: 'Known for its ultra-fine sand, this beach with a lighthouse on its southern tip stretches for miles.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2f1CSmb2jDEB9AbeA5WYPAzK60p9TOoI12t2_mWfQlpbWXQAqaoyfKtoJ0kvCu6bEpN-GRwsdQBA6HjQVaWck47
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-15" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-15" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm" data-transport-from="loc-14" data-transp
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:   <p>Den sidste etape tager dig til <span class="geo-mark" data-geo-id="loc-13" data-lat="55.05" dat  ->    <p>Den sidste etape tager dig til <span class="geo-mark" data-coord-source="cache" data-photo-name
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 163
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:     <li>1. nat: <span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.7" data-pla  ->      <li>1. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuM
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 236
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.92" data-place-name="Sandv
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.92" data-place-name="Sandvig, Bornholm" data-transport-from="loc-16" data-tr
+[EnrichmentPipeline] Extracted place name: Sandvig, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2UX5kB18n-s5wC0udADhh3teUbpASImxCoupL5VZhMW4HMB-sXTaTBD6OIgbreB82sSdW_jJZIs0Q1yPe5ExrBCPZwmeZbSjjqioOhX8lyU64CZOt9GSvFrClKDBa6vKB4GtQCh3okE_zbpeNziVo_QJW545Iyt9tKmdSwqDCOpKqC32e8VxF540jP5zaqHe-w9Q6ubvyPJlzTGueQ92RebWprHsfGBv7F8CJas3W4L38c17gifyjgcA6yG8wyNlySZm3_sjuZO2XAfUFcx8YNxOiIX50o3fHJLUd-oksXOzDdrZV-O3m3tdEX6FW2Iy6JmUE7Sn_oz76LtOgKGZuk8u1n',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2U
+[chat-simple] Chunk was enriched:     <li>2. – 3. nat: <span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.92" d  ->      <li>2. – 3. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 231
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-18" data-lat="55.15" data-lng="14.95" data-place-name="Svane
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-18" data-lat="55.15" data-lng="14.95" data-place-name="Svaneke, Bornholm" data-transport-from="loc-17" data-tr
+[EnrichmentPipeline] Extracted place name: Svaneke, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.15, lng: 14.95 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Bornholm
+[Geocoding] geocodeLocation called with: Svaneke, Bornholm API key: present
+[Geocoding] Cache hit for: Svaneke, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMalgqlAWzxOvax-FcTLp1ob2tnpAiYkIoti5KbA3JXKhXr9vT6EfVmIcVRYPngplPt2UZsa4vWOr9qpp1VqHKRI9NXu3R13feH9BoX5_K4dhQjGHJvuiIgUmCvnWaUTRfkJT9AJQVM2aPfk4q17AfuQKpRiwXY1fjcs0c45BOb-GrLvZPEItuo3If0xQNvwxBvjuvu6gFyBr6yJ8zA8I45Fejwsm1GT9dgSuT9wG5Q7m1nx6PNRhyegTvOTQNzcGUcS94I12qLovHGa8Bd3gz-T9ayd9HuA-XGbGg20olrfhGtKTlB7WnB9luhi-Im0hcL_kBWteim-WGGNeoQlyJ3U6g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMal
+[chat-simple] Chunk was enriched:     <li>4. nat: <span class="geo-mark" data-geo-id="loc-18" data-lat="55.15" data-lng="14.95" data-p  ->      <li>4. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6V
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 241
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-19" data-lat="55.05" data-lng="15.00" data-place-name="Nexø,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-19" data-lat="55.05" data-lng="15.00" data-place-name="Nexø, Bornholm" data-transport-from="loc-18" data-trans
+[EnrichmentPipeline] Extracted place name: Nexø, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.05, lng: 15 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Bornholm
+[Geocoding] geocodeLocation called with: Nexø, Bornholm API key: present
+[Geocoding] Cache hit for: Nexø, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfxQrM47bvpYH0_wMQU1Pzpw7Y4riCkDPHyULdQMIPAZGC7-1t3guSrpxc5eCOxsxNwvV3lC87SkCfP83066jjJWH7ElroQuR7tK_d4XZKa2Qu0WavE-hWHHJuYCVbc7bfTNFqf7VLtNbyp7gvNcaPjTVdZEeORzN6-1bqfEwjqJbzTzLOPC1t-aGUl8247GPszjDTcat3_ljQUMMIDbKBGMQTiFVDZTGc9eov9h8_BmkMoIlWmcOTvxMpvmZk2IqudXGI1x5vXTVlDlywpR5JRRjlxrTML1LRybSyCzZ7dMhMdm2pjgW_ObNFBbWDkC8sKdxC1QCJJcIHFisYWg0dUmA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfx
+[chat-simple] Chunk was enriched:     <li>5. – 6. nat: <span class="geo-mark" data-geo-id="loc-19" data-lat="55.05" data-lng="15.00" d  ->      <li>5. – 6. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGe
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 206
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-20" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-20" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm" data-transport-from="loc-19" data-transp
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:     <li>7. nat: <span class="geo-mark" data-geo-id="loc-20" data-lat="55.1" data-lng="14.7" data-pla  ->      <li>7. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuM
+Stream finished, messages count: 1
+ POST /api/chat-simple 200 in 23583ms
+[chat-simple] Google API Key configured: Yes (AIzaSyBQPF...)
+[EnrichmentPipeline] Initialized with API key: Yes
+[Firecrawl Tool] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracting content from URL: https://mycamper.com/dk/magasin/autocamper-rejseruter-danmark#2.-roadtrip-p%C3%A5-bornholm-p%C3%A5-7-dage
+[Firecrawl] Extracted 70 locations from content
+[Firecrawl Tool] Successfully extracted 70 locations
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 226
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, B
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:   <p>Arrive in <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place  ->    <p>Arrive in <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMa
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 439
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.12" data-lng="14.72" data-place-name="Nørrek
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-2" data-lat="55.12" data-lng="14.72" data-place-name="Nørrekås Strand, Bornholm" data-transport-from="loc-1" d
+[EnrichmentPipeline] Extracted place name: Nørrekås Strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.12, lng: 14.72 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nørrekås Strand, Bornholm
+[Geocoding] geocodeLocation called with: Nørrekås Strand, Bornholm API key: present
+[Geocoding] Cache hit for: Nørrekås Strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.104445899999995,
+  lng: 14.6955952,
+  photoName: 'places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fDh7c2AvklHdr9NN9tMRcwdSNIOikpuYMs22qO48TQGRFjF_Jqtnb-MWV9zjSKgT8XzEtKu7IqH7EmUAnmJkWfJPk2kuv0pdWELx3A7tFdFqPD9fEMr9sb78QFMc4ZYb0T--2P1knw8kDlfpnFhVFWnHMXkTunxfjarL_hbZZgRB4tM0rzItBKhpAJz9OxJ1l65SiF8drH_rg_bIhfXORLVVh_E-Sx5KBARQaTMPrvjjnSALCTmufcDmrIJSwWz4UpnaKAltdhQ1ojzoTJ8BmehOQkVQNH9Bhn6ePwJONZ4heHhQ11X6VEZCfAzvOgTzyABIfj8IaY1sncYUQk5g1Z6u3lxFguWnVvnsiajZ5RVUyK9M24fN4IKiKOw8CuD2Rn4eiQ_phhXl2dl-U7dryw0hCUNbAeVLdwTYxJlRnZ9g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJzZ7iEx0bVUYRtnOYYigfm4Q/photos/AciIO2fDh7c2AvklHdr9NN9tMRcwdSNIOikpuYMs22qO48TQGRFjF_Jqtnb-MWV9zjSKgT8XzEtKu7IqH7EmUAnmJkWf
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.18" data-lng="14.68" data-place-name="Antoin
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-3" data-lat="55.18" data-lng="14.68" data-place-name="Antoinettes Strand, Bornholm" data-transport-from="loc-1
+[EnrichmentPipeline] Extracted place name: Antoinettes Strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.18, lng: 14.68 }
+[EnrichmentPipeline] Calling geocodeLocation for: Antoinettes Strand, Bornholm
+[Geocoding] geocodeLocation called with: Antoinettes Strand, Bornholm API key: present
+[Geocoding] Cache hit for: Antoinettes Strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1194438,
+  lng: 14.7048284,
+  photoName: 'places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2eLrZYR50YW8fktgfItK7qsc5aqKYShsiqAPM_UuEPrESStKUR0W2YafKMwJ0oxuXlUFK1Kl6xmIFfilj65LGFW2J983dil5Xoase2zlvF05hoQN_bxB39QKJ_GVJEuw-546Kivqg2D6azy2wdUcpFQ_yQ6ZON2U84C0X5bH3JUwrrCC8Iqb0FgrwkSgD_PJoLhhVxAHE1hFGvrpoSLXO-NrS9eWO2VZq5FlAY23D6z_RM1JgXPHxslcWinuDjk5v2KtQBGo9lmusdZCGTPU28WOMxfDWmYwItCCl07Xk3MRFAe9e3NbyuDauvNUg92ikab8dHwsS1ckqawRass9tVzgGXqhBwC1Y_izuvJSV8rACkHCcIqmz59g5L4T9pnzjYNBHVoHf5zekgYk-0HjIPD3geZ0peehw7nfT-YAJlzbyo7',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJVw7RRicbVUYRRIZZ9MbIvPo/photos/AciIO2eLrZYR50YW8fktgfItK7qsc5aqKYShsiqAPM_UuEPrESStKUR0W2YafKMwJ0oxuXlUFK1Kl6xmIFfilj65LGFW
+[chat-simple] Chunk was enriched:   <p>Relax at <span class="geo-mark" data-geo-id="loc-2" data-lat="55.12" data-lng="14.72" data-plac  ->    <p>Relax at <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJzZ7iEx0bV
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 221
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-place-name="Sandvig, Bornholm" data-transport-from="loc-1" data-tran
+[EnrichmentPipeline] Extracted place name: Sandvig, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.277752799999995,
+  lng: 14.797747500000002,
+  photoName: 'places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2UX5kB18n-s5wC0udADhh3teUbpASImxCoupL5VZhMW4HMB-sXTaTBD6OIgbreB82sSdW_jJZIs0Q1yPe5ExrBCPZwmeZbSjjqioOhX8lyU64CZOt9GSvFrClKDBa6vKB4GtQCh3okE_zbpeNziVo_QJW545Iyt9tKmdSwqDCOpKqC32e8VxF540jP5zaqHe-w9Q6ubvyPJlzTGueQ92RebWprHsfGBv7F8CJas3W4L38c17gifyjgcA6yG8wyNlySZm3_sjuZO2XAfUFcx8YNxOiIX50o3fHJLUd-oksXOzDdrZV-O3m3tdEX6FW2Iy6JmUE7Sn_oz76LtOgKGZuk8u1n',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHVUYRlkZIPSKdN9A/photos/AciIO2cu9XD-5YrngmNN8LOUwYV1HKPCinmoAi0tS3UNlliF9Cow5H1HGF0lxnw8Wcrmxibmk9G_5vdSZfZz3nWFdo2U
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo-id="loc-4" data-lat="55.27" data-lng="14.92" data-plac  ->    <p>Drive to <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJl6Hy5AoHV
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 454
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-5" data-lat="55.28" data-lng="14.95" data-place-name="Hammer
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-5" data-lat="55.28" data-lng="14.95" data-place-name="Hammershus, Bornholm" data-transport-from="loc-4" data-t
+[EnrichmentPipeline] Extracted place name: Hammershus, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.28, lng: 14.95 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hammershus, Bornholm
+[Geocoding] geocodeLocation called with: Hammershus, Bornholm API key: present
+[Geocoding] Cache hit for: Hammershus, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2713045,
+  lng: 14.7553955,
+  photoName: 'places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2cULz_UtNxgoNnDOQYh4pnotbFCSiuULcxudab01Y4R7w_VlNT7hew-hDZBvg7oFsTf_ut9d2S_Awpibggsgl2WPtJVGAa67HOjLPD-USD4YneVZZIakxxhCoByE3PMEJuw-F_BQWx_zBux67PJs18rwsrE74Mx5i69rHbLwYgBDWHf0WmR8Ryg_ws7gQ5s9lFTO64YudjP_HmnOoLzencPSsS0Mo6YJnHA9yV9CipOZEcFNdoTRwcsVQ3thm3BrFq-t-UtNYhMdJqQjY0iJ2QohsTkLkNa2udsOdtYZWpzaya-iPAiiesNFglJ2sjQOek3kShm_nLPwKO71iPq8wQzIQ-fPRQrt6_FYAMxiyj0GN-rOCBuOkp3esRjy7muYRH1Yq89wOt0kY3RnL1pYI-eTA8pOXknxjfzT6qqzdjV2vDL',
+  description: 'Ruins of an imposing castle, built by the church in 1200, plus an exhibition center with models.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJN5AwFiIHVUYRyc2qzE8fcBc/photos/AciIO2cULz_UtNxgoNnDOQYh4pnotbFCSiuULcxudab01Y4R7w_VlNT7hew-hDZBvg7oFsTf_ut9d2S_Awpibggsgl2W
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-6" data-lat="55.27" data-lng="14.93" data-place-name="Opalsø
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-6" data-lat="55.27" data-lng="14.93" data-place-name="Opalsøen, Bornholm" data-transport-from="loc-4" data-tra
+[EnrichmentPipeline] Extracted place name: Opalsøen, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.93 }
+[EnrichmentPipeline] Calling geocodeLocation for: Opalsøen, Bornholm
+[Geocoding] geocodeLocation called with: Opalsøen, Bornholm API key: present
+[Geocoding] Cache hit for: Opalsøen, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2828149,
+  lng: 14.761053299999999,
+  photoName: 'places/ChIJo3UPRT4HVUYR3XxsdbIg0vI/photos/AciIO2cuzY97bOdm8nUHtJG8iB4mngjwKW_sxPP9ta60jtdO793eqzmEF2YjjP_KH1yl7drl3LNDoCoJWxKWvOgeu-486T_OXCGTLzyeALE3oeNcOpi19htEEvs9l_wqPStNtjwFCfsnVr-rlRHbXDTP0Iw-nfW1ViTIfN8L1Hh_T0YdBP8vE7FC5BC-ZiXNjIVt_OM9kleCSjdFYs4ONy45hSIwvD7TdQBaSzDB2aGomHtgZABHCzmhzFVbB5XTLu53h_IdNldQi6F0G-vX5EB0CbC0DgWpGhvjx5YjmZ6G_iyeVQ_wbEXXoHtRajenUAdbvhlhb-fqyUZ6X3-c1zSOb_wHcK3rAyEf5Wp9J87iEb05skxSSWlY7-iBtpCIkyA42ATTm9IS0KPsAUwl5g1wEocnJaIQQ7ARTIdUcgsVTyVgFA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJo3UPRT4HVUYR3XxsdbIg0vI/photos/AciIO2cuzY97bOdm8nUHtJG8iB4mngjwKW_sxPP9ta60jtdO793eqzmEF2YjjP_KH1yl7drl3LNDoCoJWxKWvOgeu-48
+[chat-simple] Chunk was enriched:   <p>Visit <span class="geo-mark" data-geo-id="loc-5" data-lat="55.28" data-lng="14.95" data-place-n  ->    <p>Visit <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJN5AwFiIHVUYR
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 231
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-7" data-lat="55.27" data-lng="14.92" data-place-name="Sandvi
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-7" data-lat="55.27" data-lng="14.92" data-place-name="Sandvig Strand, Bornholm" data-transport-from="loc-4" da
+[EnrichmentPipeline] Extracted place name: Sandvig Strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sandvig Strand, Bornholm
+[Geocoding] geocodeLocation called with: Sandvig Strand, Bornholm API key: present
+[Geocoding] Cache hit for: Sandvig Strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2900023,
+  lng: 14.777671899999998,
+  photoName: 'places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2eyhnMW-Gxlnppo-SFk4RGQgjLe--ZkywzLm0UGaGaJW8Ufz855h4JPQ0blc6fMC0i_SqLqyhweohl-NQYhWtRvygIlTh3ThASYT9DMaWeVU-0k4HS1HD8DuFMSt6XPH6uKavZ-AqGZvMQ59PQUJXlFdj8JM8tIMTS0rfXZOhI23I58d3YxbDXT3sfJVOp88BAD3ayc5wLJtLbfvxKflxqBembff63l1ojg_aF4lBTJghTqfxoGV3EBtlQJrLsPxSJhDu1TRbYI1dPUpJJ4CzKYYRZ5QhXWKCCUTCzsccOAiVmo_J1s-K0RzZ0eysDwi2GALvrxRHJDyFy6BuSCj-w-JQLdUDWsnqsyzGXaUWruFhOmk1p-9SqVBxd3v00hlkstJbwEq_f-7bSP5dfkBW77pgzzjvt08YqfOeFyqwIUZaFI',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJt9FVBWwHVUYR7vj8HEL1QCw/photos/AciIO2eyhnMW-Gxlnppo-SFk4RGQgjLe--ZkywzLm0UGaGaJW8Ufz855h4JPQ0blc6fMC0i_SqLqyhweohl-NQYhWtRv
+[chat-simple] Chunk was enriched:   <p>Enjoy the scenic <span class="geo-mark" data-geo-id="loc-7" data-lat="55.27" data-lng="14.92" d  ->    <p>Enjoy the scenic <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJt
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 447
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-8" data-lat="55.23" data-lng="14.97" data-place-name="Gudhje
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-8" data-lat="55.23" data-lng="14.97" data-place-name="Gudhjem, Bornholm" data-transport-from="loc-4" data-tran
+[EnrichmentPipeline] Extracted place name: Gudhjem, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.23, lng: 14.97 }
+[EnrichmentPipeline] Calling geocodeLocation for: Gudhjem, Bornholm
+[Geocoding] geocodeLocation called with: Gudhjem, Bornholm API key: present
+[Geocoding] Cache hit for: Gudhjem, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2084554,
+  lng: 14.971686499999999,
+  photoName: 'places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2cXbBeRQ2q6Cmx-f7D5RN7tKR3x_CUbt8S_1MN41UN7RH1KAUrXsE-OSOqvZKKrv-Kv1uObNss2XiqAK679bVPGcPTVhZDlDVqA7EUcWNdDwTX56DkL4i5o64YXvnPL_v7VZAM6bdXnzwlNGbqu1FoXs-1Wl5NQq7ddoBYUpLA0NtueIpHrtYwWxuGc3dAb-AuC-lkGJqUC2hOWb8RO744ee_G-rTzl0CvTa3bRc5-N_xM41ockZTznB5Ki6v-a5bpGXkKkKIIw8GfP-tCYzBfA0fidVo57eJbYPfoJX64ZINE0VtuVOqKoK7JE-s1VNudu1rvQCL-tWXBweOVp5viqofWRm8W1uIaVXD13bAWkgn-YkEpLuQIltmK4lR5qG6817RYEV6c109XwnbYqFH3EIsFlGGnQJlvybwrz7DAfI9kg',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJvbpk1skLVUYREVtYY1nfWDc/photos/AciIO2cXbBeRQ2q6Cmx-f7D5RN7tKR3x_CUbt8S_1MN41UN7RH1KAUrXsE-OSOqvZKKrv-Kv1uObNss2XiqAK679bVPG
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-9" data-lat="55.23" data-lng="14.98" data-place-name="Hellig
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-9" data-lat="55.23" data-lng="14.98" data-place-name="Helligdomsklipperne, Gudhjem" data-transport-from="loc-8
+[EnrichmentPipeline] Extracted place name: Helligdomsklipperne, Gudhjem
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.23, lng: 14.98 }
+[EnrichmentPipeline] Calling geocodeLocation for: Helligdomsklipperne, Gudhjem
+[Geocoding] geocodeLocation called with: Helligdomsklipperne, Gudhjem API key: present
+[Geocoding] Cache hit for: Helligdomsklipperne, Gudhjem
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.2241667,
+  lng: 14.9086111,
+  photoName: 'places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2cpkT4zkCXHjd80MJDimqwAtC2qGurJuuH_GWDlo9D7PrpVkYz52lTg6BC-QWOpkVhUocQLGif9VfVdw8tLn6gDy6ARADRP3FXfzOoO9HWGmpMEtGEhxecGa92vaoTqzi13JseZeekIHgbpVOwA4hrkYYbUHs-2HILqEuq2h-mSygsa7petbseDbuljbfWn_Tgfd5ocXHJDJCef5o0LfhQ59xwEb4INgoXvjQHlS1ECyZIWxyRCev-cx91bYLv34N48qdfjBamgBCrYcxlUwinvmDV21zPYvXAtdcXRfcLtiuYfLpCmsciJ1iPdbiXpDW0P2Lcuw6aW3pYLMBV7ySkI9SARbSSoWQqRnjmBbTQ1DxRPiFkA-2NNAiWabf9DFYn0onlItXLmhYzPQR0Ov8RjECTdWcAeKNRBGbjFcZEx-w',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJpS24bR8JVUYRVfhMB0MwIF8/photos/AciIO2cpkT4zkCXHjd80MJDimqwAtC2qGurJuuH_GWDlo9D7PrpVkYz52lTg6BC-QWOpkVhUocQLGif9VfVdw8tLn6gD
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo-id="loc-8" data-lat="55.23" data-lng="14.97" data-plac  ->    <p>Drive to <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJvbpk1skLV
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 486
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-10" data-lat="55.17" data-lng="14.92" data-place-name="Svane
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-10" data-lat="55.17" data-lng="14.92" data-place-name="Svaneke, Bornholm" data-transport-from="loc-8" data-tra
+[EnrichmentPipeline] Extracted place name: Svaneke, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.17, lng: 14.92 }
+[EnrichmentPipeline] Calling geocodeLocation for: Svaneke, Bornholm
+[Geocoding] geocodeLocation called with: Svaneke, Bornholm API key: present
+[Geocoding] Cache hit for: Svaneke, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1364376,
+  lng: 15.1408942,
+  photoName: 'places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMalgqlAWzxOvax-FcTLp1ob2tnpAiYkIoti5KbA3JXKhXr9vT6EfVmIcVRYPngplPt2UZsa4vWOr9qpp1VqHKRI9NXu3R13feH9BoX5_K4dhQjGHJvuiIgUmCvnWaUTRfkJT9AJQVM2aPfk4q17AfuQKpRiwXY1fjcs0c45BOb-GrLvZPEItuo3If0xQNvwxBvjuvu6gFyBr6yJ8zA8I45Fejwsm1GT9dgSuT9wG5Q7m1nx6PNRhyegTvOTQNzcGUcS94I12qLovHGa8Bd3gz-T9ayd9HuA-XGbGg20olrfhGtKTlB7WnB9luhi-Im0hcL_kBWteim-WGGNeoQlyJ3U6g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6VzVUYR9sNrIM-ru9c/photos/AciIO2cwoWavG3X_cYfDMpjcGGKavgwrL0_aVHP-Dz2vitdxjtauczOdiqvQhLBvW77U4iXx0nlOYWYs5vSki3zwwMal
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-11" data-lat="55.17" data-lng="14.93" data-place-name="Bolsj
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-11" data-lat="55.17" data-lng="14.93" data-place-name="Bolsjefabrikken, Svaneke" data-transport-from="loc-10" 
+[EnrichmentPipeline] Extracted place name: Bolsjefabrikken, Svaneke
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.17, lng: 14.93 }
+[EnrichmentPipeline] Calling geocodeLocation for: Bolsjefabrikken, Svaneke
+[Geocoding] geocodeLocation called with: Bolsjefabrikken, Svaneke API key: present
+[Geocoding] Cache hit for: Bolsjefabrikken, Svaneke
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.1363315,
+  lng: 15.140803199999999,
+  photoName: 'places/ChIJt_oyca9zVUYRE51Vyk1qkcg/photos/AciIO2c2Y52aQi06rCvQ94H2c3XFN_1ApaQA3TMqQsZ5iJ0Boi3R2kDqtrEA9Bm5mus-raSlLfv7EM03Y8skxeBxwSbw1_sqFZVs4uzYmxuvnfRX6bxWxHwupVDIBNp_tWUn6E3AF0scaqq940GdPuHZYgLKNFZztQW1NeXE5dv20pL-4e7BWvdC6OErLyf6rNX_s_dgoh3OmDt7uZDH6_SaplGsDzexd99k-WfZG_gDY6b2ZYFBmF6SUP5Ln_KCHwgyJn6XVd2VR9ypyjoqBLe2f8_ZJCcf3LfN_m2U-QA1zuf4jxq5KqMb1CrmUkTqN_p0KDcyX2Nm93uevEDJrpF4EUYV-XBBzMKbUEliqux57sCbtuf4qdUSA8MSeqW5F8ndXnnuUM7IAD7npFgbM85pI6PO8pRCII80koQfTOg5nYHeUA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJt_oyca9zVUYRE51Vyk1qkcg/photos/AciIO2c2Y52aQi06rCvQ94H2c3XFN_1ApaQA3TMqQsZ5iJ0Boi3R2kDqtrEA9Bm5mus-raSlLfv7EM03Y8skxeBxwSbw
+[chat-simple] Chunk was enriched:   <p>Continue to <span class="geo-mark" data-geo-id="loc-10" data-lat="55.17" data-lng="14.92" data-  ->    <p>Continue to <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQVgpY6
+ OPTIONS /api/route?waypoints=15.1408942%2C55.1364376%3B15.140803199999999%2C55.1363315&profile=walking 200 in 25ms
+ OPTIONS /api/route?waypoints=14.971686499999999%2C55.2084554%3B15.1408942%2C55.1364376&profile=driving 200 in 27ms
+ GET /api/route?waypoints=15.1408942%2C55.1364376%3B15.140803199999999%2C55.1363315&profile=walking 200 in 159ms
+ GET /api/route?waypoints=14.971686499999999%2C55.2084554%3B15.1408942%2C55.1364376&profile=driving 200 in 189ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 498
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-12" data-lat="55.13" data-lng="14.78" data-place-name="Almin
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-12" data-lat="55.13" data-lng="14.78" data-place-name="Almindingen, Bornholm" data-transport-from="loc-10" dat
+[EnrichmentPipeline] Extracted place name: Almindingen, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.13, lng: 14.78 }
+[EnrichmentPipeline] Calling geocodeLocation for: Almindingen, Bornholm
+[Geocoding] geocodeLocation called with: Almindingen, Bornholm API key: present
+[Geocoding] Cache hit for: Almindingen, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.089907399999994,
+  lng: 15.0243437,
+  photoName: 'places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2c1_GebyRO0qUblFIrHPAC9Oj0uiUD2XRE2nRIAWIMFusPgtScXLUfXELoc17vbfN4l82_7kSoNS1NKjdj6cAfy4SmsZ0rZRYlZWRcRPwaOofY33r6vkD0Hi2Goh9zgcqNFpuTwC2rvqFRuJHfweooHjCRKmiQg8PRo8KHF8g4Oi1B8zUFLMmqad5aNFGyUiFkW8QLlSukJWXs31wJRGRash_l2zCkMIvqlBXIMq4B3BEStWih_MpYGhm2B34MoWmToYE5LLcnqc6dswlmOQVSZ_fMalz5FrgZ4fZuh8rwDxM4JKYhLCoVsNWmgdaUBPDvhdXviJXxahnYVf-faFaN3QP-j2G4MTWTvWkqkkmLSLA2xB9E9-uHUzbHfk7nDNoS51fAr4qYZjkw--SPMUEhFUAvkF-AaRLwb2-D2V3I',
+  description: 'Hiking & biking paths crisscross this vast forest with castle remains & a herd of European bison.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJhX7CXH4NVUYRHhZx5zgdzb4/photos/AciIO2c1_GebyRO0qUblFIrHPAC9Oj0uiUD2XRE2nRIAWIMFusPgtScXLUfXELoc17vbfN4l82_7kSoNS1NKjdj6cAfy
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-13" data-lat="55.15" data-lng="14.8" data-place-name="Bison 
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-13" data-lat="55.15" data-lng="14.8" data-place-name="Bison Okker, Almindingen" data-transport-from="loc-12" d
+[EnrichmentPipeline] Extracted place name: Bison Okker, Almindingen
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.15, lng: 14.8 }
+[EnrichmentPipeline] Calling geocodeLocation for: Bison Okker, Almindingen
+[Geocoding] geocodeLocation called with: Bison Okker, Almindingen API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Bison Okker, Almindingen
+[Geocoding] Using proximity bias: 55.15, 14.8
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Unnamed Road, 3720 Aakirkeby, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Chr. X Vej, 3720 Aakirkeby, Denmark',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Bison Okker, Almindingen -> 55.110693399999995, 14.9462936, photo: places/ChIJi2-UZUoNVUYRfLrkZq6Utj0/photos/AciIO2e7dEucrcw-ippdh_6jXMP-Kyi-UHCWq44ZJbjSNjojqgEMH5z3Q4EBJk7ouvJPsTtEPEQJKyuBnuq_EVT8kS4EouZ0mqdJE4yl71dti8kL5CyBHaHHSenMgiCtvApiQ34KTS_Ia4JLQfMfP4NJLgmy5LCWtH39zqnokZqVZypsNa-FuzhzATgG1LiuhPHZ7U0FtraRhj4d7bmrtie7BA6zoD19nEi9COxmfxqm6emepk-kYTSsy5HysAfTYc1V3hLPoG1-i65KPOZm9x8f1Ltq6GFA2qG7lPV0bZabSGePM5btT5g3hehf6QcbEegt5sax3VG0m2VeEu5SWbaM0FY7Z_qNjXUNe1rkUSFwMHcAo3iijg4vCIJy7z1nNIWogVBkfpilVJz_mLrsScVFWFzs14LYq-S3gzb1DQvtXowFtg, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.110693399999995,
+  lng: 14.9462936,
+  photoName: 'places/ChIJi2-UZUoNVUYRfLrkZq6Utj0/photos/AciIO2e7dEucrcw-ippdh_6jXMP-Kyi-UHCWq44ZJbjSNjojqgEMH5z3Q4EBJk7ouvJPsTtEPEQJKyuBnuq_EVT8kS4EouZ0mqdJE4yl71dti8kL5CyBHaHHSenMgiCtvApiQ34KTS_Ia4JLQfMfP4NJLgmy5LCWtH39zqnokZqVZypsNa-FuzhzATgG1LiuhPHZ7U0FtraRhj4d7bmrtie7BA6zoD19nEi9COxmfxqm6emepk-kYTSsy5HysAfTYc1V3hLPoG1-i65KPOZm9x8f1Ltq6GFA2qG7lPV0bZabSGePM5btT5g3hehf6QcbEegt5sax3VG0m2VeEu5SWbaM0FY7Z_qNjXUNe1rkUSFwMHcAo3iijg4vCIJy7z1nNIWogVBkfpilVJz_mLrsScVFWFzs14LYq-S3gzb1DQvtXowFtg',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJi2-UZUoNVUYRfLrkZq6Utj0/photos/AciIO2e7dEucrcw-ippdh_6jXMP-Kyi-UHCWq44ZJbjSNjojqgEMH5z3Q4EBJk7ouvJPsTtEPEQJKyuBnuq_EVT8kS4
+[chat-simple] Chunk was enriched:   <p>Spend half a day exploring <span class="geo-mark" data-geo-id="loc-12" data-lat="55.13" data-ln  ->    <p>Spend half a day exploring <span class="geo-mark" data-coord-source="cache" data-photo-name="pl
+ OPTIONS /api/route?waypoints=15.0243437%2C55.089907399999994%3B14.9462936%2C55.110693399999995&profile=walking 200 in 25ms
+ GET /api/route?waypoints=15.0243437%2C55.089907399999994%3B14.9462936%2C55.110693399999995&profile=walking 200 in 92ms
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 451
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-14" data-lat="55.08" data-lng="15.08" data-place-name="Nexø,
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-14" data-lat="55.08" data-lng="15.08" data-place-name="Nexø, Bornholm" data-transport-from="loc-10" data-trans
+[EnrichmentPipeline] Extracted place name: Nexø, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.08, lng: 15.08 }
+[EnrichmentPipeline] Calling geocodeLocation for: Nexø, Bornholm
+[Geocoding] geocodeLocation called with: Nexø, Bornholm API key: present
+[Geocoding] Cache hit for: Nexø, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.062793299999996,
+  lng: 15.132580599999999,
+  photoName: 'places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfxQrM47bvpYH0_wMQU1Pzpw7Y4riCkDPHyULdQMIPAZGC7-1t3guSrpxc5eCOxsxNwvV3lC87SkCfP83066jjJWH7ElroQuR7tK_d4XZKa2Qu0WavE-hWHHJuYCVbc7bfTNFqf7VLtNbyp7gvNcaPjTVdZEeORzN6-1bqfEwjqJbzTzLOPC1t-aGUl8247GPszjDTcat3_ljQUMMIDbKBGMQTiFVDZTGc9eov9h8_BmkMoIlWmcOTvxMpvmZk2IqudXGI1x5vXTVlDlywpR5JRRjlxrTML1LRybSyCzZ7dMhMdm2pjgW_ObNFBbWDkC8sKdxC1QCJJcIHFisYWg0dUmA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttVUYRfKF3hJ1Xfdc/photos/AciIO2fXC0thDTH2LSPAM5zYz9vDCk8TXnXE2c-oCNk2RpXukrY8_cGbsQhcCVtt4tlRufvuD6j0NeGUieWfbPd58jfx
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-15" data-lat="55.05" data-lng="15.13" data-place-name="Dueod
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-15" data-lat="55.05" data-lng="15.13" data-place-name="Dueodde Strand, Bornholm" data-transport-from="loc-14" 
+[EnrichmentPipeline] Extracted place name: Dueodde Strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.05, lng: 15.13 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde Strand, Bornholm
+[Geocoding] geocodeLocation called with: Dueodde Strand, Bornholm API key: present
+[Geocoding] Cache hit for: Dueodde Strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 54.9952841,
+  lng: 15.087516199999998,
+  photoName: 'places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2dovvv3Q958rV_9aSvhizmY5hPYsHPiQSxBd_YcQcDfudZ7XQmrSNCb_QYV7yIXp9wpx_ZVF_SBsrpaFxHNxq2S_T5AAwUBM-UT2hgElj35o_hEgf8sy0OFNN4iJP9uxGunlbHgC4sJf2C_zu0lC1RitO6dFUrY8mpDwfWkWlBv5Pcv0MgvlRHk3AqvOvptTv5VsPv2jcXiqFi1D5-a7v-kRD3se6M4sB2ccKFmDYBqPlV8o27CEcdX4fgn_Y-yu0F1bF5q-gS0OV0q77XDKYUnSfKUXYOMmV8NNxWEemuQQ_HcvmiP0WV8KywsboI33pFsASUYHkWd5yg_lbfGgeOvqBC9PyXMlwTm4PbNZ4JCCBF-zMcUawIXSUVhJtsyKM4kIWoBHBIJSQkjBfF_BhImKGOmdN8CygUjHfYoYi3wAw',
+  description: 'Known for its ultra-fine sand, this beach with a lighthouse on its southern tip stretches for miles.',
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJz8Q_uvVrVUYRo0IbLu6HAL0/photos/AciIO2dovvv3Q958rV_9aSvhizmY5hPYsHPiQSxBd_YcQcDfudZ7XQmrSNCb_QYV7yIXp9wpx_ZVF_SBsrpaFxHNxq2S
+[chat-simple] Chunk was enriched:   <p>Drive to <span class="geo-mark" data-geo-id="loc-14" data-lat="55.08" data-lng="15.08" data-pla  ->    <p>Drive to <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJGeAM9OttV
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 239
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, B
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm" data-transport-from="loc-14" data-transpo
+[EnrichmentPipeline] Extracted place name: Rønne, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.7 }
+[EnrichmentPipeline] Calling geocodeLocation for: Rønne, Bornholm
+[Geocoding] geocodeLocation called with: Rønne, Bornholm API key: present
+[Geocoding] Cache hit for: Rønne, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.101017,
+  lng: 14.708328999999999,
+  photoName: 'places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v0IQ34yS_eYpu1lVcXPb0Ur7AGdWZb6S0l8sfDbPAsz44ITQAg9V5-T_DceQ43hTEndM_CpTwFIQzokeBcukFMmI8yZw6l0KAY0pRW1tQ5eN2JicuQOJ1Iun6-4gTn2qcfFDn2iGoBbV6zfNTaCN4YfirQhuq4GgE8g4mWxJAWNWjcdRoVglUvsbM-IqZ6qyTuJ3iR78FyEMdq_vFqH_v7cM3rDl3uoemWVmhyBDFdTfpcPmnBQqgI4HCmWIJ6xDgSsl1QHsKv8Q72dcnFg_jJXlGH6U97qMcCeHqtS_C0rqUXBrzrHYDSrc_b1uAN72_JZdjtBNv-GhgQ5jlxVxIUCk',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMaVUYRWDUHuaW4lJc/photos/AciIO2dHTDySBgKiMfLSoE70m7mJh75aLBoRvnavPXMtDmQcMXA2Dw6giox6aWOed47ksHsR36lzlhfDoXN_JIMRJp5v
+[chat-simple] Chunk was enriched:   <p>Return to <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place  ->    <p>Return to <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuMa
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 175
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.72" data-place-name="DCU-Ca
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.72" data-place-name="DCU-Camping Rønne Strand, Bornholm">DCU-Camping Rønne St
+[EnrichmentPipeline] Extracted place name: DCU-Camping Rønne Strand, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.1, lng: 14.72 }
+[EnrichmentPipeline] Calling geocodeLocation for: DCU-Camping Rønne Strand, Bornholm
+[Geocoding] geocodeLocation called with: DCU-Camping Rønne Strand, Bornholm API key: present
+[Geocoding] Cache hit for: DCU-Camping Rønne Strand, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.089107,
+  lng: 14.705090999999998,
+  photoName: 'places/ChIJmwnk61caVUYR2BZnacvZtFI/photos/AciIO2fRKoadYUEN7rnsP_LRvuMhy1s3HZJJVyKr-q443xw0RaNtf6zJ2kd4PLPZqZB_P2e7BGaooAlhuqtJvTrsIATh1rqqusxty_iQSo6iZzidY3Yq75RXx0U4NCjD6YWHQp4KnlpOCiwsBkKZG9AcZRD4SJNjTw_E0VwA5KoAjRu_QEs-xW4wQZKCfbRzT2LhiCaQ9mxWaLbvWeYheuoQ9Ri4yDf1QWrsHQUw5W1u3cBcFwCtLdUCet19bOU0d1T84BZRbmOu5euMGDJ76bMHMGYdaH9ZupjT6vB-Et-D4NpJ0g',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJmwnk61caVUYR2BZnacvZtFI/photos/AciIO2fRKoadYUEN7rnsP_LRvuMhy1s3HZJJVyKr-q443xw0RaNtf6zJ2kd4PLPZqZB_P2e7BGaooAlhuqtJvTrsIATh
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo-id="loc-16" data-lat="55.1" data-lng="14.72" data-place-name  ->      <li><span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJmwnk61caVUYR2BZ
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 161
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.9" data-place-name="Hulleh
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.9" data-place-name="Hullehavn Camping, Bornholm">Hullehavn Camping</span>
+[EnrichmentPipeline] Extracted place name: Hullehavn Camping, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.27, lng: 14.9 }
+[EnrichmentPipeline] Calling geocodeLocation for: Hullehavn Camping, Bornholm
+[Geocoding] geocodeLocation called with: Hullehavn Camping, Bornholm API key: present
+[Geocoding] Cache hit for: Hullehavn Camping, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.130796999999994,
+  lng: 15.150707200000001,
+  photoName: 'places/ChIJlbY1lv4aVUYRAPr1y2Ix50M/photos/AciIO2eNiD-ytTswawLLU7psJRa_K6rNFgIPlNqzgsJOiSHHdjUd9Hz2ZMpnjNfrEPI8VY9SJ9m78h7HffnCmvJSV833AlS0qUpw6WUnyUXren-8qt5N6qI-9rv2xBmI1lhjCRwyMKuGS8WysMOYZDnYHv_97ykppkm9CtyFUqkf4Jq5yUUcPA2p0qDKdCeHPFcvhDuBU56NDNYWBzZK1Fm6_KS0l0oeMoXGF0ge3DzO5vqnMQXZGAw8Ab0PVNViATGFYs7cT3hqsde1wO59EGitOMCQxjSTr45cAk7YJcGEjcF1AA',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJlbY1lv4aVUYRAPr1y2Ix50M/photos/AciIO2eNiD-ytTswawLLU7psJRa_K6rNFgIPlNqzgsJOiSHHdjUd9Hz2ZMpnjNfrEPI8VY9SJ9m78h7HffnCmvJSV833
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo-id="loc-17" data-lat="55.27" data-lng="14.9" data-place-name  ->      <li><span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJlbY1lv4aVUYRAPr
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 172
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-18" data-lat="55.05" data-lng="15.13" data-place-name="Dueod
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-18" data-lat="55.05" data-lng="15.13" data-place-name="Dueodde Family Camping, Bornholm">Dueodde Family Campin
+[EnrichmentPipeline] Extracted place name: Dueodde Family Camping, Bornholm
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 55.05, lng: 15.13 }
+[EnrichmentPipeline] Calling geocodeLocation for: Dueodde Family Camping, Bornholm
+[Geocoding] geocodeLocation called with: Dueodde Family Camping, Bornholm API key: present
+[Geocoding] Cache hit for: Dueodde Family Camping, Bornholm
+[EnrichmentPipeline] Geocoding result: {
+  lat: 55.0035515,
+  lng: 15.096841299999998,
+  photoName: 'places/ChIJnVXhsQ5sVUYRqxByJPqjM0s/photos/AciIO2ct1upeQh2-aIc6AalbUF4MBDOk5Gv-StcvwTK2AmmOnLdR9yIHGBKU2jFN-J0tGZBWt_k-yMTq3qESvlRjtb1FR640UXgMrCG2dM95xb4HncDLqtybrD-XBHhr_5ur1yj_clgAqiZmmAqfZC2qKPm5bJbbZK9ks4ebLI0dF2lO_9Q4DNbJScXL-8xiQKayFACApJKLdzY_nN3rMXO62Ak1c5fVtHhRotvzHIxU-DOzz66vY62Act2RzhBRJGleiNR7N5dcjtZcjmsSNYwWoHrWh0qiwyYOdsyTsKTU3QIS9Q',
+  description: undefined,
+  source: 'cache'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJnVXhsQ5sVUYRqxByJPqjM0s/photos/AciIO2ct1upeQh2-aIc6AalbUF4MBDOk5Gv-StcvwTK2AmmOnLdR9yIHGBKU2jFN-J0tGZBWt_k-yMTq3qESvlRjtb1F
+[chat-simple] Chunk was enriched:     <li><span class="geo-mark" data-geo-id="loc-18" data-lat="55.05" data-lng="15.13" data-place-nam  ->      <li><span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJnVXhsQ5sVUYRqxB
+Stream finished, messages count: 1
+ POST /api/chat-simple 200 in 15355ms

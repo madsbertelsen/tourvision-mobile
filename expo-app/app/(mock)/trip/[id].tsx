@@ -5,7 +5,7 @@ import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
 import { parseHTMLToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
-import { deleteNodeByIndex, stateFromJSON, stateToJSON, updateNodeTextByIndex } from '@/utils/prosemirror-transactions';
+import { deleteNodeByIndex, deleteNodeById, stateFromJSON, stateToJSON, updateNodeTextByIndex, updateNodeTextById } from '@/utils/prosemirror-transactions';
 import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
@@ -567,20 +567,29 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Find the actual current index in the document
-    let actualIndex = -1;
+    // Use the node ID if available, otherwise fall back to index-based update
+    let newState = null;
 
-    if (!hasEdited && element.documentPos !== undefined) {
-      // If we haven't edited, documentPos should still be accurate
-      actualIndex = element.documentPos;
-      console.log('[handleEditSave] Using original documentPos:', actualIndex);
+    if (element.nodeId) {
+      // Preferred: Update by node ID
+      console.log('[handleEditSave] Using node ID for update:', element.nodeId);
+      newState = updateNodeTextById(editorState, element.nodeId, newText);
     } else {
-      // After edits, we need to find by matching content
-      let currentIndex = 0;
+      // Fallback: Find the actual current index in the document
+      console.log('[handleEditSave] No node ID, falling back to index-based update');
+      let actualIndex = -1;
 
-      editorState.doc.descendants((node, pos) => {
-        if (node.isBlock && node.type.name !== 'doc') {
-          // Try different matching strategies
+      if (!hasEdited && element.documentPos !== undefined) {
+        // If we haven't edited, documentPos should still be accurate
+        actualIndex = element.documentPos;
+        console.log('[handleEditSave] Using original documentPos:', actualIndex);
+      } else {
+        // After edits, we need to find by matching content
+        // IMPORTANT: We must iterate only through direct children, not descendants!
+        const childCount = editorState.doc.content.childCount;
+
+        for (let i = 0; i < childCount; i++) {
+          const node = editorState.doc.content.child(i);
           const nodeText = node.textContent.trim();
           const elementText = element.text?.trim();
 
@@ -588,24 +597,23 @@ export default function MockChatScreen() {
           if (nodeText === elementText ||
               (elementText && nodeText.startsWith(elementText)) ||
               (elementText && elementText.startsWith(nodeText))) {
-            actualIndex = currentIndex;
-            console.log('[handleEditSave] Found matching node at index:', actualIndex);
-            return false; // Stop searching
+            actualIndex = i;
+            console.log('[handleEditSave] Found matching node at direct child index:', actualIndex);
+            break;
           }
-          currentIndex++;
         }
-      });
+      }
+
+      if (actualIndex === -1) {
+        console.error('[handleEditSave] Could not find node in document with text:', element.text);
+        return;
+      }
+
+      console.log('[handleEditSave] Found node at actual index:', actualIndex, 'originally reported as:', element.documentPos);
+
+      // Apply ProseMirror transaction using the actual index
+      newState = updateNodeTextByIndex(editorState, actualIndex, newText);
     }
-
-    if (actualIndex === -1) {
-      console.error('[handleEditSave] Could not find node in document with text:', element.text);
-      return;
-    }
-
-    console.log('[handleEditSave] Found node at actual index:', actualIndex, 'originally reported as:', element.documentPos);
-
-    // Apply ProseMirror transaction using the actual index
-    const newState = updateNodeTextByIndex(editorState, actualIndex, newText);
     if (!newState) {
       console.error('Failed to update node text');
       return;
@@ -705,21 +713,29 @@ export default function MockChatScreen() {
 
     // Check if this is itinerary content that should be managed by ProseMirror
     if (elementToDelete.isItineraryContent && editorState) {
-      // Find the actual current index in the document
-      // Use the documentPos directly if we haven't edited yet, or search by content
-      let actualIndex = -1;
+      // Use the node ID if available, otherwise fall back to index-based deletion
+      let newState = null;
 
-      if (!hasEdited && elementToDelete.documentPos !== undefined) {
-        // If we haven't edited, documentPos should still be accurate
-        actualIndex = elementToDelete.documentPos;
-        console.log('[handleDeleteElement] Using original documentPos:', actualIndex);
+      if (elementToDelete.nodeId) {
+        // Preferred: Delete by node ID
+        console.log('[handleDeleteElement] Using node ID for deletion:', elementToDelete.nodeId);
+        newState = deleteNodeById(editorState, elementToDelete.nodeId);
       } else {
-        // After edits, we need to find by matching content
-        let currentIndex = 0;
+        // Fallback: Find the actual current index in the document
+        console.log('[handleDeleteElement] No node ID, falling back to index-based deletion');
+        let actualIndex = -1;
 
-        editorState.doc.descendants((node, pos) => {
-          if (node.isBlock && node.type.name !== 'doc') {
-            // Try different matching strategies
+        if (!hasEdited && elementToDelete.documentPos !== undefined) {
+          // If we haven't edited, documentPos should still be accurate
+          actualIndex = elementToDelete.documentPos;
+          console.log('[handleDeleteElement] Using original documentPos:', actualIndex);
+        } else {
+          // After edits, we need to find by matching content
+          // IMPORTANT: We must iterate only through direct children, not descendants!
+          const childCount = editorState.doc.content.childCount;
+
+          for (let i = 0; i < childCount; i++) {
+            const node = editorState.doc.content.child(i);
             const nodeText = node.textContent.trim();
             const elementText = elementToDelete.text?.trim();
 
@@ -727,31 +743,30 @@ export default function MockChatScreen() {
             if (nodeText === elementText ||
                 (elementText && nodeText.startsWith(elementText)) ||
                 (elementText && elementText.startsWith(nodeText))) {
-              actualIndex = currentIndex;
-              console.log('[handleDeleteElement] Found matching node at index:', actualIndex);
-              return false; // Stop searching
+              actualIndex = i;
+              console.log('[handleDeleteElement] Found matching node at direct child index:', actualIndex);
+              break;
             }
-            currentIndex++;
           }
-        });
+        }
+
+        if (actualIndex === -1) {
+          console.error('[handleDeleteElement] Could not find node in document with text:', elementToDelete.text);
+          console.error('[handleDeleteElement] Document has these texts:',
+            Array.from({ length: editorState.doc.content.childCount }, (_, i) => {
+              const child = editorState.doc.content.child(i);
+              return child.textContent.substring(0, 50);
+            })
+          );
+          setActionSheetVisible(false);
+          return;
+        }
+
+        console.log('[handleDeleteElement] Found node at actual index:', actualIndex, 'originally reported as:', elementToDelete.documentPos);
+
+        // Apply ProseMirror transaction using the actual index
+        newState = deleteNodeByIndex(editorState, actualIndex);
       }
-
-      if (actualIndex === -1) {
-        console.error('[handleDeleteElement] Could not find node in document with text:', elementToDelete.text);
-        console.error('[handleDeleteElement] Document has these texts:',
-          Array.from({ length: editorState.doc.content.childCount }, (_, i) => {
-            const child = editorState.doc.content.child(i);
-            return child.textContent.substring(0, 50);
-          })
-        );
-        setActionSheetVisible(false);
-        return;
-      }
-
-      console.log('[handleDeleteElement] Found node at actual index:', actualIndex, 'originally reported as:', elementToDelete.documentPos);
-
-      // Apply ProseMirror transaction using the actual index
-      const newState = deleteNodeByIndex(editorState, actualIndex);
 
       if (!newState) {
         console.error('[handleDeleteElement] Failed to delete node from ProseMirror document');

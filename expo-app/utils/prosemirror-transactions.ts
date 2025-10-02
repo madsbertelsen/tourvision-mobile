@@ -1,6 +1,13 @@
 import { EditorState, Transaction, NodeSelection } from 'prosemirror-state';
 import { Node as ProseMirrorNode } from 'prosemirror-model';
-import { schema } from './prosemirror-schema';
+import { schema, findNodeById } from './prosemirror-schema';
+
+/**
+ * Generate a unique node ID
+ */
+function generateNodeId(): string {
+  return `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
 
 /**
  * Find a block node by its index (0-based)
@@ -36,6 +43,113 @@ export function findNodeByIndex(doc: ProseMirrorNode, targetIndex: number): { no
   console.log('[findNodeByIndex]   -> content:', node.textContent.substring(0, 50));
 
   return { node, pos, from, to };
+}
+
+/**
+ * Delete a node by its unique ID attribute
+ */
+export function deleteNodeById(state: EditorState, nodeId: string): EditorState | null {
+  const result = findNodeById(state.doc, nodeId);
+
+  if (!result) {
+    console.error('[deleteNodeById] Node not found with ID:', nodeId);
+    return null;
+  }
+
+  const { node, pos } = result;
+
+  console.log('[deleteNodeById] Deleting node with ID:', nodeId);
+  console.log('[deleteNodeById]   -> pos:', pos, 'size:', node.nodeSize);
+  console.log('[deleteNodeById]   -> type:', node.type.name);
+  console.log('[deleteNodeById]   -> content:', node.textContent.substring(0, 50));
+  console.log('[deleteNodeById] Document before:', state.doc.content.childCount, 'children');
+
+  const tr = state.tr;
+
+  // Delete using the correct from and to positions
+  const from = pos;
+  const to = pos + node.nodeSize;
+  tr.delete(from, to);
+
+  // Apply the transaction
+  const newState = state.apply(tr);
+
+  console.log('[deleteNodeById] Document after:', newState.doc.content.childCount, 'children');
+
+  if (newState.doc.content.childCount > 0) {
+    const firstNode = newState.doc.content.child(0);
+    console.log('[deleteNodeById] First node after deletion:', firstNode.type.name, firstNode.textContent.substring(0, 50));
+  } else {
+    console.log('[deleteNodeById] Document is now empty');
+  }
+
+  return newState;
+}
+
+/**
+ * Update text content of a node by its unique ID
+ */
+export function updateNodeTextById(
+  state: EditorState,
+  nodeId: string,
+  newText: string
+): EditorState | null {
+  const result = findNodeById(state.doc, nodeId);
+
+  if (!result) {
+    console.error('[updateNodeTextById] Node not found with ID:', nodeId);
+    return null;
+  }
+
+  const { node, pos } = result;
+
+  console.log('[updateNodeTextById] Updating node with ID:', nodeId);
+  console.log('[updateNodeTextById]   -> pos:', pos, 'size:', node.nodeSize);
+  console.log('[updateNodeTextById]   -> old text:', node.textContent.substring(0, 50));
+  console.log('[updateNodeTextById]   -> new text:', newText.substring(0, 50));
+
+  const tr = state.tr;
+
+  try {
+    // Create new node with updated text, preserving type and ID
+    let newContent;
+
+    // Handle different node types appropriately
+    if (node.isText) {
+      newContent = [schema.text(newText)];
+    } else if (node.type === schema.nodes.paragraph ||
+               node.type === schema.nodes.heading ||
+               (node.isBlock && node.type.spec.content === 'inline*')) {
+      // For block nodes that can contain text
+      newContent = newText ? [schema.text(newText)] : [];
+    } else {
+      // For complex nodes, try to preserve structure
+      newContent = node.content.size > 0 ? [schema.text(newText)] : [];
+    }
+
+    // Create the new node with the same type, preserving the ID attribute
+    const newAttrs = { ...node.attrs };
+    if (!newAttrs.id) {
+      // If the node doesn't have an ID yet, generate one
+      newAttrs.id = generateNodeId();
+    }
+    const newNode = node.type.create(newAttrs, newContent, node.marks);
+
+    // Use replaceWith to replace the node at the correct positions
+    const from = pos;
+    const to = pos + node.nodeSize;
+    tr.replaceWith(from, to, newNode);
+
+    // Apply transaction
+    const newState = state.apply(tr);
+
+    console.log('[updateNodeTextById] Update successful');
+
+    return newState;
+  } catch (error) {
+    console.error('[updateNodeTextById] Error updating node:', error);
+    return null;
+  }
 }
 
 /**

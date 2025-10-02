@@ -34,6 +34,7 @@ export type FlatElement = {
   originalText?: string; // Store original text for undo
   documentPos?: number; // Position in ProseMirror document
   nodeSize?: number; // Size of node in ProseMirror document
+  nodeId?: string; // Unique ID of the ProseMirror node
 };
 
 export interface Location {
