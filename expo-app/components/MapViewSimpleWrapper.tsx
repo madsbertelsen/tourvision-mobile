@@ -29,7 +29,7 @@ export function MapViewSimpleWrapper({
   center = { lat: 0, lng: 0 },
   zoom = 2,
 }: MapViewSimpleWrapperProps) {
-  console.log('[MapViewSimpleWrapper] Received locations:', locations);
+  // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
   // Get focusedLocation, followMode, and routes from context
   let focusedLocation = null;
@@ -58,11 +58,11 @@ export function MapViewSimpleWrapper({
     return fromVisible && toVisible;
   });
 
-  console.log('[MapViewSimpleWrapper] Filtering routes:', {
-    totalRoutes: allRoutes.length,
-    visibleRoutes: visibleRoutes.length,
-    visibleLocationIds: Array.from(visibleLocationIds)
-  });
+  // console.log('[MapViewSimpleWrapper] Filtering routes:', {
+  //   totalRoutes: allRoutes.length,
+  //   visibleRoutes: visibleRoutes.length,
+  //   visibleLocationIds: Array.from(visibleLocationIds)
+  // });
 
   // If height is a string percentage, use flex: 1 to fill parent
   const containerStyle = height === '100%'

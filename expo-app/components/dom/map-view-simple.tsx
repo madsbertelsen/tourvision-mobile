@@ -148,14 +148,14 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
 
     if (visibleLabels.length === 0) return;
 
-    console.log('[Animation] Visible labels to animate:', visibleLabels.map(l => l.id));
+    // console.log('[Animation] Visible labels to animate:', visibleLabels.map(l => l.id));
 
     // Animate each visible label with stagger delay
     visibleLabels.forEach((label, index) => {
       const delay = index * 150; // 150ms stagger between animations
 
       const timer = setTimeout(() => {
-        console.log(`[Animation] Starting animation for label: ${label.id}`);
+        // console.log(`[Animation] Starting animation for label: ${label.id}`);
 
         // Mark as animated
         animatedLabelsRef.current.add(label.id);
@@ -171,13 +171,13 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
           const elapsed = Date.now() - startTime;
           const progress = Math.min(elapsed / duration, 1);
 
-          console.log(`[Animation] ${label.id} progress: ${progress.toFixed(3)}`);
+          // console.log(`[Animation] ${label.id} progress: ${progress.toFixed(3)}`);
           setLabelAnimations(prev => new Map(prev).set(label.id, progress));
 
           if (progress < 1) {
             requestAnimationFrame(animate);
           } else {
-            console.log(`[Animation] Completed animation for label: ${label.id}`);
+            // console.log(`[Animation] Completed animation for label: ${label.id}`);
           }
         };
 
@@ -239,7 +239,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   return null;
                 }
 
-                console.log(`[Render] Hexagon ${hexLabel.id} progress: ${progress}`);
+                // console.log(`[Render] Hexagon ${hexLabel.id} progress: ${progress}`);
 
                 // Hexagon explosion phase: 0.3-0.5 (900-1500ms of 3000ms)
                 const hexProgress = Math.max(0, Math.min((progress - 0.3) / 0.2, 1));

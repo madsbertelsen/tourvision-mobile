@@ -5,7 +5,7 @@ import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
 import { parseHTMLToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
-import { deleteNodeByIndex, stateToJSON, stateFromJSON, updateNodeTextByIndex } from '@/utils/prosemirror-transactions';
+import { deleteNodeByIndex, stateFromJSON, stateToJSON, updateNodeTextByIndex } from '@/utils/prosemirror-transactions';
 import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
@@ -270,7 +270,7 @@ function extractAllLocations(elements: FlatElement[]) {
                 transportFrom: item.transportFrom,
                 transportProfile: item.transportProfile
               };
-              console.log('[extractAllLocations] Adding location:', location);
+              // console.log('[extractAllLocations] Adding location:', location);
               locations.push(location);
             }
           }
@@ -279,7 +279,7 @@ function extractAllLocations(elements: FlatElement[]) {
     }
   });
 
-  console.log('[extractAllLocations] Total locations extracted:', locations.length);
+  // console.log('[extractAllLocations] Total locations extracted:', locations.length);
   return locations;
 }
 
@@ -348,7 +348,16 @@ export default function MockChatScreen() {
     error
   } = chatHelpers;
 
-  const isLoading = status === ('in_progress' as any);
+  const isLoading = status === ('in_progress' as any) || status === 'loading';
+
+  // Only log status changes, not every render
+  const previousStatusRef = useRef(status);
+  useEffect(() => {
+    if (previousStatusRef.current !== status) {
+      console.log('[TripChat] Status changed from', previousStatusRef.current, 'to', status);
+      previousStatusRef.current = status;
+    }
+  }, [status]);
 
   // Restore messages when trip loads
   useEffect(() => {
@@ -360,17 +369,37 @@ export default function MockChatScreen() {
 
   // Restore ProseMirror document when trip loads
   useEffect(() => {
-    if (currentTrip && currentTrip.itinerary_document && !editorState) {
-      console.log('[TripChat] Restoring ProseMirror document from trip');
-      const restoredState = stateFromJSON(currentTrip.itinerary_document);
-      setEditorState(restoredState);
-      setHasEdited(true); // Mark as edited since we have a saved document
+    if (currentTrip && !editorState) {
+      // Try to restore from itineraries array first (use the latest one)
+      if (currentTrip.itineraries && currentTrip.itineraries.length > 0) {
+        const latestItinerary = currentTrip.itineraries[currentTrip.itineraries.length - 1];
+        console.log('[TripChat] Restoring ProseMirror document from itineraries array');
+        const restoredState = stateFromJSON(latestItinerary.document);
+        setEditorState(restoredState);
+        setHasEdited(true);
+      }
+      // Fall back to legacy itinerary_document field
+      else if (currentTrip.itinerary_document) {
+        console.log('[TripChat] Restoring ProseMirror document from legacy field');
+        const restoredState = stateFromJSON(currentTrip.itinerary_document);
+        setEditorState(restoredState);
+        setHasEdited(true);
+      }
     }
   }, [currentTrip, editorState]);
 
-  // Save messages whenever they change
+  // Save messages whenever they change (but skip if we're processing itinerary)
+  const skipAutoSaveRef = useRef(false);
+
   useEffect(() => {
     if (!currentTrip || messages.length === 0) return;
+
+    // Skip auto-save if we're in the middle of processing itinerary
+    if (skipAutoSaveRef.current) {
+      console.log('[TripChat] Skipping auto-save due to itinerary processing');
+      skipAutoSaveRef.current = false;
+      return;
+    }
 
     // Save messages immediately when they change
     console.log('[TripChat] Saving messages:', messages.length);
@@ -378,6 +407,7 @@ export default function MockChatScreen() {
       ...currentTrip,
       messages: messages,
       itinerary_document: currentTrip.itinerary_document,
+      itineraries: currentTrip.itineraries || [],
       modifications: currentTrip.modifications || [],
     };
 
@@ -388,27 +418,107 @@ export default function MockChatScreen() {
     });
   }, [messages]); // Only depend on messages, not on currentTrip to avoid loops
 
-  // Save itinerary document when streaming completes (messages are saved separately)
-  const previousIsLoading = useRef(isLoading);
+  // Parse and save itinerary document for messages that need it
+  const hasProcessedRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    // Detect transition from loading to not loading (streaming completed)
-    if (previousIsLoading.current && !isLoading && currentTrip && editorState) {
-      console.log('[TripChat] Streaming completed, saving itinerary document');
-      const updatedTrip = {
-        ...currentTrip,
-        messages: messages, // Include current messages
-        itinerary_document: stateToJSON(editorState),
-        modifications: currentTrip.modifications || [],
-      };
-      saveTrip(updatedTrip).then(() => {
-        console.log('[TripChat] Successfully saved itinerary document after streaming');
-        setCurrentTrip(updatedTrip);
-      }).catch(error => {
-        console.error('[TripChat] Failed to save itinerary document:', error);
-      });
+    // Process messages that have itinerary content but no parsed document
+    console.log('[TripChat-Processing] Effect running. Trip:', !!currentTrip, 'Messages:', messages.length, 'Loading:', isLoading);
+
+    if (currentTrip && messages.length > 0 && !isLoading) {
+      console.log('[TripChat-Processing] Checking for itinerary content to process.');
+
+      // Find the last assistant message that might contain itinerary
+      const lastAssistantMessage = messages.findLast((msg: any) => msg.role === 'assistant');
+      console.log('[TripChat] Found last assistant message:', !!lastAssistantMessage);
+
+      if (lastAssistantMessage) {
+        // Check if we already have an itinerary for this message
+        const existingItinerary = currentTrip.itineraries?.find(
+          (it: any) => it.messageId === lastAssistantMessage.id
+        );
+
+        const alreadyProcessed = hasProcessedRef.current.has(lastAssistantMessage.id) || existingItinerary;
+        console.log('[TripChat] Message already processed?', alreadyProcessed, 'ID:', lastAssistantMessage.id);
+
+        if (!alreadyProcessed) {
+          console.log('[TripChat] Last message parts:', lastAssistantMessage.parts);
+
+          // Check if this message has itinerary content
+          const textContent = lastAssistantMessage.parts?.filter((part: any) => part.type === 'text')
+            .map((part: any) => part.text)
+            .join('') || '';
+
+          console.log('[TripChat] Text content preview:', textContent.substring(0, 100), '...');
+
+          const hasItineraryHTML = textContent.includes('<itinerary>') && textContent.includes('</itinerary>');
+
+          // We no longer check for parts, just process if there's itinerary HTML
+          console.log('[TripChat] Has itinerary HTML:', hasItineraryHTML);
+          console.log('[TripChat] Existing itineraries count:', currentTrip.itineraries?.length || 0);
+
+        if (hasItineraryHTML) {
+          // Mark this message as processed
+          hasProcessedRef.current.add(lastAssistantMessage.id);
+          console.log('[TripChat] Processing itinerary content for message:', lastAssistantMessage.id);
+
+          // Extract and parse the itinerary content
+          const itineraryMatch = textContent.match(/<itinerary>([\s\S]*?)<\/itinerary>/);
+          if (itineraryMatch) {
+            const itineraryHTML = itineraryMatch[1];
+
+            try {
+              // Parse HTML to ProseMirror
+              const parsed = parseHTMLToProseMirror(itineraryHTML);
+              const proseMirrorJSON = stateToJSON(parsed.state);
+
+              // Create new itinerary entry
+              const newItinerary = {
+                messageId: lastAssistantMessage.id,
+                document: proseMirrorJSON,
+                createdAt: Date.now()
+              };
+
+              // Add to itineraries array (or create it if it doesn't exist)
+              const updatedItineraries = [
+                ...(currentTrip.itineraries || []),
+                newItinerary
+              ];
+
+              // Save the updated trip with the new itinerary
+              const updatedTrip = {
+                ...currentTrip,
+                messages: messages, // Keep messages as-is
+                itineraries: updatedItineraries,
+                itinerary_document: proseMirrorJSON, // Keep for backward compatibility
+                modifications: currentTrip.modifications || [],
+              };
+
+              console.log('[TripChat] Added itinerary to array. Total itineraries:', updatedItineraries.length);
+
+              saveTrip(updatedTrip).then(() => {
+                console.log('[TripChat] Successfully saved trip with itinerary in array');
+                setCurrentTrip(updatedTrip);
+                // Store the parsed state for editing (use the latest itinerary)
+                setEditorState(parsed.state);
+              }).catch(error => {
+                console.error('[TripChat] Failed to save trip:', error);
+              });
+            } catch (parseError) {
+              console.error('[TripChat] Failed to parse itinerary HTML:', parseError);
+            }
+          }
+        } else {
+            console.log('[TripChat] No itinerary content in last assistant message');
+          }
+        } else {
+          console.log('[TripChat] Message was already processed earlier');
+        }
+      } else {
+        console.log('[TripChat] No assistant message with unprocessed itinerary content found');
+      }
     }
-    previousIsLoading.current = isLoading;
-  }, [isLoading, currentTrip, editorState, messages]);
+  }, [currentTrip, messages, isLoading, editorState, setMessages]);
 
   // Toggle collapse state for a message
   const toggleMessageCollapse = useCallback((messageId: string) => {
@@ -538,6 +648,7 @@ export default function MockChatScreen() {
         ...currentTrip,
         messages: messages, // Include messages to persist chat history
         itinerary_document: stateToJSON(newState),
+        itineraries: currentTrip.itineraries || [],
         modifications: [
           ...(currentTrip.modifications || []),
           {
@@ -667,6 +778,7 @@ export default function MockChatScreen() {
           ...currentTrip,
           messages: messages, // Include the actual chat messages
           itinerary_document: stateToJSON(newState),
+          itineraries: currentTrip.itineraries || [],
           modifications: allMods
         };
 
@@ -746,9 +858,63 @@ export default function MockChatScreen() {
 
       // Only show content if not collapsed
       if (!isCollapsed) {
+        // Check if this is the last assistant message and we have a trip-level itinerary document
+        const isLastAssistantMessage = message.role === 'assistant' &&
+          messages.findLast((msg: any) => msg.role === 'assistant')?.id === message.id;
+
+        // First check if message has a parsed itinerary-document part (for immediate display)
+        // OR if this is the last assistant message and we have a trip-level itinerary document
+        const itineraryPart = message.parts?.find((part: any) => part.type === 'itinerary-document');
+        const useTripItinerary = !itineraryPart && isLastAssistantMessage && currentTrip?.itinerary_document && hasItineraryContent;
+
         // Add content elements
-        if (hasItineraryContent) {
-          // Extract the content between <itinerary> tags
+        if ((itineraryPart && itineraryPart.content) || useTripItinerary) {
+          // We have a pre-parsed ProseMirror document, use it directly
+          let doc;
+          let state;
+
+          // If we have edited the document, use the editorState as source of truth
+          if (hasEdited && editorState) {
+            console.log('[useEffect] Using edited editorState as source, doc children:', editorState.doc.content.childCount);
+            doc = editorState.doc;
+            state = editorState;
+          } else {
+            // Use the parsed document from the message part or trip level
+            const documentJSON = itineraryPart?.content || currentTrip?.itinerary_document;
+            console.log('[useEffect] Using itinerary document from:', itineraryPart ? 'message part' : 'trip level');
+            state = stateFromJSON(documentJSON);
+            doc = state.doc;
+
+            // Restore editor state if not already set
+            if (!editorState) {
+              setEditorState(state);
+              console.log('[useEffect] EditorState restored from itinerary document');
+            }
+          }
+
+          // Convert ProseMirror document to renderable elements
+          const pmElements = proseMirrorToElements(doc, message.id);
+
+          console.log('[useEffect] Rendering ProseMirror elements:', pmElements.length, 'hasEdited:', hasEdited);
+
+          // Add elements with message context
+          pmElements.forEach((pmElement, index) => {
+            const elementId = hasEdited
+              ? `${message.id}-pm-${updateCounter}-${index}` // Include updateCounter for uniqueness
+              : `${message.id}-pm-${index}`; // Original ID for streaming
+
+            elements.push({
+              ...pmElement,
+              id: elementId,
+              messageId: message.id,
+              messageColor: messageColor,
+              role: message.role as 'user' | 'assistant',
+              isItineraryContent: true,
+            });
+          });
+        } else if (hasItineraryContent && !itineraryPart) {
+          // Fallback: Parse HTML content if no itinerary-document part exists yet
+          // This handles backwards compatibility and streaming states
           let itineraryHTML: string;
 
           if (hasCompleteItinerary) {
@@ -756,87 +922,75 @@ export default function MockChatScreen() {
             const itineraryMatch = textContent.match(/<itinerary>([\s\S]*?)<\/itinerary>/);
             itineraryHTML = itineraryMatch ? itineraryMatch[1] : '';
           } else if (hasPartialItinerary) {
-            // Partial itinerary (streaming): extract everything after opening tag
+            // Partial itinerary (streaming): extract and try to render what we have
             const openTagIndex = textContent.indexOf('<itinerary>');
             itineraryHTML = textContent.substring(openTagIndex + '<itinerary>'.length);
-            // Add a closing tag to make it parseable (will be incomplete but renderable)
-            if (!itineraryHTML.includes('</itinerary>')) {
-              // Close any open tags to make partial content valid
-              itineraryHTML = itineraryHTML.trim();
-            }
           } else {
             itineraryHTML = '';
           }
-          let doc;
-          let state;
 
-          // If we have edited the document, use the editorState as source of truth
-          // Otherwise, parse the HTML content (important for streaming)
-          if (hasEdited && editorState) {
-            console.log('[useEffect] Using editorState as source, doc children:', editorState.doc.content.childCount);
-            doc = editorState.doc;
-            state = editorState;
-          } else if (itineraryHTML && itineraryHTML.trim().length > 0) {
-            // Only try to parse if we have non-empty HTML content
+          // Parse itinerary HTML (both complete and partial for streaming)
+          if (itineraryHTML && itineraryHTML.trim().length > 0) {
+            let doc;
+            let state;
+
             try {
-              // Parse only the itinerary HTML content (not the wrapping tags or other text)
+              // Parse the itinerary HTML content (works for both complete and partial)
               const parsed = parseHTMLToProseMirror(itineraryHTML);
               doc = parsed.doc;
               state = parsed.state;
 
-              // Store the state if we don't have one yet and it's complete
-              if (!editorState && hasCompleteItinerary) {
-                setEditorState(state);
-                // The save will be handled by the streaming completion effect
-                console.log('[useEffect] EditorState created from parsed itinerary');
-              }
-            } catch (parseError) {
-              console.warn('[useEffect] Failed to parse partial itinerary HTML:', parseError);
-              // Fall back to showing as text during streaming
-              doc = null;
-              state = null;
-            }
-          } else {
-            // No content to parse yet (early streaming state)
-            doc = null;
-            state = null;
-          }
+              // Convert ProseMirror document to renderable elements
+              const pmElements = proseMirrorToElements(doc, message.id);
 
-          // Only render ProseMirror elements if we have a valid document
-          if (doc && state) {
-            // Convert ProseMirror document to renderable elements
-            const pmElements = proseMirrorToElements(doc, message.id);
+              console.log('[useEffect] Rendering ProseMirror elements from HTML:', pmElements.length, 'isPartial:', hasPartialItinerary);
 
-            console.log('[useEffect] Rendering ProseMirror elements:', pmElements.length, 'hasEdited:', hasEdited);
-            console.log('[useEffect] First few elements:', pmElements.slice(0, 3).map(el => ({ id: el.id, text: el.text?.substring(0, 30) })));
-
-            // Add elements with message context
-            // When edited, use unique IDs to force React to re-render
-            pmElements.forEach((pmElement, index) => {
-              const elementId = hasEdited
-                ? `${message.id}-pm-${updateCounter}-${index}` // Include updateCounter for uniqueness
-                : `${message.id}-pm-${index}`; // Original ID for streaming
-
-              elements.push({
-                ...pmElement,
-                id: elementId,
-                messageId: message.id,
-                messageColor: messageColor,
-                role: message.role as 'user' | 'assistant',
-                isItineraryContent: true,
+              // Add elements with message context
+              pmElements.forEach((pmElement, index) => {
+                elements.push({
+                  ...pmElement,
+                  id: `${message.id}-pm-${index}`,
+                  messageId: message.id,
+                  messageColor: messageColor,
+                  role: message.role as 'user' | 'assistant',
+                  isItineraryContent: true,
+                });
               });
-            });
-          } else if (hasPartialItinerary) {
-            // During streaming, show a loading message instead of raw HTML
-            elements.push({
-              id: `${message.id}-loading`,
-              type: 'content',
-              messageId: message.id,
-              messageColor: messageColor,
-              text: 'Loading itinerary...',
-              height: 0,
-              role: message.role as 'user' | 'assistant',
-            });
+
+              // Store editor state only for complete itineraries
+              if (hasCompleteItinerary && !editorState) {
+                setEditorState(state);
+                console.log('[useEffect] EditorState set from complete itinerary HTML');
+              }
+
+              // Note: The streaming completion handler will add the itinerary-document part when complete
+            } catch (parseError) {
+              console.warn('[useEffect] Failed to parse itinerary HTML:', parseError);
+              // For partial content during streaming, this is expected - show what we can
+              if (hasPartialItinerary) {
+                // Show the raw text content as a fallback during streaming
+                elements.push({
+                  id: `${message.id}-streaming`,
+                  type: 'content',
+                  messageId: message.id,
+                  messageColor: messageColor,
+                  text: itineraryHTML,
+                  height: 0,
+                  role: message.role as 'user' | 'assistant',
+                });
+              } else {
+                // For complete content, show error
+                elements.push({
+                  id: `${message.id}-error`,
+                  type: 'content',
+                  messageId: message.id,
+                  messageColor: messageColor,
+                  text: 'Failed to parse itinerary content',
+                  height: 0,
+                  role: message.role as 'user' | 'assistant',
+                });
+              }
+            }
           }
         } else if (textContent && !hasItineraryContent) {
           // Regular text message (not itinerary)
@@ -910,7 +1064,7 @@ export default function MockChatScreen() {
                       photoName: item.photoName || undefined,
                       geoId: item.geoId || undefined
                     };
-                    console.log('[visibleLocations] Adding visible location:', location);
+                    // console.log('[visibleLocations] Adding visible location:', location);
                     newVisibleLocations.push(location);
                   }
                 }
@@ -921,7 +1075,7 @@ export default function MockChatScreen() {
       }
     });
 
-    console.log('[visibleLocations] Total visible locations:', newVisibleLocations.length);
+    // console.log('[visibleLocations] Total visible locations:', newVisibleLocations.length);
     setVisibleLocations(newVisibleLocations);
     // Only update context if we have locations to show
     if (newVisibleLocations.length > 0) {

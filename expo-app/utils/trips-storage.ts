@@ -26,7 +26,12 @@ export interface SavedTrip {
     newText?: string;
     timestamp: number;
   }>;
-  itinerary_document?: any; // ProseMirror document JSON
+  itinerary_document?: any; // ProseMirror document JSON (deprecated - use itineraries array)
+  itineraries?: Array<{
+    messageId: string; // ID of the message that generated this itinerary
+    document: any; // ProseMirror document JSON
+    createdAt: number;
+  }>;
   createdAt: number;
   updatedAt: number;
 }

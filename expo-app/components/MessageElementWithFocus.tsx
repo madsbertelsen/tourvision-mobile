@@ -220,7 +220,7 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
       return null;
     }
 
-    console.log('Rendering element with parsedContent:', element.id, element.parsedContent);
+    // console.log('Rendering element with parsedContent:', element.id, element.parsedContent);
 
     // Check if it's a heading
     if (element.isHeading && element.headingLevel) {
