@@ -65,6 +65,7 @@ interface MessageElementWithFocusProps {
   containerHeight?: number;
   styles: any;
   transitionDuration?: number;
+  isEditing?: boolean; // New: whether this element is currently being edited
 }
 
 // Colors
@@ -88,23 +89,27 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
   containerHeight,
   styles,
   transitionDuration = 300,
+  isEditing: isEditingProp = false,
 }) => {
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingInternal, setIsEditingInternal] = useState(false);
   const [editedText, setEditedText] = useState(element.text || '');
+
+  // Use prop or internal state for editing
+  const isEditing = isEditingProp || isEditingInternal;
 
   // Handle save edit
   const handleSaveEdit = () => {
     if (onEditSave && editedText !== element.text) {
       onEditSave(element.id, editedText);
     }
-    setIsEditing(false);
+    setIsEditingInternal(false);
   };
 
   // Handle cancel edit
   const handleCancelEdit = () => {
     setEditedText(element.text || '');
-    setIsEditing(false);
+    setIsEditingInternal(false);
   };
 
   let mockContext = null;

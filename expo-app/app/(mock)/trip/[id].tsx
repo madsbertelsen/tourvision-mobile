@@ -539,6 +539,9 @@ export default function MockChatScreen() {
     setActionSheetVisible(true);
   }, []);
 
+  // Track which element is being edited
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+
   // Handle edit save using ProseMirror transactions
   const handleEditSave = useCallback(async (elementId: string, newText: string) => {
     if (!editorState) {
@@ -554,6 +557,7 @@ export default function MockChatScreen() {
         }
         return el;
       }));
+      setEditingElementId(null);  // Clear the editing state
       return;
     }
 
@@ -662,6 +666,9 @@ export default function MockChatScreen() {
       };
       await saveTrip(updatedTrip);
       setCurrentTrip(updatedTrip);
+
+      // Clear the editing state
+      setEditingElementId(null);
     }
   }, [editorState, flatElements, currentTrip, messages]);
 
@@ -1437,6 +1444,7 @@ export default function MockChatScreen() {
                         onEditSave={handleEditSave}
                         onDelete={handleDeleteElement}
                         transitionDuration={300}
+                        isEditing={editingElementId === element.id}
                       />
                     </View>
                   );
@@ -1492,7 +1500,9 @@ export default function MockChatScreen() {
             icon: '✏️',
             text: 'Edit',
             onPress: () => {
-              // Will be handled by the inline edit mode in MessageElementWithFocus
+              if (selectedElement) {
+                setEditingElementId(selectedElement.id);
+              }
               setActionSheetVisible(false);
             },
           },
