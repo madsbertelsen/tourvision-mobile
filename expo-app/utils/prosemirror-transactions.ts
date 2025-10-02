@@ -451,18 +451,48 @@ export function stateToJSON(state: EditorState): any {
  */
 export function stateFromJSON(json: any): EditorState {
   try {
-    const doc = schema.nodeFromJSON(json);
+    // Ensure all block nodes have IDs before creating the document
+    const ensureNodeIds = (nodeJson: any): any => {
+      if (!nodeJson) return nodeJson;
+
+      // If this is a block node without an ID, generate one
+      if (nodeJson.type &&
+          (nodeJson.type === 'paragraph' ||
+           nodeJson.type === 'heading' ||
+           nodeJson.type === 'blockquote' ||
+           nodeJson.type === 'bulletList' ||
+           nodeJson.type === 'orderedList')) {
+        if (!nodeJson.attrs) {
+          nodeJson.attrs = {};
+        }
+        if (!nodeJson.attrs.id) {
+          nodeJson.attrs.id = generateNodeId();
+          console.log('[stateFromJSON] Added ID to', nodeJson.type, 'node:', nodeJson.attrs.id);
+        }
+      }
+
+      // Recursively process content
+      if (nodeJson.content && Array.isArray(nodeJson.content)) {
+        nodeJson.content = nodeJson.content.map(ensureNodeIds);
+      }
+
+      return nodeJson;
+    };
+
+    const processedJson = ensureNodeIds(json);
+    const doc = schema.nodeFromJSON(processedJson);
+
     return EditorState.create({
       doc,
       schema
     });
   } catch (error) {
     console.error('Error creating state from JSON:', error);
-    // Return empty state as fallback
+    // Return empty state as fallback with ID
     return EditorState.create({
       schema,
       doc: schema.node('doc', null, [
-        schema.node('paragraph', null, [])
+        schema.node('paragraph', { id: generateNodeId() }, [])
       ])
     });
   }

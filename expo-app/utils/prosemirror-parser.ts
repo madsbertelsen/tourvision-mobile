@@ -120,8 +120,13 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
 
   // Process only direct children of the document
   doc.content.forEach((node, offset, index) => {
-    // Generate a unique ID if the node doesn't have one
-    const nodeId = node.attrs?.id || `pm-element-${index}`;
+    // Use the actual node ID if it exists, otherwise log a warning
+    const nodeId = node.attrs?.id;
+
+    if (!nodeId) {
+      console.warn('[proseMirrorToElements] Node at index', index, 'has no ID. Type:', node.type.name);
+      console.warn('[proseMirrorToElements] Node attrs:', node.attrs);
+    }
 
     // Handle different node types
     if (node.type === schema.nodes.paragraph) {
@@ -138,7 +143,7 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
         // Store the actual child index, which matches what deleteNodeByIndex expects
         documentPos: index,
         nodeSize: node.nodeSize,
-        nodeId: nodeId, // Store the ProseMirror node ID
+        nodeId: nodeId || undefined, // Only store if node actually has an ID
         isDeleted: false,
         isEdited: false
       });
@@ -154,7 +159,7 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
         headingLevel: node.attrs.level as 1 | 2 | 3,
         documentPos: index,
         nodeSize: node.nodeSize,
-        nodeId: nodeId, // Store the ProseMirror node ID
+        nodeId: nodeId || undefined, // Only store if node actually has an ID
         isDeleted: false,
         isEdited: false
       });
@@ -180,7 +185,7 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
         height: 40 * node.childCount,
         documentPos: index,
         nodeSize: node.nodeSize,
-        nodeId: nodeId, // Store the ProseMirror node ID
+        nodeId: nodeId || undefined, // Only store if node actually has an ID
         isDeleted: false,
         isEdited: false
       });
@@ -195,7 +200,7 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
         height: 50,
         documentPos: index,
         nodeSize: node.nodeSize,
-        nodeId: nodeId, // Store the ProseMirror node ID
+        nodeId: nodeId || undefined, // Only store if node actually has an ID
         isDeleted: false,
         isEdited: false
       });
