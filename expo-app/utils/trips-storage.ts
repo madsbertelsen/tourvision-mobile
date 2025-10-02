@@ -26,7 +26,6 @@ export interface SavedTrip {
     newText?: string;
     timestamp: number;
   }>;
-  itinerary_document?: any; // ProseMirror document JSON (deprecated - use itineraries array)
   itineraries?: Array<{
     messageId: string; // ID of the message that generated this itinerary
     document: any; // ProseMirror document JSON
@@ -97,7 +96,7 @@ export async function saveTrip(trip: SavedTrip): Promise<void> {
   try {
     console.log('[saveTrip] Saving trip with ID:', trip.id);
     console.log('[saveTrip] Trip has modifications:', trip.modifications?.length || 0);
-    console.log('[saveTrip] Trip has itinerary_document:', !!trip.itinerary_document);
+    console.log('[saveTrip] Trip has itineraries:', trip.itineraries?.length || 0);
     console.log('[saveTrip] Trip has messages:', trip.messages?.length || 0);
 
     const trips = await getTrips();

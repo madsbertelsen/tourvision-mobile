@@ -370,18 +370,11 @@ export default function MockChatScreen() {
   // Restore ProseMirror document when trip loads
   useEffect(() => {
     if (currentTrip && !editorState) {
-      // Try to restore from itineraries array first (use the latest one)
+      // Restore from itineraries array (use the latest one)
       if (currentTrip.itineraries && currentTrip.itineraries.length > 0) {
         const latestItinerary = currentTrip.itineraries[currentTrip.itineraries.length - 1];
         console.log('[TripChat] Restoring ProseMirror document from itineraries array');
         const restoredState = stateFromJSON(latestItinerary.document);
-        setEditorState(restoredState);
-        setHasEdited(true);
-      }
-      // Fall back to legacy itinerary_document field
-      else if (currentTrip.itinerary_document) {
-        console.log('[TripChat] Restoring ProseMirror document from legacy field');
-        const restoredState = stateFromJSON(currentTrip.itinerary_document);
         setEditorState(restoredState);
         setHasEdited(true);
       }
@@ -406,7 +399,6 @@ export default function MockChatScreen() {
     const updatedTrip = {
       ...currentTrip,
       messages: messages,
-      itinerary_document: currentTrip.itinerary_document,
       itineraries: currentTrip.itineraries || [],
       modifications: currentTrip.modifications || [],
     };
@@ -490,7 +482,6 @@ export default function MockChatScreen() {
                 ...currentTrip,
                 messages: messages, // Keep messages as-is
                 itineraries: updatedItineraries,
-                itinerary_document: proseMirrorJSON, // Keep for backward compatibility
                 modifications: currentTrip.modifications || [],
               };
 
@@ -648,11 +639,19 @@ export default function MockChatScreen() {
     // Save to local storage
     if (currentTrip) {
       console.log('[handleEditSave] Saving trip to local storage');
+      // Update the latest itinerary if we have one
+      const updatedItineraries = currentTrip.itineraries ? [...currentTrip.itineraries] : [];
+      if (updatedItineraries.length > 0) {
+        updatedItineraries[updatedItineraries.length - 1] = {
+          ...updatedItineraries[updatedItineraries.length - 1],
+          document: stateToJSON(newState),
+        };
+      }
+
       const updatedTrip = {
         ...currentTrip,
         messages: messages, // Include messages to persist chat history
-        itinerary_document: stateToJSON(newState),
-        itineraries: currentTrip.itineraries || [],
+        itineraries: updatedItineraries,
         modifications: [
           ...(currentTrip.modifications || []),
           {
@@ -781,11 +780,19 @@ export default function MockChatScreen() {
         };
         const allMods = [...existingMods, newMod];
 
+        // Update the latest itinerary with the new state
+        const updatedItineraries = currentTrip.itineraries ? [...currentTrip.itineraries] : [];
+        if (updatedItineraries.length > 0) {
+          updatedItineraries[updatedItineraries.length - 1] = {
+            ...updatedItineraries[updatedItineraries.length - 1],
+            document: stateToJSON(newState),
+          };
+        }
+
         const updatedTrip = {
           ...currentTrip,
           messages: messages, // Include the actual chat messages
-          itinerary_document: stateToJSON(newState),
-          itineraries: currentTrip.itineraries || [],
+          itineraries: updatedItineraries,
           modifications: allMods
         };
 
@@ -865,17 +872,13 @@ export default function MockChatScreen() {
 
       // Only show content if not collapsed
       if (!isCollapsed) {
-        // Check if this is the last assistant message and we have a trip-level itinerary document
-        const isLastAssistantMessage = message.role === 'assistant' &&
-          messages.findLast((msg: any) => msg.role === 'assistant')?.id === message.id;
-
-        // First check if message has a parsed itinerary-document part (for immediate display)
-        // OR if this is the last assistant message and we have a trip-level itinerary document
-        const itineraryPart = message.parts?.find((part: any) => part.type === 'itinerary-document');
-        const useTripItinerary = !itineraryPart && isLastAssistantMessage && currentTrip?.itinerary_document && hasItineraryContent;
+        // Check if this message has an itinerary in the itineraries array
+        const messageItinerary = currentTrip?.itineraries?.find(
+          (it: any) => it.messageId === message.id
+        );
 
         // Add content elements
-        if ((itineraryPart && itineraryPart.content) || useTripItinerary) {
+        if (messageItinerary && messageItinerary.document) {
           // We have a pre-parsed ProseMirror document, use it directly
           let doc;
           let state;
@@ -886,9 +889,9 @@ export default function MockChatScreen() {
             doc = editorState.doc;
             state = editorState;
           } else {
-            // Use the parsed document from the message part or trip level
-            const documentJSON = itineraryPart?.content || currentTrip?.itinerary_document;
-            console.log('[useEffect] Using itinerary document from:', itineraryPart ? 'message part' : 'trip level');
+            // Use the parsed document from the itineraries array
+            const documentJSON = messageItinerary.document;
+            console.log('[useEffect] Using itinerary document from itineraries array');
             state = stateFromJSON(documentJSON);
             doc = state.doc;
 
