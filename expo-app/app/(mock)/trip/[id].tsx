@@ -375,6 +375,14 @@ export default function MockChatScreen() {
         const latestItinerary = currentTrip.itineraries[currentTrip.itineraries.length - 1];
         console.log('[TripChat] Restoring ProseMirror document from itineraries array');
         const restoredState = stateFromJSON(latestItinerary.document);
+        console.log('[TripChat] Restored document has', restoredState.doc.content.childCount, 'children');
+
+        // Log first node to check content
+        if (restoredState.doc.content.childCount > 0) {
+          const firstNode = restoredState.doc.content.child(0);
+          console.log('[TripChat] First node in restored doc:', firstNode.type.name, 'content:', firstNode.textContent.substring(0, 50));
+        }
+
         setEditorState(restoredState);
         setHasEdited(true);
       }
@@ -786,10 +794,20 @@ export default function MockChatScreen() {
         // Update the latest itinerary with the new state
         const updatedItineraries = currentTrip.itineraries ? [...currentTrip.itineraries] : [];
         if (updatedItineraries.length > 0) {
+          const newDocument = stateToJSON(newState);
+          console.log('[handleDeleteElement] Updating itinerary document');
+          console.log('[handleDeleteElement] New document will have', newState.doc.content.childCount, 'children');
+
           updatedItineraries[updatedItineraries.length - 1] = {
             ...updatedItineraries[updatedItineraries.length - 1],
-            document: stateToJSON(newState),
+            document: newDocument,
           };
+
+          // Log first node to verify the heading is gone
+          if (newState.doc.content.childCount > 0) {
+            const firstNode = newState.doc.content.child(0);
+            console.log('[handleDeleteElement] First node after deletion:', firstNode.type.name, 'content:', firstNode.textContent.substring(0, 50));
+          }
         }
 
         const updatedTrip = {
@@ -803,12 +821,22 @@ export default function MockChatScreen() {
         console.log('[handleDeleteElement] Latest modification:', newMod);
 
         await saveTrip(updatedTrip);
+        // Update currentTrip to reflect the new itinerary document
         setCurrentTrip(updatedTrip);
+
+        // Ensure the editor state reflects the saved document
+        // This is important for consistency between editorState and saved state
+        console.log('[handleDeleteElement] Trip updated with new itinerary document');
 
         // Verify save
         setTimeout(async () => {
           const savedTrip = await getTrip(currentTrip.id);
           console.log('[handleDeleteElement] Verification - saved trip has modifications:', savedTrip?.modifications?.length);
+          if (savedTrip?.itineraries && savedTrip.itineraries.length > 0) {
+            const latestItinerary = savedTrip.itineraries[savedTrip.itineraries.length - 1];
+            const savedState = stateFromJSON(latestItinerary.document);
+            console.log('[handleDeleteElement] Saved document has', savedState.doc.content.childCount, 'children');
+          }
         }, 100);
       }
     } else {
