@@ -59,13 +59,42 @@ export function parseJSONToProseMirror(json: any): {
   let doc: ProseMirrorNode;
 
   try {
+    // Ensure all block nodes have IDs before creating the document
+    const ensureNodeIds = (nodeJson: any): any => {
+      if (!nodeJson) return nodeJson;
+
+      // If this is a block node without an ID, generate one
+      if (nodeJson.type &&
+          (nodeJson.type === 'paragraph' ||
+           nodeJson.type === 'heading' ||
+           nodeJson.type === 'blockquote' ||
+           nodeJson.type === 'bulletList' ||
+           nodeJson.type === 'orderedList')) {
+        if (!nodeJson.attrs) {
+          nodeJson.attrs = {};
+        }
+        if (!nodeJson.attrs.id) {
+          nodeJson.attrs.id = generateNodeId();
+        }
+      }
+
+      // Recursively process content
+      if (nodeJson.content && Array.isArray(nodeJson.content)) {
+        nodeJson.content = nodeJson.content.map(ensureNodeIds);
+      }
+
+      return nodeJson;
+    };
+
+    const processedJson = ensureNodeIds(json);
+
     // Attempt to create node from JSON
-    doc = schema.nodeFromJSON(json);
+    doc = schema.nodeFromJSON(processedJson);
   } catch (error) {
     console.error('Error parsing JSON to ProseMirror:', error);
-    // Fallback to empty document
+    // Fallback to empty document with ID
     doc = schema.node('doc', null, [
-      schema.node('paragraph', null, [])
+      schema.node('paragraph', { id: generateNodeId() }, [])
     ]);
   }
 

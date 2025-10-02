@@ -331,15 +331,21 @@ export function insertNode(
 ): EditorState {
   const tr = state.tr;
 
+  // Ensure the new node has an ID
+  const nodeAttrs = {
+    ...attrs,
+    id: attrs.id || generateNodeId()
+  };
+
   let newNode: ProseMirrorNode;
 
   if (nodeType === 'paragraph') {
-    newNode = schema.node('paragraph', attrs, [schema.text(content)]);
+    newNode = schema.node('paragraph', nodeAttrs, [schema.text(content)]);
   } else if (nodeType === 'heading') {
-    newNode = schema.node('heading', { level: 2, ...attrs }, [schema.text(content)]);
+    newNode = schema.node('heading', { level: 2, ...nodeAttrs }, [schema.text(content)]);
   } else {
     // Default to paragraph
-    newNode = schema.node('paragraph', attrs, [schema.text(content)]);
+    newNode = schema.node('paragraph', nodeAttrs, [schema.text(content)]);
   }
 
   // Insert the node
