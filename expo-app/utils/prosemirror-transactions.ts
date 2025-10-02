@@ -4,23 +4,29 @@ import { schema } from './prosemirror-schema';
 
 /**
  * Find a block node by its index (0-based)
+ * This counts only direct children of the document
  */
 export function findNodeByIndex(doc: ProseMirrorNode, targetIndex: number): { node: ProseMirrorNode; pos: number } | null {
-  let currentIndex = 0;
-  let result: { node: ProseMirrorNode; pos: number } | null = null;
+  // Check if target index is valid
+  if (targetIndex < 0 || targetIndex >= doc.content.childCount) {
+    console.error('[findNodeByIndex] Index out of bounds:', targetIndex, 'doc has', doc.content.childCount, 'children');
+    return null;
+  }
 
-  doc.descendants((node, pos) => {
-    // Only count block-level nodes (paragraphs, headings, lists)
-    if (node.isBlock && node.type.name !== 'doc') {
-      if (currentIndex === targetIndex) {
-        result = { node, pos };
-        return false; // Stop traversing
-      }
-      currentIndex++;
-    }
-  });
+  // Get the child directly by index
+  const node = doc.content.child(targetIndex);
 
-  return result;
+  // Calculate the position
+  let pos = 0;
+  for (let i = 0; i < targetIndex; i++) {
+    pos += doc.content.child(i).nodeSize;
+  }
+  // Add 1 for the doc node itself
+  pos += 1;
+
+  console.log('[findNodeByIndex] Found node at index', targetIndex, 'pos:', pos, 'type:', node.type.name);
+
+  return { node, pos };
 }
 
 /**
@@ -34,13 +40,26 @@ export function deleteNodeByIndex(state: EditorState, nodeIndex: number): Editor
     return null;
   }
 
+  console.log('[deleteNodeByIndex] Deleting node at pos:', nodeInfo.pos, 'size:', nodeInfo.node.nodeSize);
+  console.log('[deleteNodeByIndex] Node type:', nodeInfo.node.type.name, 'content:', nodeInfo.node.textContent.substring(0, 50));
+
   const tr = state.tr;
 
   // Delete the node
   tr.delete(nodeInfo.pos, nodeInfo.pos + nodeInfo.node.nodeSize);
 
   // Apply transaction
-  return state.apply(tr);
+  const newState = state.apply(tr);
+
+  console.log('[deleteNodeByIndex] Document before:', state.doc.content.childCount, 'children');
+  console.log('[deleteNodeByIndex] Document after:', newState.doc.content.childCount, 'children');
+
+  if (newState.doc.content.childCount > 0) {
+    const firstNode = newState.doc.content.child(0);
+    console.log('[deleteNodeByIndex] First node after deletion:', firstNode.type.name, firstNode.textContent.substring(0, 50));
+  }
+
+  return newState;
 }
 
 /**
