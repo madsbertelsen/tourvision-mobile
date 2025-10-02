@@ -21,7 +21,7 @@ import { MessageActionSheet } from '@/components/MessageActionSheet';
 import { useMockContext } from '@/contexts/MockContext';
 import { EditorState } from 'prosemirror-state';
 import { parseHTMLToProseMirror, parseJSONToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
-import { deleteNode, updateNodeText, stateToJSON } from '@/utils/prosemirror-transactions';
+import { deleteNodeByIndex, updateNodeTextByIndex, stateToJSON } from '@/utils/prosemirror-transactions';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
@@ -397,20 +397,29 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Find the element with its document position
+    // Find the element with its document index
     const element = flatElements.find(el => el.id === elementId);
-    if (!element || element.documentPos === undefined || element.nodeSize === undefined) {
-      console.error('Element not found or missing document position:', elementId);
+    if (!element || element.documentPos === undefined) {
+      console.error('Element not found or missing document index:', elementId);
       return;
     }
 
-    // Apply ProseMirror transaction
-    const newState = updateNodeText(editorState, element.documentPos, element.nodeSize, newText);
+    // Apply ProseMirror transaction using index
+    const newState = updateNodeTextByIndex(editorState, element.documentPos, newText);
+    if (!newState) {
+      console.error('Failed to update node text');
+      return;
+    }
+
     setEditorState(newState);
 
-    // Convert updated document to elements
-    const updatedElements = proseMirrorToElements(newState.doc);
-    setFlatElements(updatedElements);
+    // Convert updated document to elements with the same message ID
+    const messageId = element.messageId;
+    const updatedElements = proseMirrorToElements(newState.doc, messageId);
+
+    // Merge with existing non-ProseMirror elements
+    const nonPMElements = flatElements.filter(el => !el.id.startsWith('pm-element-'));
+    setFlatElements([...nonPMElements, ...updatedElements]);
 
     // Save to local storage
     if (currentTrip) {
@@ -450,20 +459,29 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Find the element with its document position
+    // Find the element with its document index
     const element = flatElements.find(el => el.id === elementId);
-    if (!element || element.documentPos === undefined || element.nodeSize === undefined) {
-      console.error('Element not found or missing document position:', elementId);
+    if (!element || element.documentPos === undefined) {
+      console.error('Element not found or missing document index:', elementId);
       return;
     }
 
-    // Apply ProseMirror transaction
-    const newState = deleteNode(editorState, element.documentPos, element.nodeSize);
+    // Apply ProseMirror transaction using index
+    const newState = deleteNodeByIndex(editorState, element.documentPos);
+    if (!newState) {
+      console.error('Failed to delete node');
+      return;
+    }
+
     setEditorState(newState);
 
-    // Convert updated document to elements
-    const updatedElements = proseMirrorToElements(newState.doc);
-    setFlatElements(updatedElements);
+    // Convert updated document to elements with the same message ID
+    const messageId = element.messageId;
+    const updatedElements = proseMirrorToElements(newState.doc, messageId);
+
+    // Merge with existing non-ProseMirror elements
+    const nonPMElements = flatElements.filter(el => !el.id.startsWith('pm-element-'));
+    setFlatElements([...nonPMElements, ...updatedElements]);
 
     // Save to local storage
     if (currentTrip) {
@@ -546,15 +564,15 @@ export default function MockChatScreen() {
           // Note: We'll need to manage this properly in a useEffect
 
           // Convert ProseMirror document to renderable elements
-          const pmElements = proseMirrorToElements(doc);
+          const pmElements = proseMirrorToElements(doc, message.id);
 
           console.log('Parsed HTML to ProseMirror, elements:', pmElements.length);
 
-          // Add elements with message context
-          pmElements.forEach(pmElement => {
+          // Add elements with message context, preserving their IDs
+          pmElements.forEach((pmElement, index) => {
             elements.push({
               ...pmElement,
-              id: `${message.id}-${pmElement.id}`,
+              id: `${message.id}-pm-${index}`, // Unique ID combining message and element index
               messageId: message.id,
               messageColor: messageColor,
               role: message.role as 'user' | 'assistant',

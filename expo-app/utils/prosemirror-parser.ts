@@ -66,12 +66,12 @@ export function parseJSONToProseMirror(json: any): {
 /**
  * Convert ProseMirror document to renderable UI elements
  */
-export function proseMirrorToElements(doc: ProseMirrorNode): FlatElement[] {
+export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string): FlatElement[] {
   const elements: FlatElement[] = [];
-  let elementId = 0;
+  let elementIndex = 0;
 
   // Track message context for grouping
-  let currentMessageId = 'msg-1';
+  let currentMessageId = messageId || 'msg-1';
   let currentMessageColor = '#3B82F6';
 
   doc.descendants((node, pos) => {
@@ -85,21 +85,24 @@ export function proseMirrorToElements(doc: ProseMirrorNode): FlatElement[] {
       const parsedContent = parseNodeContent(node);
 
       elements.push({
-        id: `element-${elementId++}`,
+        id: `pm-element-${elementIndex}`,
         type: 'content',
         messageId: currentMessageId,
         messageColor: currentMessageColor,
         text: node.textContent,
         parsedContent,
         height: 50, // Default height, will be measured
-        documentPos: pos,
+        // Store the index in the document, not the position
+        // We'll find the actual position when needed
+        documentPos: elementIndex,
         nodeSize: node.nodeSize,
         isDeleted: false,
         isEdited: false
       });
+      elementIndex++;
     } else if (node.type === schema.nodes.heading) {
       elements.push({
-        id: `element-${elementId++}`,
+        id: `pm-element-${elementIndex}`,
         type: 'content',
         messageId: currentMessageId,
         messageColor: currentMessageColor,
@@ -107,28 +110,27 @@ export function proseMirrorToElements(doc: ProseMirrorNode): FlatElement[] {
         height: 60, // Slightly taller for headings
         isHeading: true,
         headingLevel: node.attrs.level as 1 | 2 | 3,
-        documentPos: pos,
+        documentPos: elementIndex,
         nodeSize: node.nodeSize,
         isDeleted: false,
         isEdited: false
       });
+      elementIndex++;
     } else if (node.type === schema.nodes.bulletList || node.type === schema.nodes.orderedList) {
-      // Process list items
-      node.forEach((listItem, offset) => {
-        const itemPos = pos + offset + 1;
-        elements.push({
-          id: `element-${elementId++}`,
-          type: 'content',
-          messageId: currentMessageId,
-          messageColor: currentMessageColor,
-          text: listItem.textContent,
-          height: 40,
-          documentPos: itemPos,
-          nodeSize: listItem.nodeSize,
-          isDeleted: false,
-          isEdited: false
-        });
+      // Process list as a single element for now
+      elements.push({
+        id: `pm-element-${elementIndex}`,
+        type: 'content',
+        messageId: currentMessageId,
+        messageColor: currentMessageColor,
+        text: node.textContent,
+        height: 40 * node.childCount,
+        documentPos: elementIndex,
+        nodeSize: node.nodeSize,
+        isDeleted: false,
+        isEdited: false
       });
+      elementIndex++;
     }
   });
 

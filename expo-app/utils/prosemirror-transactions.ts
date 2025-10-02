@@ -3,7 +3,48 @@ import { Node as ProseMirrorNode } from 'prosemirror-model';
 import { schema } from './prosemirror-schema';
 
 /**
- * Delete a node at a specific position
+ * Find a block node by its index (0-based)
+ */
+export function findNodeByIndex(doc: ProseMirrorNode, targetIndex: number): { node: ProseMirrorNode; pos: number } | null {
+  let currentIndex = 0;
+  let result: { node: ProseMirrorNode; pos: number } | null = null;
+
+  doc.descendants((node, pos) => {
+    // Only count block-level nodes (paragraphs, headings, lists)
+    if (node.isBlock && node.type.name !== 'doc') {
+      if (currentIndex === targetIndex) {
+        result = { node, pos };
+        return false; // Stop traversing
+      }
+      currentIndex++;
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Delete a node by its index
+ */
+export function deleteNodeByIndex(state: EditorState, nodeIndex: number): EditorState | null {
+  const nodeInfo = findNodeByIndex(state.doc, nodeIndex);
+
+  if (!nodeInfo) {
+    console.error('Node not found at index:', nodeIndex);
+    return null;
+  }
+
+  const tr = state.tr;
+
+  // Delete the node
+  tr.delete(nodeInfo.pos, nodeInfo.pos + nodeInfo.node.nodeSize);
+
+  // Apply transaction
+  return state.apply(tr);
+}
+
+/**
+ * Delete a node at a specific position (legacy, prefer deleteNodeByIndex)
  */
 export function deleteNode(state: EditorState, pos: number, nodeSize: number): EditorState {
   const tr = state.tr;
@@ -16,7 +57,51 @@ export function deleteNode(state: EditorState, pos: number, nodeSize: number): E
 }
 
 /**
- * Update text content of a node
+ * Update text content of a node by its index
+ */
+export function updateNodeTextByIndex(
+  state: EditorState,
+  nodeIndex: number,
+  newText: string
+): EditorState | null {
+  const nodeInfo = findNodeByIndex(state.doc, nodeIndex);
+
+  if (!nodeInfo) {
+    console.error('Node not found at index:', nodeIndex);
+    return null;
+  }
+
+  const tr = state.tr;
+  const node = nodeInfo.node;
+
+  // Create new node with updated text
+  let newNode: ProseMirrorNode;
+
+  if (node.type === schema.nodes.paragraph) {
+    // For paragraphs, replace with new paragraph containing text
+    newNode = schema.node('paragraph', node.attrs, [schema.text(newText)]);
+  } else if (node.type === schema.nodes.heading) {
+    // For headings, preserve level
+    newNode = schema.node('heading', node.attrs, [schema.text(newText)]);
+  } else {
+    // For other nodes, try to preserve type
+    try {
+      newNode = schema.node(node.type, node.attrs, [schema.text(newText)]);
+    } catch (error) {
+      console.error('Error creating new node:', error);
+      return null;
+    }
+  }
+
+  // Replace the node
+  tr.replaceWith(nodeInfo.pos, nodeInfo.pos + node.nodeSize, newNode);
+
+  // Apply transaction
+  return state.apply(tr);
+}
+
+/**
+ * Update text content of a node (legacy, prefer updateNodeTextByIndex)
  */
 export function updateNodeText(
   state: EditorState,
