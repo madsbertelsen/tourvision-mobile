@@ -620,11 +620,14 @@ export default function MockChatScreen() {
       // Find the message ID for itinerary content
       const messageId = element.messageId;
 
+      // Find the message index for consistent ID generation
+      const messageIndex = messages.findIndex((msg: any) => msg.id === messageId);
+
       // Rebuild itinerary elements from the new state
       const pmElements = proseMirrorToElements(newState.doc, messageId);
       const formattedElements = pmElements.map((el, index) => ({
         ...el,
-        id: `${messageId}-pm-${index}`,
+        id: `${messageId}-pm-${messageIndex}-${index}`,
         messageId: messageId,
         messageColor: element.messageColor,
         role: element.role,
@@ -909,9 +912,8 @@ export default function MockChatScreen() {
 
           // Add elements with message context
           pmElements.forEach((pmElement, index) => {
-            const elementId = hasEdited
-              ? `${message.id}-pm-${updateCounter}-${index}` // Include updateCounter for uniqueness
-              : `${message.id}-pm-${index}`; // Original ID for streaming
+            // Always use consistent ID format, regardless of edit state
+            const elementId = `${message.id}-pm-${msgIndex}-${index}`;
 
             elements.push({
               ...pmElement,
