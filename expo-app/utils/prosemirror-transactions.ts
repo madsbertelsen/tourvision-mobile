@@ -5,32 +5,41 @@ import { schema } from './prosemirror-schema';
 /**
  * Find a block node by its index (0-based)
  * This counts only direct children of the document
+ * Returns the node and its position (the position before the node)
  */
-export function findNodeByIndex(doc: ProseMirrorNode, targetIndex: number): { node: ProseMirrorNode; pos: number } | null {
+export function findNodeByIndex(doc: ProseMirrorNode, targetIndex: number): { node: ProseMirrorNode; pos: number; from: number; to: number } | null {
   // Check if target index is valid
   if (targetIndex < 0 || targetIndex >= doc.content.childCount) {
     console.error('[findNodeByIndex] Index out of bounds:', targetIndex, 'doc has', doc.content.childCount, 'children');
     return null;
   }
 
-  // Get the child directly by index
+  // Calculate the position by iterating through children
+  let pos = 1; // Start at 1 (after the doc node opening)
+
+  for (let i = 0; i < targetIndex; i++) {
+    const child = doc.content.child(i);
+    pos += child.nodeSize;
+  }
+
+  // Get the target node
   const node = doc.content.child(targetIndex);
 
-  // Calculate the position
-  let pos = 0;
-  for (let i = 0; i < targetIndex; i++) {
-    pos += doc.content.child(i).nodeSize;
-  }
-  // Add 1 for the doc node itself
-  pos += 1;
+  // The 'from' position is where the node starts
+  const from = pos;
+  // The 'to' position is where the node ends
+  const to = pos + node.nodeSize;
 
-  console.log('[findNodeByIndex] Found node at index', targetIndex, 'pos:', pos, 'type:', node.type.name);
+  console.log('[findNodeByIndex] Found node at index', targetIndex);
+  console.log('[findNodeByIndex]   -> pos:', pos, 'from:', from, 'to:', to);
+  console.log('[findNodeByIndex]   -> type:', node.type.name, 'size:', node.nodeSize);
+  console.log('[findNodeByIndex]   -> content:', node.textContent.substring(0, 50));
 
-  return { node, pos };
+  return { node, pos, from, to };
 }
 
 /**
- * Delete a node by its index using proper ProseMirror NodeSelection
+ * Delete a node by its index using proper ProseMirror positions
  */
 export function deleteNodeByIndex(state: EditorState, nodeIndex: number): EditorState | null {
   const nodeInfo = findNodeByIndex(state.doc, nodeIndex);
@@ -40,54 +49,30 @@ export function deleteNodeByIndex(state: EditorState, nodeIndex: number): Editor
     return null;
   }
 
-  console.log('[deleteNodeByIndex] Deleting node at pos:', nodeInfo.pos, 'size:', nodeInfo.node.nodeSize);
-  console.log('[deleteNodeByIndex] Node type:', nodeInfo.node.type.name, 'content:', nodeInfo.node.textContent.substring(0, 50));
+  console.log('[deleteNodeByIndex] Deleting node at index:', nodeIndex);
+  console.log('[deleteNodeByIndex]   -> from:', nodeInfo.from, 'to:', nodeInfo.to);
+  console.log('[deleteNodeByIndex]   -> type:', nodeInfo.node.type.name);
+  console.log('[deleteNodeByIndex]   -> content:', nodeInfo.node.textContent.substring(0, 50));
   console.log('[deleteNodeByIndex] Document before:', state.doc.content.childCount, 'children');
 
-  try {
-    // Create a NodeSelection for the target node
-    const selection = NodeSelection.create(state.doc, nodeInfo.pos);
+  const tr = state.tr;
 
-    // Create a transaction with the node selection
-    const tr = state.tr.setSelection(selection);
+  // Delete using the correct from and to positions
+  tr.delete(nodeInfo.from, nodeInfo.to);
 
-    // Delete the selected node using deleteSelection
-    tr.deleteSelection();
+  // Apply the transaction
+  const newState = state.apply(tr);
 
-    // Apply the transaction
-    const newState = state.apply(tr);
+  console.log('[deleteNodeByIndex] Document after:', newState.doc.content.childCount, 'children');
 
-    console.log('[deleteNodeByIndex] Document after:', newState.doc.content.childCount, 'children');
-
-    if (newState.doc.content.childCount > 0) {
-      const firstNode = newState.doc.content.child(0);
-      console.log('[deleteNodeByIndex] First node after deletion:', firstNode.type.name, firstNode.textContent.substring(0, 50));
-    } else {
-      console.log('[deleteNodeByIndex] Document is now empty');
-    }
-
-    return newState;
-  } catch (error) {
-    console.error('[deleteNodeByIndex] Error creating NodeSelection:', error);
-
-    // Fallback to range deletion if NodeSelection fails
-    console.log('[deleteNodeByIndex] Falling back to range deletion');
-    const tr = state.tr;
-
-    // Use ReplaceStep with empty content instead of delete
-    const from = nodeInfo.pos;
-    const to = nodeInfo.pos + nodeInfo.node.nodeSize;
-
-    // Replace the range with nothing (effectively deleting it)
-    tr.replace(from, to);
-
-    // Apply transaction
-    const newState = state.apply(tr);
-
-    console.log('[deleteNodeByIndex] Document after fallback:', newState.doc.content.childCount, 'children');
-
-    return newState;
+  if (newState.doc.content.childCount > 0) {
+    const firstNode = newState.doc.content.child(0);
+    console.log('[deleteNodeByIndex] First node after deletion:', firstNode.type.name, firstNode.textContent.substring(0, 50));
+  } else {
+    console.log('[deleteNodeByIndex] Document is now empty');
   }
+
+  return newState;
 }
 
 /**
@@ -104,7 +89,7 @@ export function deleteNode(state: EditorState, pos: number, nodeSize: number): E
 }
 
 /**
- * Update text content of a node by its index using proper ProseMirror patterns
+ * Update text content of a node by its index using proper ProseMirror positions
  */
 export function updateNodeTextByIndex(
   state: EditorState,
@@ -118,9 +103,10 @@ export function updateNodeTextByIndex(
     return null;
   }
 
-  console.log('[updateNodeTextByIndex] Updating node at index:', nodeIndex, 'pos:', nodeInfo.pos);
-  console.log('[updateNodeTextByIndex] Old text:', nodeInfo.node.textContent.substring(0, 50));
-  console.log('[updateNodeTextByIndex] New text:', newText.substring(0, 50));
+  console.log('[updateNodeTextByIndex] Updating node at index:', nodeIndex);
+  console.log('[updateNodeTextByIndex]   -> from:', nodeInfo.from, 'to:', nodeInfo.to);
+  console.log('[updateNodeTextByIndex]   -> old text:', nodeInfo.node.textContent.substring(0, 50));
+  console.log('[updateNodeTextByIndex]   -> new text:', newText.substring(0, 50));
 
   const tr = state.tr;
   const node = nodeInfo.node;
@@ -145,8 +131,8 @@ export function updateNodeTextByIndex(
     // Create the new node with the same type and attributes
     const newNode = node.type.create(node.attrs, newContent, node.marks);
 
-    // Use replaceWith to replace the node at the correct position
-    tr.replaceWith(nodeInfo.pos, nodeInfo.pos + node.nodeSize, newNode);
+    // Use replaceWith to replace the node at the correct positions
+    tr.replaceWith(nodeInfo.from, nodeInfo.to, newNode);
 
     // Apply transaction
     const newState = state.apply(tr);
@@ -159,11 +145,11 @@ export function updateNodeTextByIndex(
 
     // Fallback: Try to replace just the content inside the node
     try {
-      const from = nodeInfo.pos + 1; // Skip the node opening
-      const to = nodeInfo.pos + node.nodeSize - 1; // Skip the node closing
+      const contentFrom = nodeInfo.from + 1; // Skip the node opening
+      const contentTo = nodeInfo.to - 1; // Skip the node closing
 
       // Replace the content inside the node
-      tr.replaceWith(from, to, newText ? [schema.text(newText)] : []);
+      tr.replaceWith(contentFrom, contentTo, newText ? [schema.text(newText)] : []);
 
       const newState = state.apply(tr);
       console.log('[updateNodeTextByIndex] Fallback update successful');
