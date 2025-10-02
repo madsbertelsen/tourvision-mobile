@@ -5,7 +5,7 @@ import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
 import { parseHTMLToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
-import { deleteNodeByIndex, deleteNodeById, stateFromJSON, stateToJSON, updateNodeTextByIndex, updateNodeTextById } from '@/utils/prosemirror-transactions';
+import { deleteNodeById, stateFromJSON, stateToJSON, updateNodeTextById } from '@/utils/prosemirror-transactions';
 import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
@@ -567,44 +567,20 @@ export default function MockChatScreen() {
       return;
     }
 
-    // Use the node ID if available, otherwise fall back to index-based update
-    let newState = null;
-
-    if (element.nodeId) {
-      // Preferred: Update by node ID
-      console.log('[handleEditSave] Using node ID for update:', element.nodeId);
-      newState = updateNodeTextById(editorState, element.nodeId, newText);
-    } else {
-      // Fallback: Find node by matching content (should rarely be needed)
-      console.log('[handleEditSave] No node ID, attempting to find by content');
-      let actualIndex = -1;
-
-      // Always search by content - never trust documentPos as it becomes stale
-      const childCount = editorState.doc.content.childCount;
-
-      for (let i = 0; i < childCount; i++) {
-        const node = editorState.doc.content.child(i);
-        const nodeText = node.textContent.trim();
-        const elementText = element.text?.trim();
-
-        // Match if the texts are equal or if one starts with the other
-        if (nodeText === elementText ||
-            (elementText && nodeText.startsWith(elementText)) ||
-            (elementText && elementText.startsWith(nodeText))) {
-          actualIndex = i;
-          console.log('[handleEditSave] Found matching node at index:', actualIndex);
-          break;
-        }
-      }
-
-      if (actualIndex === -1) {
-        console.error('[handleEditSave] Could not find node in document with text:', element.text);
-        return;
-      }
-
-      // Apply ProseMirror transaction using the actual index
-      newState = updateNodeTextByIndex(editorState, actualIndex, newText);
+    // Check for node ID - this should always exist
+    if (!element.nodeId) {
+      console.error('[handleEditSave] CRITICAL: Element has no node ID. This should not happen!');
+      console.error('[handleEditSave] Element details:', {
+        id: element.id,
+        text: element.text?.substring(0, 50)
+      });
+      setEditingElementId(null);
+      return;
     }
+
+    // Update by node ID - this is the only way
+    console.log('[handleEditSave] Updating node with ID:', element.nodeId);
+    const newState = updateNodeTextById(editorState, element.nodeId, newText);
     if (!newState) {
       console.error('Failed to update node text');
       return;
@@ -707,48 +683,20 @@ export default function MockChatScreen() {
       // Use the node ID if available, otherwise fall back to index-based deletion
       let newState = null;
 
-      if (elementToDelete.nodeId) {
-        // Preferred: Delete by node ID
-        console.log('[handleDeleteElement] Using node ID for deletion:', elementToDelete.nodeId);
-        newState = deleteNodeById(editorState, elementToDelete.nodeId);
-      } else {
-        // Fallback: Find node by matching content (should rarely be needed)
-        console.log('[handleDeleteElement] No node ID, attempting to find by content');
-        let actualIndex = -1;
-
-        // Always search by content - never trust documentPos as it becomes stale
-        const childCount = editorState.doc.content.childCount;
-
-        for (let i = 0; i < childCount; i++) {
-          const node = editorState.doc.content.child(i);
-          const nodeText = node.textContent.trim();
-          const elementText = elementToDelete.text?.trim();
-
-          // Match if the texts are equal or if one starts with the other
-          if (nodeText === elementText ||
-              (elementText && nodeText.startsWith(elementText)) ||
-              (elementText && elementText.startsWith(nodeText))) {
-            actualIndex = i;
-            console.log('[handleDeleteElement] Found matching node at index:', actualIndex);
-            break;
-          }
-        }
-
-        if (actualIndex === -1) {
-          console.error('[handleDeleteElement] Could not find node in document with text:', elementToDelete.text);
-          console.error('[handleDeleteElement] Document has these texts:',
-            Array.from({ length: editorState.doc.content.childCount }, (_, i) => {
-              const child = editorState.doc.content.child(i);
-              return child.textContent.substring(0, 50);
-            })
-          );
-          setActionSheetVisible(false);
-          return;
-        }
-
-        // Apply ProseMirror transaction using the actual index
-        newState = deleteNodeByIndex(editorState, actualIndex);
+      if (!elementToDelete.nodeId) {
+        console.error('[handleDeleteElement] CRITICAL: Element has no node ID. This should not happen!');
+        console.error('[handleDeleteElement] Element details:', {
+          id: elementToDelete.id,
+          text: elementToDelete.text?.substring(0, 50),
+          isItineraryContent: elementToDelete.isItineraryContent
+        });
+        setActionSheetVisible(false);
+        return;
       }
+
+      // Delete by node ID - this is the only way
+      console.log('[handleDeleteElement] Deleting node with ID:', elementToDelete.nodeId);
+      newState = deleteNodeById(editorState, elementToDelete.nodeId);
 
       if (!newState) {
         console.error('[handleDeleteElement] Failed to delete node from ProseMirror document');
