@@ -4,6 +4,7 @@ import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { buildLocationGraph, enhanceGraphWithDistances, summarizeGraph, type LocationGraph } from '@/utils/location-graph';
+import { getBoundingBoxFromCenterRadius, getViewStateFromBounds } from '@/utils/map-bounds';
 import { parseHTMLToProseMirror, proseMirrorToElements } from '@/utils/prosemirror-parser';
 import { deleteNodeById, stateFromJSON, stateToJSON, updateNodeTextById } from '@/utils/prosemirror-transactions';
 import { fetchRouteWithCache, type Waypoint } from '@/utils/transportation-api';
@@ -475,10 +476,37 @@ export default function MockChatScreen() {
           hasProcessedRef.current.add(lastAssistantMessage.id);
           console.log('[TripChat] Processing itinerary content for message:', lastAssistantMessage.id);
 
-          // Extract and parse the itinerary content
-          const itineraryMatch = textContent.match(/<itinerary>([\s\S]*?)<\/itinerary>/);
+          // Extract and parse the itinerary content (with optional center and radius attributes)
+          const itineraryMatch = textContent.match(/<itinerary(?:\s+center="([^"]+)")?(?:\s+radius="([^"]+)")?\s*>([\s\S]*?)<\/itinerary>/);
           if (itineraryMatch) {
-            const itineraryHTML = itineraryMatch[1];
+            const centerStr = itineraryMatch[1];
+            const radiusStr = itineraryMatch[2];
+            const itineraryHTML = itineraryMatch[3];
+
+            // Parse and apply map positioning from center + radius if provided
+            if (centerStr && radiusStr) {
+              try {
+                const [lat, lng] = centerStr.split(',').map(s => parseFloat(s.trim()));
+                const radiusKm = parseFloat(radiusStr);
+
+                if (!isNaN(lat) && !isNaN(lng) && !isNaN(radiusKm)) {
+                  console.log('[TripChat] Calculating map bounds from center:', {lat, lng}, 'radius:', radiusKm, 'km');
+
+                  const bounds = getBoundingBoxFromCenterRadius({ lat, lng }, radiusKm);
+                  const viewState = getViewStateFromBounds(
+                    bounds,
+                    screenWidth,
+                    screenHeight * 0.4 // Map takes 40% of screen height
+                  );
+
+                  console.log('[TripChat] Setting map to center:', viewState.center, 'zoom:', viewState.zoom);
+                  setMapCenter(viewState.center);
+                  setMapZoom(viewState.zoom);
+                }
+              } catch (error) {
+                console.error('[TripChat] Failed to parse itinerary center/radius:', error);
+              }
+            }
 
             try {
               // Parse HTML to ProseMirror
@@ -1046,7 +1074,7 @@ export default function MockChatScreen() {
   }, [messages, collapsedMessages, editorState, updateCounter]); // Dependencies for proper updates
 
   // Get context for sharing locations with layout
-  const { updateVisibleLocations, setRoutes, showItinerary, setShowItinerary } = useMockContext();
+  const { updateVisibleLocations, setRoutes, showItinerary, setShowItinerary, setMapCenter, setMapZoom } = useMockContext();
 
   // Track element positions
   const [elementPositions, setElementPositions] = useState<Map<string, {top: number, bottom: number}>>(new Map());

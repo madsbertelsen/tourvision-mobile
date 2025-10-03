@@ -31,12 +31,14 @@ export function MapViewSimpleWrapper({
 }: MapViewSimpleWrapperProps) {
   // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
-  // Get focusedLocation, followMode, routes, and showItinerary from context
+  // Get focusedLocation, followMode, routes, showItinerary, mapCenter, and mapZoom from context
   let focusedLocation = null;
   let followMode = false;
   let allRoutes: RouteWithMetadata[] = [];
   let selectedRoute = null;
   let showItinerary = false;
+  let mapCenter = center;
+  let mapZoom = zoom;
   try {
     const context = useMockContext();
     focusedLocation = context.focusedLocation;
@@ -44,8 +46,10 @@ export function MapViewSimpleWrapper({
     allRoutes = context.routes;
     selectedRoute = context.selectedRoute;
     showItinerary = context.showItinerary;
+    mapCenter = context.mapCenter;
+    mapZoom = context.mapZoom;
   } catch (error) {
-    // Context not available, defaults stay
+    // Context not available, use prop defaults
   }
 
   // Filter routes to only show those connecting currently visible locations
@@ -76,8 +80,8 @@ export function MapViewSimpleWrapper({
       <React.Suspense fallback={<View style={styles.loading} />}>
         <MapViewSimpleDOM
           locations={locations}
-          center={center}
-          zoom={zoom}
+          center={mapCenter}
+          zoom={mapZoom}
           focusedLocation={focusedLocation}
           followMode={followMode}
           routes={visibleRoutes}

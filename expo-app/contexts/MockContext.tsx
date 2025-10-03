@@ -33,6 +33,10 @@ interface MockContextType {
   setSelectedRoute: (routeId: string | null) => void;
   showItinerary: boolean;
   setShowItinerary: (show: boolean) => void;
+  mapCenter: { lat: number; lng: number };
+  setMapCenter: (center: { lat: number; lng: number }) => void;
+  mapZoom: number;
+  setMapZoom: (zoom: number) => void;
 }
 
 const MockContext = createContext<MockContextType | undefined>(undefined);
@@ -45,6 +49,8 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [routes, setRoutes] = useState<RouteWithMetadata[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
   const [showItinerary, setShowItinerary] = useState<boolean>(false); // Hidden by default
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
+  const [mapZoom, setMapZoom] = useState<number>(2);
 
   return (
     <MockContext.Provider
@@ -61,7 +67,11 @@ export function MockProvider({ children }: { children: ReactNode }) {
         selectedRoute,
         setSelectedRoute,
         showItinerary,
-        setShowItinerary
+        setShowItinerary,
+        mapCenter,
+        setMapCenter,
+        mapZoom,
+        setMapZoom
       }}
     >
       {children}
