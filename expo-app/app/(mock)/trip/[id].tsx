@@ -463,9 +463,10 @@ export default function MockChatScreen() {
             .map((part: any) => part.text)
             .join('') || '';
 
-          console.log('[TripChat] Text content preview:', textContent.substring(0, 100), '...');
+          console.log('[TripChat] Text content preview:', textContent.substring(0, 200), '...');
 
-          const hasItineraryHTML = textContent.includes('<itinerary>') && textContent.includes('</itinerary>');
+          // Check for itinerary tag (with or without attributes)
+          const hasItineraryHTML = textContent.includes('<itinerary') && textContent.includes('</itinerary>');
 
           // We no longer check for parts, just process if there's itinerary HTML
           console.log('[TripChat] Has itinerary HTML:', hasItineraryHTML);
@@ -477,11 +478,24 @@ export default function MockChatScreen() {
           console.log('[TripChat] Processing itinerary content for message:', lastAssistantMessage.id);
 
           // Extract and parse the itinerary content (with optional center and radius attributes)
-          const itineraryMatch = textContent.match(/<itinerary(?:\s+center="([^"]+)")?(?:\s+radius="([^"]+)")?\s*>([\s\S]*?)<\/itinerary>/);
+          // First, extract the full opening tag to parse attributes flexibly
+          const openingTagMatch = textContent.match(/<itinerary([^>]*)>/);
+          const itineraryMatch = textContent.match(/<itinerary[^>]*>([\s\S]*?)<\/itinerary>/);
+
           if (itineraryMatch) {
-            const centerStr = itineraryMatch[1];
-            const radiusStr = itineraryMatch[2];
-            const itineraryHTML = itineraryMatch[3];
+            const itineraryHTML = itineraryMatch[1];
+
+            // Parse attributes from opening tag (handle any order)
+            let centerStr: string | null = null;
+            let radiusStr: string | null = null;
+
+            if (openingTagMatch && openingTagMatch[1]) {
+              const attrs = openingTagMatch[1];
+              const centerMatch = attrs.match(/center="([^"]+)"/);
+              const radiusMatch = attrs.match(/radius="([^"]+)"/);
+              centerStr = centerMatch ? centerMatch[1] : null;
+              radiusStr = radiusMatch ? radiusMatch[1] : null;
+            }
 
             console.log('[TripChat] Extracted itinerary attributes:', { centerStr, radiusStr });
 
