@@ -204,26 +204,42 @@ function filterAvailableHexagons(
   });
 }
 
-// Find nearest available hexagon to a point
+// Find nearest available hexagon to a point, preferring edge positions
 function findNearestHexagon(
   targetX: number,
   targetY: number,
   availableHexagons: Hexagon[],
-  usedHexagonIds: Set<string>
+  usedHexagonIds: Set<string>,
+  viewportWidth: number,
+  viewportHeight: number
 ): Hexagon | null {
   let nearest: Hexagon | null = null;
-  let minDistance = Infinity;
+  let bestScore = Infinity;
+
+  const centerX = viewportWidth / 2;
+  const centerY = viewportHeight / 2;
 
   for (const hex of availableHexagons) {
     // Skip if already used
     if (usedHexagonIds.has(hex.id)) continue;
 
-    const dx = hex.x - targetX;
-    const dy = hex.y - targetY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Distance from target location (we want this small)
+    const dxTarget = hex.x - targetX;
+    const dyTarget = hex.y - targetY;
+    const distanceToTarget = Math.sqrt(dxTarget * dxTarget + dyTarget * dyTarget);
 
-    if (distance < minDistance) {
-      minDistance = distance;
+    // Distance from viewport center (we want this large)
+    const dxCenter = hex.x - centerX;
+    const dyCenter = hex.y - centerY;
+    const distanceFromCenter = Math.sqrt(dxCenter * dxCenter + dyCenter * dyCenter);
+
+    // Score: balance between being close to target and far from center
+    // Lower score is better
+    // Weight the center distance negatively (subtract it) to prefer edge positions
+    const score = distanceToTarget - (distanceFromCenter * 0.3);
+
+    if (score < bestScore) {
+      bestScore = score;
       nearest = hex;
     }
   }
@@ -311,12 +327,14 @@ export function calculateHexagonalLabels(
     const colorIndex = location.colorIndex ?? i;
     const color = markerColors[colorIndex % markerColors.length];
 
-    // Find nearest available hexagon
+    // Find nearest available hexagon (preferring edge positions)
     const nearestHex = findNearestHexagon(
       location.screenX,
       location.screenY,
       availableHexagons,
-      usedHexagonIds
+      usedHexagonIds,
+      viewportWidth,
+      viewportHeight
     );
 
     if (nearestHex) {

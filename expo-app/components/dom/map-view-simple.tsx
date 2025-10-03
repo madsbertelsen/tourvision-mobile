@@ -102,6 +102,10 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   const prevCenterRef = useRef<{ lng: number; lat: number } | null>(null);
   const prevZoomRef = useRef<number>(viewState.zoom);
 
+  // Zoom animation state
+  const [isZoomAnimating, setIsZoomAnimating] = useState(false);
+  const zoomAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   // Track viewport size
   useEffect(() => {
@@ -129,11 +133,30 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     const currentCenter = { lng: viewState.longitude, lat: viewState.latitude };
     const currentZoom = viewState.zoom;
 
-    // If zoom changed, reset translation and skip delta calculation
+    // If zoom changed, trigger animation and reset translation
     if (prevZoomRef.current !== currentZoom) {
       setGridTranslate({ x: 0, y: 0 });
       prevCenterRef.current = currentCenter;
       prevZoomRef.current = currentZoom;
+
+      // Start zoom animation
+      setIsZoomAnimating(true);
+
+      // Clear any existing timeout
+      if (zoomAnimationTimeoutRef.current) {
+        clearTimeout(zoomAnimationTimeoutRef.current);
+      }
+
+      // End animation after transition duration
+      zoomAnimationTimeoutRef.current = setTimeout(() => {
+        setIsZoomAnimating(false);
+      }, 300); // Match CSS transition duration
+
+      return;
+    }
+
+    // Skip panning updates during zoom animation
+    if (isZoomAnimating) {
       return;
     }
 
@@ -154,7 +177,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     }
 
     prevCenterRef.current = currentCenter;
-  }, [map, viewState.longitude, viewState.latitude, viewState.zoom]);
+  }, [map, viewState.longitude, viewState.latitude, viewState.zoom, isZoomAnimating]);
 
   // Calculate screen-based hexagonal grid - recalculate when viewport, locations, or zoom changes
   useEffect(() => {
@@ -200,6 +223,15 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     return () => clearTimeout(timeoutId);
   }, [map, locations, viewportSize, viewState.zoom]);
 
+  // Cleanup zoom animation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (zoomAnimationTimeoutRef.current) {
+        clearTimeout(zoomAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <>
       {/* Location markers - small black dots */}
@@ -222,7 +254,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       ))}
 
       {/* Hexagon grid and labels - rendered as SVG overlay */}
-      {!isAnimating && hexGridData.hexagons.length > 0 && (
+      {!isAnimating && !isZoomAnimating && hexGridData.hexagons.length > 0 && (
         <svg
           style={{
             position: 'absolute',
@@ -234,7 +266,9 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
             zIndex: 1,
           }}
         >
-          <g transform={`translate(${gridTranslate.x}, ${gridTranslate.y})`}>
+          <g
+            transform={`translate(${gridTranslate.x}, ${gridTranslate.y})`}
+          >
             {/* Hexagon grid lines */}
             {hexGridData.hexagons.map(hex => (
               <path
@@ -248,24 +282,52 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
             ))}
 
             {/* Connection lines from labels to locations */}
-            {hexGridData.labels.map(label => (
-              <line
-                key={`line-${label.id}`}
-                x1={label.x}
-                y1={label.y}
-                x2={label.locationX}
-                y2={label.locationY}
-                stroke={label.color}
-                strokeWidth="2"
-                strokeOpacity="0.6"
-              />
-            ))}
+            {hexGridData.labels.map(label => {
+              // Calculate tapered line path
+              const dx = label.locationX - label.x;
+              const dy = label.locationY - label.y;
+              const angle = Math.atan2(dy, dx);
+              const perpAngle = angle + Math.PI / 2;
+
+              // Width at label end and location end
+              const labelWidth = 4;
+              const locationWidth = 1;
+
+              // Calculate perpendicular offsets
+              const labelOffset = {
+                x: Math.cos(perpAngle) * labelWidth / 2,
+                y: Math.sin(perpAngle) * labelWidth / 2,
+              };
+              const locationOffset = {
+                x: Math.cos(perpAngle) * locationWidth / 2,
+                y: Math.sin(perpAngle) * locationWidth / 2,
+              };
+
+              // Create 4 points for the tapered line
+              const points = [
+                { x: label.x - labelOffset.x, y: label.y - labelOffset.y },
+                { x: label.x + labelOffset.x, y: label.y + labelOffset.y },
+                { x: label.locationX + locationOffset.x, y: label.locationY + locationOffset.y },
+                { x: label.locationX - locationOffset.x, y: label.locationY - locationOffset.y },
+              ];
+
+              const pathData = `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y} Z`;
+
+              return (
+                <path
+                  key={`line-${label.id}`}
+                  d={pathData}
+                  fill="black"
+                  fillOpacity="0.6"
+                />
+              );
+            })}
           </g>
         </svg>
       )}
 
       {/* Screen-based label overlays */}
-      {!isAnimating && hexGridData.labels.map(label => {
+      {!isAnimating && !isZoomAnimating && hexGridData.labels.map(label => {
         // Create light background color (20% opacity like text and itinerary)
         const backgroundColor = `${label.color}33`;
 
