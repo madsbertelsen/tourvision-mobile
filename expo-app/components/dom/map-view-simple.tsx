@@ -219,6 +219,15 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
       {!isAnimating && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
           <svg style={{ width: '100%', height: '100%', position: 'absolute' }}>
+            {/* Define shadow filter for hexagons */}
+            <defs>
+              <filter id="hexagon-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.3"/>
+              </filter>
+              <filter id="hexagon-shadow-strong" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.4"/>
+              </filter>
+            </defs>
             {/* Render hexagonal grid */}
             {hexGridData.hexagons.map(hex => {
               const isUsed = hexGridData.usedHexagonIds.has(hex.id);
@@ -257,10 +266,11 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   <path
                     d={getHexagonPath(0, 0, hexGridData.hexSize * hexScale)}
                     fill={hexLabel ? 'white' : 'none'}
-                    fillOpacity={hexLabel ? 0.9 : 0}
+                    fillOpacity={hexLabel ? 0.95 : 0}
                     stroke={hexLabel ? hexLabel.color : (isAvailable ? '#D1D5DB' : '#EF4444')}
-                    strokeWidth={hexLabel ? 2 : 1}
+                    strokeWidth={hexLabel ? 2.5 : 1}
                     strokeOpacity={hexOpacity}
+                    filter={hexLabel ? 'url(#hexagon-shadow-strong)' : undefined}
                   />
                 </g>
               );
@@ -359,6 +369,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
                   cursor: 'pointer',
                   opacity: photoOpacity,
                   transition: 'opacity 300ms ease-out, transform 300ms ease-out',
+                  filter: 'drop-shadow(0px 4px 10px rgba(0, 0, 0, 0.3))',
                 }}
               >
                 {/* Photo hexagon */}
