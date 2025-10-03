@@ -3,7 +3,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Map as MapGL, Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
-import { calculateGeoHexagonalLabels, type GeoHexGridData } from './hexagonal-label-layout-geo';
+import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 interface Location {
@@ -88,14 +88,19 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   // Expanded groups state (selectedAlternatives is now passed as prop from parent)
   const [expandedGroups, setExpandedGroups] = useState(() => new Set<string>());
 
-  // Geographic hexGrid state (no debouncing needed - only recalculates when locations change)
-  const [geoHexGridData, setGeoHexGridData] = useState<GeoHexGridData>({
+  // Screen-based hexGrid state
+  const [hexGridData, setHexGridData] = useState<HexGridData>({
     labels: [],
     hexagons: [],
-    hexSizeKm: 0,
+    hexSize: 0,
     availableHexagons: [],
     usedHexagonIds: new Set(),
   });
+
+  // Grid translation state for smooth panning
+  const [gridTranslate, setGridTranslate] = useState({ x: 0, y: 0 });
+  const prevCenterRef = useRef<{ lng: number; lat: number } | null>(null);
+  const prevZoomRef = useRef<number>(viewState.zoom);
 
 
   // Track viewport size
@@ -117,38 +122,83 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     };
   }, [map]);
 
-  // Calculate geographic hexagonal grid - recalculate only when locations change
+  // Update grid translation during panning for smooth movement
   useEffect(() => {
-    if (!map || !locations.length || viewportSize.height === 0) {
-      setGeoHexGridData({
+    if (!map) return;
+
+    const currentCenter = { lng: viewState.longitude, lat: viewState.latitude };
+    const currentZoom = viewState.zoom;
+
+    // If zoom changed, reset translation and skip delta calculation
+    if (prevZoomRef.current !== currentZoom) {
+      setGridTranslate({ x: 0, y: 0 });
+      prevCenterRef.current = currentCenter;
+      prevZoomRef.current = currentZoom;
+      return;
+    }
+
+    // If we have a previous center, calculate the pixel delta (panning only)
+    if (prevCenterRef.current) {
+      const prevPoint = map.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
+      const currentPoint = map.project([currentCenter.lng, currentCenter.lat]);
+
+      // Invert delta: when map center moves right, grid should move left (and vice versa)
+      const deltaX = prevPoint.x - currentPoint.x;
+      const deltaY = prevPoint.y - currentPoint.y;
+
+      // Update translation offset
+      setGridTranslate(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+    }
+
+    prevCenterRef.current = currentCenter;
+  }, [map, viewState.longitude, viewState.latitude, viewState.zoom]);
+
+  // Calculate screen-based hexagonal grid - recalculate when viewport, locations, or zoom changes
+  useEffect(() => {
+    if (!map || !locations.length || viewportSize.width === 0) {
+      setHexGridData({
         labels: [],
         hexagons: [],
-        hexSizeKm: 0,
+        hexSize: 0,
         availableHexagons: [],
         usedHexagonIds: new Set(),
       });
       return;
     }
 
-    // Get current map bounds
-    const bounds = map.getBounds();
-    const boundsObj = {
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest(),
+    const recalculate = () => {
+      const mapProjection = (lng: number, lat: number) => {
+        try {
+          const point = map.project([lng, lat]);
+          return { x: point.x, y: point.y };
+        } catch {
+          return null;
+        }
+      };
+
+      const newGridData = calculateHexagonalLabels(
+        locations,
+        mapProjection,
+        viewportSize.width,
+        viewportSize.height,
+        MARKER_COLORS
+      );
+
+      setHexGridData(newGridData);
+
+      // Reset translation after recalculation
+      setGridTranslate({ x: 0, y: 0 });
+      prevCenterRef.current = { lng: viewState.longitude, lat: viewState.latitude };
     };
 
-    const newGridData = calculateGeoHexagonalLabels(
-      locations,
-      boundsObj,
-      viewState.zoom,
-      viewportSize.height,
-      MARKER_COLORS
-    );
+    // Immediate recalculation on zoom change, debounced for other changes
+    const timeoutId = setTimeout(recalculate, 0); // Immediate
 
-    setGeoHexGridData(newGridData);
-  }, [map, locations, viewState.zoom, viewportSize.height]);
+    return () => clearTimeout(timeoutId);
+  }, [map, locations, viewportSize, viewState.zoom]);
 
   return (
     <>
@@ -171,44 +221,87 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         </Marker>
       ))}
 
-      {/* Geographic label markers - Mapbox Markers that move with the map */}
-      {!isAnimating && geoHexGridData.labels.map(label => {
+      {/* Hexagon grid and labels - rendered as SVG overlay */}
+      {!isAnimating && hexGridData.hexagons.length > 0 && (
+        <svg
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        >
+          <g transform={`translate(${gridTranslate.x}, ${gridTranslate.y})`}>
+            {/* Hexagon grid lines */}
+            {hexGridData.hexagons.map(hex => (
+              <path
+                key={hex.id}
+                d={getHexagonPath(hex.x, hex.y, hexGridData.hexSize)}
+                fill="none"
+                stroke="#CBD5E1"
+                strokeWidth="1"
+                strokeOpacity="0.3"
+              />
+            ))}
+
+            {/* Connection lines from labels to locations */}
+            {hexGridData.labels.map(label => (
+              <line
+                key={`line-${label.id}`}
+                x1={label.x}
+                y1={label.y}
+                x2={label.locationX}
+                y2={label.locationY}
+                stroke={label.color}
+                strokeWidth="2"
+                strokeOpacity="0.6"
+              />
+            ))}
+          </g>
+        </svg>
+      )}
+
+      {/* Screen-based label overlays */}
+      {!isAnimating && hexGridData.labels.map(label => {
         // Create light background color (20% opacity like text and itinerary)
         const backgroundColor = `${label.color}33`;
 
         return (
-          <Marker
+          <div
             key={`label-${label.id}`}
-            longitude={label.lng}
-            latitude={label.lat}
-            anchor="center"
-          >
-            {/* White container to block map underneath */}
-            <div style={{
+            style={{
+              position: 'absolute',
+              left: `${label.x + gridTranslate.x}px`,
+              top: `${label.y + gridTranslate.y}px`,
+              transform: 'translate(-50%, -50%)',
               backgroundColor: 'white',
               borderRadius: '6px',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
               padding: '0px',
               cursor: 'pointer',
+              pointerEvents: 'auto',
+              zIndex: 2,
+            }}
+          >
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#1f2937',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              padding: '6px 12px',
+              backgroundColor: backgroundColor,
+              borderRadius: '6px',
+              maxWidth: '150px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}>
-              {/* Name label with colored background on top of white */}
-              <div style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#1f2937',
-                textAlign: 'center',
-                whiteSpace: 'nowrap',
-                padding: '6px 12px',
-                backgroundColor: backgroundColor,
-                borderRadius: '6px',
-                maxWidth: '150px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}>
-                {label.name}
-              </div>
+              {label.name}
             </div>
-          </Marker>
+          </div>
         );
       })}
 

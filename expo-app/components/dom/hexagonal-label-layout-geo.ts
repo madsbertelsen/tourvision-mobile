@@ -1,3 +1,8 @@
+import hexGrid from '@turf/hex-grid';
+import { point } from '@turf/helpers';
+import distance from '@turf/distance';
+import type { Feature, Polygon } from 'geojson';
+
 export interface Location {
   id: string;
   name: string;
@@ -11,8 +16,7 @@ export interface GeoHexagon {
   id: string;
   lat: number; // center latitude
   lng: number; // center longitude
-  col: number;
-  row: number;
+  feature: Feature<Polygon>; // GeoJSON feature from Turf.js
 }
 
 export interface GeoHexLabel {
@@ -27,77 +31,44 @@ export interface GeoHexLabel {
   photoName?: string;
 }
 
-// Calculate haversine distance between two points in kilometers
+// Calculate haversine distance between two points in kilometers using Turf.js
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+  const from = point([lng1, lat1]);
+  const to = point([lng2, lat2]);
+  return distance(from, to, { units: 'kilometers' });
 }
 
-// Calculate degrees per kilometer at a given latitude
-// At equator: 1 deg lat ≈ 111km, 1 deg lng ≈ 111km
-// At poles: 1 deg lat ≈ 111km, 1 deg lng ≈ 0km
-function getDegreesPerKm(lat: number): { latPerKm: number; lngPerKm: number } {
-  const latPerKm = 1 / 111; // Roughly constant
-  const lngPerKm = 1 / (111 * Math.cos(lat * Math.PI / 180)); // Varies with latitude
-  return { latPerKm, lngPerKm };
-}
-
-// Generate flat-top hexagonal grid in geographic coordinates
+// Generate flat-top hexagonal grid in geographic coordinates using Turf.js
 function generateGeoHexGrid(
   boundsLat: { min: number; max: number },
   boundsLng: { min: number; max: number },
   hexSizeKm: number
 ): GeoHexagon[] {
-  const hexagons: GeoHexagon[] = [];
+  // Turf.js hexGrid expects bbox in [minX, minY, maxX, maxY] format (lng, lat)
+  const bbox: [number, number, number, number] = [
+    boundsLng.min,
+    boundsLat.min,
+    boundsLng.max,
+    boundsLat.max,
+  ];
 
-  // Use center latitude for degree calculations (approximation)
-  const centerLat = (boundsLat.min + boundsLat.max) / 2;
-  const { latPerKm, lngPerKm } = getDegreesPerKm(centerLat);
+  // Generate hexagonal grid using Turf.js
+  const grid = hexGrid(bbox, hexSizeKm, { units: 'kilometers' });
 
-  // Flat-top hexagon spacing in kilometers
-  const horizontalSpacingKm = Math.sqrt(3) * hexSizeKm;
-  const verticalSpacingKm = 1.5 * hexSizeKm;
+  // Convert Turf.js features to our GeoHexagon format
+  const hexagons: GeoHexagon[] = grid.features.map((feature, index) => {
+    // Calculate center point of hexagon
+    const coordinates = feature.geometry.coordinates[0];
+    const centerLng = coordinates.reduce((sum, coord) => sum + coord[0], 0) / coordinates.length;
+    const centerLat = coordinates.reduce((sum, coord) => sum + coord[1], 0) / coordinates.length;
 
-  // Convert to degrees
-  const horizontalSpacingDeg = horizontalSpacingKm * lngPerKm;
-  const verticalSpacingDeg = verticalSpacingKm * latPerKm;
-
-  // Calculate grid dimensions with padding
-  const lngRange = boundsLng.max - boundsLng.min;
-  const latRange = boundsLat.max - boundsLat.min;
-
-  const cols = Math.ceil(lngRange / horizontalSpacingDeg) + 4; // Extra padding
-  const rows = Math.ceil(latRange / verticalSpacingDeg) + 4;
-
-  // Start from bounds minimum with padding
-  const startLng = boundsLng.min - horizontalSpacingDeg * 2;
-  const startLat = boundsLat.min - verticalSpacingDeg * 2;
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      // Offset every other row by half the horizontal spacing
-      const offsetLng = (row % 2) * (horizontalSpacingDeg / 2);
-
-      const lng = startLng + col * horizontalSpacingDeg + offsetLng;
-      const lat = startLat + row * verticalSpacingDeg;
-
-      hexagons.push({
-        id: `hex-${row}-${col}`,
-        lat,
-        lng,
-        col,
-        row,
-      });
-    }
-  }
+    return {
+      id: `hex-${index}`,
+      lat: centerLat,
+      lng: centerLng,
+      feature,
+    };
+  });
 
   return hexagons;
 }

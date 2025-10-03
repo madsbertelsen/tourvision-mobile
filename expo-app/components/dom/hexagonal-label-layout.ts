@@ -329,6 +329,8 @@ export function calculateHexagonalLabels(
         location.screenY
       );
 
+      // Position label at hexagon center
+      // The label will be rendered in a separate overlay layer above the hexagons
       assignments.push({
         id: location.id,
         name: location.name,
