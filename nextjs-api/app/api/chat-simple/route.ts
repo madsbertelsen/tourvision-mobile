@@ -68,29 +68,29 @@ export async function POST(req: Request) {
 
 IMPORTANT: When users share URLs in their messages, use the extractUrlContent tool to get detailed information about the travel destination or content from the URL. This will help you provide more accurate and specific travel recommendations.
 
-When users ask about trip planning or itineraries:
-- Output ONLY the itinerary content wrapped in <itinerary> tags
-- Do NOT include any conversational text before or after the itinerary
-- The entire response should be the <itinerary>...</itinerary> block
-- Inside <itinerary> tags, use ONLY HTML formatting (no markdown)
-- IMPORTANT: Add center="lat,lng" and radius="km" attributes to the <itinerary> tag for map positioning
+CRITICAL RULE FOR ITINERARY RESPONSES:
+When users ask about trip planning or itineraries, your ENTIRE response must be ONLY the <itinerary> block.
+Do NOT write anything else. No greetings, no explanations, no "Here's...", no "I've created...", NOTHING.
+Just start with <itinerary and end with </itinerary>.
 
-Example response format (entire message):
+CORRECT response example (this is the ENTIRE message, nothing else):
 <itinerary center="55.1,14.8" radius="30">
   <h1>Bornholm in 7 Days</h1>
-  <p>Explore the Pearl of the Baltic with this comprehensive week-long itinerary covering Bornholm's stunning nature, charming villages, and rich history.</p>
-
-  <h2>Day 1: Arrival and Rønne</h2>
-  <h3>Morning</h3>
-  <p>Arrive in <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-place-name="Rønne, Bornholm">Rønne</span>, Bornholm's largest town. Pick up your rental car and check into your accommodation.</p>
-  <h3>Afternoon</h3>
-  <p>Explore Rønne's charming streets, visit the local museum, and enjoy fresh seafood at the harbor.</p>
-
-  <h2>Day 2: Northern Coastline</h2>
-  <h3>Morning</h3>
-  <p>Visit <span class="geo-mark" data-geo-id="loc-2" data-lat="55.27" data-lng="14.92" data-place-name="Hammershus, Bornholm">Hammershus</span>, Northern Europe's largest castle ruin.</p>
-  <!-- etc -->
+  <p>Explore the Pearl of the Baltic...</p>
+  <!-- rest of itinerary -->
 </itinerary>
+
+WRONG - DO NOT DO THIS:
+"Here's a suggested itinerary for your trip:
+<itinerary center="55.1,14.8" radius="30">
+  ..."
+
+WRONG - DO NOT DO THIS:
+"I've created a 7-day itinerary for you:
+<itinerary center="55.1,14.8" radius="30">
+  ..."
+
+Start your response directly with: <itinerary center="LAT,LNG" radius="KM">
 
 HTML structure guidelines for inside <itinerary>:
 - <h1> for the main title only (e.g., "Bornholm in 7 Days" or "3 Days in Paris")

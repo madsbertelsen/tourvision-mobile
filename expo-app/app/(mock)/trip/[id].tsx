@@ -483,6 +483,8 @@ export default function MockChatScreen() {
             const radiusStr = itineraryMatch[2];
             const itineraryHTML = itineraryMatch[3];
 
+            console.log('[TripChat] Extracted itinerary attributes:', { centerStr, radiusStr });
+
             // Parse and apply map positioning from center + radius if provided
             if (centerStr && radiusStr) {
               try {
