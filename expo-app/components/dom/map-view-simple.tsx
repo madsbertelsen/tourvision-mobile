@@ -3,7 +3,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Map as MapGL, Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
-import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
+import { calculateGeoHexagonalLabels, type GeoHexGridData } from './hexagonal-label-layout-geo';
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 interface Location {
@@ -85,31 +85,17 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   const { current: map } = useMap();
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
-  // Position tracking for smooth transitions
-  const previousPositionsRef = useRef(new Map<string, { x: number; y: number }>());
-
-  interface PositionTransition {
-    fromX: number;
-    fromY: number;
-    toX: number;
-    toY: number;
-    progress: number;
-  }
-  const [labelTransitions, setLabelTransitions] = useState(() => new Map<string, PositionTransition>());
-  const transitionTimersRef = useRef(new Map<string, number>());
-
   // Expanded groups state (selectedAlternatives is now passed as prop from parent)
   const [expandedGroups, setExpandedGroups] = useState(() => new Set<string>());
 
-  // Debounced hexGrid state
-  const [stableHexGridData, setStableHexGridData] = useState<HexGridData>({
+  // Geographic hexGrid state (no debouncing needed - only recalculates when locations change)
+  const [geoHexGridData, setGeoHexGridData] = useState<GeoHexGridData>({
     labels: [],
     hexagons: [],
-    hexSize: 0,
+    hexSizeKm: 0,
     availableHexagons: [],
     usedHexagonIds: new Set(),
   });
-  const hexGridDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
 
   // Track viewport size
@@ -131,124 +117,38 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     };
   }, [map]);
 
-  // Calculate hexagonal grid and labels - recalculate when viewState changes
-  const hexGridData = useMemo(() => {
-    if (!map || !locations.length || viewportSize.width === 0) {
-      return {
+  // Calculate geographic hexagonal grid - recalculate only when locations change
+  useEffect(() => {
+    if (!map || !locations.length || viewportSize.height === 0) {
+      setGeoHexGridData({
         labels: [],
         hexagons: [],
-        hexSize: 0,
+        hexSizeKm: 0,
         availableHexagons: [],
-        usedHexagonIds: new Set<string>(),
-      };
+        usedHexagonIds: new Set(),
+      });
+      return;
     }
 
-    const mapProjection = (lng: number, lat: number) => {
-      try {
-        const point = map.project([lng, lat]);
-        return { x: point.x, y: point.y };
-      } catch {
-        return null;
-      }
+    // Get current map bounds
+    const bounds = map.getBounds();
+    const boundsObj = {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest(),
     };
 
-    return calculateHexagonalLabels(
+    const newGridData = calculateGeoHexagonalLabels(
       locations,
-      mapProjection,
-      viewportSize.width,
+      boundsObj,
+      viewState.zoom,
       viewportSize.height,
       MARKER_COLORS
     );
-  }, [map, locations, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
 
-  // Debounce hexGrid updates to stable state (50ms delay after map stops moving)
-  useEffect(() => {
-    if (hexGridDebounceRef.current) {
-      clearTimeout(hexGridDebounceRef.current);
-    }
-    hexGridDebounceRef.current = setTimeout(() => {
-      setStableHexGridData(hexGridData);
-    }, 50);
-    return () => {
-      if (hexGridDebounceRef.current) {
-        clearTimeout(hexGridDebounceRef.current);
-      }
-    };
-  }, [hexGridData]);
-
-  // Detect position changes and trigger smooth animations
-  useEffect(() => {
-    console.log('[PositionAnimation] stableHexGridData changed, checking for position updates');
-
-    const previousPositions = previousPositionsRef.current;
-    const newTransitions = new Map<string, PositionTransition>();
-
-    stableHexGridData.labels.forEach(label => {
-      const prevPos = previousPositions.get(label.id);
-
-      if (prevPos) {
-        // Check if position actually changed (more than 1px threshold to avoid micro-movements)
-        const deltaX = Math.abs(label.x - prevPos.x);
-        const deltaY = Math.abs(label.y - prevPos.y);
-
-        if (deltaX > 1 || deltaY > 1) {
-          console.log(`[PositionAnimation] Label ${label.id} moved from (${prevPos.x}, ${prevPos.y}) to (${label.x}, ${label.y})`);
-
-          // Start transition from previous position to new position
-          newTransitions.set(label.id, {
-            fromX: prevPos.x,
-            fromY: prevPos.y,
-            toX: label.x,
-            toY: label.y,
-            progress: 0,
-          });
-        }
-      } else {
-        // First time seeing this label - store its initial position
-        previousPositions.set(label.id, { x: label.x, y: label.y });
-      }
-    });
-
-    if (newTransitions.size > 0) {
-      console.log(`[PositionAnimation] Starting ${newTransitions.size} position transitions`);
-      setLabelTransitions(newTransitions);
-
-      // Animate transitions over 400ms
-      const duration = 400;
-      const startTime = Date.now();
-
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easedProgress = easeInOutCubic(progress);
-
-        setLabelTransitions(prev => {
-          const updated = new Map(prev);
-          updated.forEach((transition, id) => {
-            updated.set(id, { ...transition, progress: easedProgress });
-          });
-          return updated;
-        });
-
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          // Update previous positions to new positions after transition completes
-          newTransitions.forEach((transition, id) => {
-            previousPositionsRef.current.set(id, { x: transition.toX, y: transition.toY });
-          });
-
-          // Clear transitions after completion
-          console.log('[PositionAnimation] Transitions completed');
-          setLabelTransitions(new Map());
-        }
-      };
-
-      requestAnimationFrame(animate);
-    }
-  }, [stableHexGridData]);
-
-
+    setGeoHexGridData(newGridData);
+  }, [map, locations, viewState.zoom, viewportSize.height]);
 
   return (
     <>
@@ -271,114 +171,46 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         </Marker>
       ))}
 
-      {/* Hexagonal grid, labels and connection lines - only show when not animating */}
-      {!isAnimating && (
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          <svg style={{ width: '100%', height: '100%', position: 'absolute' }}>
-            {/* Define shadow filter for hexagons */}
-            <defs>
-              <filter id="hexagon-shadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.3"/>
-              </filter>
-              <filter id="hexagon-shadow-strong" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.4"/>
-              </filter>
-            </defs>
-            {/* Render hexagonal grid */}
-            {/* Connection lines from labels to locations */}
-            {stableHexGridData.labels.map(label => {
-              // Get live location coordinates from hexGridData (updates with map movement)
-              const liveLabel = hexGridData.labels.find(l => l.id === label.id);
-              const locationX = liveLabel?.locationX ?? label.locationX;
-              const locationY = liveLabel?.locationY ?? label.locationY;
+      {/* Geographic label markers - Mapbox Markers that move with the map */}
+      {!isAnimating && geoHexGridData.labels.map(label => {
+        // Create light background color (20% opacity like text and itinerary)
+        const backgroundColor = `${label.color}33`;
 
-              // Check if label is currently transitioning between positions
-              const transition = labelTransitions.get(label.id);
-              let displayX = label.x;
-              let displayY = label.y;
-
-              if (transition) {
-                // Interpolate position during transition
-                displayX = transition.fromX + (transition.toX - transition.fromX) * transition.progress;
-                displayY = transition.fromY + (transition.toY - transition.fromY) * transition.progress;
-              }
-
-              // Draw visible line connecting label to POI marker (uses live location coords)
-              return (
-                <line
-                  key={`connection-${label.id}`}
-                  x1={locationX}
-                  y1={locationY}
-                  x2={displayX}
-                  y2={displayY}
-                  stroke="#6B7280"
-                  strokeWidth={2}
-                  strokeOpacity={0.7}
-                  strokeDasharray="4,4"
-                />
-              );
-            })}
-          </svg>
-
-          {/* Text labels on hexagons */}
-          {stableHexGridData.labels.map(label => {
-            // Check if label is currently transitioning between positions
-            const transition = labelTransitions.get(label.id);
-            let displayX = label.x;
-            let displayY = label.y;
-
-            if (transition) {
-              // Interpolate position during transition
-              displayX = transition.fromX + (transition.toX - transition.fromX) * transition.progress;
-              displayY = transition.fromY + (transition.toY - transition.fromY) * transition.progress;
-              console.log(`[PositionAnimation] Rendering label ${label.id} at interpolated position (${displayX.toFixed(1)}, ${displayY.toFixed(1)}) progress=${transition.progress.toFixed(2)}`);
-            }
-
-            // Create light background color (20% opacity like text and itinerary)
-            const backgroundColor = `${label.color}33`;
-
-            return (
-              <div
-                key={`label-${label.id}`}
-                style={{
-                  position: 'absolute',
-                  left: `${displayX}px`,
-                  top: `${displayY}px`,
-                  transform: `translate(-50%, -50%)`,
-                  pointerEvents: 'auto',
-                  cursor: 'pointer',
-                  opacity: 1,
-                }}
-              >
-                {/* White container to block map underneath */}
-                <div style={{
-                  backgroundColor: 'white',
-                  borderRadius: '6px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                  padding: '0px',
-                }}>
-                  {/* Name label with colored background on top of white */}
-                  <div style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#1f2937',
-                    textAlign: 'center',
-                    whiteSpace: 'nowrap',
-                    padding: '6px 12px',
-                    backgroundColor: backgroundColor,
-                    borderRadius: '6px',
-                    maxWidth: `${hexGridData.hexSize * 2}px`,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>
-                    {label.name}
-                  </div>
-                </div>
+        return (
+          <Marker
+            key={`label-${label.id}`}
+            longitude={label.lng}
+            latitude={label.lat}
+            anchor="center"
+          >
+            {/* White container to block map underneath */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '6px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              padding: '0px',
+              cursor: 'pointer',
+            }}>
+              {/* Name label with colored background on top of white */}
+              <div style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#1f2937',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+                padding: '6px 12px',
+                backgroundColor: backgroundColor,
+                borderRadius: '6px',
+                maxWidth: '150px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
+                {label.name}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          </Marker>
+        );
+      })}
 
       {/* Itinerary Overlay - Top Left */}
       {showItinerary && locations.length > 0 && (
