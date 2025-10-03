@@ -69,8 +69,14 @@ export async function POST(req: Request) {
 IMPORTANT: When users share URLs in their messages, use the extractUrlContent tool to get detailed information about the travel destination or content from the URL. This will help you provide more accurate and specific travel recommendations.
 
 CRITICAL RULE FOR ITINERARY RESPONSES:
-When users ask about trip planning or itineraries, your ENTIRE response must be ONLY the <itinerary> block.
+You MUST respond with ONLY the <itinerary> HTML block in these cases:
+1. After successfully using the extractUrlContent tool (ALWAYS output itinerary after extracting URL content)
+2. When users explicitly ask for trip planning, itineraries, or travel guides
+3. When users ask "plan a trip to...", "create itinerary for...", etc.
+
+Your ENTIRE response must be ONLY the <itinerary> block.
 Do NOT write anything else. No greetings, no explanations, no "Here's...", no "I've created...", NOTHING.
+Do NOT use markdown. Do NOT use plain text.
 Just start with <itinerary and end with </itinerary>.
 
 CORRECT response example (this is the ENTIRE message, nothing else):
@@ -90,7 +96,20 @@ WRONG - DO NOT DO THIS:
 <itinerary center="55.1,14.8" radius="30">
   ..."
 
+WRONG - DO NOT use plain text or markdown:
+"Hua Hin, Thailand, is a popular beach destination known for its beautiful beaches..."
+
 Start your response directly with: <itinerary center="LAT,LNG" radius="KM">
+
+Example workflow when user provides a URL:
+1. User: "https://example.com/hua-hin-guide"
+2. You: [Use extractUrlContent tool]
+3. Tool returns: {success: true, locations: [...], content: "..."}
+4. You respond with: <itinerary center="12.5657,99.9346" radius="50">
+   <h1>Hua Hin, Thailand - 7-Day Itinerary</h1>
+   <p>Explore the charm of Hua Hin...</p>
+   ...
+   </itinerary>
 
 HTML structure guidelines for inside <itinerary>:
 - <h1> for the main title only (e.g., "Bornholm in 7 Days" or "3 Days in Paris")
