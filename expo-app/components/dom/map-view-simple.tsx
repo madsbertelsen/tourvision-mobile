@@ -54,6 +54,11 @@ function getRouteStyle(profile: string) {
   };
 }
 
+// Easing function for smooth animations
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 interface MapViewSimpleProps {
   locations?: Location[];
   center?: { lat: number; lng: number };
@@ -66,19 +71,44 @@ interface MapViewSimpleProps {
 }
 
 // Inner component to access map instance
-function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
+function MapContent({ locations, focusedLocation, isAnimating, viewState, routes, selectedAlternatives, setSelectedAlternatives }: {
   locations: Location[],
   focusedLocation: FocusedLocation | null,
   isAnimating: boolean,
-  viewState: { longitude: number; latitude: number; zoom: number }
+  viewState: { longitude: number; latitude: number; zoom: number },
+  routes: RouteWithMetadata[],
+  selectedAlternatives: Map<string, string>,
+  setSelectedAlternatives: React.Dispatch<React.SetStateAction<Map<string, string>>>
 }) {
   const { current: map } = useMap();
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
-  // Animation state: track which labels have been animated and their progress
-  const animatedLabelsRef = useRef(new Set<string>());
-  const [labelAnimations, setLabelAnimations] = useState(() => new Map<string, number>());
-  const animationTimersRef = useRef(new Map<string, NodeJS.Timeout>());
+  // Position tracking for smooth transitions
+  const previousPositionsRef = useRef(new Map<string, { x: number; y: number }>());
+
+  interface PositionTransition {
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    progress: number;
+  }
+  const [labelTransitions, setLabelTransitions] = useState(() => new Map<string, PositionTransition>());
+  const transitionTimersRef = useRef(new Map<string, number>());
+
+  // Expanded groups state (selectedAlternatives is now passed as prop from parent)
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set<string>());
+
+  // Debounced hexGrid state
+  const [stableHexGridData, setStableHexGridData] = useState<HexGridData>({
+    labels: [],
+    hexagons: [],
+    hexSize: 0,
+    availableHexagons: [],
+    usedHexagonIds: new Set(),
+  });
+  const hexGridDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
 
   // Track viewport size
   useEffect(() => {
@@ -129,70 +159,94 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
     );
   }, [map, locations, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
 
-  // Detect labels that are visible in viewport and haven't been animated yet
+  // Debounce hexGrid updates to stable state (50ms delay after map stops moving)
   useEffect(() => {
-    if (!viewportSize.width || !viewportSize.height) return;
-
-    // Check which labels are currently visible in viewport
-    const visibleLabels = hexGridData.labels.filter(label => {
-      // Check if label is within viewport bounds
-      const inViewport =
-        label.x >= 0 &&
-        label.x <= viewportSize.width &&
-        label.y >= 0 &&
-        label.y <= viewportSize.height;
-
-      // Only animate if visible and not yet animated
-      return inViewport && !animatedLabelsRef.current.has(label.id);
-    });
-
-    if (visibleLabels.length === 0) return;
-
-    // console.log('[Animation] Visible labels to animate:', visibleLabels.map(l => l.id));
-
-    // Animate each visible label with stagger delay
-    visibleLabels.forEach((label, index) => {
-      const delay = index * 150; // 150ms stagger between animations
-
-      const timer = setTimeout(() => {
-        // console.log(`[Animation] Starting animation for label: ${label.id}`);
-
-        // Mark as animated
-        animatedLabelsRef.current.add(label.id);
-
-        // Start animation by setting progress to 0
-        setLabelAnimations(prev => new Map(prev).set(label.id, 0));
-
-        // Animate progress from 0 to 1 over 3000ms (3 seconds)
-        const startTime = Date.now();
-        const duration = 3000;
-
-        const animate = () => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-
-          // console.log(`[Animation] ${label.id} progress: ${progress.toFixed(3)}`);
-          setLabelAnimations(prev => new Map(prev).set(label.id, progress));
-
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            // console.log(`[Animation] Completed animation for label: ${label.id}`);
-          }
-        };
-
-        requestAnimationFrame(animate);
-      }, delay);
-
-      animationTimersRef.current.set(label.id, timer);
-    });
-
-    // Cleanup timers on unmount
+    if (hexGridDebounceRef.current) {
+      clearTimeout(hexGridDebounceRef.current);
+    }
+    hexGridDebounceRef.current = setTimeout(() => {
+      setStableHexGridData(hexGridData);
+    }, 50);
     return () => {
-      animationTimersRef.current.forEach(timer => clearTimeout(timer));
-      animationTimersRef.current.clear();
+      if (hexGridDebounceRef.current) {
+        clearTimeout(hexGridDebounceRef.current);
+      }
     };
-  }, [hexGridData.labels, viewportSize, viewState.longitude, viewState.latitude, viewState.zoom]);
+  }, [hexGridData]);
+
+  // Detect position changes and trigger smooth animations
+  useEffect(() => {
+    console.log('[PositionAnimation] stableHexGridData changed, checking for position updates');
+
+    const previousPositions = previousPositionsRef.current;
+    const newTransitions = new Map<string, PositionTransition>();
+
+    stableHexGridData.labels.forEach(label => {
+      const prevPos = previousPositions.get(label.id);
+
+      if (prevPos) {
+        // Check if position actually changed (more than 1px threshold to avoid micro-movements)
+        const deltaX = Math.abs(label.x - prevPos.x);
+        const deltaY = Math.abs(label.y - prevPos.y);
+
+        if (deltaX > 1 || deltaY > 1) {
+          console.log(`[PositionAnimation] Label ${label.id} moved from (${prevPos.x}, ${prevPos.y}) to (${label.x}, ${label.y})`);
+
+          // Start transition from previous position to new position
+          newTransitions.set(label.id, {
+            fromX: prevPos.x,
+            fromY: prevPos.y,
+            toX: label.x,
+            toY: label.y,
+            progress: 0,
+          });
+        }
+      } else {
+        // First time seeing this label - store its initial position
+        previousPositions.set(label.id, { x: label.x, y: label.y });
+      }
+    });
+
+    if (newTransitions.size > 0) {
+      console.log(`[PositionAnimation] Starting ${newTransitions.size} position transitions`);
+      setLabelTransitions(newTransitions);
+
+      // Animate transitions over 400ms
+      const duration = 400;
+      const startTime = Date.now();
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeInOutCubic(progress);
+
+        setLabelTransitions(prev => {
+          const updated = new Map(prev);
+          updated.forEach((transition, id) => {
+            updated.set(id, { ...transition, progress: easedProgress });
+          });
+          return updated;
+        });
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Update previous positions to new positions after transition completes
+          newTransitions.forEach((transition, id) => {
+            previousPositionsRef.current.set(id, { x: transition.toX, y: transition.toY });
+          });
+
+          // Clear transitions after completion
+          console.log('[PositionAnimation] Transitions completed');
+          setLabelTransitions(new Map());
+        }
+      };
+
+      requestAnimationFrame(animate);
+    }
+  }, [stableHexGridData]);
+
+
 
   return (
     <>
@@ -229,157 +283,421 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
               </filter>
             </defs>
             {/* Render hexagonal grid */}
-            {hexGridData.hexagons.map(hex => {
-              const isUsed = hexGridData.usedHexagonIds.has(hex.id);
-              const isAvailable = hexGridData.availableHexagons.some(h => h.id === hex.id);
-
-              // Find the label for this hexagon if it's used
-              const hexLabel = isUsed ? hexGridData.labels.find(l => l.hexagonId === hex.id) : null;
-
-              let hexScale = 1;
-              let hexOpacity = hexLabel ? 0.8 : 0.2;
-
-              if (hexLabel) {
-                // Get animation progress - don't render if not animated yet
-                const progress = labelAnimations.get(hexLabel.id);
-
-                // Skip rendering if animation hasn't started yet
-                if (progress === undefined) {
-                  return null;
-                }
-
-                // console.log(`[Render] Hexagon ${hexLabel.id} progress: ${progress}`);
-
-                // Hexagon explosion phase: 0.3-0.5 (900-1500ms of 3000ms)
-                const hexProgress = Math.max(0, Math.min((progress - 0.3) / 0.2, 1));
-
-                // Scale from 0.2 to 1.0 with bounce easing
-                const t = hexProgress;
-                const bounce = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-                hexScale = 0.2 + bounce * 0.8;
-
-                hexOpacity = hexProgress > 0 ? 0.8 : 0;
-              }
-
-              return (
-                <g key={hex.id} transform={`translate(${hex.x}, ${hex.y})`}>
-                  <path
-                    d={getHexagonPath(0, 0, hexGridData.hexSize * hexScale)}
-                    fill={hexLabel ? 'white' : 'none'}
-                    fillOpacity={hexLabel ? 0.95 : 0}
-                    stroke={hexLabel ? hexLabel.color : (isAvailable ? '#D1D5DB' : '#EF4444')}
-                    strokeWidth={hexLabel ? 2.5 : 1}
-                    strokeOpacity={hexOpacity}
-                    filter={hexLabel ? 'url(#hexagon-shadow-strong)' : undefined}
-                  />
-                </g>
-              );
-            })}
-
             {/* Connection lines from labels to locations */}
-            {hexGridData.labels.map(label => {
-              // Get animation progress (0 = start, 1 = complete)
-              const progress = labelAnimations.get(label.id);
+            {stableHexGridData.labels.map(label => {
+              // Get live location coordinates from hexGridData (updates with map movement)
+              const liveLabel = hexGridData.labels.find(l => l.id === label.id);
+              const locationX = liveLabel?.locationX ?? label.locationX;
+              const locationY = liveLabel?.locationY ?? label.locationY;
 
-              // Skip rendering if animation hasn't started yet
-              if (progress === undefined) {
-                return null;
+              // Check if label is currently transitioning between positions
+              const transition = labelTransitions.get(label.id);
+              let displayX = label.x;
+              let displayY = label.y;
+
+              if (transition) {
+                // Interpolate position during transition
+                displayX = transition.fromX + (transition.toX - transition.fromX) * transition.progress;
+                displayY = transition.fromY + (transition.toY - transition.fromY) * transition.progress;
               }
 
-              // Line growth phase: 0-0.3 (0-900ms of 3000ms)
-              const lineProgress = Math.min(progress / 0.3, 1);
-
-              // Calculate perpendicular offsets for tapering
-              const dx = label.connectionPointX - label.locationX;
-              const dy = label.connectionPointY - label.locationY;
-              const length = Math.sqrt(dx * dx + dy * dy);
-
-              // Normalize direction
-              const nx = dx / length;
-              const ny = dy / length;
-
-              // Perpendicular direction (rotate 90 degrees)
-              const px = -ny;
-              const py = nx;
-
-              // Width at each end
-              const thinWidth = 0.5; // Thin end at location (1px total width)
-              const thickWidth = 1.5; // Thick end at hexagon (3px total width)
-
-              // Animated connection point (grows from location to hexagon)
-              const currentX = label.locationX + (label.connectionPointX - label.locationX) * lineProgress;
-              const currentY = label.locationY + (label.connectionPointY - label.locationY) * lineProgress;
-
-              // Calculate polygon points for tapered line
-              const x1 = label.locationX + px * thinWidth;
-              const y1 = label.locationY + py * thinWidth;
-              const x2 = label.locationX - px * thinWidth;
-              const y2 = label.locationY - py * thinWidth;
-              const x3 = currentX - px * (thinWidth + (thickWidth - thinWidth) * lineProgress);
-              const y3 = currentY - py * (thinWidth + (thickWidth - thinWidth) * lineProgress);
-              const x4 = currentX + px * (thinWidth + (thickWidth - thinWidth) * lineProgress);
-              const y4 = currentY + py * (thinWidth + (thickWidth - thinWidth) * lineProgress);
-
+              // Draw visible line connecting label to POI marker (uses live location coords)
               return (
-                <polygon
+                <line
                   key={`connection-${label.id}`}
-                  points={`${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`}
-                  fill={label.color}
-                  fillOpacity={lineProgress > 0 ? "0.8" : "0"}
+                  x1={locationX}
+                  y1={locationY}
+                  x2={displayX}
+                  y2={displayY}
+                  stroke="#6B7280"
+                  strokeWidth={2}
+                  strokeOpacity={0.7}
+                  strokeDasharray="4,4"
                 />
               );
             })}
           </svg>
 
           {/* Text labels on hexagons */}
-          {hexGridData.labels.map(label => {
-            // Get animation progress - skip if not animated yet
-            const progress = labelAnimations.get(label.id);
+          {stableHexGridData.labels.map(label => {
+            // Check if label is currently transitioning between positions
+            const transition = labelTransitions.get(label.id);
+            let displayX = label.x;
+            let displayY = label.y;
 
-            // Skip rendering if animation hasn't started yet
-            if (progress === undefined) {
-              return null;
+            if (transition) {
+              // Interpolate position during transition
+              displayX = transition.fromX + (transition.toX - transition.fromX) * transition.progress;
+              displayY = transition.fromY + (transition.toY - transition.fromY) * transition.progress;
+              console.log(`[PositionAnimation] Rendering label ${label.id} at interpolated position (${displayX.toFixed(1)}, ${displayY.toFixed(1)}) progress=${transition.progress.toFixed(2)}`);
             }
 
-            // Text reveal phase: 0.5-0.8 (1500-2400ms of 3000ms)
-            const textProgress = Math.max(0, Math.min((progress - 0.5) / 0.3, 1));
-
-            // Scale from 0.8 to 1.0 and opacity from 0 to 1
-            const textOpacity = textProgress;
-            const textScale = 0.8 + textProgress * 0.2;
+            // Create light background color (20% opacity like text and itinerary)
+            const backgroundColor = `${label.color}33`;
 
             return (
               <div
                 key={`label-${label.id}`}
                 style={{
                   position: 'absolute',
-                  left: `${label.x}px`,
-                  top: `${label.y}px`,
-                  transform: `translate(-50%, -50%) scale(${textScale})`,
+                  left: `${displayX}px`,
+                  top: `${displayY}px`,
+                  transform: `translate(-50%, -50%)`,
                   pointerEvents: 'auto',
                   cursor: 'pointer',
-                  opacity: textOpacity,
-                  transition: 'opacity 300ms ease-out, transform 300ms ease-out',
+                  opacity: 1,
                 }}
               >
-                {/* Name label centered in hexagon */}
+                {/* White container to block map underneath */}
                 <div style={{
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  color: '#1f2937',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                  padding: '4px 8px',
-                  maxWidth: `${hexGridData.hexSize * 1.6}px`,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.8)',
+                  backgroundColor: 'white',
+                  borderRadius: '6px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  padding: '0px',
                 }}>
-                  {label.name}
+                  {/* Name label with colored background on top of white */}
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#1f2937',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    padding: '6px 12px',
+                    backgroundColor: backgroundColor,
+                    borderRadius: '6px',
+                    maxWidth: `${hexGridData.hexSize * 2}px`,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {label.name}
+                  </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Itinerary Overlay - Top Left */}
+      {locations.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '16px',
+          left: '16px',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(8px)',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          padding: '12px',
+          maxHeight: '300px',
+          overflowY: 'auto',
+          minWidth: '200px',
+          maxWidth: '280px',
+          pointerEvents: 'auto',
+          zIndex: 10,
+        }}>
+          <div style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#1f2937',
+            marginBottom: '8px',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+            paddingBottom: '6px',
+          }}>
+            Itinerary
+          </div>
+
+          {(() => {
+            // Detect alternative destinations
+            // Build groups: locations with routes from same origin are alternatives
+            const processedIndices = new Set<number>();
+            const renderItems: JSX.Element[] = [];
+            let sequentialNumber = 1;
+
+            locations.forEach((location, index) => {
+              if (processedIndices.has(index)) return;
+
+              // Check if there are multiple locations with routes from this location
+              const routesFromHere = routes.filter(r => r.fromId === location.id);
+              const alternativeLocationIds = routesFromHere.map(r => r.toId);
+
+              // Find which of the next locations are alternatives (have route from current location)
+              const alternatives: Array<{ location: Location; index: number; route: RouteWithMetadata }> = [];
+              for (let i = index + 1; i < locations.length; i++) {
+                if (processedIndices.has(i)) continue;
+                const loc = locations[i];
+                const routeToLoc = routesFromHere.find(r => r.toId === loc.id);
+                if (routeToLoc) {
+                  alternatives.push({ location: loc, index: i, route: routeToLoc });
+                }
+              }
+
+              // Find route to next location (for non-alternatives)
+              const nextLocation = locations[index + 1];
+              const routeToNext = nextLocation && !alternativeLocationIds.includes(nextLocation.id)
+                ? routes.find(r => r.fromId === location.id && r.toId === nextLocation.id)
+                : null;
+
+              // Helper functions
+              const getTransportIcon = (profile: string) => {
+                switch (profile) {
+                  case 'driving': return '🚗';
+                  case 'walking': return '🚶';
+                  case 'cycling': return '🚴';
+                  case 'transit': return '🚇';
+                  default: return '→';
+                }
+              };
+
+              const formatDuration = (seconds?: number) => {
+                if (!seconds) return '';
+                const minutes = Math.round(seconds / 60);
+                if (minutes < 60) return `${minutes} min`;
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+              };
+
+              const formatDistance = (meters?: number) => {
+                if (!meters) return '';
+                if (meters < 1000) return `${Math.round(meters)}m`;
+                return `${(meters / 1000).toFixed(1)}km`;
+              };
+
+              const renderLocationItem = (loc: Location, number: string, isAlternative = false) => {
+                const markerColor = loc.colorIndex !== undefined
+                  ? MARKER_COLORS[loc.colorIndex % MARKER_COLORS.length]
+                  : MARKER_COLORS[0];
+
+                // Create light background color (20% opacity)
+                const backgroundColor = `${markerColor}33`;
+
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '4px',
+                  }}>
+                    {/* Location name with colored background */}
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: isAlternative ? '400' : '500',
+                      color: '#1f2937',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      backgroundColor: backgroundColor,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      opacity: isAlternative ? 0.7 : 1,
+                    }}>
+                      {loc.name}
+                    </div>
+                  </div>
+                );
+              };
+
+              // Mark location as processed
+              processedIndices.add(index);
+
+              // Render current location
+              renderItems.push(
+                <div key={location.id}>
+                  {renderLocationItem(location, `${sequentialNumber}.`)}
+                </div>
+              );
+
+              // Render route to next (if not alternatives) - AFTER the location
+              if (routeToNext) {
+                renderItems.push(
+                  <div key={`route-${location.id}-${nextLocation.id}`} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginLeft: '16px',
+                    marginBottom: '8px',
+                    paddingLeft: '8px',
+                    borderLeft: `2px solid ${ROUTE_COLORS[routeToNext.profile] || '#9CA3AF'}`,
+                  }}>
+                    <span style={{ fontSize: '12px' }}>
+                      {getTransportIcon(routeToNext.profile)}
+                    </span>
+                    <span style={{
+                      fontSize: '11px',
+                      color: '#6b7280',
+                    }}>
+                      {formatDuration(routeToNext.duration)}
+                      {routeToNext.distance && ` · ${formatDistance(routeToNext.distance)}`}
+                    </span>
+                  </div>
+                );
+              }
+
+              // Handle alternatives - show selected one with indicator
+              if (alternatives.length > 0) {
+                // Create group ID for this alternative set
+                const groupId = `alt-${location.id}`;
+
+                // Auto-select first alternative if not already selected
+                if (!selectedAlternatives.has(groupId)) {
+                  setSelectedAlternatives(prev => new Map(prev).set(groupId, alternatives[0].location.id));
+                }
+
+                const selectedAltId = selectedAlternatives.get(groupId) || alternatives[0].location.id;
+                const selectedAlt = alternatives.find(a => a.location.id === selectedAltId) || alternatives[0];
+                const isExpanded = expandedGroups.has(groupId);
+
+                // Mark all alternatives as processed
+                alternatives.forEach(alt => processedIndices.add(alt.index));
+
+                // Render route for selected alternative FIRST (between origin and destination)
+                renderItems.push(
+                  <div key={`route-alt-${groupId}`} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginLeft: '16px',
+                    marginBottom: '8px',
+                    paddingLeft: '8px',
+                    borderLeft: `2px solid ${ROUTE_COLORS[selectedAlt.route.profile] || '#9CA3AF'}`,
+                  }}>
+                    <span style={{ fontSize: '12px' }}>
+                      {getTransportIcon(selectedAlt.route.profile)}
+                    </span>
+                    <span style={{
+                      fontSize: '11px',
+                      color: '#6b7280',
+                    }}>
+                      {formatDuration(selectedAlt.route.duration)}
+                      {selectedAlt.route.distance && ` · ${formatDistance(selectedAlt.route.distance)}`}
+                    </span>
+                  </div>
+                );
+
+                // Then render selected alternative location
+                renderItems.push(
+                  <div key={`${groupId}-selected`}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '4px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      setExpandedGroups(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(groupId)) {
+                          newSet.delete(groupId);
+                        } else {
+                          newSet.add(groupId);
+                        }
+                        return newSet;
+                      });
+                    }}>
+                      {renderLocationItem(selectedAlt.location, `${sequentialNumber}.`)}
+
+                      {/* Badge indicator - only show if there are actually alternatives */}
+                      {alternatives.length > 1 && (
+                        <span style={{
+                          fontSize: '9px',
+                          color: '#6B7280',
+                          backgroundColor: '#F3F4F6',
+                          padding: '2px 6px',
+                          borderRadius: '10px',
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap',
+                          marginLeft: '-4px',
+                        }}>
+                          +{alternatives.length - 1} more
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Expanded view showing all alternatives */}
+                    {isExpanded && (
+                      <div style={{
+                        marginLeft: '16px',
+                        marginBottom: '8px',
+                        backgroundColor: 'rgba(249, 250, 251, 0.9)',
+                        borderRadius: '8px',
+                        padding: '8px',
+                        border: '1px solid #E5E7EB',
+                      }}>
+                        <div style={{
+                          fontSize: '10px',
+                          color: '#6B7280',
+                          fontWeight: '600',
+                          marginBottom: '6px',
+                        }}>
+                          Alternatives:
+                        </div>
+
+                        {alternatives.map((alt) => {
+                          const isSelected = alt.location.id === selectedAltId;
+                          return (
+                            <div
+                              key={alt.location.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAlternatives(prev => new Map(prev).set(groupId, alt.location.id));
+                                setExpandedGroups(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.delete(groupId);
+                                  return newSet;
+                                });
+                              }}
+                              style={{
+                                padding: '6px',
+                                borderRadius: '6px',
+                                backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                cursor: 'pointer',
+                                marginBottom: '4px',
+                                border: isSelected ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid transparent',
+                              }}
+                            >
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                              }}>
+                                {isSelected && (
+                                  <span style={{ fontSize: '12px', color: '#3B82F6' }}>✓</span>
+                                )}
+                                <div style={{ flex: 1 }}>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: isSelected ? '600' : '400',
+                                    color: '#1f2937',
+                                    marginBottom: '2px',
+                                  }}>
+                                    {alt.location.name}
+                                  </div>
+                                  <div style={{
+                                    fontSize: '10px',
+                                    color: '#6b7280',
+                                  }}>
+                                    {getTransportIcon(alt.route.profile)} {formatDuration(alt.route.duration)}
+                                    {alt.route.distance && ` · ${formatDistance(alt.route.distance)}`}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              sequentialNumber++;
+            });
+
+            return renderItems;
+          })()}
         </div>
       )}
     </>
@@ -410,6 +728,9 @@ export default function MapViewSimple({
     latitude: number;
     zoom: number;
   } | null>(null);
+
+  // Alternative destination selection state (lifted from MapContent)
+  const [selectedAlternatives, setSelectedAlternatives] = useState(() => new Map<string, string>());
 
   // Flying marker state
   const [flyingMarker, setFlyingMarker] = useState<{
@@ -788,14 +1109,66 @@ export default function MapViewSimple({
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
       >
-        {/* Render route layers */}
-        {routes.map((route) => {
-          if (!route.geometry || !route.geometry.coordinates) return null;
+        {/* Render route layers - only show routes in active itinerary path */}
+        {(() => {
+          // Build actual itinerary path considering selected alternatives
+          // We need to compute which locations are actually visited based on alternative selections
+          const activeItinerary: Location[] = [];
+          const processedIndices = new Set<number>();
 
-          const routeStyle = getRouteStyle(route.profile);
-          const isSelected = selectedRoute === route.id;
+          locations.forEach((location, index) => {
+            if (processedIndices.has(index)) return;
 
-          return (
+            // Add current location to itinerary
+            activeItinerary.push(location);
+            processedIndices.add(index);
+
+            // Check if there are alternatives from this location
+            const routesFromHere = routes.filter(r => r.fromId === location.id);
+            const alternativeLocationIds = routesFromHere.map(r => r.toId);
+
+            // Find which of the next locations are alternatives
+            const alternatives: Array<{ location: Location; index: number }> = [];
+            for (let i = index + 1; i < locations.length; i++) {
+              if (processedIndices.has(i)) continue;
+              const loc = locations[i];
+              if (alternativeLocationIds.includes(loc.id)) {
+                alternatives.push({ location: loc, index: i });
+              }
+            }
+
+            // If there are alternatives, get the selected one
+            if (alternatives.length > 0) {
+              const groupId = `alt-${location.id}`;
+              const selectedAltId = selectedAlternatives.get(groupId) || alternatives[0].location.id;
+              const selectedAlt = alternatives.find(a => a.location.id === selectedAltId) || alternatives[0];
+
+              // Add selected alternative to itinerary
+              activeItinerary.push(selectedAlt.location);
+              // Mark all alternatives as processed
+              alternatives.forEach(alt => processedIndices.add(alt.index));
+            }
+          });
+
+          // Build set of active route pairs from the computed itinerary
+          const activeRoutePairs = new Set<string>();
+          for (let i = 0; i < activeItinerary.length - 1; i++) {
+            const fromLoc = activeItinerary[i];
+            const toLoc = activeItinerary[i + 1];
+            activeRoutePairs.add(`${fromLoc.id}-${toLoc.id}`);
+          }
+
+          return routes.filter((route) => {
+            // Only show routes that connect consecutive locations in the active itinerary
+            const pairKey = `${route.fromId}-${route.toId}`;
+            return activeRoutePairs.has(pairKey);
+          }).map((route) => {
+            if (!route.geometry || !route.geometry.coordinates) return null;
+
+            const routeStyle = getRouteStyle(route.profile);
+            const isSelected = selectedRoute === route.id;
+
+            return (
             <Source
               key={`route-${route.id}`}
               id={`route-${route.id}`}
@@ -825,8 +1198,9 @@ export default function MapViewSimple({
                 }}
               />
             </Source>
-          );
-        })}
+            );
+          });
+        })()}
 
         {/* Tail trail as GeoJSON line */}
         {markerTrail.length > 1 && (
@@ -924,6 +1298,9 @@ export default function MapViewSimple({
           focusedLocation={focusedLocation}
           isAnimating={isAnimating}
           viewState={viewState}
+          routes={routes}
+          selectedAlternatives={selectedAlternatives}
+          setSelectedAlternatives={setSelectedAlternatives}
         />
       </MapGL>
     </div>

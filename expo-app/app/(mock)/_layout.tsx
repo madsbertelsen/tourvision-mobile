@@ -5,8 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  SafeAreaView,
-  Switch
+  SafeAreaView
 } from 'react-native';
 import { Stack, usePathname, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,8 +22,7 @@ function MockLayoutContent() {
     visibleLocations,
     focusedLocation,
     setFocusedLocation,
-    followMode,
-    setFollowMode
+    followMode
   } = useMockContext();
 
   // Determine if we're on a location detail page
@@ -67,11 +65,11 @@ function MockLayoutContent() {
           />
         </View>
 
-        {/* Dynamic content area with header */}
+        {/* Dynamic content area */}
         <View style={styles.contentContainer}>
-          {/* Dynamic Header */}
-          <View style={styles.header}>
-            {isLocationDetail ? (
+          {/* Dynamic Header - only show for location detail pages */}
+          {isLocationDetail && (
+            <View style={styles.header}>
               <View style={styles.headerWithBack}>
                 <TouchableOpacity
                   style={styles.backButton}
@@ -83,40 +81,13 @@ function MockLayoutContent() {
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="arrow-back" size={24} color="#111827" />
+                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitleWithBack}>{locationName}</Text>
                 <View style={styles.backButton} />
               </View>
-            ) : (
-              <>
-                <View style={styles.headerTitleRow}>
-                  <Text style={styles.headerTitle}>Travel Assistant</Text>
-                  <View style={styles.followToggle}>
-                    <Ionicons
-                      name={followMode ? "navigate" : "navigate-outline"}
-                      size={16}
-                      color={followMode ? "#3B82F6" : "#6b7280"}
-                    />
-                    <Text style={[styles.followLabel, followMode && styles.followLabelActive]}>
-                      Follow
-                    </Text>
-                    <Switch
-                      value={followMode}
-                      onValueChange={setFollowMode}
-                      trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
-                      thumbColor={followMode ? '#3B82F6' : '#f3f4f6'}
-                      ios_backgroundColor="#d1d5db"
-                      style={styles.switch}
-                    />
-                  </View>
-                </View>
-                <Text style={styles.headerSubtitle}>
-                  Share a travel URL or ask about any destination
-                </Text>
-              </>
-            )}
-          </View>
+            </View>
+          )}
 
           {/* Content area - changes based on route */}
           <View style={styles.slotContainer}>
@@ -172,34 +143,19 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     flexDirection: 'column',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    backgroundColor: '#ffffff',
   },
   header: {
     padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#1F2937',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  followToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  followLabel: {
-    fontSize: 13,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  followLabelActive: {
-    color: '#3B82F6',
-  },
-  switch: {
-    transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }],
+    borderBottomColor: '#374151',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 10,
   },
   headerWithBack: {
     flexDirection: 'row',
@@ -212,22 +168,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
   headerTitleWithBack: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: '#FFFFFF',
     flex: 1,
     textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
   },
   slotContainer: {
     flex: 1,

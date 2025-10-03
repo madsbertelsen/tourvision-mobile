@@ -307,18 +307,18 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
               if (item.type === 'geo-mark') {
                 const key = `${element.id}-${idx}`;
                 const animation = geoMarkAnimations.get(key) || new Animated.Value(0);
-                
-                // Interpolate colors for smooth transition
-                const dotColor = animation.interpolate({
+
+                // Interpolate background color for smooth transition (lighter version of marker color)
+                const backgroundColor = animation.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [INACTIVE_COLOR, item.color || '#3B82F6'],
+                  outputRange: ['rgba(209, 213, 219, 0.3)', `${item.color || '#3B82F6'}33`], // 33 = 20% opacity
                 });
-                
+
                 const textColor = animation.interpolate({
                   inputRange: [0, 1],
                   outputRange: [INACTIVE_TEXT_COLOR, '#111827'],
                 });
-                
+
                 return (
                   <TouchableOpacity
                     key={idx}
@@ -353,14 +353,15 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                     activeOpacity={0.7}
                     style={{ flexDirection: 'row', alignItems: 'center' }}
                   >
-                    <Animated.Text style={{
-                      color: dotColor,
-                      fontSize: 10,
-                      marginRight: 2,
-                    }}>● </Animated.Text>
                     <Animated.Text style={[
                       styles.locationText,
-                      { color: textColor }
+                      {
+                        color: textColor,
+                        backgroundColor: backgroundColor,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 4,
+                      }
                     ]}>{item.text}</Animated.Text>
                     {idx < element.parsedContent!.length - 1 ? <Text> </Text> : null}
                   </TouchableOpacity>
@@ -488,7 +489,7 @@ export const messageElementWithFocusStyles = StyleSheet.create({
     borderColor: '#3B82F6',
     borderRadius: 4,
     padding: 4,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#ffffff',
   },
   editedText: {
     fontStyle: 'italic' as const,

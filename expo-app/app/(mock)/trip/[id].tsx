@@ -121,15 +121,16 @@ const parseItineraryContent = (htmlContent: string): Array<{text: string, parsed
         fullMatch: fullMatch.substring(0, 200) + '...'
       });
 
-      // Add the geo-mark with color
-      if (!locationColors.has(locationName)) {
-        locationColors.set(locationName, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
+      // Add the geo-mark with color using geoId for consistent coloring
+      const colorKey = geoId || locationName;
+      if (!locationColors.has(colorKey)) {
+        locationColors.set(colorKey, MARKER_COLORS[colorIndex % MARKER_COLORS.length]);
         colorIndex++;
       }
       parsedContent.push({
         type: 'geo-mark',
         text: locationName,
-        color: locationColors.get(locationName),
+        color: locationColors.get(colorKey),
         lat,
         lng,
         photoName,
@@ -473,6 +474,27 @@ export default function MockChatScreen() {
               const parsed = parseHTMLToProseMirror(itineraryHTML);
               const proseMirrorJSON = stateToJSON(parsed.state);
 
+              // Extract first heading to use as trip title if still "New Trip"
+              let newTitle = currentTrip.title;
+              if (currentTrip.title === 'New Trip') {
+                // Look for the first heading in the document
+                const doc = parsed.doc;
+                let firstHeading: string | null = null;
+
+                doc.descendants((node) => {
+                  if (!firstHeading && node.type.name === 'heading') {
+                    firstHeading = node.textContent;
+                    return false; // Stop traversing
+                  }
+                  return true; // Continue traversing
+                });
+
+                if (firstHeading && firstHeading.trim().length > 0) {
+                  newTitle = firstHeading.trim();
+                  console.log('[TripChat] Extracted trip title from first heading:', newTitle);
+                }
+              }
+
               // Create new itinerary entry
               const newItinerary = {
                 messageId: lastAssistantMessage.id,
@@ -486,9 +508,10 @@ export default function MockChatScreen() {
                 newItinerary
               ];
 
-              // Save the updated trip with the new itinerary
+              // Save the updated trip with the new itinerary (and possibly new title)
               const updatedTrip = {
                 ...currentTrip,
+                title: newTitle,
                 messages: messages, // Keep messages as-is
                 itineraries: updatedItineraries,
                 modifications: currentTrip.modifications || [],
@@ -1222,10 +1245,16 @@ export default function MockChatScreen() {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: '#fff',
+      paddingVertical: 16,
+      backgroundColor: '#1F2937',
       borderBottomWidth: 1,
-      borderBottomColor: '#E5E7EB',
+      borderBottomColor: '#374151',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
+      zIndex: 10,
     },
     backButton: {
       padding: 4,
@@ -1235,7 +1264,7 @@ export default function MockChatScreen() {
       flex: 1,
       fontSize: 18,
       fontWeight: '600',
-      color: '#111827',
+      color: '#FFFFFF',
     },
     headerSpacer: {
       width: 40,
@@ -1246,17 +1275,21 @@ export default function MockChatScreen() {
     chatContainer: {
       flex: 1,
       flexDirection: 'column',
+      backgroundColor: '#ffffff',
     },
     messagesWrapper: {
       flex: 1,
+      backgroundColor: '#ffffff',
     },
     messagesContainer: {
       flex: 1,
+      backgroundColor: '#ffffff',
     },
     messagesContent: {
       paddingHorizontal: 12,
       paddingTop: 8,
       paddingBottom: 8,
+      backgroundColor: '#ffffff',
     },
     messagesContentEmpty: {
       flex: 1,
@@ -1345,7 +1378,7 @@ export default function MockChatScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#111827" />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {currentTrip.title}

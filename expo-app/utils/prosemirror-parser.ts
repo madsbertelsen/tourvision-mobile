@@ -210,6 +210,38 @@ export function proseMirrorToElements(doc: ProseMirrorNode, messageId?: string):
   return elements;
 }
 
+// Color palette for geo-marks
+const MARKER_COLORS = [
+  '#3B82F6', // Blue
+  '#8B5CF6', // Purple
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#EF4444', // Red
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#84CC16', // Lime
+  '#F97316', // Orange
+  '#6366F1', // Indigo
+];
+
+// Global color assignment map for geo-marks (persists across all calls)
+const geoMarkColorMap = new Map<string, string>();
+let nextColorIndex = 0;
+
+/**
+ * Get or assign a color for a geo-mark based on its geoId
+ */
+function getGeoMarkColor(geoId: string | null | undefined, locationName: string): string {
+  const key = geoId || locationName;
+
+  if (!geoMarkColorMap.has(key)) {
+    geoMarkColorMap.set(key, MARKER_COLORS[nextColorIndex % MARKER_COLORS.length]);
+    nextColorIndex++;
+  }
+
+  return geoMarkColorMap.get(key)!;
+}
+
 /**
  * Parse node content to extract geo-marks and text
  */
@@ -239,7 +271,7 @@ function parseNodeContent(node: ProseMirrorNode): Array<{
         textBuffer = '';
       }
 
-      // Add geo-mark
+      // Add geo-mark with unique color based on geoId
       content.push({
         type: 'geo-mark',
         text: child.textContent,
@@ -251,7 +283,7 @@ function parseNodeContent(node: ProseMirrorNode): Array<{
         geoId: child.attrs.geoId,
         transportFrom: child.attrs.transportFrom,
         transportProfile: child.attrs.transportProfile,
-        color: '#3B82F6' // Default color, can be customized
+        color: getGeoMarkColor(child.attrs.geoId, child.textContent)
       });
     } else if (child.isInline) {
       // Handle other inline content

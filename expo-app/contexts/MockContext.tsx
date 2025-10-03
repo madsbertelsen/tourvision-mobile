@@ -27,7 +27,6 @@ interface MockContextType {
   focusedLocation: Location | null;
   setFocusedLocation: (location: Location | null) => void;
   followMode: boolean;
-  setFollowMode: (enabled: boolean) => void;
   routes: RouteWithMetadata[];
   setRoutes: (routes: RouteWithMetadata[]) => void;
   selectedRoute: string | null; // Route ID
@@ -40,7 +39,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [visibleLocations, setVisibleLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [focusedLocation, setFocusedLocation] = useState<Location | null>(null);
-  const [followMode, setFollowMode] = useState<boolean>(false);
+  const [followMode] = useState<boolean>(true); // Always enabled
   const [routes, setRoutes] = useState<RouteWithMetadata[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
 
@@ -54,7 +53,6 @@ export function MockProvider({ children }: { children: ReactNode }) {
         focusedLocation,
         setFocusedLocation,
         followMode,
-        setFollowMode,
         routes,
         setRoutes,
         selectedRoute,
