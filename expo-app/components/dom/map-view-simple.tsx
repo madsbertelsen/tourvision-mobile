@@ -331,7 +331,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
             })}
           </svg>
 
-          {/* Photos on hexagons */}
+          {/* Text labels on hexagons */}
           {hexGridData.labels.map(label => {
             // Get animation progress - skip if not animated yet
             const progress = labelAnimations.get(label.id);
@@ -341,74 +341,44 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState }: {
               return null;
             }
 
-            const photoUrl = label.photoName
-              ? `https://places.googleapis.com/v1/${label.photoName}/media?maxHeightPx=400&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
-              : null;
-
-            // Photo size - larger to fill more of the hexagon while keeping border visible
-            const photoSize = hexGridData.hexSize * 0.85;
-
-            // Photo reveal phase: 0.4-0.7 (1200-2100ms of 3000ms)
-            const photoProgress = Math.max(0, Math.min((progress - 0.4) / 0.3, 1));
+            // Text reveal phase: 0.5-0.8 (1500-2400ms of 3000ms)
+            const textProgress = Math.max(0, Math.min((progress - 0.5) / 0.3, 1));
 
             // Scale from 0.8 to 1.0 and opacity from 0 to 1
-            const photoOpacity = photoProgress;
-            const photoScale = 0.8 + photoProgress * 0.2;
+            const textOpacity = textProgress;
+            const textScale = 0.8 + textProgress * 0.2;
 
-            return photoUrl ? (
+            return (
               <div
                 key={`label-${label.id}`}
                 style={{
                   position: 'absolute',
                   left: `${label.x}px`,
                   top: `${label.y}px`,
-                  transform: `translate(-50%, -50%) scale(${photoScale})`,
-                  width: `${photoSize * 2}px`,
-                  height: `${photoSize * 2}px`,
+                  transform: `translate(-50%, -50%) scale(${textScale})`,
                   pointerEvents: 'auto',
                   cursor: 'pointer',
-                  opacity: photoOpacity,
+                  opacity: textOpacity,
                   transition: 'opacity 300ms ease-out, transform 300ms ease-out',
-                  filter: 'drop-shadow(0px 4px 10px rgba(0, 0, 0, 0.3))',
                 }}
               >
-                {/* Photo hexagon */}
-                <img
-                  src={photoUrl}
-                  alt={label.name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    clipPath: 'polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%)',
-                    display: 'block',
-                  }}
-                />
-                {/* Name label overlaid on bottom of photo */}
+                {/* Name label centered in hexagon */}
                 <div style={{
-                  position: 'absolute',
-                  bottom: '10%',
-                  left: '50%',
-                  transform: `translateX(-50%) translateY(${(1 - Math.max(0, Math.min((progress - 0.6) / 0.3, 1))) * 5}px)`,
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: '700',
-                  color: 'white',
+                  color: '#1f2937',
                   textAlign: 'center',
                   whiteSpace: 'nowrap',
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  padding: '2px 6px',
-                  borderRadius: '3px',
-                  maxWidth: '90%',
+                  padding: '4px 8px',
+                  maxWidth: `${hexGridData.hexSize * 1.6}px`,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                  opacity: Math.max(0, Math.min((progress - 0.6) / 0.3, 1)),
-                  transition: 'opacity 300ms ease-out, transform 300ms ease-out',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.8)',
                 }}>
                   {label.name}
                 </div>
               </div>
-            ) : null;
+            );
           })}
         </div>
       )}

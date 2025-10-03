@@ -6528,3 +6528,13 @@ Stream finished, messages count: 1
 [chat-simple] Chunk was enriched:     <li>7. nat: <span class="geo-mark" data-geo-id="loc-1" data-lat="55.1" data-lng="14.7" data-plac  ->      <li>7. nat: <span class="geo-mark" data-coord-source="cache" data-photo-name="places/ChIJQxk0kuM
 Stream finished, messages count: 1
  POST /api/chat-simple 200 in 17767ms
+ OPTIONS /api/route?waypoints=15.1408942%2C55.1364376%3B15.0243437%2C55.089907399999994&profile=driving 200 in 152ms
+ OPTIONS /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B15.1408942%2C55.1364376&profile=driving 200 in 164ms
+ OPTIONS /api/route?waypoints=15.0243437%2C55.089907399999994%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 163ms
+ OPTIONS /api/route?waypoints=15.132580599999999%2C55.062793299999996%3B15.087516199999998%2C54.9952841&profile=walking 200 in 166ms
+ OPTIONS /api/route?waypoints=14.708328999999999%2C55.101017%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 227ms
+ GET /api/route?waypoints=15.132580599999999%2C55.062793299999996%3B15.087516199999998%2C54.9952841&profile=walking 200 in 356ms
+ GET /api/route?waypoints=15.0243437%2C55.089907399999994%3B15.132580599999999%2C55.062793299999996&profile=driving 200 in 372ms
+ GET /api/route?waypoints=14.797747500000002%2C55.277752799999995%3B15.1408942%2C55.1364376&profile=driving 200 in 386ms
+ GET /api/route?waypoints=15.1408942%2C55.1364376%3B15.0243437%2C55.089907399999994&profile=driving 200 in 439ms
+ GET /api/route?waypoints=14.708328999999999%2C55.101017%3B14.797747500000002%2C55.277752799999995&profile=driving 200 in 339ms
