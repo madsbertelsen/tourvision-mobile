@@ -31,17 +31,19 @@ export function MapViewSimpleWrapper({
 }: MapViewSimpleWrapperProps) {
   // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
-  // Get focusedLocation, followMode, and routes from context
+  // Get focusedLocation, followMode, routes, and showItinerary from context
   let focusedLocation = null;
   let followMode = false;
   let allRoutes: RouteWithMetadata[] = [];
   let selectedRoute = null;
+  let showItinerary = false;
   try {
     const context = useMockContext();
     focusedLocation = context.focusedLocation;
     followMode = context.followMode;
     allRoutes = context.routes;
     selectedRoute = context.selectedRoute;
+    showItinerary = context.showItinerary;
   } catch (error) {
     // Context not available, defaults stay
   }
@@ -80,6 +82,7 @@ export function MapViewSimpleWrapper({
           followMode={followMode}
           routes={visibleRoutes}
           selectedRoute={selectedRoute}
+          showItinerary={showItinerary}
           style={{ width: '100%', height: '100%' }}
         />
       </React.Suspense>

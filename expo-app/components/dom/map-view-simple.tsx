@@ -68,17 +68,19 @@ interface MapViewSimpleProps {
   followMode?: boolean;
   routes?: RouteWithMetadata[];
   selectedRoute?: string | null;
+  showItinerary?: boolean;
 }
 
 // Inner component to access map instance
-function MapContent({ locations, focusedLocation, isAnimating, viewState, routes, selectedAlternatives, setSelectedAlternatives }: {
+function MapContent({ locations, focusedLocation, isAnimating, viewState, routes, selectedAlternatives, setSelectedAlternatives, showItinerary }: {
   locations: Location[],
   focusedLocation: FocusedLocation | null,
   isAnimating: boolean,
   viewState: { longitude: number; latitude: number; zoom: number },
   routes: RouteWithMetadata[],
   selectedAlternatives: Map<string, string>,
-  setSelectedAlternatives: React.Dispatch<React.SetStateAction<Map<string, string>>>
+  setSelectedAlternatives: React.Dispatch<React.SetStateAction<Map<string, string>>>,
+  showItinerary: boolean
 }) {
   const { current: map } = useMap();
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -379,7 +381,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       )}
 
       {/* Itinerary Overlay - Top Left */}
-      {locations.length > 0 && (
+      {showItinerary && locations.length > 0 && (
         <div style={{
           position: 'absolute',
           top: '16px',
@@ -713,6 +715,7 @@ export default function MapViewSimple({
   followMode = false,
   routes = [],
   selectedRoute = null,
+  showItinerary = false,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -1301,6 +1304,7 @@ export default function MapViewSimple({
           routes={routes}
           selectedAlternatives={selectedAlternatives}
           setSelectedAlternatives={setSelectedAlternatives}
+          showItinerary={showItinerary || false}
         />
       </MapGL>
     </div>

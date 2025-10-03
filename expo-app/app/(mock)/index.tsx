@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ export default function TripListScreen() {
   const [trips, setTrips] = useState<SavedTrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
 
   // Load trips on mount
   useEffect(() => {
@@ -44,6 +46,29 @@ export default function TripListScreen() {
       const newTrip = await createTrip('New Trip');
       // Navigate to the new trip
       router.push(`/(mock)/trip/${newTrip.id}`);
+    } catch (error) {
+      console.error('Error creating trip:', error);
+      Alert.alert('Error', 'Failed to create trip');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSubmitUrl = async () => {
+    if (!urlInput.trim()) {
+      Alert.alert('Please enter a URL', 'Enter a travel guide or blog URL to get started');
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      const newTrip = await createTrip('New Trip');
+      // Navigate to the new trip with the URL as initial message
+      router.push({
+        pathname: `/(mock)/trip/${newTrip.id}`,
+        params: { initialMessage: urlInput.trim() }
+      });
+      setUrlInput(''); // Clear input
     } catch (error) {
       console.error('Error creating trip:', error);
       Alert.alert('Error', 'Failed to create trip');
@@ -120,18 +145,38 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Trips</Text>
+      </View>
+
+      {/* URL Input Section */}
+      <View style={styles.urlInputSection}>
+        <View style={styles.urlInputContainer}>
+          <Ionicons name="link-outline" size={20} color="#6B7280" style={styles.urlInputIcon} />
+          <TextInput
+            style={styles.urlInput}
+            placeholder="Paste a travel guide URL to get started..."
+            value={urlInput}
+            onChangeText={setUrlInput}
+            onSubmitEditing={handleSubmitUrl}
+            returnKeyType="go"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!isCreating}
+          />
+          {urlInput.length > 0 && !isCreating && (
+            <TouchableOpacity onPress={() => setUrlInput('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity
-          style={styles.createButton}
-          onPress={handleCreateTrip}
-          disabled={isCreating}
+          style={[styles.submitButton, !urlInput.trim() && styles.submitButtonDisabled]}
+          onPress={handleSubmitUrl}
+          disabled={!urlInput.trim() || isCreating}
         >
           {isCreating ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <>
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.createButtonText}>New Trip</Text>
-            </>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
           )}
         </TouchableOpacity>
       </View>
@@ -140,22 +185,11 @@ export default function TripListScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {trips.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="airplane-outline" size={64} color="#9CA3AF" />
+            <Ionicons name="link-outline" size={64} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No trips yet</Text>
             <Text style={styles.emptyDescription}>
-              Create your first trip to start planning
+              Paste a travel guide URL above to extract locations and create your first trip
             </Text>
-            <TouchableOpacity
-              style={styles.emptyCreateButton}
-              onPress={handleCreateTrip}
-              disabled={isCreating}
-            >
-              {isCreating ? (
-                <ActivityIndicator size="small" color="#3B82F6" />
-              ) : (
-                <Text style={styles.emptyCreateButtonText}>Create Trip</Text>
-              )}
-            </TouchableOpacity>
           </View>
         ) : (
           trips.map((trip) => (
@@ -231,19 +265,49 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
   },
-  createButton: {
+  urlInputSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3B82F6',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    gap: 12,
   },
-  createButtonText: {
-    color: '#fff',
+  urlInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+  },
+  urlInputIcon: {
+    marginRight: 8,
+  },
+  urlInput: {
+    flex: 1,
+    paddingVertical: 12,
     fontSize: 15,
-    fontWeight: '600',
+    color: '#111827',
+  },
+  clearButton: {
+    padding: 4,
+  },
+  submitButton: {
+    backgroundColor: '#3B82F6',
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.5,
   },
   scrollView: {
     flex: 1,

@@ -81,7 +81,7 @@ function MockLayoutContent() {
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                  <Ionicons name="arrow-back" size={24} color="#111827" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitleWithBack}>{locationName}</Text>
                 <View style={styles.backButton} />
@@ -147,14 +147,14 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    backgroundColor: '#1F2937',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#374151',
+    borderBottomColor: '#e5e7eb',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
     zIndex: 10,
   },
   headerWithBack: {
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   headerTitleWithBack: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#111827',
     flex: 1,
     textAlign: 'center',
   },

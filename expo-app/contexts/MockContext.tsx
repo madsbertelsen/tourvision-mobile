@@ -31,6 +31,8 @@ interface MockContextType {
   setRoutes: (routes: RouteWithMetadata[]) => void;
   selectedRoute: string | null; // Route ID
   setSelectedRoute: (routeId: string | null) => void;
+  showItinerary: boolean;
+  setShowItinerary: (show: boolean) => void;
 }
 
 const MockContext = createContext<MockContextType | undefined>(undefined);
@@ -42,6 +44,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [followMode] = useState<boolean>(true); // Always enabled
   const [routes, setRoutes] = useState<RouteWithMetadata[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+  const [showItinerary, setShowItinerary] = useState<boolean>(false); // Hidden by default
 
   return (
     <MockContext.Provider
@@ -56,7 +59,9 @@ export function MockProvider({ children }: { children: ReactNode }) {
         routes,
         setRoutes,
         selectedRoute,
-        setSelectedRoute
+        setSelectedRoute,
+        showItinerary,
+        setShowItinerary
       }}
     >
       {children}

@@ -288,6 +288,7 @@ export default function MockChatScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const tripId = params.id as string;
+  const initialMessage = params.initialMessage as string | undefined;
 
   const [inputText, setInputText] = useState('');
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -303,6 +304,7 @@ export default function MockChatScreen() {
   const [selectedElement, setSelectedElement] = useState<FlatElement | null>(null);
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [flatElements, setFlatElements] = useState<FlatElement[]>([]);
+  const initialMessageSentRef = useRef(false);
 
   // Load trip on mount first
   useEffect(() => {
@@ -367,6 +369,15 @@ export default function MockChatScreen() {
       setMessages(currentTrip.messages);
     }
   }, [currentTrip, messages.length, setMessages]);
+
+  // Send initial message if provided from URL input
+  useEffect(() => {
+    if (initialMessage && !initialMessageSentRef.current && sendMessage && currentTrip) {
+      console.log('[TripChat] Sending initial message:', initialMessage);
+      initialMessageSentRef.current = true;
+      sendMessage({ text: initialMessage });
+    }
+  }, [initialMessage, sendMessage, currentTrip]);
 
   // Restore ProseMirror document when trip loads
   useEffect(() => {
@@ -1035,7 +1046,7 @@ export default function MockChatScreen() {
   }, [messages, collapsedMessages, editorState, updateCounter]); // Dependencies for proper updates
 
   // Get context for sharing locations with layout
-  const { updateVisibleLocations, setRoutes } = useMockContext();
+  const { updateVisibleLocations, setRoutes, showItinerary, setShowItinerary } = useMockContext();
 
   // Track element positions
   const [elementPositions, setElementPositions] = useState<Map<string, {top: number, bottom: number}>>(new Map());
@@ -1245,15 +1256,15 @@ export default function MockChatScreen() {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingVertical: 16,
-      backgroundColor: '#1F2937',
+      paddingVertical: 12,
+      backgroundColor: '#ffffff',
       borderBottomWidth: 1,
-      borderBottomColor: '#374151',
+      borderBottomColor: '#e5e7eb',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 2,
       zIndex: 10,
     },
     backButton: {
@@ -1264,7 +1275,11 @@ export default function MockChatScreen() {
       flex: 1,
       fontSize: 18,
       fontWeight: '600',
-      color: '#FFFFFF',
+      color: '#111827',
+    },
+    itineraryToggle: {
+      padding: 8,
+      marginLeft: 8,
     },
     headerSpacer: {
       width: 40,
@@ -1378,12 +1393,21 @@ export default function MockChatScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {currentTrip.title}
         </Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={styles.itineraryToggle}
+          onPress={() => setShowItinerary(!showItinerary)}
+        >
+          <Ionicons
+            name={showItinerary ? "list" : "list-outline"}
+            size={24}
+            color="#111827"
+          />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
