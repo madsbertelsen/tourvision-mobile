@@ -109,6 +109,10 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   // Track if we're waiting for grid recalculation
   const [isRecalculating, setIsRecalculating] = useState(false);
 
+  // Track previous grid data for smooth transitions
+  const prevHexGridDataRef = useRef<HexGridData | null>(null);
+  const [shouldAnimateLabels, setShouldAnimateLabels] = useState(false);
+
   // Track viewport size
   useEffect(() => {
     if (!map) return;
@@ -195,6 +199,9 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       return;
     }
 
+    // Store current grid data before recalculating
+    prevHexGridDataRef.current = hexGridData.labels.length > 0 ? hexGridData : null;
+
     // Mark as recalculating
     setIsRecalculating(true);
 
@@ -223,16 +230,21 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       setGridTranslate({ x: 0, y: 0 });
       prevCenterRef.current = { lng: viewState.longitude, lat: viewState.latitude };
 
-      // Mark recalculation complete
+      // Mark recalculation complete and trigger animation
       setIsRecalculating(false);
+      setShouldAnimateLabels(true);
+
+      // Reset animation flag after transition completes
+      setTimeout(() => {
+        setShouldAnimateLabels(false);
+      }, 300);
     };
 
-    // Immediate recalculation on zoom change, debounced for panning
-    const delay = prevZoomRef.current !== viewState.zoom ? 0 : 500; // Immediate on zoom, 500ms debounce on pan
-    const timeoutId = setTimeout(recalculate, delay);
+    // Recalculate immediately on zoom change
+    const timeoutId = setTimeout(recalculate, 0);
 
     return () => clearTimeout(timeoutId);
-  }, [map, locations, routes, viewportSize, viewState.zoom, viewState.longitude, viewState.latitude]);
+  }, [map, locations, routes, viewportSize, viewState.zoom]);
 
   // Cleanup zoom animation timeout on unmount
   useEffect(() => {
@@ -265,7 +277,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       ))}
 
       {/* Hexagon grid and labels - rendered as SVG overlay */}
-      {!isAnimating && !isZoomAnimating && !isRecalculating && hexGridData.hexagons.length > 0 && (
+      {!isAnimating && !isZoomAnimating && hexGridData.hexagons.length > 0 && (
         <svg
           style={{
             position: 'absolute',
@@ -338,7 +350,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
       )}
 
       {/* Screen-based label overlays */}
-      {!isAnimating && !isZoomAnimating && !isRecalculating && hexGridData.labels.map(label => {
+      {!isAnimating && !isZoomAnimating && hexGridData.labels.map(label => {
         // Create light background color (20% opacity like text and itinerary)
         const backgroundColor = `${label.color}33`;
 
@@ -357,6 +369,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
               cursor: 'pointer',
               pointerEvents: 'auto',
               zIndex: 2,
+              transition: shouldAnimateLabels ? 'left 300ms ease-out, top 300ms ease-out' : 'none',
             }}
           >
             <div style={{
