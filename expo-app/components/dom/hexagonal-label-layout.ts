@@ -587,7 +587,7 @@ export function calculateHexagonalLabels(
   // Generate hexagonal grid
   const hexagons = generateHexGrid(viewportWidth, viewportHeight, hexSize);
 
-  // Project locations to screen coordinates and filter to only visible ones
+  // Project locations to screen coordinates
   const projectedLocations = locations
     .map(location => {
       const projected = mapProjection(location.lng, location.lat);
@@ -599,34 +599,14 @@ export function calculateHexagonalLabels(
         screenY: projected.y,
       };
     })
-    .filter((loc): loc is NonNullable<typeof loc> => loc !== null)
-    // Only include locations that are visible in the viewport
-    .filter(loc => {
-      return (
-        loc.screenX >= 0 &&
-        loc.screenX <= viewportWidth &&
-        loc.screenY >= 0 &&
-        loc.screenY <= viewportHeight
-      );
-    });
-
-  // Filter out hexagons too close to viewport edges
-  // Use generous margin to ensure labels stay within viewport
-  // Labels can be wider than LABEL_WIDTH due to longer text
-  const edgeMargin = 100; // Conservative margin to keep labels in view
-  const hexagonsAwayFromEdges = filterEdgeHexagons(
-    hexagons,
-    viewportWidth,
-    viewportHeight,
-    edgeMargin
-  );
+    .filter((loc): loc is NonNullable<typeof loc> => loc !== null);
 
   // Filter out hexagons that overlap with location markers
   // Use hexagon circumradius + buffer to ensure entire hexagon doesn't cover location
   const exclusionRadius = hexSize * 1.2; // Hexagon radius + 20% buffer
 
   const availableHexagons = filterAvailableHexagons(
-    hexagonsAwayFromEdges,
+    hexagons,
     projectedLocations.map(loc => ({ x: loc.screenX, y: loc.screenY })),
     exclusionRadius
   );

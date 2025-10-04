@@ -1098,9 +1098,17 @@ export default function MockChatScreen() {
   // Track visible locations based on scroll
   const [visibleLocations, setVisibleLocations] = useState<Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}>>([]);
 
-  // Update visible locations as a side effect of scroll
+  // Update visible locations to show only the 2 geo-marks closest to top of scrollview
   useEffect(() => {
-    const newVisibleLocations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}> = [];
+    const visibleLocationsWithPosition: Array<{
+      name: string,
+      lat: number,
+      lng: number,
+      color?: string,
+      photoName?: string,
+      geoId?: string,
+      position: number  // Distance from top of viewport
+    }> = [];
     const seenLocations = new Set<string>();
 
     flatElements.forEach(element => {
@@ -1121,16 +1129,15 @@ export default function MockChatScreen() {
                   const locationKey = `${item.text}-${lat}-${lng}`;
                   if (!seenLocations.has(locationKey)) {
                     seenLocations.add(locationKey);
-                    const location = {
+                    visibleLocationsWithPosition.push({
                       name: item.text,
                       lat,
                       lng,
                       color: item.color,
                       photoName: item.photoName || undefined,
-                      geoId: item.geoId || undefined
-                    };
-                    // console.log('[visibleLocations] Adding visible location:', location);
-                    newVisibleLocations.push(location);
+                      geoId: item.geoId || undefined,
+                      position: itemTop  // Store distance from top
+                    });
                   }
                 }
               }
@@ -1140,11 +1147,23 @@ export default function MockChatScreen() {
       }
     });
 
-    // console.log('[visibleLocations] Total visible locations:', newVisibleLocations.length);
-    setVisibleLocations(newVisibleLocations);
+    // Sort by position (closest to top first) and take only first 2
+    visibleLocationsWithPosition.sort((a, b) => a.position - b.position);
+    const topTwoLocations = visibleLocationsWithPosition.slice(0, 2).map(loc => ({
+      name: loc.name,
+      lat: loc.lat,
+      lng: loc.lng,
+      color: loc.color,
+      photoName: loc.photoName,
+      geoId: loc.geoId
+    }));
+
+    console.log('[visibleLocations] Showing top 2 of', visibleLocationsWithPosition.length, 'visible locations:', topTwoLocations.map(l => l.name));
+    setVisibleLocations(topTwoLocations);
+
     // Only update context if we have locations to show
-    if (newVisibleLocations.length > 0) {
-      const mappedLocations = newVisibleLocations.map((loc: any, idx) => ({
+    if (topTwoLocations.length > 0) {
+      const mappedLocations = topTwoLocations.map((loc: any, idx) => ({
         id: loc.geoId || `loc-${idx}`,
         name: loc.name,
         lat: loc.lat,
@@ -1159,12 +1178,27 @@ export default function MockChatScreen() {
     }
   }, [scrollOffset, elementPositions, flatElements, containerHeight, updateVisibleLocations]);
 
-  // Process location graph when flatElements change (but don't auto-save)
+  // Process location graph when visible locations change (but don't auto-save)
   useEffect(() => {
     if (!currentTrip || isLoadingTrip) return;
 
+    // Use visible locations to build graph
+    if (visibleLocations.length === 0) {
+      setLocationGraph(null);
+      return;
+    }
+
+    // Get full location data for the visible locations
     const allLocations = extractAllLocations(flatElements);
-    const locationsWithDescription = allLocations.map(loc => ({
+    const visibleLocationKeys = new Set(
+      visibleLocations.map(loc => `${loc.name}-${loc.lat}-${loc.lng}`)
+    );
+
+    const visibleFullLocations = allLocations.filter(loc =>
+      visibleLocationKeys.has(`${loc.name}-${loc.lat}-${loc.lng}`)
+    );
+
+    const locationsWithDescription = visibleFullLocations.map(loc => ({
       id: `${loc.name}-${loc.lat}-${loc.lng}`,
       name: loc.name,
       lat: loc.lat,
@@ -1176,19 +1210,21 @@ export default function MockChatScreen() {
       transportProfile: loc.transportProfile,
     }));
 
-    // Build location graph from the locations
+    // Build location graph from visible locations only
     if (locationsWithDescription.length > 0) {
       const graph = buildLocationGraph(locationsWithDescription);
       enhanceGraphWithDistances(graph);
       setLocationGraph(graph);
 
       // Log the graph summary for debugging
-      console.log('[TripChat] Location Graph:', summarizeGraph(graph));
+      console.log('[TripChat] Location Graph (top 2 visible):', summarizeGraph(graph));
+    } else {
+      setLocationGraph(null);
     }
 
     // AUTO-SAVE DISABLED - was overwriting modifications
     // Saving is now only done explicitly in handleDeleteElement and handleEditSave
-  }, [flatElements, currentTrip, isLoadingTrip]);
+  }, [visibleLocations, flatElements, currentTrip, isLoadingTrip]);
 
   // Fetch routes when location graph changes
   useEffect(() => {
@@ -1251,7 +1287,7 @@ export default function MockChatScreen() {
   }, [locationGraph, setRoutes]);
 
   // No longer needed - we track visible locations instead of focused location
-  const handleLocationFocus = useCallback((locations: Array<{name: string, lat: number, lng: number}>) => {
+  const handleLocationFocus = useCallback((_locations: Array<{name: string, lat: number, lng: number}>) => {
     // This callback is no longer used but kept for compatibility
   }, []);
 
@@ -1275,8 +1311,7 @@ export default function MockChatScreen() {
     }
   };
 
-  // Get all locations for map (no longer used, we use visibleLocations instead)
-  const allLocations = extractAllLocations(flatElements);
+  // Locations are now filtered to show only last 2 in visibleLocations state
 
   // Combine styles
   const styles = StyleSheet.create({

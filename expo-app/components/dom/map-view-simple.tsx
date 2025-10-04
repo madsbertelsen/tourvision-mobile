@@ -3,7 +3,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Map as MapGL, Marker, Source, Layer, useMap } from 'react-map-gl/dist/mapbox';
-import { calculateHexagonalLabels, getHexagonPath, type HexGridData } from './hexagonal-label-layout';
+import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 
 interface Location {
@@ -88,13 +88,12 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   // Expanded groups state (selectedAlternatives is now passed as prop from parent)
   const [expandedGroups, setExpandedGroups] = useState(() => new Set<string>());
 
-  // Screen-based hexGrid state
-  const [hexGridData, setHexGridData] = useState<HexGridData>({
+  // Edge-based grid state
+  const [edgeGridData, setEdgeGridData] = useState<EdgeGridData>({
     labels: [],
-    hexagons: [],
-    hexSize: 0,
-    availableHexagons: [],
-    usedHexagonIds: new Set(),
+    edgePositions: [],
+    availableEdgePositions: [],
+    usedEdgeIds: new Set(),
   });
 
   // Grid translation state for smooth panning
@@ -110,7 +109,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
   const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Track previous grid data for smooth transitions
-  const prevHexGridDataRef = useRef<HexGridData | null>(null);
+  const prevEdgeGridDataRef = useRef<EdgeGridData | null>(null);
   const [shouldAnimateLabels, setShouldAnimateLabels] = useState(false);
 
   // Track viewport size
@@ -185,22 +184,21 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
     prevCenterRef.current = currentCenter;
   }, [map, viewState.longitude, viewState.latitude, viewState.zoom, isZoomAnimating]);
 
-  // Calculate screen-based hexagonal grid - recalculate when viewport, locations, zoom, or position changes
+  // Calculate edge-based labels - recalculate when viewport, locations, or zoom changes
   useEffect(() => {
     if (!map || !locations.length || viewportSize.width === 0) {
-      setHexGridData({
+      setEdgeGridData({
         labels: [],
-        hexagons: [],
-        hexSize: 0,
-        availableHexagons: [],
-        usedHexagonIds: new Set(),
+        edgePositions: [],
+        availableEdgePositions: [],
+        usedEdgeIds: new Set(),
       });
       setIsRecalculating(false);
       return;
     }
 
     // Store current grid data before recalculating
-    prevHexGridDataRef.current = hexGridData.labels.length > 0 ? hexGridData : null;
+    prevEdgeGridDataRef.current = edgeGridData.labels.length > 0 ? edgeGridData : null;
 
     // Mark as recalculating
     setIsRecalculating(true);
@@ -215,7 +213,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         }
       };
 
-      const newGridData = calculateHexagonalLabels(
+      const newGridData = calculateEdgeLabels(
         locations,
         mapProjection,
         viewportSize.width,
@@ -224,7 +222,7 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         routes
       );
 
-      setHexGridData(newGridData);
+      setEdgeGridData(newGridData);
 
       // Reset translation after recalculation
       setGridTranslate({ x: 0, y: 0 });
@@ -276,8 +274,8 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         </Marker>
       ))}
 
-      {/* Hexagon grid and labels - rendered as SVG overlay */}
-      {!isAnimating && !isZoomAnimating && hexGridData.hexagons.length > 0 && (
+      {/* Connection lines overlay - rendered as SVG */}
+      {!isAnimating && !isZoomAnimating && edgeGridData.labels.length > 0 && (
         <svg
           style={{
             position: 'absolute',
@@ -292,20 +290,8 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
           <g
             transform={`translate(${gridTranslate.x}, ${gridTranslate.y})`}
           >
-            {/* Hexagon grid lines */}
-            {hexGridData.hexagons.map(hex => (
-              <path
-                key={hex.id}
-                d={getHexagonPath(hex.x, hex.y, hexGridData.hexSize)}
-                fill="none"
-                stroke="#CBD5E1"
-                strokeWidth="1"
-                strokeOpacity="0.3"
-              />
-            ))}
-
             {/* Connection lines from labels to locations */}
-            {hexGridData.labels.map(label => {
+            {edgeGridData.labels.map(label => {
               // Calculate tapered line path
               const dx = label.locationX - label.x;
               const dy = label.locationY - label.y;
@@ -349,8 +335,8 @@ function MapContent({ locations, focusedLocation, isAnimating, viewState, routes
         </svg>
       )}
 
-      {/* Screen-based label overlays */}
-      {!isAnimating && !isZoomAnimating && hexGridData.labels.map(label => {
+      {/* Edge-based label overlays */}
+      {!isAnimating && !isZoomAnimating && edgeGridData.labels.map(label => {
         // Create light background color (20% opacity like text and itinerary)
         const backgroundColor = `${label.color}33`;
 
