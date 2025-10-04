@@ -22,7 +22,7 @@ export {
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: '(mock)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -79,8 +79,8 @@ function ProtectedLayout() {
       <Stack.Screen name="(mock)" options={{ headerShown: false }} />
       <Stack.Screen name="test-prosemirror" options={{ headerShown: false }} />
       <Stack.Screen name="test-transparency" options={{ headerShown: false }} />
+      <Stack.Screen name="simple-map-test" options={{ headerShown: false }} />
       <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
     </Stack>
   );

@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { useMockContext } from '@/contexts/MockContext';
 import type { RouteWithMetadata } from '@/contexts/MockContext';
+import { useMockContext } from '@/contexts/MockContext';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
 // Import DOM component - works on all platforms with expo-dom
 const MapViewSimpleDOM = React.lazy(() => import('./dom/map-view-simple'));
@@ -76,7 +76,7 @@ export function MapViewSimpleWrapper({
     : [styles.container, { height }];
 
   return (
-    <View style={containerStyle}>
+    <View style={{ width: '100%', overflow: 'hidden' ,height: "100%"}}>
       <React.Suspense fallback={<View style={styles.loading} />}>
         <MapViewSimpleDOM
           locations={locations}

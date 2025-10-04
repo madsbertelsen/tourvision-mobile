@@ -11,6 +11,9 @@ import { register, type RegisterActionState } from '../actions';
 import { toast } from '@/components/toast';
 import { useSession } from 'next-auth/react';
 
+// Disable static rendering for auth pages
+export const dynamic = 'force-dynamic';
+
 export default function Page() {
   const router = useRouter();
 

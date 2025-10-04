@@ -309,6 +309,7 @@ export default function MockChatScreen() {
 
   // Load trip on mount first
   useEffect(() => {
+    console.log('process.env.NODE_ENV', process.env.NODE_ENV);
     async function loadTripData() {
       try {
         setIsLoadingTrip(true);

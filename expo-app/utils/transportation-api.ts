@@ -25,7 +25,8 @@ export interface Waypoint {
   lng: number;
 }
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_NEXTJS_API_URL || 'http://localhost:3001';
+// Use environment variable for local development, empty string for production (relative URLs)
+const API_BASE_URL = process.env.EXPO_PUBLIC_NEXTJS_API_URL || '';
 
 /**
  * Fetch transportation options between two locations
@@ -149,7 +150,7 @@ export async function fetchRoute(
     });
 
     const response = await fetch(
-      `${API_BASE_URL}/api/route?${params}`,
+      `${process.env.NODE_ENV === 'production' ? '' : API_BASE_URL}/api/route?${params}`,
       {
         headers: {
           'Content-Type': 'application/json',

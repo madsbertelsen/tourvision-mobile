@@ -1,16 +1,16 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  SafeAreaView
-} from 'react-native';
-import { Stack, usePathname, useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import { MockProvider, useMockContext } from '@/contexts/MockContext';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import React from 'react';
+import {
+  Dimensions,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -49,7 +49,7 @@ function MockLayoutContent() {
     <SafeAreaView style={styles.container}>
       <View style={styles.mainContainer}>
         {/* Map - Always visible at top */}
-        <View style={styles.mapContainer}>
+        <View style={{flex:1, width:"100%"}}>
           <MapViewSimpleWrapper
             locations={visibleLocations.map((loc, idx) => ({
               id: loc.id || `loc-${idx}`,
@@ -59,7 +59,7 @@ function MockLayoutContent() {
               colorIndex: loc.colorIndex || getColorIndex(loc.color),
               photoName: loc.photoName,
             }))}
-            height={mapHeight}
+            height={300}
             center={{ lat: 0, lng: 0 }}
             zoom={2}
           />
@@ -129,7 +129,8 @@ export default function MockLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    display: 'flex',
+    backgroundColor: '#ffffff',
   },
   mainContainer: {
     flex: 1,

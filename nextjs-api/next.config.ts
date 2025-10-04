@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+const { withExpo } = require('@expo/next-adapter');
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -23,6 +24,16 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Transpile React Native packages for web compatibility
+  transpilePackages: [
+    'react-native',
+    'react-native-web',
+    'expo',
+    'react-native-reanimated',
+    'react-native-svg',
+    'nativewind',
+    'react-native-gesture-handler',
+  ],
 };
 
-export default nextConfig;
+export default withExpo(nextConfig);

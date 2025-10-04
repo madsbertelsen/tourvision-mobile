@@ -1,5 +1,5 @@
-import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { NextResponse, type NextRequest } from 'next/server';
 import { guestRegex, isDevelopmentEnvironment } from './lib/constants';
 
 export async function middleware(request: NextRequest) {
@@ -11,6 +11,26 @@ export async function middleware(request: NextRequest) {
    */
   if (pathname.startsWith('/ping')) {
     return new Response('pong', { status: 200 });
+  }
+
+  // Serve Expo static assets (must come before other checks)
+  if (pathname.startsWith('/_expo/') || pathname.startsWith('/assets/')) {
+    return NextResponse.next();
+  }
+
+  // Serve Expo app at root by rewriting to index.html
+  if (pathname === '/') {
+    return NextResponse.rewrite(new URL('/index.html', request.url));
+  }
+
+  // Allow Expo app routes to pass through (public access)
+  if (pathname.startsWith('/(') ||  // Expo route groups like (mock), (auth), (public)
+      pathname.startsWith('/location/') ||
+      pathname.startsWith('/trip/') ||
+      pathname.startsWith('/simple-map-test') ||
+      pathname === '/test-map-clean' ||
+      pathname.endsWith('.html')) {
+    return NextResponse.next();
   }
 
   if (pathname.startsWith('/api/auth')) {
@@ -46,7 +66,7 @@ export async function middleware(request: NextRequest) {
     if (pathname === '/login' || pathname === '/register') {
       return NextResponse.next();
     }
-    
+
     // Otherwise redirect to login
     const redirectUrl = encodeURIComponent(request.url);
     return NextResponse.redirect(
@@ -57,7 +77,7 @@ export async function middleware(request: NextRequest) {
   const isGuest = guestRegex.test(token?.email ?? '');
 
   if (token && !isGuest && ['/login', '/register'].includes(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/admin', request.url));
   }
 
   return NextResponse.next();
@@ -65,18 +85,21 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/',
+    '/admin',
     '/chat/:id',
     '/api/:path*',
     '/login',
     '/register',
+    '/_expo/:path*',  // Include Expo static bundles
+    '/assets/:path*',  // Include Expo assets
 
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico, sitemap.xml, robots.txt (metadata files)
+     * - Static HTML files from Expo (*.html)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.html).*)',
   ],
 };
