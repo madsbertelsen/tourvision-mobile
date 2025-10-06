@@ -323,32 +323,27 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                   <TouchableOpacity
                     key={idx}
                     onPress={() => {
-                      // Set the focused location for the map before navigating
+                      // Set the focused location for the map and show modal
                       if (mockContext && item.lat && item.lng) {
                         const lat = parseFloat(item.lat);
                         const lng = parseFloat(item.lng);
                         if (!isNaN(lat) && !isNaN(lng)) {
-                          mockContext.setFocusedLocation({
+                          const locationData = {
                             id: `loc-${idx}`,
                             name: item.text,
                             lat,
-                            lng
-                          });
+                            lng,
+                            description: item.description || '',
+                            photoName: item.photoName || ''
+                          };
+
+                          // Set focused location for map animation
+                          mockContext.setFocusedLocation(locationData);
+
+                          // Show modal instead of navigating
+                          mockContext.setSelectedLocationModal(locationData);
                         }
                       }
-
-                      // Navigate to location detail screen
-                      router.push({
-                        pathname: '/(mock)/location/[id]',
-                        params: {
-                          id: `loc-${idx}`,
-                          name: item.text,
-                          lat: item.lat || '0',
-                          lng: item.lng || '0',
-                          description: item.description || '',
-                          photoName: item.photoName || ''
-                        }
-                      });
                     }}
                     activeOpacity={0.7}
                     style={{ flexDirection: 'row', alignItems: 'center' }}

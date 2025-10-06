@@ -79,6 +79,8 @@ interface MapViewSimpleProps {
   routes?: RouteWithMetadata[];
   selectedRoute?: string | null;
   showItinerary?: boolean;
+  selectedLocationModal?: Location | null;
+  onCloseModal?: () => void;
 }
 
 // Inner component to handle edge labels and itinerary overlay
@@ -289,95 +291,39 @@ function MapContent({
 
   return (
     <>
-      {/* Connection lines overlay - rendered as SVG */}
-      {!isAnimating && !isZoomAnimating && edgeGridData.labels.length > 0 && (
-        <svg
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        >
-          <g
-            transform={`translate(${gridTranslate.x}, ${gridTranslate.y})`}
-          >
-            {/* Connection lines from labels to locations */}
-            {edgeGridData.labels.map(label => {
-              // Calculate tapered line path
-              const dx = label.locationX - label.x;
-              const dy = label.locationY - label.y;
-              const angle = Math.atan2(dy, dx);
-              const perpAngle = angle + Math.PI / 2;
+      {/* Simple labels to the right of markers */}
+      {!isAnimating && !isZoomAnimating && deckRef.current && locations.map((location, index) => {
+        const deck = deckRef.current.deck;
+        if (!deck) return null;
 
-              // Width at label end and location end
-              const labelWidth = 4;
-              const locationWidth = 1;
+        const viewport = deck.getViewports()[0];
+        const projected = viewport.project([location.lng, location.lat]);
 
-              // Calculate perpendicular offsets
-              const labelOffset = {
-                x: Math.cos(perpAngle) * labelWidth / 2,
-                y: Math.sin(perpAngle) * labelWidth / 2,
-              };
-              const locationOffset = {
-                x: Math.cos(perpAngle) * locationWidth / 2,
-                y: Math.sin(perpAngle) * locationWidth / 2,
-              };
-
-              // Create 4 points for the tapered line
-              const points = [
-                { x: label.x - labelOffset.x, y: label.y - labelOffset.y },
-                { x: label.x + labelOffset.x, y: label.y + labelOffset.y },
-                { x: label.locationX + locationOffset.x, y: label.locationY + locationOffset.y },
-                { x: label.locationX - locationOffset.x, y: label.locationY - locationOffset.y },
-              ];
-
-              const pathData = `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y} Z`;
-
-              return (
-                <path
-                  key={`line-${label.id}`}
-                  d={pathData}
-                  fill="black"
-                  fillOpacity="0.6"
-                />
-              );
-            })}
-          </g>
-        </svg>
-      )}
-
-      {/* Edge-based label overlays */}
-      {!isAnimating && !isZoomAnimating && edgeGridData.labels.map(label => {
-        // Create light background color (20% opacity like text and itinerary)
-        const backgroundColor = `${label.color}33`;
+        const colorIndex = location.colorIndex ?? index;
+        const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+        const backgroundColor = `${color}33`; // 20% opacity
 
         return (
           <div
-            key={`label-${label.id}`}
+            key={`label-${location.id}`}
             style={{
               position: 'absolute',
-              left: `${label.x + gridTranslate.x}px`,
-              top: `${label.y + gridTranslate.y}px`,
-              transform: 'translate(-50%, -50%)',
+              left: `${projected[0] + 10}px`, // 10px to the right of marker
+              top: `${projected[1]}px`,
+              transform: 'translate(0, -50%)',
               backgroundColor: 'white',
               borderRadius: '6px',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              padding: '0px',
               cursor: 'pointer',
               pointerEvents: 'auto',
               zIndex: 2,
-              transition: shouldAnimateLabels ? 'left 300ms ease-out, top 300ms ease-out' : 'none',
             }}
           >
             <div style={{
               fontSize: '12px',
               fontWeight: '600',
               color: '#1f2937',
-              textAlign: 'center',
+              textAlign: 'left',
               whiteSpace: 'nowrap',
               padding: '6px 12px',
               backgroundColor: backgroundColor,
@@ -386,7 +332,7 @@ function MapContent({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}>
-              {label.name}
+              {location.name}
             </div>
           </div>
         );
@@ -728,6 +674,8 @@ export default function MapViewSimple({
   routes = [],
   selectedRoute = null,
   showItinerary = false,
+  selectedLocationModal = null,
+  onCloseModal,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -1217,7 +1165,7 @@ export default function MapViewSimple({
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
-    <div style={{width: "100%", height: "100%"}}>
+    <div style={{width: "100%", height: "100%", position: "relative"}}>
       <DeckGL
         ref={deckRef}
         viewState={viewState}
@@ -1245,6 +1193,50 @@ export default function MapViewSimple({
         showItinerary={showItinerary || false}
         deckRef={deckRef}
       />
+
+      {/* Location Detail Modal */}
+      {selectedLocationModal && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'white',
+            borderRadius: '16px 16px 0 0',
+            padding: '20px',
+            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{selectedLocationModal.name}</h3>
+            <button
+              onClick={onCloseModal}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: 0,
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+          </div>
+          {selectedLocationModal.description && (
+            <p style={{ margin: '0 0 12px 0', color: '#666' }}>{selectedLocationModal.description}</p>
+          )}
+          <p style={{ margin: 0, fontSize: '14px', color: '#999' }}>
+            {selectedLocationModal.lat.toFixed(6)}, {selectedLocationModal.lng.toFixed(6)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

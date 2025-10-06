@@ -31,7 +31,7 @@ export function MapViewSimpleWrapper({
 }: MapViewSimpleWrapperProps) {
   // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
-  // Get focusedLocation, followMode, routes, showItinerary, mapCenter, and mapZoom from context
+  // Get focusedLocation, followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
   let focusedLocation = null;
   let followMode = false;
   let allRoutes: RouteWithMetadata[] = [];
@@ -39,6 +39,8 @@ export function MapViewSimpleWrapper({
   let showItinerary = false;
   let mapCenter = center;
   let mapZoom = zoom;
+  let selectedLocationModal = null;
+  let setSelectedLocationModal: ((location: Location | null) => void) | null = null;
   try {
     const context = useMockContext();
     focusedLocation = context.focusedLocation;
@@ -48,6 +50,8 @@ export function MapViewSimpleWrapper({
     showItinerary = context.showItinerary;
     mapCenter = context.mapCenter;
     mapZoom = context.mapZoom;
+    selectedLocationModal = context.selectedLocationModal;
+    setSelectedLocationModal = context.setSelectedLocationModal;
   } catch (error) {
     // Context not available, use prop defaults
   }
@@ -87,6 +91,8 @@ export function MapViewSimpleWrapper({
           routes={visibleRoutes}
           selectedRoute={selectedRoute}
           showItinerary={showItinerary}
+          selectedLocationModal={selectedLocationModal}
+          onCloseModal={() => setSelectedLocationModal && setSelectedLocationModal(null)}
           style={{ width: '100%', height: '100%' }}
         />
       </React.Suspense>
