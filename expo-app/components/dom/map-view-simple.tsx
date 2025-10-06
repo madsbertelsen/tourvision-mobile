@@ -7,6 +7,7 @@ import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, PathLayer, TextLayer } from '@deck.gl/layers';
 import MapGL from 'react-map-gl/mapbox';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
+import HexGridOverlay from './hex-grid-overlay';
 
 interface Location {
   id: string;
@@ -94,6 +95,7 @@ function MapContent({
   setSelectedAlternatives,
   showItinerary,
   deckRef,
+  selectedLocationModal,
 }: {
   locations: Location[],
   focusedLocation: FocusedLocation | null,
@@ -104,6 +106,7 @@ function MapContent({
   setSelectedAlternatives: React.Dispatch<React.SetStateAction<Map<string, string>>>,
   showItinerary: boolean,
   deckRef: React.RefObject<any>,
+  selectedLocationModal: Location | null,
 }) {
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
@@ -292,7 +295,7 @@ function MapContent({
   return (
     <>
       {/* Simple labels to the right of markers */}
-      {!isAnimating && !isZoomAnimating && deckRef.current && locations.map((location, index) => {
+      {!isAnimating && !isZoomAnimating && !selectedLocationModal && deckRef.current && locations.map((location, index) => {
         const deck = deckRef.current.deck;
         if (!deck) return null;
 
@@ -711,6 +714,10 @@ export default function MapViewSimple({
   // Track if map is currently animating
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Container ref and dimensions for hex grid
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
+
   // Animation state
   const animationRef = useRef<{
     frameId?: number;
@@ -941,6 +948,20 @@ export default function MapViewSimple({
     prevFocusedLocationRef.current = focusedLocation;
   }, [focusedLocation]);
 
+  // Update container dimensions for hex grid
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        setContainerDims({ width, height });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
   // Track previous bounds to prevent redundant animations
   const prevBoundsRef = useRef<string | null>(null);
 
@@ -1165,7 +1186,7 @@ export default function MapViewSimple({
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
-    <div style={{width: "100%", height: "100%", position: "relative"}}>
+    <div ref={containerRef} style={{width: "100%", height: "100%", position: "relative"}}>
       <DeckGL
         ref={deckRef}
         viewState={viewState}
@@ -1177,7 +1198,7 @@ export default function MapViewSimple({
       >
         <MapGL
           mapboxAccessToken={mapboxToken}
-          mapStyle="mapbox://styles/mapbox/light-v11"
+          mapStyle={selectedLocationModal ? "mapbox://styles/mapbox/standard" : "mapbox://styles/mapbox/light-v11"}
         />
       </DeckGL>
 
@@ -1192,51 +1213,28 @@ export default function MapViewSimple({
         setSelectedAlternatives={setSelectedAlternatives}
         showItinerary={showItinerary || false}
         deckRef={deckRef}
+        selectedLocationModal={selectedLocationModal || null}
       />
 
-      {/* Location Detail Modal */}
-      {selectedLocationModal && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'white',
-            borderRadius: '16px 16px 0 0',
-            padding: '20px',
-            boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.15)',
-            zIndex: 1000,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{selectedLocationModal.name}</h3>
-            <button
-              onClick={onCloseModal}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '24px',
-                cursor: 'pointer',
-                padding: 0,
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              ×
-            </button>
-          </div>
-          {selectedLocationModal.description && (
-            <p style={{ margin: '0 0 12px 0', color: '#666' }}>{selectedLocationModal.description}</p>
-          )}
-          <p style={{ margin: 0, fontSize: '14px', color: '#999' }}>
-            {selectedLocationModal.lat.toFixed(6)}, {selectedLocationModal.lng.toFixed(6)}
-          </p>
-        </div>
-      )}
+      {/* Hexagonal Grid Overlay */}
+      {selectedLocationModal && containerDims.width > 0 && deckRef.current && (() => {
+        // Project lat/lng to screen coordinates
+        const deck = deckRef.current.deck;
+        if (!deck) return null;
+
+        const viewport = deck.getViewports()[0];
+        const [x, y] = viewport.project([selectedLocationModal.lng, selectedLocationModal.lat]);
+
+        return (
+          <HexGridOverlay
+            width={containerDims.width}
+            height={containerDims.height}
+            focusedLocation={selectedLocationModal}
+            locationScreenPos={{ x, y }}
+            onClose={onCloseModal || (() => {})}
+          />
+        );
+      })()}
     </div>
   );
 }
