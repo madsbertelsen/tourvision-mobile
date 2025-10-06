@@ -1,8 +1,10 @@
 'use dom';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
-import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import Map, { Layer, Marker, Popup, Source } from 'react-map-gl/dist/mapbox';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DeckGL from '@deck.gl/react';
+import { ScatterplotLayer, PathLayer, TextLayer, IconLayer } from '@deck.gl/layers';
+import MapGL from 'react-map-gl/mapbox';
 
 interface Location {
   id: string;
@@ -66,6 +68,14 @@ interface MapViewProps {
   onWaypointDrag?: (routeId: string, waypointIndex: number, newPosition: { lng: number; lat: number }) => void;
 }
 
+// Helper function to convert hex color to RGB array
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [128, 128, 128];
+}
+
 export default function MapView({
   locations = [],
   focusedLocation = null,
@@ -86,554 +96,257 @@ export default function MapView({
   const initialCenter = center || (locations.length > 0
     ? { lat: locations[0].lat, lng: locations[0].lng }
     : { lat: 40.7128, lng: -74.0060 });
-    
+
   const [viewState, setViewState] = useState({
     longitude: initialCenter.lng,
     latitude: initialCenter.lat,
     zoom: zoom,
+    pitch: 0,
+    bearing: 0,
   });
-  
-  const [popupInfo, setPopupInfo] = useState<Location | null>(null);
-  const mapRef = useRef<any>(null);
+
+  const [hoveredObject, setHoveredObject] = useState<any>(null);
+  const deckRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hoverPreview, setHoverPreview] = useState<{ lng: number; lat: number; routeId: string; segmentIndex: number } | null>(null);
-  const [isDraggingPreview, setIsDraggingPreview] = useState(false);
-  const [draggedRoute, setDraggedRoute] = useState<TransportationRoute | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-
-  // Add ResizeObserver to handle container size changes
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (mapRef.current) {
-        const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
-        if (map) {
-          // Trigger map resize when container size changes
-          map.resize();
-        }
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
-
-  // Globe rotation animation when showing empty state
-  useEffect(() => {
-    // Start rotation animation only when map is loaded and showing the globe view
-    if (mapLoaded && locations.length === 0 && zoom && zoom <= 1 && mapRef.current) {
-      let animationId: number;
-      let startTime: number | null = null;
-
-      const rotateGlobe = (timestamp: number) => {
-        if (!startTime) startTime = timestamp;
-        const elapsed = timestamp - startTime;
-
-        // Calculate the new longitude (rotate 360 degrees every 20 seconds for smoother effect)
-        const rotationSpeed = 360 / 20000; // degrees per millisecond
-        const newLongitude = (elapsed * rotationSpeed) % 360;
-
-        // Update the map center smoothly
-        if (mapRef.current) {
-          const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
-          if (map && map.isStyleLoaded()) {
-            // Use easeTo for smooth animation
-            map.easeTo({
-              center: [newLongitude - 180, 0],
-              duration: 50, // Small duration for smooth continuous movement
-              easing: (t: number) => t, // Linear easing
-            });
-          }
-        }
-
-        // Continue the animation
-        animationId = requestAnimationFrame(rotateGlobe);
-      };
-
-      // Start the animation with a small delay to ensure map is ready
-      const timeoutId = setTimeout(() => {
-        animationId = requestAnimationFrame(rotateGlobe);
-      }, 500);
-
-      // Cleanup function to stop the animation
-      return () => {
-        clearTimeout(timeoutId);
-        if (animationId) {
-          cancelAnimationFrame(animationId);
-        }
-      };
-    }
-  }, [mapLoaded, locations.length, zoom]);
 
   // Focus on a specific location when it changes
   useEffect(() => {
-    console.log('Map: focusedLocation changed:', focusedLocation, 'mapLoaded:', mapLoaded, 'hasMapRef:', !!mapRef.current);
-    if (focusedLocation && mapRef.current && mapLoaded) {
-      console.log('Map: Flying to location:', focusedLocation.name, 'at', focusedLocation.lat, focusedLocation.lng);
-
-      // Simply fly to the focused location
-      mapRef.current.flyTo({
-        center: [focusedLocation.lng, focusedLocation.lat],
+    if (focusedLocation && mapLoaded) {
+      setViewState({
+        ...viewState,
+        longitude: focusedLocation.lng,
+        latitude: focusedLocation.lat,
         zoom: 14,
-        duration: 800,
-        essential: true, // This animation is considered essential with respect to prefers-reduced-motion
+        transitionDuration: 800,
+        transitionInterpolator: undefined,
       });
     }
   }, [focusedLocation, mapLoaded]);
 
   useEffect(() => {
     // Initial auto-fit bounds when locations are first loaded
-    if (locations.length > 0 && mapRef.current && mapLoaded && !focusedLocation) {
-      // Stop any rotation animation when locations are added
+    if (locations.length > 0 && mapLoaded && !focusedLocation) {
       if (locations.length === 1) {
         // For single location, just fly to it
-        mapRef.current.flyTo({
-          center: [locations[0].lng, locations[0].lat],
+        setViewState({
+          ...viewState,
+          longitude: locations[0].lng,
+          latitude: locations[0].lat,
           zoom: 12,
-          duration: 1000,
+          transitionDuration: 1000,
         });
       } else {
-        // For multiple locations, fit bounds
-        const bounds: [[number, number], [number, number]] = [
-          [180, 90],
-          [-180, -90]
-        ];
+        // For multiple locations, calculate bounds
+        const lngs = locations.map(loc => loc.lng);
+        const lats = locations.map(loc => loc.lat);
 
-        locations.forEach(loc => {
-          bounds[0][0] = Math.min(bounds[0][0], loc.lng);
-          bounds[0][1] = Math.min(bounds[0][1], loc.lat);
-          bounds[1][0] = Math.max(bounds[1][0], loc.lng);
-          bounds[1][1] = Math.max(bounds[1][1], loc.lat);
-        });
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
 
-        mapRef.current.fitBounds(bounds, {
-          padding: 50,
-          duration: 1000,
-          maxZoom: 15, // Prevent zooming in too close
+        const centerLng = (minLng + maxLng) / 2;
+        const centerLat = (minLat + maxLat) / 2;
+
+        // Calculate appropriate zoom level (simplified)
+        const lngDiff = maxLng - minLng;
+        const latDiff = maxLat - minLat;
+        const maxDiff = Math.max(lngDiff, latDiff);
+
+        let calculatedZoom = 10;
+        if (maxDiff < 0.01) calculatedZoom = 15;
+        else if (maxDiff < 0.05) calculatedZoom = 13;
+        else if (maxDiff < 0.1) calculatedZoom = 12;
+        else if (maxDiff < 0.5) calculatedZoom = 10;
+        else if (maxDiff < 1) calculatedZoom = 9;
+        else if (maxDiff < 5) calculatedZoom = 7;
+        else calculatedZoom = 5;
+
+        setViewState({
+          ...viewState,
+          longitude: centerLng,
+          latitude: centerLat,
+          zoom: calculatedZoom,
+          transitionDuration: 1000,
         });
       }
     }
   }, [locations.length, mapLoaded]);
 
-  const handleMapClick = useCallback((event: any) => {
-    if (onMapClick) {
-      onMapClick(event.lngLat.lat, event.lngLat.lng);
-    }
-  }, [onMapClick]);
-
-  const handleMarkerClick = useCallback((location: Location, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPopupInfo(location);
-    if (onLocationClick) {
-      onLocationClick(location);
-    }
-  }, [onLocationClick]);
-
-  const handleRouteClick = useCallback((routeId: string, e: any) => {
-    if (onRouteClick && e.lngLat) {
-      onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat });
-    }
-  }, [onRouteClick]);
-
-  // Helper to find nearest point on a polyline and which segment it's on
-  const findNearestPointOnLine = useCallback((
-    point: { lng: number; lat: number },
-    lineCoordinates: number[][]
-  ): { lng: number; lat: number; segmentIndex: number } => {
-    let minDistance = Infinity;
-    let nearestPoint = { lng: lineCoordinates[0][0], lat: lineCoordinates[0][1] };
-    let nearestSegmentIndex = 0;
-
-    for (let i = 0; i < lineCoordinates.length - 1; i++) {
-      const start = { lng: lineCoordinates[i][0], lat: lineCoordinates[i][1] };
-      const end = { lng: lineCoordinates[i + 1][0], lat: lineCoordinates[i + 1][1] };
-
-      // Calculate projection of point onto line segment
-      const dx = end.lng - start.lng;
-      const dy = end.lat - start.lat;
-      const t = Math.max(0, Math.min(1, ((point.lng - start.lng) * dx + (point.lat - start.lat) * dy) / (dx * dx + dy * dy)));
-
-      const projection = {
-        lng: start.lng + t * dx,
-        lat: start.lat + t * dy
-      };
-
-      // Calculate distance
-      const distance = Math.sqrt(
-        Math.pow(projection.lng - point.lng, 2) +
-        Math.pow(projection.lat - point.lat, 2)
-      );
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestPoint = projection;
-        nearestSegmentIndex = i;
+  const handleClick = useCallback((info: any) => {
+    if (info.object) {
+      // Clicked on a layer object
+      if (info.layer?.id === 'location-markers' && onLocationClick) {
+        onLocationClick(info.object);
+      } else if (info.layer?.id?.startsWith('route-') && onRouteClick) {
+        const routeId = info.layer.id.replace('route-', '');
+        onRouteClick(routeId, { lng: info.coordinate[0], lat: info.coordinate[1] });
       }
+    } else if (onMapClick) {
+      // Clicked on empty map
+      onMapClick(info.coordinate[1], info.coordinate[0]);
     }
+  }, [onLocationClick, onMapClick, onRouteClick]);
 
-    return { ...nearestPoint, segmentIndex: nearestSegmentIndex };
-  }, []);
-
-  const handleMapMouseMove = useCallback((e: any) => {
-    if (!mapRef.current || !e.lngLat) return;
-
-    // Skip hover updates when dragging
-    if (isDraggingPreview) {
-      return;
-    }
-
-    // Normal hover behavior when not dragging
-    // Check if hovering over any route
-    const features = mapRef.current.queryRenderedFeatures(e.point, {
-      layers: transportationRoutes.map(r => `transport-route-click-${r.id}`)
-    });
-
-    if (features && features.length > 0) {
-      const routeId = features[0].properties?.routeId;
-      if (routeId) {
-        const route = transportationRoutes.find(r => r.id === routeId);
-        if (route) {
-          const nearestPointData = findNearestPointOnLine(
-            { lng: e.lngLat.lng, lat: e.lngLat.lat },
-            route.geometry.coordinates
-          );
-          setHoverPreview({
-            lng: nearestPointData.lng,
-            lat: nearestPointData.lat,
-            routeId,
-            segmentIndex: nearestPointData.segmentIndex
-          });
-          mapRef.current.getCanvas().style.cursor = 'pointer';
-        }
+  // Create location markers layer
+  const locationMarkersLayer = new ScatterplotLayer({
+    id: 'location-markers',
+    data: locations,
+    getPosition: (d: Location) => [d.lng, d.lat],
+    getFillColor: (d: Location) => {
+      const colorIndex = d.colorIndex ?? locations.indexOf(d);
+      const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+      return [...hexToRgb(color), 255];
+    },
+    getRadius: 12,
+    radiusScale: 1,
+    radiusMinPixels: 8,
+    radiusMaxPixels: 20,
+    pickable: true,
+    stroked: true,
+    filled: true,
+    lineWidthMinPixels: 3,
+    getLineColor: [255, 255, 255],
+    onHover: (info: any) => {
+      if (info.object) {
+        setHoveredObject(info.object);
+      } else {
+        setHoveredObject(null);
       }
-    } else {
-      setHoverPreview(null);
-      mapRef.current.getCanvas().style.cursor = '';
+    },
+  });
+
+  // Create location labels layer
+  const locationLabelsLayer = new TextLayer({
+    id: 'location-labels',
+    data: locations,
+    getPosition: (d: Location) => [d.lng, d.lat],
+    getText: (d: Location) => d.name,
+    getSize: 12,
+    getColor: [51, 51, 51, 255],
+    getAngle: 0,
+    getTextAnchor: 'middle',
+    getAlignmentBaseline: 'bottom',
+    getPixelOffset: [0, -20],
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontWeight: 600,
+    background: true,
+    backgroundPadding: [4, 2],
+    getBackgroundColor: [255, 255, 255, 230],
+    getBorderColor: [0, 0, 0, 0],
+    getBorderWidth: 0,
+  });
+
+  // Create route layers
+  const routeLayers: any[] = [];
+
+  if (showRoute && routeGeometry) {
+    routeLayers.push(new PathLayer({
+      id: 'main-route',
+      data: [{ path: routeGeometry.coordinates }],
+      getPath: (d: any) => d.path,
+      getColor: [...hexToRgb(routeColor), 191], // 0.75 opacity
+      getWidth: 4,
+      widthMinPixels: 2,
+      pickable: false,
+      capRounded: true,
+      jointRounded: true,
+    }));
+  }
+
+  transportationRoutes.forEach((route) => {
+    const routeStyle = {
+      color: route.color || '#6B7280',
+      width: 3,
+      dasharray: route.mode === 'walking' ? true : false,
+    };
+
+    routeLayers.push(new PathLayer({
+      id: `route-${route.id}`,
+      data: [{ path: route.geometry.coordinates, ...route }],
+      getPath: (d: any) => d.path,
+      getColor: [...hexToRgb(routeStyle.color), 153], // 0.6 opacity
+      getWidth: routeStyle.width,
+      widthMinPixels: 2,
+      pickable: true,
+      capRounded: true,
+      jointRounded: true,
+      getDashArray: routeStyle.dasharray ? [2, 2] : undefined,
+    }));
+
+    // Add waypoint markers
+    if (route.waypoints && route.waypoints.length > 0) {
+      routeLayers.push(new ScatterplotLayer({
+        id: `waypoints-${route.id}`,
+        data: route.waypoints,
+        getPosition: (d: Waypoint) => [d.lng, d.lat],
+        getFillColor: [...hexToRgb(route.color || '#6B7280'), 255],
+        getRadius: 6,
+        radiusMinPixels: 6,
+        radiusMaxPixels: 12,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        lineWidthMinPixels: 2,
+        getLineColor: [255, 255, 255],
+      }));
     }
-  }, [transportationRoutes, findNearestPointOnLine, isDraggingPreview]);
+  });
+
+  const layers = [
+    ...routeLayers,
+    locationMarkersLayer,
+    locationLabelsLayer,
+  ];
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
     <div ref={containerRef} style={style}>
-      <style>{`
-        @keyframes pulse {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.1);
-            opacity: 0.8;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-      `}</style>
-      <Map
-        ref={mapRef}
-        {...viewState}
-        onMove={evt => setViewState(evt.viewState)}
-        onLoad={() => {
-          // Set map as loaded
-          setMapLoaded(true);
-
-          // Trigger resize when map loads to ensure it fits container
-          if (mapRef.current) {
-            const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
-            if (map) {
-              // Small delay to ensure container is fully rendered
-              setTimeout(() => {
-                map.resize();
-              }, 100);
-            }
-          }
-        }}
-        onClick={(e) => {
-          // Don't handle clicks when dragging preview
-          if (isDraggingPreview) return;
-
-          // Check if clicking on a route
-          if (mapRef.current && e.lngLat) {
-            const features = mapRef.current.queryRenderedFeatures(e.point, {
-              layers: transportationRoutes.map(r => `transport-route-click-${r.id}`)
-            });
-
-            if (features && features.length > 0) {
-              const routeId = features[0].properties?.routeId;
-              if (routeId && onRouteClick) {
-                // Find which segment the click was on
-                const route = transportationRoutes.find(r => r.id === routeId);
-                if (route) {
-                  const nearestPointData = findNearestPointOnLine(
-                    { lng: e.lngLat.lng, lat: e.lngLat.lat },
-                    route.geometry.coordinates
-                  );
-                  onRouteClick(routeId, { lng: e.lngLat.lng, lat: e.lngLat.lat }, nearestPointData.segmentIndex);
-                }
-                return; // Don't trigger map click
-              }
-            }
-          }
-          handleMapClick(e);
-        }}
-        onMouseMove={handleMapMouseMove}
-        mapboxAccessToken={mapboxToken}
-        mapStyle="mapbox://styles/mapbox/light-v11"
-        style={{ width: '100%', height: '100%' }}
-        interactiveLayerIds={transportationRoutes.map(r => `transport-route-click-${r.id}`)}
+      <DeckGL
+        ref={deckRef}
+        viewState={viewState}
+        onViewStateChange={({ viewState }: any) => setViewState(viewState)}
+        controller={true}
+        layers={layers}
+        onClick={handleClick}
+        getCursor={({ isHovering }: any) => isHovering ? 'pointer' : 'grab'}
       >
-        {showRoute && routeGeometry && (
-          <Source
-            id="route"
-            type="geojson"
-            data={{
-              type: 'Feature',
-              properties: {},
-              geometry: routeGeometry,
-            }}
-          >
-            <Layer
-              id="route-line"
-              type="line"
-              layout={{
-                'line-join': 'round',
-                'line-cap': 'round',
-              }}
-              paint={{
-                'line-color': routeColor,
-                'line-width': 4,
-                'line-opacity': 0.75,
-              }}
-            />
-          </Source>
-        )}
-        
-        {/* Render all transportation routes */}
-        {transportationRoutes.map((route) => (
-          <React.Fragment key={route.id}>
-            <Source
-              id={`transport-route-${route.id}`}
-              type="geojson"
-              data={{
-                type: 'Feature',
-                properties: {
-                  routeId: route.id,
-                  mode: route.mode,
-                  fromPlace: route.fromPlace,
-                  toPlace: route.toPlace,
-                  duration: route.duration,
-                },
-                geometry: route.geometry,
-              }}
-            >
-              <Layer
-                id={`transport-route-line-${route.id}`}
-                type="line"
-                layout={{
-                  'line-join': 'round',
-                  'line-cap': 'round',
-                }}
-                paint={{
-                  'line-color': route.color || '#6B7280',
-                  'line-width': 3,
-                  'line-opacity': 0.6,
-                  'line-dasharray': route.mode === 'walking' ? [2, 2] : undefined,
-                }}
-              />
-              {/* Interactive invisible layer for click detection */}
-              <Layer
-                id={`transport-route-click-${route.id}`}
-                type="line"
-                layout={{
-                  'line-join': 'round',
-                  'line-cap': 'round',
-                }}
-                paint={{
-                  'line-color': 'transparent',
-                  'line-width': 40, // Wider for easier clicking
-                }}
-              />
-            </Source>
+        <MapGL
+          mapboxAccessToken={mapboxToken}
+          mapStyle="mapbox://styles/mapbox/light-v11"
+          onLoad={() => setMapLoaded(true)}
+        />
+      </DeckGL>
 
-            {/* Render waypoint markers */}
-            {route.waypoints?.map((waypoint, index) => (
-              <Marker
-                key={`${route.id}-waypoint-${index}`}
-                longitude={waypoint.lng}
-                latitude={waypoint.lat}
-                draggable={true}
-                onDragEnd={(e) => {
-                  if (onWaypointDrag) {
-                    onWaypointDrag(route.id, index, { lng: e.lngLat.lng, lat: e.lngLat.lat });
-                  }
-                }}
-              >
-                <div
-                  style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: route.color || '#6B7280',
-                    border: '2px solid white',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                    cursor: 'move',
-                  }}
-                />
-              </Marker>
-            ))}
-          </React.Fragment>
-        ))}
-
-        {/* Hover preview dot */}
-        {hoverPreview && (
-          <Marker
-            longitude={hoverPreview.lng}
-            latitude={hoverPreview.lat}
-            anchor="center"
-            draggable={true}
-            onDragStart={() => {
-              setIsDraggingPreview(true);
-              const route = transportationRoutes.find(r => r.id === hoverPreview.routeId);
-              setDraggedRoute(route || null);
-              // Disable map dragging - use getMap() to access the underlying mapbox instance
-              if (mapRef.current) {
-                const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
-                if (map && map.dragPan) {
-                  map.dragPan.disable();
-                }
-              }
-            }}
-            onDrag={(e) => {
-              // Don't update position during drag - let the marker follow the cursor naturally
-              // We'll snap to the route on drag end
-            }}
-            onDragEnd={(e) => {
-              // Re-enable map dragging
-              if (mapRef.current) {
-                const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
-                if (map && map.dragPan) {
-                  map.dragPan.enable();
-                }
-              }
-
-              // Create waypoint at the exact drop position
-              if (draggedRoute && e && e.lngLat && hoverPreview) {
-                const dropPoint = { lng: e.lngLat.lng, lat: e.lngLat.lat };
-                console.log('Waypoint dropped at:', dropPoint, 'from segment:', hoverPreview.segmentIndex);
-
-                // Create waypoint at the exact drop position (not snapped to route)
-                // The route will be recalculated to go through this point
-                // Pass segment index to help with proper waypoint ordering
-                if (onRouteClick) {
-                  onRouteClick(draggedRoute.id, dropPoint, hoverPreview.segmentIndex);
-                }
-              }
-
-              // Reset drag state
-              setIsDraggingPreview(false);
-              setDraggedRoute(null);
-              setHoverPreview(null);
-            }}
-          >
-            <div
-              style={{
-                width: isDraggingPreview ? '20px' : '16px',
-                height: isDraggingPreview ? '20px' : '16px',
-                borderRadius: '50%',
-                backgroundColor: isDraggingPreview ? '#4ade80' : 'white',
-                border: `2px solid ${isDraggingPreview ? '#166534' : '#333'}`,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                cursor: isDraggingPreview ? 'grabbing' : 'grab',
-                animation: isDraggingPreview ? 'none' : 'pulse 1.5s ease-in-out infinite',
-                transition: 'all 0.2s ease',
-              }}
-            />
-          </Marker>
-        )}
-
-        {locations.map((location, index) => {
-          const colorIndex = location.colorIndex ?? index;
-          const markerColor = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-
-          return (
-            <Marker
-              key={location.id}
-              longitude={location.lng}
-              latitude={location.lat}
-              anchor="bottom"
-              onClick={(e) => handleMarkerClick(location, e)}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                    marginBottom: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#333',
-                    maxWidth: '120px',
-                    textAlign: 'center',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {location.name}
-                </div>
-                <div
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: markerColor,
-                    border: '3px solid white',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  }}
-                />
-              </div>
-            </Marker>
-          );
-        })}
-        
-        {popupInfo && (
-          <Popup
-            anchor="top"
-            longitude={popupInfo.lng}
-            latitude={popupInfo.lat}
-            onClose={() => setPopupInfo(null)}
-            closeButton={true}
-            closeOnClick={false}
-          >
-            <div style={{ padding: '8px' }}>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 'bold' }}>
-                {popupInfo.name}
-              </h3>
-              {popupInfo.description && (
-                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
-                  {popupInfo.description}
-                </p>
-              )}
+      {/* Popup for hovered location */}
+      {hoveredObject && (
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 1,
+            pointerEvents: 'none',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -120px)',
+            background: 'white',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            maxWidth: '200px',
+          }}
+        >
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+            {hoveredObject.name}
+          </div>
+          {hoveredObject.description && (
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {hoveredObject.description}
             </div>
-          </Popup>
-        )}
-      </Map>
+          )}
+        </div>
+      )}
     </div>
   );
 }
