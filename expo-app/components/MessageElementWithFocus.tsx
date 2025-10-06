@@ -323,7 +323,7 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                   <TouchableOpacity
                     key={idx}
                     onPress={() => {
-                      // Set the focused location for the map and show modal
+                      // Just focus the map on this location
                       if (mockContext && item.lat && item.lng) {
                         const lat = parseFloat(item.lat);
                         const lng = parseFloat(item.lng);
@@ -337,17 +337,13 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                             photoName: item.photoName || ''
                           };
 
-                          // Toggle: if same location is clicked, dismiss modal
-                          if (mockContext.selectedLocationModal &&
-                              mockContext.selectedLocationModal.id === locationData.id) {
-                            mockContext.setSelectedLocationModal(null);
+                          // Toggle: if same location is clicked, clear focus
+                          if (mockContext.focusedLocation &&
+                              mockContext.focusedLocation.id === locationData.id) {
                             mockContext.setFocusedLocation(null);
                           } else {
                             // Set focused location for map animation
                             mockContext.setFocusedLocation(locationData);
-
-                            // Show modal instead of navigating
-                            mockContext.setSelectedLocationModal(locationData);
                           }
                         }
                       }
