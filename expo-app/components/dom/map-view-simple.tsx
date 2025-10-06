@@ -962,6 +962,44 @@ export default function MapViewSimple({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Track previous selectedLocationModal to detect changes
+  const prevSelectedLocationModalRef = useRef<Location | null>(null);
+
+  // Zoom to selected location modal
+  useEffect(() => {
+    const prevModal = prevSelectedLocationModalRef.current;
+    const modalChanged =
+      (!prevModal && selectedLocationModal) ||
+      (prevModal && !selectedLocationModal) ||
+      (prevModal && selectedLocationModal && prevModal.id !== selectedLocationModal.id);
+
+    if (!modalChanged) {
+      return;
+    }
+
+    if (selectedLocationModal) {
+      // Save current view state before zooming
+      setSavedViewState({
+        longitude: viewState.longitude,
+        latitude: viewState.latitude,
+        zoom: viewState.zoom,
+      });
+
+      // Animate to the selected location with detail zoom level
+      animateToLocation({
+        longitude: selectedLocationModal.lng,
+        latitude: selectedLocationModal.lat,
+        zoom: 12, // Detail view
+      });
+    } else if (savedViewState) {
+      // Restore previous view when modal is closed
+      animateToLocation(savedViewState, true);
+      setSavedViewState(null);
+    }
+
+    prevSelectedLocationModalRef.current = selectedLocationModal;
+  }, [selectedLocationModal, animateToLocation, savedViewState, viewState]);
+
   // Track previous bounds to prevent redundant animations
   const prevBoundsRef = useRef<string | null>(null);
 

@@ -337,11 +337,18 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
                             photoName: item.photoName || ''
                           };
 
-                          // Set focused location for map animation
-                          mockContext.setFocusedLocation(locationData);
+                          // Toggle: if same location is clicked, dismiss modal
+                          if (mockContext.selectedLocationModal &&
+                              mockContext.selectedLocationModal.id === locationData.id) {
+                            mockContext.setSelectedLocationModal(null);
+                            mockContext.setFocusedLocation(null);
+                          } else {
+                            // Set focused location for map animation
+                            mockContext.setFocusedLocation(locationData);
 
-                          // Show modal instead of navigating
-                          mockContext.setSelectedLocationModal(locationData);
+                            // Show modal instead of navigating
+                            mockContext.setSelectedLocationModal(locationData);
+                          }
                         }
                       }
                     }}
