@@ -21,6 +21,130 @@ export interface ProseMirrorViewerRef {
   getState: () => EditorState;
 }
 
+// Geo-mark editor modal component
+function GeoMarkEditor({ node, onSave, onCancel }: {
+  node: ProseMirrorNode;
+  onSave: (attrs: any) => void;
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = React.useState({
+    placeName: node.attrs.placeName || '',
+    lat: node.attrs.lat || '',
+    lng: node.attrs.lng || '',
+    transportFrom: node.attrs.transportFrom || '',
+    transportProfile: node.attrs.transportProfile || 'walking',
+    description: node.attrs.description || '',
+    colorIndex: node.attrs.colorIndex || 0
+  });
+
+  const colors = [
+    '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+  ];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="geo-mark-editor-overlay" onClick={onCancel}>
+      <div className="geo-mark-editor-modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit Location</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Place Name</label>
+            <input
+              type="text"
+              value={formData.placeName}
+              onChange={(e) => setFormData({ ...formData, placeName: e.target.value })}
+              placeholder="e.g. Eiffel Tower"
+              required
+            />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Latitude</label>
+              <input
+                type="text"
+                value={formData.lat}
+                onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                placeholder="48.8584"
+              />
+            </div>
+            <div className="form-group">
+              <label>Longitude</label>
+              <input
+                type="text"
+                value={formData.lng}
+                onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                placeholder="2.2945"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Transportation Mode</label>
+            <select
+              value={formData.transportProfile}
+              onChange={(e) => setFormData({ ...formData, transportProfile: e.target.value })}
+            >
+              <option value="">None</option>
+              <option value="walking">🚶 Walking</option>
+              <option value="driving">🚗 Driving</option>
+              <option value="cycling">🚴 Cycling</option>
+              <option value="transit">🚇 Public Transit</option>
+            </select>
+          </div>
+
+          {formData.transportProfile && (
+            <div className="form-group">
+              <label>Coming from</label>
+              <input
+                type="text"
+                value={formData.transportFrom}
+                onChange={(e) => setFormData({ ...formData, transportFrom: e.target.value })}
+                placeholder="Previous location ID"
+              />
+            </div>
+          )}
+
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Additional notes..."
+              rows={3}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Color</label>
+            <div className="color-picker">
+              {colors.map((color, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className={`color-option ${formData.colorIndex === index ? 'selected' : ''}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setFormData({ ...formData, colorIndex: index })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="form-actions">
+            <button type="button" onClick={onCancel}>Cancel</button>
+            <button type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProps>((
   {
     content,
@@ -33,6 +157,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 ) => {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const [editingGeoMark, setEditingGeoMark] = useState<{ pos: number; node: ProseMirrorNode } | null>(null);
+  const [viewRef, setViewRef] = useState<any>(null);
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -166,6 +292,23 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   // Get current state
   const getState = () => state;
 
+  // Handle geo-mark updates
+  const handleGeoMarkUpdate = (updatedAttrs: any) => {
+    if (!editingGeoMark || !viewRef) return;
+
+    const { pos, node } = editingGeoMark;
+    const tr = viewRef.state.tr;
+
+    // Update the node attributes
+    tr.setNodeMarkup(pos, null, { ...node.attrs, ...updatedAttrs });
+
+    // Dispatch the transaction
+    viewRef.dispatch(tr);
+
+    // Close editor
+    setEditingGeoMark(null);
+  };
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     scrollToNode,
@@ -196,7 +339,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     });
 
     // Custom rendering for geo-marks
-    views['geoMark'] = (node: ProseMirrorNode) => {
+    views['geoMark'] = (node: ProseMirrorNode, view: any, getPos: any) => {
       const span = document.createElement('span');
       span.className = 'pm-geo-mark';
 
@@ -215,11 +358,23 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
       span.title = node.attrs?.placeName || 'Location';
 
+      // Make clickable in edit mode
+      if (editable) {
+        span.style.cursor = 'pointer';
+        span.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const pos = getPos();
+          setEditingGeoMark({ pos, node });
+          setViewRef(view);
+        };
+      }
+
       return { dom: span, contentDOM: span };
     };
 
     return views;
-  }, []);
+  }, [editable]);
 
   return (
     <div ref={setContainer} className="prosemirror-viewer-container">
@@ -235,6 +390,15 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           className="prosemirror-viewer"
         />
       </ProseMirror>
+
+      {/* Geo-mark editor modal */}
+      {editingGeoMark && (
+        <GeoMarkEditor
+          node={editingGeoMark.node}
+          onSave={handleGeoMarkUpdate}
+          onCancel={() => setEditingGeoMark(null)}
+        />
+      )}
     </div>
   );
 });

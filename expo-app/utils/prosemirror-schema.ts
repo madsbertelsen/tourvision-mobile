@@ -58,7 +58,8 @@ const nodes: { [key: string]: NodeSpec } = {
       transportProfile: { default: null },
       coordSource: { default: null },
       description: { default: null },
-      photoName: { default: null }
+      photoName: { default: null },
+      colorIndex: { default: 0 }
     },
     parseDOM: [{
       tag: "span.geo-mark",
@@ -72,7 +73,8 @@ const nodes: { [key: string]: NodeSpec } = {
           transportProfile: dom.getAttribute("data-transport-profile"),
           coordSource: dom.getAttribute("data-coord-source"),
           description: dom.getAttribute("data-description"),
-          photoName: dom.getAttribute("data-photo-name")
+          photoName: dom.getAttribute("data-photo-name"),
+          colorIndex: dom.getAttribute("data-color-index") ? parseInt(dom.getAttribute("data-color-index")) : 0
         };
       }
     }],
@@ -91,6 +93,7 @@ const nodes: { [key: string]: NodeSpec } = {
       if (node.attrs.coordSource) attrs["data-coord-source"] = node.attrs.coordSource;
       if (node.attrs.description) attrs["data-description"] = node.attrs.description;
       if (node.attrs.photoName) attrs["data-photo-name"] = node.attrs.photoName;
+      if (node.attrs.colorIndex !== undefined) attrs["data-color-index"] = node.attrs.colorIndex;
 
       return ["span", attrs, 0];
     }
