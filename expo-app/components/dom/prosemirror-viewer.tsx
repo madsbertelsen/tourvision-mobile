@@ -28,6 +28,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   ref
 ) => {
   const [mount, setMount] = useState<HTMLElement | null>(null);
+  const [container, setContainer] = useState<HTMLElement | null>(null);
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -76,10 +77,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Handle scroll-based focus detection
   useEffect(() => {
-    if (!mount) return;
+    if (!container || !mount) return;
 
     const handleScroll = () => {
-      const editorRect = mount.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
       const threshold = 150; // pixels from top
 
       let focusedId: string | null = null;
@@ -92,9 +93,9 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           const domNode = mount.querySelector(`[data-node-id="${node.attrs.id}"]`);
           if (domNode) {
             const rect = domNode.getBoundingClientRect();
-            const distance = Math.abs((rect.top - editorRect.top) - threshold);
+            const distance = Math.abs((rect.top - containerRect.top) - threshold);
 
-            if (distance < minDistance && rect.top - editorRect.top <= threshold && rect.bottom - editorRect.top > threshold) {
+            if (distance < minDistance && rect.top - containerRect.top <= threshold && rect.bottom - containerRect.top > threshold) {
               minDistance = distance;
               focusedId = node.attrs.id;
             }
@@ -107,9 +108,14 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       }
     };
 
-    mount.addEventListener('scroll', handleScroll);
-    return () => mount.removeEventListener('scroll', handleScroll);
-  }, [mount, state, onNodeFocus, focusedNodeId]);
+    // Attach listener to the scrolling container
+    container.addEventListener('scroll', handleScroll);
+
+    // Call once on mount to set initial focus
+    handleScroll();
+
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [container, mount, state, onNodeFocus, focusedNodeId]);
 
   // Apply focus styling based on focusedNodeId
   useEffect(() => {
@@ -129,7 +135,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Scroll to a specific node
   const scrollToNode = (nodeId: string) => {
-    if (!mount) return;
+    if (!mount || !container) return;
 
     const element = mount.querySelector(`[data-node-id="${nodeId}"]`);
     if (element) {
@@ -196,7 +202,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   }, []);
 
   return (
-    <div className="prosemirror-viewer-container">
+    <div ref={setContainer} className="prosemirror-viewer-container">
       <ProseMirror
         mount={mount}
         state={state}
