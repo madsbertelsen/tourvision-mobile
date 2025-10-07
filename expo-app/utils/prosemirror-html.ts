@@ -70,23 +70,36 @@ export function prosemirrorToHTML(content: JSONContent): string {
  * This is a simplified parser that handles basic HTML without DOM dependencies
  */
 export function htmlToProsemirror(html: string): JSONContent {
-  // For now, return a basic document structure
-  // In production, you'd want a proper HTML parser
   const content: any[] = [];
 
-  // Simple regex-based parsing for basic elements
-  const paragraphs = html.match(/<p[^>]*>(.*?)<\/p>/gi) || [];
-  const headings = html.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi) || [];
+  // Strip <itinerary> wrapper if present
+  let cleanHtml = html;
+  const itineraryMatch = html.match(/<itinerary[^>]*>(.*)<\/itinerary>/is);
+  if (itineraryMatch) {
+    cleanHtml = itineraryMatch[1];
+  } else {
+    // Handle incomplete itinerary tag
+    const incompleteMatch = html.match(/<itinerary[^>]*>(.*)/is);
+    if (incompleteMatch) {
+      cleanHtml = incompleteMatch[1];
+    }
+  }
 
-  // Combine and sort by position in HTML
-  const elements: { pos: number; node: any }[] = [];
+  // Simple regex-based parsing for complete elements only
+  const paragraphs = cleanHtml.match(/<p[^>]*>(.*?)<\/p>/gis) || [];
+  const headings = cleanHtml.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/gis) || [];
+  const listItems = cleanHtml.match(/<li[^>]*>(.*?)<\/li>/gis) || [];
+
+  // Combine and sort by position in cleanHtml
+  const elements: { pos: number; node: any; length: number }[] = [];
 
   paragraphs.forEach(p => {
-    const pos = html.indexOf(p);
-    const textMatch = p.match(/<p[^>]*>(.*?)<\/p>/i);
+    const pos = cleanHtml.indexOf(p);
+    const textMatch = p.match(/<p[^>]*>(.*?)<\/p>/is);
     if (textMatch) {
       elements.push({
         pos,
+        length: p.length,
         node: {
           type: 'paragraph',
           content: [{ type: 'text', text: stripHTML(textMatch[1]) }]
@@ -96,11 +109,12 @@ export function htmlToProsemirror(html: string): JSONContent {
   });
 
   headings.forEach(h => {
-    const pos = html.indexOf(h);
-    const match = h.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/i);
+    const pos = cleanHtml.indexOf(h);
+    const match = h.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/is);
     if (match) {
       elements.push({
         pos,
+        length: h.length,
         node: {
           type: 'heading',
           attrs: { level: parseInt(match[1]) },
@@ -110,16 +124,56 @@ export function htmlToProsemirror(html: string): JSONContent {
     }
   });
 
-  // Sort by position and extract nodes
+  // Sort by position
   elements.sort((a, b) => a.pos - b.pos);
-  content.push(...elements.map(e => e.node));
 
-  // If no content found, create a default paragraph
+  // Build content array and track what we've processed
+  let lastProcessedPos = 0;
+  elements.forEach(el => {
+    // Add any text between elements
+    if (el.pos > lastProcessedPos) {
+      const betweenText = cleanHtml.substring(lastProcessedPos, el.pos);
+      const stripped = stripHTML(betweenText).trim();
+      if (stripped) {
+        content.push({
+          type: 'paragraph',
+          content: [{ type: 'text', text: stripped }]
+        });
+      }
+    }
+
+    // Add the element
+    content.push(el.node);
+    lastProcessedPos = el.pos + el.length;
+  });
+
+  // Add any remaining text after the last element
+  if (lastProcessedPos < cleanHtml.length) {
+    const remainingText = cleanHtml.substring(lastProcessedPos);
+    const stripped = stripHTML(remainingText).trim();
+    if (stripped) {
+      content.push({
+        type: 'paragraph',
+        content: [{ type: 'text', text: stripped }]
+      });
+    }
+  }
+
+  // If no content found, create a default paragraph with all text
   if (content.length === 0) {
-    content.push({
-      type: 'paragraph',
-      content: [{ type: 'text', text: stripHTML(html) }]
-    });
+    const stripped = stripHTML(cleanHtml).trim();
+    if (stripped) {
+      content.push({
+        type: 'paragraph',
+        content: [{ type: 'text', text: stripped }]
+      });
+    } else {
+      // Return empty document
+      content.push({
+        type: 'paragraph',
+        content: []
+      });
+    }
   }
 
   return {
@@ -130,12 +184,17 @@ export function htmlToProsemirror(html: string): JSONContent {
 
 function stripHTML(html: string): string {
   return html
+    // Remove complete tags
     .replace(/<[^>]*>/g, '')
+    // Remove incomplete opening tags (e.g., "<h1" or "<span class=")
+    .replace(/<[^<]*/g, '')
+    // Decode HTML entities
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
     .trim();
 }
 

@@ -1,120 +1,79 @@
-import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
-import { MockProvider, useMockContext } from '@/contexts/MockContext';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { MockProvider } from '@/contexts/MockContext';
+import { Drawer } from 'expo-router/drawer';
+import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+  View,
+  useWindowDimensions,
 } from 'react-native';
+import TripsSidebar from '@/components/TripsSidebar';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-function MockLayoutContent() {
+// Custom drawer content
+function CustomDrawerContent(props: any) {
   const router = useRouter();
-  const pathname = usePathname();
-  const params = useLocalSearchParams();
-  const {
-    visibleLocations,
-    focusedLocation,
-    setFocusedLocation,
-    followMode
-  } = useMockContext();
 
-  // Determine if we're on a location detail page
-  const isLocationDetail = pathname.includes('/location/');
-  const locationName = params.name as string || 'Location';
-
-  // Map height - 40% of screen
-  const mapHeight = screenHeight * 0.4;
-
-  // Helper to get color index
-  const getColorIndex = (color?: string): number => {
-    if (!color) return 0;
-    const MARKER_COLORS = [
-      '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
-      '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
-    ];
-    const index = MARKER_COLORS.indexOf(color);
-    return index >= 0 ? index : 0;
+  const handleTripSelect = (tripId: string, initialMessage?: string) => {
+    // Navigate to trip detail page
+    router.push({
+      pathname: `/(mock)/trip/${tripId}`,
+      params: initialMessage ? { initialMessage } : undefined
+    });
+    // Close drawer on mobile
+    props.navigation.closeDrawer();
   };
 
-  // Removed bounds change handler - no longer needed
+  return (
+    <View style={{ flex: 1 }}>
+      <TripsSidebar
+        selectedTripId={null}
+        onTripSelect={handleTripSelect}
+      />
+    </View>
+  );
+}
+
+function MockLayoutContent() {
+  const { width: windowWidth } = useWindowDimensions();
+  const isLargeScreen = windowWidth >= 1024;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.mainContainer}>
-        {/* Map - Always visible at top */}
-        <View style={{flex:1, width:"100%"}}>
-          <MapViewSimpleWrapper
-            locations={visibleLocations.map((loc, idx) => ({
-              id: loc.id || `loc-${idx}`,
-              name: loc.name,
-              lat: loc.lat,
-              lng: loc.lng,
-              colorIndex: loc.colorIndex || getColorIndex(loc.color),
-              photoName: loc.photoName,
-            }))}
-            height={300}
-            center={{ lat: 0, lng: 0 }}
-            zoom={2}
-          />
-        </View>
-
-        {/* Dynamic content area */}
-        <View style={styles.contentContainer}>
-          {/* Dynamic Header - only show for location detail pages */}
-          {isLocationDetail && (
-            <View style={styles.header}>
-              <View style={styles.headerWithBack}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => {
-                    // Simply clear focused location and go back
-                    // The map component will handle restoration internally
-                    setFocusedLocation(null);
-                    router.back();
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="arrow-back" size={24} color="#111827" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitleWithBack}>{locationName}</Text>
-                <View style={styles.backButton} />
-              </View>
-            </View>
-          )}
-
-          {/* Content area - changes based on route */}
-          <View style={styles.slotContainer}>
-            <Stack
-              screenOptions={{
-                headerShown: false, // We have our own header
-                animation: 'slide_from_right',
-              }}
-            >
-              <Stack.Screen
-                name="index"
-                options={{
-                  title: 'Chat',
-                }}
-              />
-              <Stack.Screen
-                name="location/[id]"
-                options={{
-                  title: 'Location Detail',
-                  presentation: 'card',
-                }}
-              />
-            </Stack>
-          </View>
-        </View>
-      </View>
-    </SafeAreaView>
+    <Drawer
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
+      screenOptions={{
+        drawerStyle: {
+          width: 320,
+        },
+        drawerType: isLargeScreen ? 'permanent' : 'front',
+        headerShown: true,
+        headerTitle: 'TourVision',
+        headerStyle: {
+          backgroundColor: '#fff',
+        },
+        headerTintColor: '#111827',
+      }}
+    >
+      <Drawer.Screen
+        name="index"
+        options={{
+          title: 'Trips',
+          drawerLabel: 'Trips',
+        }}
+      />
+      <Drawer.Screen
+        name="trip/[id]"
+        options={{
+          title: 'Trip Detail',
+          drawerLabel: () => null, // Hide from drawer menu
+        }}
+      />
+      <Drawer.Screen
+        name="location/[id]"
+        options={{
+          title: 'Location Detail',
+          drawerLabel: () => null, // Hide from drawer menu
+        }}
+      />
+    </Drawer>
   );
 }
 
@@ -126,57 +85,3 @@ export default function MockLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    display: 'flex',
-    backgroundColor: '#ffffff',
-  },
-  mainContainer: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  mapContainer: {
-    width: screenWidth,
-    height: screenHeight * 0.4,
-    backgroundColor: '#f3f4f6',
-  },
-  contentContainer: {
-    flex: 1,
-    flexDirection: 'column',
-    backgroundColor: '#ffffff',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    zIndex: 10,
-  },
-  headerWithBack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitleWithBack: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-    textAlign: 'center',
-  },
-  slotContainer: {
-    flex: 1,
-  },
-});

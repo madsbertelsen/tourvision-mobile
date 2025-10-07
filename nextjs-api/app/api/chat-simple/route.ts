@@ -5,10 +5,35 @@ import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream
 import { z } from 'zod';
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const body = await req.json();
+  console.log('[chat-simple] Request body:', JSON.stringify(body, null, 2));
+
+  const { messages } = body;
+
+  // Validate messages
+  if (!messages || !Array.isArray(messages)) {
+    console.error('[chat-simple] Invalid messages:', messages);
+    return new Response(JSON.stringify({ error: 'Messages array is required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Transform messages to have parts array if they have content field
+  const transformedMessages = messages.map((msg: any) => {
+    if (msg.content && !msg.parts) {
+      return {
+        ...msg,
+        parts: [{ type: 'text', text: msg.content }]
+      };
+    }
+    return msg;
+  });
+
+  console.log('[chat-simple] Transformed messages:', JSON.stringify(transformedMessages, null, 2));
 
   // Convert UIMessages to ModelMessages format
-  const modelMessages = convertToModelMessages(messages);
+  const modelMessages = convertToModelMessages(transformedMessages);
 
   // Initialize enrichment pipeline with Google Maps API key if available
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
@@ -236,6 +261,9 @@ For non-itinerary questions, be conversational and helpful. For itinerary reques
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
       },
     }
   );
