@@ -91,11 +91,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
         // Load document if exists
         if (trip.itineraries && trip.itineraries.length > 0) {
+          console.log('[TripDetailView] Loading document from itineraries, count:', trip.itineraries.length);
           const latestItinerary = trip.itineraries[trip.itineraries.length - 1];
           if (latestItinerary.document) {
+            console.log('[TripDetailView] Latest itinerary document:', JSON.stringify(latestItinerary.document).substring(0, 200));
             const state = stateFromJSON(latestItinerary.document);
             setEditorState(state);
+            console.log('[TripDetailView] EditorState loaded from itinerary');
           }
+        } else {
+          console.log('[TripDetailView] No itineraries found in trip');
         }
       } catch (error) {
         console.error('Error loading trip:', error);
@@ -124,6 +129,131 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
     saveMessages();
   }, [messages]);
+
+  // Sync editor state with itineraries array
+  useEffect(() => {
+    console.log('[TripDetailView] Sync effect triggered');
+    console.log('[TripDetailView] currentTrip exists:', !!currentTrip);
+    console.log('[TripDetailView] itineraries exists:', !!currentTrip?.itineraries);
+    console.log('[TripDetailView] itineraries length:', currentTrip?.itineraries?.length || 0);
+
+    if (!currentTrip?.itineraries || currentTrip.itineraries.length === 0) {
+      console.log('[TripDetailView] No itineraries to sync');
+      return;
+    }
+
+    const latestItinerary = currentTrip.itineraries[currentTrip.itineraries.length - 1];
+    if (!latestItinerary.document) {
+      console.log('[TripDetailView] Latest itinerary has no document');
+      return;
+    }
+
+    console.log('[TripDetailView] Syncing editorState with latest itinerary');
+    console.log('[TripDetailView] Latest itinerary document:', JSON.stringify(latestItinerary.document).substring(0, 200));
+    const newState = stateFromJSON(latestItinerary.document);
+    setEditorState(newState);
+    console.log('[TripDetailView] EditorState synced');
+  }, [currentTrip?.itineraries?.length, currentTrip]);
+
+  // Parse and save itinerary from messages
+  useEffect(() => {
+    const parseItinerary = async () => {
+      if (!currentTrip || messages.length === 0) return;
+
+      // Only parse when streaming is complete
+      if (isChatLoading) return;
+
+      // Find last assistant message
+      const lastAssistantMessage = messages.findLast((msg: any) => msg.role === 'assistant');
+      if (!lastAssistantMessage) {
+        console.log('[TripDetailView] No assistant message found');
+        return;
+      }
+
+      // Check if already processed
+      const existingItinerary = currentTrip.itineraries?.find(
+        (it: any) => it.messageId === lastAssistantMessage.id
+      );
+
+      // If already processed and has content, skip
+      if (existingItinerary) {
+        const hasContent = existingItinerary.document?.content?.some(
+          (node: any) => node.content && node.content.length > 0
+        );
+        if (hasContent) {
+          console.log('[TripDetailView] Message already processed with content:', lastAssistantMessage.id);
+          return;
+        } else {
+          console.log('[TripDetailView] Message was processed but document is empty, re-parsing');
+          // Remove the empty itinerary so we can re-parse
+          const filteredItineraries = currentTrip.itineraries?.filter(
+            (it: any) => it.messageId !== lastAssistantMessage.id
+          );
+          const updatedTrip = {
+            ...currentTrip,
+            itineraries: filteredItineraries || [],
+          };
+          await saveTrip(updatedTrip);
+          setCurrentTrip(updatedTrip);
+        }
+      }
+
+      // Extract text content
+      const textParts = lastAssistantMessage.parts?.filter((part: any) => part.type === 'text') || [];
+      const textContent = textParts.map((part: any) => part.text).join('');
+
+      console.log('[TripDetailView] Checking message for itinerary');
+      console.log('[TripDetailView] Message has parts:', lastAssistantMessage.parts?.length || 0);
+      console.log('[TripDetailView] Text parts count:', textParts.length);
+      console.log('[TripDetailView] Text content length:', textContent.length);
+      console.log('[TripDetailView] Text content preview:', textContent.substring(0, 300));
+
+      // Check for itinerary HTML
+      if (!textContent.includes('<itinerary')) {
+        console.log('[TripDetailView] No itinerary HTML found in message');
+        return;
+      }
+
+      console.log('[TripDetailView] Parsing itinerary from message:', lastAssistantMessage.id);
+      console.log('[TripDetailView] Full text content:', textContent);
+
+      try {
+        // Parse HTML to ProseMirror
+        const proseMirrorDoc = htmlToProsemirror(textContent);
+
+        // Create new itinerary entry
+        const newItinerary = {
+          messageId: lastAssistantMessage.id,
+          document: proseMirrorDoc,
+          createdAt: Date.now(),
+        };
+
+        // Update trip with new itinerary
+        const updatedItineraries = [...(currentTrip.itineraries || []), newItinerary];
+        const updatedTrip = {
+          ...currentTrip,
+          itineraries: updatedItineraries,
+        };
+
+        console.log('[TripDetailView] Saving itinerary, total count:', updatedItineraries.length);
+        console.log('[TripDetailView] Itinerary document:', JSON.stringify(proseMirrorDoc).substring(0, 200));
+        await saveTrip(updatedTrip);
+        setCurrentTrip(updatedTrip);
+
+        // Update editor state
+        const newState = stateFromJSON(proseMirrorDoc);
+        console.log('[TripDetailView] Setting editor state from parsed itinerary');
+        console.log('[TripDetailView] New state doc:', JSON.stringify(newState.doc.toJSON()).substring(0, 200));
+        setEditorState(newState);
+
+        console.log('[TripDetailView] Itinerary parsed and saved');
+      } catch (error) {
+        console.error('[TripDetailView] Failed to parse itinerary:', error);
+      }
+    };
+
+    parseItinerary();
+  }, [messages, currentTrip, isChatLoading]);
 
   // Handle initial message
   useEffect(() => {
@@ -213,13 +343,21 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'chat' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('chat')}
+            onPress={() => {
+              console.log('[TripDetailView] Switching to chat view');
+              setViewMode('chat');
+            }}
           >
             <Ionicons name="chatbubble-outline" size={20} color={viewMode === 'chat' ? '#fff' : '#6B7280'} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'document' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('document')}
+            onPress={() => {
+              console.log('[TripDetailView] Switching to document view');
+              console.log('[TripDetailView] Current itineraries count:', currentTrip?.itineraries?.length || 0);
+              console.log('[TripDetailView] Current editorState doc:', JSON.stringify(editorState.doc.toJSON()).substring(0, 200));
+              setViewMode('document');
+            }}
           >
             <Ionicons name="document-text-outline" size={20} color={viewMode === 'document' ? '#fff' : '#6B7280'} />
           </TouchableOpacity>
@@ -331,14 +469,21 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
           {/* Document editor */}
           <View style={{ flex: 1 }}>
-            <ProseMirrorViewerWrapper
-              content={editorState.doc.toJSON()}
-              onNodeFocus={handleNodeFocus}
-              focusedNodeId={focusedNodeId}
-              height="100%"
-              editable={isEditable}
-              onChange={handleDocumentChange}
-            />
+            {(() => {
+              const docContent = editorState.doc.toJSON();
+              console.log('[TripDetailView] Rendering document view with content:', JSON.stringify(docContent).substring(0, 200));
+              console.log('[TripDetailView] Document has content nodes:', docContent.content?.length || 0);
+              return (
+                <ProseMirrorViewerWrapper
+                  content={docContent}
+                  onNodeFocus={handleNodeFocus}
+                  focusedNodeId={focusedNodeId}
+                  height="100%"
+                  editable={isEditable}
+                  onChange={handleDocumentChange}
+                />
+              );
+            })()}
           </View>
         </View>
       )}
