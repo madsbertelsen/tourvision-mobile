@@ -358,14 +358,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         const lng = parseFloat(node.attrs.lng);
         if (!isNaN(lat) && !isNaN(lng)) {
           locations.push({
-            id: node.attrs.geoId || `loc-${locationIndex++}`,
+            id: node.attrs.geoId || `loc-${locationIndex}`,
             name: node.attrs.placeName || 'Location',
             lat,
             lng,
             description: node.attrs.description,
-            colorIndex: node.attrs.colorIndex,
+            // Assign color index if not present
+            colorIndex: node.attrs.colorIndex ?? locationIndex,
             photoName: node.attrs.photoName,
           });
+          locationIndex++;
         }
       }
       if (node.content) {

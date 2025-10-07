@@ -231,7 +231,7 @@ export default function HexGridOverlay({ width, height, focusedLocation, locatio
             color: '#111',
             letterSpacing: '-0.02em',
           }}>
-            {focusedLocation.name}
+            {focusedLocation.name.split(',')[0]}
           </h2>
           <button
             onClick={onClose}

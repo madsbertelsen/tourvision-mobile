@@ -354,7 +354,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
         '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
       ];
       span.style.backgroundColor = `${colors[colorIndex % colors.length]}33`;
-      span.style.borderBottom = `2px solid ${colors[colorIndex % colors.length]}`;
 
       span.title = node.attrs?.placeName || 'Location';
 

@@ -335,7 +335,7 @@ function MapContent({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}>
-              {location.name}
+              {location.name.split(',')[0]}
             </div>
           </div>
         );
@@ -456,7 +456,7 @@ function MapContent({
                       borderRadius: '4px',
                       opacity: isAlternative ? 0.7 : 1,
                     }}>
-                      {loc.name}
+                      {loc.name.split(',')[0]}
                     </div>
                   </div>
                 );
@@ -636,7 +636,7 @@ function MapContent({
                                     color: '#1f2937',
                                     marginBottom: '2px',
                                   }}>
-                                    {alt.location.name}
+                                    {alt.location.name.split(',')[0]}
                                   </div>
                                   <div style={{
                                     fontSize: '10px',
