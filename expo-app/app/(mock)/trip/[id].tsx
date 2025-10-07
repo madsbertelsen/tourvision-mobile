@@ -456,6 +456,33 @@ export default function MockChatScreen() {
     fetchRoutes();
   }, [locationGraph, setRoutes]);
 
+  // Handle document changes from editor
+  const handleDocumentChange = useCallback(async (newDoc: any) => {
+    if (!currentTrip || !currentTrip.itineraries || currentTrip.itineraries.length === 0) return;
+
+    console.log('[TripChat] Document changed, persisting to storage');
+
+    // Update the editor state
+    const newState = stateFromJSON(newDoc);
+    setEditorState(newState);
+
+    // Update the trip with the new document
+    const updatedItineraries = [...currentTrip.itineraries];
+    updatedItineraries[updatedItineraries.length - 1] = {
+      ...updatedItineraries[updatedItineraries.length - 1],
+      document: newDoc
+    };
+
+    const updatedTrip = {
+      ...currentTrip,
+      itineraries: updatedItineraries
+    };
+
+    // Save to storage
+    await saveTrip(updatedTrip);
+    setCurrentTrip(updatedTrip);
+  }, [currentTrip]);
+
   // Handle node focus from ProseMirror viewer
   const handleNodeFocus = useCallback((nodeId: string | null) => {
     console.log('[TripChat] Node focus changed to:', nodeId);
@@ -776,6 +803,7 @@ export default function MockChatScreen() {
                     focusedNodeId={focusedNodeId}
                     height="100%"
                     editable={isEditable}
+                    onChange={handleDocumentChange}
                   />
                 </View>
               )}

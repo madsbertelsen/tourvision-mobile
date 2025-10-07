@@ -13,6 +13,7 @@ interface ProseMirrorViewerProps {
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
   editable?: boolean;
+  onChange?: (doc: any) => void;
 }
 
 export interface ProseMirrorViewerRef {
@@ -25,7 +26,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     content,
     onNodeFocus,
     focusedNodeId,
-    editable = false
+    editable = false,
+    onChange
   },
   ref
 ) => {
@@ -83,7 +85,14 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Handle transactions when editing
   const dispatchTransaction = (tr: any) => {
-    setState(prevState => prevState.apply(tr));
+    setState(prevState => {
+      const newState = prevState.apply(tr);
+      // Notify parent of document changes
+      if (onChange && tr.docChanged) {
+        onChange(newState.doc.toJSON());
+      }
+      return newState;
+    });
   };
 
   // Handle scroll-based focus detection
