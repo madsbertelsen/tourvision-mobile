@@ -1,3 +1,4 @@
+import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import ProseMirrorViewerWrapper from '@/components/ProseMirrorViewerWrapper';
 import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
@@ -20,6 +21,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -32,6 +34,7 @@ type ViewMode = 'chat' | 'document';
 
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const { setFocusedLocation } = useMockContext();
+  const { width } = useWindowDimensions();
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
@@ -45,6 +48,9 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Determine if we should show split view (document + map)
+  const isLargeScreen = width >= 1024;
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -332,6 +338,50 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     [currentTrip]
   );
 
+  // Extract locations from the document for map display
+  const extractLocations = useCallback((doc: any) => {
+    const locations: Array<{
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      description?: string;
+      colorIndex?: number;
+      photoName?: string;
+    }> = [];
+
+    let locationIndex = 0;
+
+    const traverse = (node: any) => {
+      if (node.type === 'geoMark' && node.attrs?.lat && node.attrs?.lng) {
+        const lat = parseFloat(node.attrs.lat);
+        const lng = parseFloat(node.attrs.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          locations.push({
+            id: node.attrs.geoId || `loc-${locationIndex++}`,
+            name: node.attrs.placeName || 'Location',
+            lat,
+            lng,
+            description: node.attrs.description,
+            colorIndex: node.attrs.colorIndex,
+            photoName: node.attrs.photoName,
+          });
+        }
+      }
+      if (node.content) {
+        node.content.forEach(traverse);
+      }
+    };
+
+    if (doc?.content) {
+      doc.content.forEach(traverse);
+    }
+
+    return locations;
+  }, []);
+
+  const documentLocations = extractLocations(editorState.doc.toJSON());
+
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
     sendMessage({ content: inputText.trim() });
@@ -472,21 +522,51 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <ScrollView style={styles.documentScrollView} contentContainerStyle={styles.documentScrollContent}>
-          {/* Document content in message bubble */}
-          <View style={styles.messageWrapper}>
-            <View style={[styles.messageBubble, styles.assistantMessage]}>
-              <ProseMirrorViewerWrapper
-                content={editorState.doc.toJSON()}
-                onNodeFocus={handleNodeFocus}
-                focusedNodeId={focusedNodeId}
-                height="auto"
-                editable={false}
-                onChange={() => {}}
-              />
+        <View style={styles.documentContainer}>
+          {isLargeScreen ? (
+            // Split view for large screens: document on left, map on right
+            <View style={styles.splitView}>
+              <ScrollView style={[styles.documentScrollView, styles.documentScrollViewSplit]} contentContainerStyle={styles.documentScrollContent}>
+                {/* Document content in message bubble */}
+                <View style={styles.messageWrapper}>
+                  <View style={[styles.messageBubble, styles.assistantMessage]}>
+                    <ProseMirrorViewerWrapper
+                      content={editorState.doc.toJSON()}
+                      onNodeFocus={handleNodeFocus}
+                      focusedNodeId={focusedNodeId}
+                      height="auto"
+                      editable={true}
+                      onChange={handleDocumentChange}
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+              <View style={styles.mapContainer}>
+                <MapViewSimpleWrapper
+                  locations={documentLocations}
+                  height="100%"
+                />
+              </View>
             </View>
-          </View>
-        </ScrollView>
+          ) : (
+            // Single column view for mobile
+            <ScrollView style={styles.documentScrollView} contentContainerStyle={styles.documentScrollContent}>
+              {/* Document content in message bubble */}
+              <View style={styles.messageWrapper}>
+                <View style={[styles.messageBubble, styles.assistantMessage]}>
+                  <ProseMirrorViewerWrapper
+                    content={editorState.doc.toJSON()}
+                    onNodeFocus={handleNodeFocus}
+                    focusedNodeId={focusedNodeId}
+                    height="auto"
+                    editable={true}
+                    onChange={handleDocumentChange}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
       )}
     </View>
   );
@@ -621,11 +701,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
+  documentScrollViewSplit: {
+    maxWidth: 900,
+  },
   documentScrollContent: {
     padding: 16,
   },
   documentContainer: {
     flex: 1,
+  },
+  splitView: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 16,
+  },
+  mapContainer: {
+    flex: 1,
+    minWidth: 0,
+    padding: 16,
+    backgroundColor: '#F3F4F6',
   },
   documentToolbar: {
     flexDirection: 'row',
