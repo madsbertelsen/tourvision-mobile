@@ -46,6 +46,7 @@ export default function MockChatScreen() {
   const lastFetchedGraphKey = useRef<string>('');
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const initialMessageSentRef = useRef(false);
+  const [isEditable, setIsEditable] = useState(false);
 
   // Load trip on mount first
   useEffect(() => {
@@ -686,6 +687,16 @@ export default function MockChatScreen() {
         </Text>
         <TouchableOpacity
           style={styles.itineraryToggle}
+          onPress={() => setIsEditable(!isEditable)}
+        >
+          <Ionicons
+            name={isEditable ? "create" : "create-outline"}
+            size={24}
+            color={isEditable ? "#3B82F6" : "#111827"}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.itineraryToggle}
           onPress={() => setShowItinerary(!showItinerary)}
         >
           <Ionicons
@@ -764,6 +775,7 @@ export default function MockChatScreen() {
                     onNodeFocus={handleNodeFocus}
                     focusedNodeId={focusedNodeId}
                     height="100%"
+                    editable={isEditable}
                   />
                 </View>
               )}

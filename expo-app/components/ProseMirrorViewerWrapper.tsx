@@ -10,13 +10,15 @@ interface ProseMirrorViewerWrapperProps {
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
   height?: number | string;
+  editable?: boolean;
 }
 
 export function ProseMirrorViewerWrapper({
   content,
   onNodeFocus,
   focusedNodeId,
-  height = '100%'
+  height = '100%',
+  editable = false
 }: ProseMirrorViewerWrapperProps) {
   const viewerRef = useRef<ProseMirrorViewerRef>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +57,7 @@ export function ProseMirrorViewerWrapper({
           content={content}
           onNodeFocus={onNodeFocus}
           focusedNodeId={focusedNodeId}
+          editable={editable}
         />
       </Suspense>
     </View>

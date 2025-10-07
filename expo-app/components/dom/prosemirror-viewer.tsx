@@ -12,6 +12,7 @@ interface ProseMirrorViewerProps {
   content?: any; // ProseMirror JSON document
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
+  editable?: boolean;
 }
 
 export interface ProseMirrorViewerRef {
@@ -23,7 +24,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   {
     content,
     onNodeFocus,
-    focusedNodeId
+    focusedNodeId,
+    editable = false
   },
   ref
 ) => {
@@ -54,26 +56,35 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [content]);
 
-  // Create editor state (read-only)
-  const [state] = useState(() => {
+  // Create editor state with proper state management
+  const [state, setState] = useState(() => {
     return EditorState.create({
       doc: initialDoc,
       schema
     });
   });
 
-  // Update state when content changes
+  // Update state when content changes externally
   useEffect(() => {
     if (!content) return;
 
     try {
       const newDoc = content._type ? content : schema.nodeFromJSON(content);
-      // For now, we'll keep the state immutable since it's read-only
-      // In the future, we can update it if needed
+      // Update the state with new content
+      setState(EditorState.create({
+        doc: newDoc,
+        schema,
+        selection: state.selection // Preserve selection if possible
+      }));
     } catch (error) {
       console.error('Error updating content:', error);
     }
   }, [content]);
+
+  // Handle transactions when editing
+  const dispatchTransaction = (tr: any) => {
+    setState(prevState => prevState.apply(tr));
+  };
 
   // Handle scroll-based focus detection
   useEffect(() => {
@@ -206,8 +217,9 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       <ProseMirror
         mount={mount}
         state={state}
+        dispatchTransaction={editable ? dispatchTransaction : undefined}
         nodeViews={nodeViews}
-        editable={() => false}
+        editable={() => editable}
       >
         <div
           ref={setMount}
