@@ -474,17 +474,22 @@ export default function MockChatScreen() {
       if (node.attrs?.id === nodeId) {
         // Extract geo-marks from this node's content
         const geoMarks = extractGeoMarks(node);
-        geoMarks.forEach(({ placeName, lat, lng, geoId }) => {
-          if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        console.log('[TripChat] Found', geoMarks.length, 'geo-marks in node:', nodeId);
+        geoMarks.forEach(({ attrs }) => {
+          const { placeName, lat, lng, geoId } = attrs;
+          const latNum = parseFloat(lat);
+          const lngNum = parseFloat(lng);
+
+          if (lat && lng && !isNaN(latNum) && !isNaN(lngNum)) {
             locations.push({
               name: placeName,
-              lat,
-              lng,
+              lat: latNum,
+              lng: lngNum,
               geoId,
-              photoName: undefined, // Not available in current schema
+              photoName: attrs.photoName,
               color: undefined, // Will be assigned by index
-              transportFrom: undefined,
-              transportProfile: undefined,
+              transportFrom: attrs.transportFrom,
+              transportProfile: attrs.transportProfile,
             });
           }
         });
