@@ -48,6 +48,14 @@ const ROUTE_COLORS = {
   transit: '#8B5CF6', // Purple
 };
 
+// Helper function to convert hex color to RGB array
+function hexToRgb(hex: string, alpha: number = 1): [number, number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return [r, g, b, alpha * 255];
+}
+
 // Get route style based on profile
 function getRouteStyle(profile: string) {
   return {
@@ -57,13 +65,6 @@ function getRouteStyle(profile: string) {
   };
 }
 
-// Helper function to convert hex color to RGB array
-function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [128, 128, 128];
-}
 
 // Easing function for smooth animations
 function easeInOutCubic(t: number): number {
@@ -294,53 +295,6 @@ function MapContent({
 
   return (
     <>
-      {/* Simple labels to the right of markers */}
-      {!isAnimating && !isZoomAnimating && !selectedLocationModal && deckRef.current && locations.map((location, index) => {
-        const deck = deckRef.current.deck;
-        if (!deck) return null;
-
-        const viewport = deck.getViewports()[0];
-        const projected = viewport.project([location.lng, location.lat]);
-
-        const colorIndex = location.colorIndex ?? index;
-        const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-        const backgroundColor = `${color}33`; // 20% opacity
-
-        return (
-          <div
-            key={`label-${location.id}`}
-            style={{
-              position: 'absolute',
-              left: `${projected[0] + 10}px`, // 10px to the right of marker
-              top: `${projected[1]}px`,
-              transform: 'translate(0, -50%)',
-              backgroundColor: 'white',
-              borderRadius: '6px',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              cursor: 'pointer',
-              pointerEvents: 'auto',
-              zIndex: 2,
-            }}
-          >
-            <div style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              color: '#1f2937',
-              textAlign: 'left',
-              whiteSpace: 'nowrap',
-              padding: '6px 12px',
-              backgroundColor: backgroundColor,
-              borderRadius: '6px',
-              maxWidth: '150px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
-              {location.name.split(',')[0]}
-            </div>
-          </div>
-        );
-      })}
-
       {/* Itinerary Overlay - Top Left */}
       {showItinerary && locations.length > 0 && (
         <div style={{
@@ -1142,13 +1096,13 @@ export default function MapViewSimple({
 
     const routeStyle = getRouteStyle(route.profile);
     const isSelected = selectedRoute === route.id;
-    const color = hexToRgb(routeStyle.color);
+    const color = hexToRgb(routeStyle.color, isSelected ? 1 : 0.7);
 
     layers.push(new PathLayer({
       id: `route-${route.id}`,
       data: [{ path: route.geometry.coordinates }],
       getPath: (d: any) => d.path,
-      getColor: [...color, isSelected ? 255 : 179], // 0.7 opacity when not selected
+      getColor: color,
       getWidth: isSelected ? routeStyle.width + 2 : routeStyle.width,
       widthMinPixels: 2,
       pickable: false,
@@ -1220,6 +1174,34 @@ export default function MapViewSimple({
     stroked: false,
     filled: true,
   }));
+
+  // Location labels - rendered with TextLayer for performance
+  if (!selectedLocationModal) {
+    layers.push(new TextLayer({
+      id: 'location-labels',
+      data: locations,
+      getPosition: (d: Location) => [d.lng, d.lat],
+      getText: (d: Location) => d.name.split(',')[0],
+      getColor: [31, 41, 55, 255], // #1f2937
+      getSize: 12,
+      getPixelOffset: [20, 0], // 20px to the right of marker
+      getTextAnchor: 'start',
+      getAlignmentBaseline: 'center',
+      background: true,
+      getBackgroundColor: (d: Location) => {
+        const index = locations.indexOf(d);
+        const colorIndex = d.colorIndex ?? index;
+        const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+        // Convert hex to RGB with 20% opacity for background
+        return hexToRgb(color, 0.2);
+      },
+      backgroundPadding: [4, 8], // vertical, horizontal padding
+      billboard: false,
+      pickable: false,
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontWeight: 600,
+    }));
+  }
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 

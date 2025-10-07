@@ -9,6 +9,7 @@ import { fetchRouteWithCache, type RouteDetails } from '@/utils/transportation-a
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { EditorState } from 'prosemirror-state';
@@ -34,6 +35,7 @@ interface TripDetailViewProps {
 type ViewMode = 'chat' | 'document';
 
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
+  const router = useRouter();
   const { setFocusedLocation } = useMockContext();
   const { width } = useWindowDimensions();
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
@@ -294,12 +296,13 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   useEffect(() => {
     if (initialMessage && !isLoadingTrip && !initialMessageSentRef.current && currentTrip) {
       initialMessageSentRef.current = true;
-      setInputText(initialMessage);
       setTimeout(() => {
         sendMessage({ content: initialMessage });
+        // Clear the initialMessage from URL after sending
+        router.setParams({ initialMessage: undefined });
       }, 100);
     }
-  }, [initialMessage, isLoadingTrip, currentTrip]);
+  }, [initialMessage, isLoadingTrip, currentTrip, sendMessage, router]);
 
   // Auto-scroll to bottom
   useEffect(() => {

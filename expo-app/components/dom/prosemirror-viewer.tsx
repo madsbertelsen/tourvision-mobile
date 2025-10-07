@@ -2,10 +2,12 @@
 
 import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { ProseMirror } from '@nytimes/react-prosemirror';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, Plugin } from 'prosemirror-state';
 import { Schema, Node as ProseMirrorNode, DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import { schema } from '@/utils/prosemirror-schema';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { keymap } from 'prosemirror-keymap';
+import { baseKeymap } from 'prosemirror-commands';
 import './prosemirror-viewer-styles.css';
 
 interface ProseMirrorViewerProps {
@@ -188,7 +190,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [state, setState] = useState(() => {
     return EditorState.create({
       doc: initialDoc,
-      schema
+      schema,
+      plugins: [
+        keymap(baseKeymap)
+      ]
     });
   });
 
@@ -202,6 +207,9 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       setState(EditorState.create({
         doc: newDoc,
         schema,
+        plugins: [
+          keymap(baseKeymap)
+        ],
         selection: state.selection // Preserve selection if possible
       }));
     } catch (error) {
