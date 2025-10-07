@@ -42,6 +42,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   );
   const [inputText, setInputText] = useState('');
   const initialMessageSentRef = useRef(false);
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -157,56 +158,43 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
   // Parse and save itinerary from messages
   useEffect(() => {
+    console.log('[TripDetailView] Parse effect FIRED');
+    console.log('[TripDetailView] messages:', messages.length);
+    console.log('[TripDetailView] isChatLoading:', isChatLoading);
+    console.log('[TripDetailView] currentTrip:', !!currentTrip);
+
     const parseItinerary = async () => {
-      if (!currentTrip || messages.length === 0) return;
+      if (!currentTrip || messages.length === 0) {
+        console.log('[TripDetailView] Early exit - no trip or no messages');
+        return;
+      }
 
       // Only parse when streaming is complete
-      if (isChatLoading) return;
+      if (isChatLoading) {
+        console.log('[TripDetailView] Early exit - still loading');
+        return;
+      }
 
       // Find last assistant message
       const lastAssistantMessage = messages.findLast((msg: any) => msg.role === 'assistant');
       if (!lastAssistantMessage) {
-        console.log('[TripDetailView] No assistant message found');
+        console.log('[TripDetailView] Early exit - no assistant message');
         return;
       }
 
-      // Check if already processed
+      console.log('[TripDetailView] Last assistant message ID:', lastAssistantMessage.id);
+
+      // Check if already exists in storage with actual content
       const existingItinerary = currentTrip.itineraries?.find(
         (it: any) => it.messageId === lastAssistantMessage.id
       );
 
-      // If already processed and has content, skip
-      if (existingItinerary) {
-        const hasContent = existingItinerary.document?.content?.some(
-          (node: any) => node.content && node.content.length > 0
-        );
-        if (hasContent) {
-          console.log('[TripDetailView] Message already processed with content:', lastAssistantMessage.id);
-          return;
-        } else {
-          console.log('[TripDetailView] Message was processed but document is empty, re-parsing');
-          // Remove the empty itinerary so we can re-parse
-          const filteredItineraries = currentTrip.itineraries?.filter(
-            (it: any) => it.messageId !== lastAssistantMessage.id
-          );
-          const updatedTrip = {
-            ...currentTrip,
-            itineraries: filteredItineraries || [],
-          };
-          await saveTrip(updatedTrip);
-          setCurrentTrip(updatedTrip);
-        }
-      }
-
-      // Extract text content
+      // Extract text content first
       const textParts = lastAssistantMessage.parts?.filter((part: any) => part.type === 'text') || [];
       const textContent = textParts.map((part: any) => part.text).join('');
 
       console.log('[TripDetailView] Checking message for itinerary');
-      console.log('[TripDetailView] Message has parts:', lastAssistantMessage.parts?.length || 0);
-      console.log('[TripDetailView] Text parts count:', textParts.length);
       console.log('[TripDetailView] Text content length:', textContent.length);
-      console.log('[TripDetailView] Text content preview:', textContent.substring(0, 300));
 
       // Check for itinerary HTML
       if (!textContent.includes('<itinerary')) {
@@ -214,8 +202,43 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         return;
       }
 
+      // Check if HTML is complete (has closing tag)
+      const isComplete = textContent.includes('</itinerary>');
+      if (!isComplete) {
+        console.log('[TripDetailView] Itinerary HTML incomplete (no closing tag), waiting...');
+        return;
+      }
+
+      console.log('[TripDetailView] Found complete <itinerary> HTML');
+
+      // Check if we already have this exact content parsed
+      if (existingItinerary) {
+        // Compare the HTML content to see if it's the same
+        const storedHtml = existingItinerary.sourceHtml || '';
+        if (storedHtml === textContent) {
+          console.log('[TripDetailView] Itinerary already parsed with same content, skipping');
+          lastProcessedMessageIdRef.current = lastAssistantMessage.id;
+          return;
+        } else {
+          console.log('[TripDetailView] Message content changed, will re-parse');
+          console.log('[TripDetailView] Stored length:', storedHtml.length, 'Current length:', textContent.length);
+          // Remove old itinerary to replace with new parse
+          const filteredItineraries = currentTrip.itineraries?.filter(
+            (it: any) => it.messageId !== lastAssistantMessage.id
+          );
+          currentTrip.itineraries = filteredItineraries || [];
+        }
+      }
+
+      // Check if we've already processed this in this session
+      if (lastProcessedMessageIdRef.current === lastAssistantMessage.id) {
+        console.log('[TripDetailView] Already processed in this session, skipping');
+        return;
+      }
+
+      console.log('[TripDetailView] Found <itinerary> tag, parsing...');
+
       console.log('[TripDetailView] Parsing itinerary from message:', lastAssistantMessage.id);
-      console.log('[TripDetailView] Full text content:', textContent);
 
       try {
         // Parse HTML to ProseMirror
@@ -225,6 +248,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         const newItinerary = {
           messageId: lastAssistantMessage.id,
           document: proseMirrorDoc,
+          sourceHtml: textContent,
           createdAt: Date.now(),
         };
 
@@ -247,13 +271,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         setEditorState(newState);
 
         console.log('[TripDetailView] Itinerary parsed and saved');
+
+        // Mark as processed
+        lastProcessedMessageIdRef.current = lastAssistantMessage.id;
       } catch (error) {
         console.error('[TripDetailView] Failed to parse itinerary:', error);
       }
     };
 
     parseItinerary();
-  }, [messages, currentTrip, isChatLoading]);
+  }, [messages, isChatLoading, currentTrip]);
 
   // Handle initial message
   useEffect(() => {
@@ -343,21 +370,13 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'chat' && styles.viewModeButtonActive]}
-            onPress={() => {
-              console.log('[TripDetailView] Switching to chat view');
-              setViewMode('chat');
-            }}
+            onPress={() => setViewMode('chat')}
           >
             <Ionicons name="chatbubble-outline" size={20} color={viewMode === 'chat' ? '#fff' : '#6B7280'} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'document' && styles.viewModeButtonActive]}
-            onPress={() => {
-              console.log('[TripDetailView] Switching to document view');
-              console.log('[TripDetailView] Current itineraries count:', currentTrip?.itineraries?.length || 0);
-              console.log('[TripDetailView] Current editorState doc:', JSON.stringify(editorState.doc.toJSON()).substring(0, 200));
-              setViewMode('document');
-            }}
+            onPress={() => setViewMode('document')}
           >
             <Ionicons name="document-text-outline" size={20} color={viewMode === 'document' ? '#fff' : '#6B7280'} />
           </TouchableOpacity>
@@ -453,39 +472,21 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <View style={styles.documentContainer}>
-          {/* Document toolbar */}
-          <View style={styles.documentToolbar}>
-            <TouchableOpacity
-              style={[styles.toolbarButton, isEditable && styles.toolbarButtonActive]}
-              onPress={() => setIsEditable(!isEditable)}
-            >
-              <Ionicons name={isEditable ? 'checkmark' : 'create-outline'} size={20} color={isEditable ? '#fff' : '#6B7280'} />
-              <Text style={[styles.toolbarButtonText, isEditable && styles.toolbarButtonTextActive]}>
-                {isEditable ? 'Done' : 'Edit'}
-              </Text>
-            </TouchableOpacity>
+        <ScrollView style={styles.documentScrollView} contentContainerStyle={styles.documentScrollContent}>
+          {/* Document content in message bubble */}
+          <View style={styles.messageWrapper}>
+            <View style={[styles.messageBubble, styles.assistantMessage]}>
+              <ProseMirrorViewerWrapper
+                content={editorState.doc.toJSON()}
+                onNodeFocus={handleNodeFocus}
+                focusedNodeId={focusedNodeId}
+                height="auto"
+                editable={false}
+                onChange={() => {}}
+              />
+            </View>
           </View>
-
-          {/* Document editor */}
-          <View style={{ flex: 1 }}>
-            {(() => {
-              const docContent = editorState.doc.toJSON();
-              console.log('[TripDetailView] Rendering document view with content:', JSON.stringify(docContent).substring(0, 200));
-              console.log('[TripDetailView] Document has content nodes:', docContent.content?.length || 0);
-              return (
-                <ProseMirrorViewerWrapper
-                  content={docContent}
-                  onNodeFocus={handleNodeFocus}
-                  focusedNodeId={focusedNodeId}
-                  height="100%"
-                  editable={isEditable}
-                  onChange={handleDocumentChange}
-                />
-              );
-            })()}
-          </View>
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -615,6 +616,13 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#9CA3AF',
     opacity: 0.5,
+  },
+  documentScrollView: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  documentScrollContent: {
+    padding: 16,
   },
   documentContainer: {
     flex: 1,

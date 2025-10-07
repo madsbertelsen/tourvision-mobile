@@ -15,6 +15,24 @@ export function prosemirrorToHTML(content: JSONContent): string {
       return escapeHTML(node.text || '');
     }
 
+    // Handle geo-mark nodes
+    if (node.type === 'geoMark') {
+      const attrs: string[] = ['class="geo-mark"', 'data-geo="true"'];
+      if (node.attrs?.lat) attrs.push(`data-lat="${node.attrs.lat}"`);
+      if (node.attrs?.lng) attrs.push(`data-lng="${node.attrs.lng}"`);
+      if (node.attrs?.placeName) attrs.push(`data-place-name="${escapeHTML(node.attrs.placeName)}"`);
+      if (node.attrs?.geoId) attrs.push(`data-geo-id="${node.attrs.geoId}"`);
+      if (node.attrs?.transportFrom) attrs.push(`data-transport-from="${node.attrs.transportFrom}"`);
+      if (node.attrs?.transportProfile) attrs.push(`data-transport-profile="${node.attrs.transportProfile}"`);
+      if (node.attrs?.coordSource) attrs.push(`data-coord-source="${node.attrs.coordSource}"`);
+      if (node.attrs?.description) attrs.push(`data-description="${escapeHTML(node.attrs.description)}"`);
+      if (node.attrs?.photoName) attrs.push(`data-photo-name="${node.attrs.photoName}"`);
+      if (node.attrs?.colorIndex !== undefined) attrs.push(`data-color-index="${node.attrs.colorIndex}"`);
+
+      const content = node.content?.map(nodeToHTML).join('') || node.attrs?.placeName || '';
+      return `<span ${attrs.join(' ')}>${content}</span>`;
+    }
+
     // Handle element nodes
     const id = `node-${nodeId++}`;
 
@@ -85,6 +103,77 @@ export function htmlToProsemirror(html: string): JSONContent {
     }
   }
 
+  // Helper function to parse inline content (text and geo-marks)
+  const parseInlineContent = (html: string): any[] => {
+    const inlineNodes: any[] = [];
+    const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>(.*?)<\/span>/gi;
+
+    let lastIndex = 0;
+    let match;
+
+    while ((match = geoMarkRegex.exec(html)) !== null) {
+      // Add text before geo-mark
+      if (match.index > lastIndex) {
+        const textBefore = html.substring(lastIndex, match.index);
+        const stripped = stripHTML(textBefore).trim();
+        if (stripped) {
+          inlineNodes.push({ type: 'text', text: stripped });
+        }
+      }
+
+      // Extract attributes from the span tag
+      const spanTag = html.substring(match.index, match.index + match[0].indexOf('>') + 1);
+      const attrs: any = {};
+
+      const attrMatch = (name: string) => {
+        const regex = new RegExp(`data-${name}="([^"]*)"`, 'i');
+        const m = spanTag.match(regex);
+        return m ? m[1] : null;
+      };
+
+      attrs.lat = attrMatch('lat');
+      attrs.lng = attrMatch('lng');
+      attrs.placeName = attrMatch('place-name');
+      attrs.geoId = attrMatch('geo-id');
+      attrs.transportFrom = attrMatch('transport-from');
+      attrs.transportProfile = attrMatch('transport-profile');
+      attrs.coordSource = attrMatch('coord-source');
+      attrs.description = attrMatch('description');
+      attrs.photoName = attrMatch('photo-name');
+      const colorIndex = attrMatch('color-index');
+      if (colorIndex) attrs.colorIndex = parseInt(colorIndex);
+
+      // Add geo-mark node with text content
+      const textContent = stripHTML(match[1]);
+      inlineNodes.push({
+        type: 'geoMark',
+        attrs,
+        content: textContent ? [{ type: 'text', text: textContent }] : []
+      });
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text after last geo-mark
+    if (lastIndex < html.length) {
+      const textAfter = html.substring(lastIndex);
+      const stripped = stripHTML(textAfter).trim();
+      if (stripped) {
+        inlineNodes.push({ type: 'text', text: stripped });
+      }
+    }
+
+    // If no geo-marks found, return plain text
+    if (inlineNodes.length === 0) {
+      const stripped = stripHTML(html).trim();
+      if (stripped) {
+        return [{ type: 'text', text: stripped }];
+      }
+    }
+
+    return inlineNodes;
+  };
+
   // Simple regex-based parsing for complete elements only
   const paragraphs = cleanHtml.match(/<p[^>]*>(.*?)<\/p>/gis) || [];
   const headings = cleanHtml.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/gis) || [];
@@ -102,7 +191,7 @@ export function htmlToProsemirror(html: string): JSONContent {
         length: p.length,
         node: {
           type: 'paragraph',
-          content: [{ type: 'text', text: stripHTML(textMatch[1]) }]
+          content: parseInlineContent(textMatch[1])
         }
       });
     }
@@ -118,7 +207,7 @@ export function htmlToProsemirror(html: string): JSONContent {
         node: {
           type: 'heading',
           attrs: { level: parseInt(match[1]) },
-          content: [{ type: 'text', text: stripHTML(match[2]) }]
+          content: parseInlineContent(match[2])
         }
       });
     }
