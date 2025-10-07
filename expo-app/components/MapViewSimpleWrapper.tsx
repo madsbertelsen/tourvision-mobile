@@ -8,6 +8,7 @@ const MapViewSimpleDOM = React.lazy(() => import('./dom/map-view-simple'));
 
 interface MapViewSimpleWrapperProps {
   locations?: Location[];
+  routes?: RouteWithMetadata[];
   height?: number | string;
   center?: { lat: number; lng: number };
   zoom?: number;
@@ -25,6 +26,7 @@ interface Location {
 
 export function MapViewSimpleWrapper({
   locations = [],
+  routes: propRoutes,
   height = 400,
   center = { lat: 0, lng: 0 },
   zoom = 2,
@@ -34,7 +36,7 @@ export function MapViewSimpleWrapper({
   // Get focusedLocation, followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
   let focusedLocation = null;
   let followMode = false;
-  let allRoutes: RouteWithMetadata[] = [];
+  let allRoutes: RouteWithMetadata[] = propRoutes || [];
   let selectedRoute = null;
   let showItinerary = false;
   let mapCenter = center;
@@ -45,7 +47,8 @@ export function MapViewSimpleWrapper({
     const context = useMockContext();
     focusedLocation = context.focusedLocation;
     followMode = context.followMode;
-    allRoutes = context.routes;
+    // Use prop routes if provided, otherwise use context routes
+    allRoutes = propRoutes || context.routes;
     selectedRoute = context.selectedRoute;
     showItinerary = context.showItinerary;
     mapCenter = context.mapCenter;

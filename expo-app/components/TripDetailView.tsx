@@ -5,13 +5,14 @@ import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import { schema } from '@/utils/prosemirror-schema';
 import { stateFromJSON } from '@/utils/prosemirror-transactions';
+import { fetchRouteWithCache, type RouteDetails } from '@/utils/transportation-api';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
 import { Ionicons } from '@expo/vector-icons';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { EditorState } from 'prosemirror-state';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -46,6 +47,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [inputText, setInputText] = useState('');
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -338,8 +340,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     [currentTrip]
   );
 
-  // Extract locations from the document for map display
-  const extractLocations = useCallback((doc: any) => {
+  // Extract locations and routes from the document for map display
+  const extractLocationsAndRoutes = useCallback((doc: any) => {
     const locations: Array<{
       id: string;
       name: string;
@@ -350,6 +352,13 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       photoName?: string;
     }> = [];
 
+    const routesMap = new Map<string, {
+      id: string;
+      fromId: string;
+      toId: string;
+      profile: 'walking' | 'driving' | 'cycling' | 'transit';
+    }>();
+
     let locationIndex = 0;
 
     const traverse = (node: any) => {
@@ -357,8 +366,20 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         const lat = parseFloat(node.attrs.lat);
         const lng = parseFloat(node.attrs.lng);
         if (!isNaN(lat) && !isNaN(lng)) {
+          const locationId = node.attrs.geoId || `loc-${locationIndex}`;
+
+          // Log first few geo-marks to debug
+          if (locationIndex < 3) {
+            console.log('[extractLocationsAndRoutes] GeoMark attrs:', {
+              placeName: node.attrs.placeName,
+              geoId: node.attrs.geoId,
+              transportFrom: node.attrs.transportFrom,
+              transportProfile: node.attrs.transportProfile,
+            });
+          }
+
           locations.push({
-            id: node.attrs.geoId || `loc-${locationIndex}`,
+            id: locationId,
             name: node.attrs.placeName || 'Location',
             lat,
             lng,
@@ -367,6 +388,19 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             colorIndex: node.attrs.colorIndex ?? locationIndex,
             photoName: node.attrs.photoName,
           });
+
+          // If this location has a transport route from another location
+          if (node.attrs.transportFrom && node.attrs.transportProfile) {
+            const routeId = `${node.attrs.transportFrom}-to-${locationId}`;
+            console.log('[extractLocationsAndRoutes] Adding route:', routeId, node.attrs.transportProfile);
+            routesMap.set(routeId, {
+              id: routeId,
+              fromId: node.attrs.transportFrom,
+              toId: locationId,
+              profile: node.attrs.transportProfile as 'walking' | 'driving' | 'cycling' | 'transit',
+            });
+          }
+
           locationIndex++;
         }
       }
@@ -379,10 +413,80 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       doc.content.forEach(traverse);
     }
 
-    return locations;
+    // Return route definitions without geometry (to be fetched)
+    const routes = Array.from(routesMap.values());
+
+    return { locations, routes };
   }, []);
 
-  const documentLocations = extractLocations(editorState.doc.toJSON());
+  const { locations: documentLocations, routes: documentRoutes } = useMemo(
+    () => {
+      const result = extractLocationsAndRoutes(editorState.doc.toJSON());
+      console.log('[TripDetailView] Extracted locations:', result.locations.length);
+      console.log('[TripDetailView] Extracted routes:', result.routes.length);
+      if (result.routes.length > 0) {
+        console.log('[TripDetailView] Sample route:', result.routes[0]);
+      }
+      return result;
+    },
+    [editorState.doc, extractLocationsAndRoutes]
+  );
+
+  // Fetch actual routes from API when document routes change
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      console.log('[TripDetailView] fetchRoutes effect triggered, routes:', documentRoutes.length);
+
+      if (documentRoutes.length === 0) {
+        setFetchedRoutes([]);
+        return;
+      }
+
+      const locationMap = new Map(documentLocations.map(loc => [loc.id, loc]));
+
+      try {
+        const routePromises = documentRoutes.map(async (route) => {
+          const fromLoc = locationMap.get(route.fromId);
+          const toLoc = locationMap.get(route.toId);
+
+          console.log('[TripDetailView] Fetching route:', route.id, 'from', route.fromId, 'to', route.toId);
+
+          if (!fromLoc || !toLoc) {
+            console.warn('[TripDetailView] Missing location for route:', route.id);
+            return null;
+          }
+
+          try {
+            console.log('[TripDetailView] Calling API for route:', route.profile, fromLoc.name, '->', toLoc.name);
+            const routeDetails = await fetchRouteWithCache(route.profile, [
+              { lat: fromLoc.lat, lng: fromLoc.lng },
+              { lat: toLoc.lat, lng: toLoc.lng }
+            ]);
+
+            console.log('[TripDetailView] Got route details:', routeDetails.distance, 'meters');
+
+            return {
+              ...route,
+              ...routeDetails,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch route ${route.id}:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(routePromises);
+        const validRoutes = results.filter(r => r !== null);
+        console.log('[TripDetailView] Fetched routes complete:', validRoutes.length);
+        setFetchedRoutes(validRoutes);
+      } catch (error) {
+        console.error('Error fetching routes:', error);
+        setFetchedRoutes([]);
+      }
+    };
+
+    fetchRoutes();
+  }, [documentRoutes, documentLocations]);
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
@@ -420,6 +524,23 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           {currentTrip.title}
         </Text>
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.viewModeButton}
+            onPress={async () => {
+              // Force re-parse from HTML
+              if (currentTrip.itineraries && currentTrip.itineraries.length > 0) {
+                const updatedTrip = {
+                  ...currentTrip,
+                  itineraries: []
+                };
+                await saveTrip(updatedTrip);
+                setCurrentTrip(updatedTrip);
+                lastProcessedMessageIdRef.current = null;
+              }
+            }}
+          >
+            <Ionicons name="refresh-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewModeButton, viewMode === 'chat' && styles.viewModeButtonActive]}
             onPress={() => setViewMode('chat')}
@@ -546,6 +667,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
               <View style={styles.mapContainer}>
                 <MapViewSimpleWrapper
                   locations={documentLocations}
+                  routes={fetchedRoutes}
                   height="100%"
                 />
               </View>
