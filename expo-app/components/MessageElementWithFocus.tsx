@@ -195,8 +195,9 @@ export const MessageElementWithFocus: React.FC<MessageElementWithFocusProps> = (
   const baseStyle = [
     styles.box,
     {
-      backgroundColor: isVisible ? backgroundColor : 'transparent',
-      // No borders - we'll use text alignment or other indicators
+      backgroundColor: isFocused ? 'rgba(59, 130, 246, 0.05)' : (isVisible ? backgroundColor : 'transparent'),
+      borderLeftWidth: isFocused ? 3 : 0,
+      borderLeftColor: '#3B82F6',
       // No individual shadows or rounded corners for unified sheet
       shadowOpacity: 0,
       elevation: 0,

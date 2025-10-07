@@ -295,7 +295,7 @@ export default function MockChatScreen() {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
   const messagesScrollRef = useRef<ScrollView>(null);
-  const [focusedElementId, setFocusedElementId] = useState<string | null>(null);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set());
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
@@ -1099,85 +1099,31 @@ export default function MockChatScreen() {
   // Track visible locations based on scroll
   const [visibleLocations, setVisibleLocations] = useState<Array<{name: string, lat: number, lng: number, color?: string, photoName?: string}>>([]);
 
-  // Update visible locations to show only the 2 geo-marks closest to top of scrollview
-  useEffect(() => {
-    const visibleLocationsWithPosition: Array<{
-      name: string,
-      lat: number,
-      lng: number,
-      color?: string,
-      photoName?: string,
-      geoId?: string,
-      position: number  // Distance from top of viewport
-    }> = [];
-    const seenLocations = new Set<string>();
+  // Calculate which node should be focused based on scroll position
+  const calculateFocusedNode = useCallback(() => {
+    const FOCUS_THRESHOLD = 150; // Pixels from top of viewport
 
-    flatElements.forEach(element => {
-      const position = elementPositions.get(element.id);
-      if (position) {
-        const itemTop = position.top - scrollOffset;
-        const itemBottom = position.bottom - scrollOffset;
+    let closestElement: { id: string; distance: number } | null = null;
 
-        // Check if this element is in view and not deleted
-        if (itemTop < containerHeight && itemBottom > 0 && !element.isDeleted) {
-          if (element.type === 'content' && element.parsedContent) {
-            // Extract geo-marks from visible elements
-            element.parsedContent.forEach((item: any) => {
-              if (item.type === 'geo-mark' && item.lat && item.lng) {
-                const lat = parseFloat(item.lat);
-                const lng = parseFloat(item.lng);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                  const locationKey = `${item.text}-${lat}-${lng}`;
-                  if (!seenLocations.has(locationKey)) {
-                    seenLocations.add(locationKey);
-                    visibleLocationsWithPosition.push({
-                      name: item.text,
-                      lat,
-                      lng,
-                      color: item.color,
-                      photoName: item.photoName || undefined,
-                      geoId: item.geoId || undefined,
-                      position: itemTop  // Store distance from top
-                    });
-                  }
-                }
-              }
-            });
-          }
+    elementPositions.forEach((position, elementId) => {
+      const element = flatElements.find(e => e.id === elementId);
+      if (!element || element.type === 'gap' || !element.nodeId) return;
+
+      // Calculate distance from element top to focus threshold
+      const elementTop = position.top - scrollOffset;
+      const distanceToThreshold = Math.abs(elementTop - FOCUS_THRESHOLD);
+
+      // Element should be in focus zone (above or at threshold)
+      if (elementTop <= FOCUS_THRESHOLD &&
+          position.bottom - scrollOffset > FOCUS_THRESHOLD) {
+        if (!closestElement || distanceToThreshold < closestElement.distance) {
+          closestElement = { id: element.nodeId, distance: distanceToThreshold };
         }
       }
     });
 
-    // Sort by position (closest to top first) and take only first 2
-    visibleLocationsWithPosition.sort((a, b) => a.position - b.position);
-    const topTwoLocations = visibleLocationsWithPosition.slice(0, 2).map(loc => ({
-      name: loc.name,
-      lat: loc.lat,
-      lng: loc.lng,
-      color: loc.color,
-      photoName: loc.photoName,
-      geoId: loc.geoId
-    }));
-
-    console.log('[visibleLocations] Showing top 2 of', visibleLocationsWithPosition.length, 'visible locations:', topTwoLocations.map(l => l.name));
-    setVisibleLocations(topTwoLocations);
-
-    // Only update context if we have locations to show
-    if (topTwoLocations.length > 0) {
-      const mappedLocations = topTwoLocations.map((loc: any, idx) => ({
-        id: loc.geoId || `loc-${idx}`,
-        name: loc.name,
-        lat: loc.lat,
-        lng: loc.lng,
-        color: loc.color,
-        colorIndex: getColorIndex(loc.color),
-        photoName: loc.photoName,
-        geoId: loc.geoId
-      }));
-      console.log('[updateVisibleLocations] Passing to context:', mappedLocations);
-      updateVisibleLocations(mappedLocations);
-    }
-  }, [scrollOffset, elementPositions, flatElements, containerHeight, updateVisibleLocations]);
+    return closestElement?.id || null;
+  }, [elementPositions, scrollOffset, flatElements]);
 
   // Process location graph when visible locations change (but don't auto-save)
   useEffect(() => {
@@ -1218,7 +1164,7 @@ export default function MockChatScreen() {
       setLocationGraph(graph);
 
       // Log the graph summary for debugging
-      console.log('[TripChat] Location Graph (top 2 visible):', summarizeGraph(graph));
+      console.log('[TripChat] Location Graph (focused node):', summarizeGraph(graph));
     } else {
       setLocationGraph(null);
     }
@@ -1287,10 +1233,66 @@ export default function MockChatScreen() {
     fetchRoutes();
   }, [locationGraph, setRoutes]);
 
-  // No longer needed - we track visible locations instead of focused location
-  const handleLocationFocus = useCallback((_locations: Array<{name: string, lat: number, lng: number}>) => {
-    // This callback is no longer used but kept for compatibility
-  }, []);
+  // Update visible locations for map when focused node changes
+  const handleLocationFocus = useCallback((locations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string, geoId?: string}>) => {
+    // Update local state for location graph processing
+    setVisibleLocations(locations);
+
+    // Update context for map display
+    const mappedLocations = locations.map((loc, idx) => ({
+      id: loc.geoId || `loc-${idx}`,
+      name: loc.name,
+      lat: loc.lat,
+      lng: loc.lng,
+      color: loc.color,
+      colorIndex: getColorIndex(loc.color),
+      photoName: loc.photoName,
+      geoId: loc.geoId
+    }));
+    console.log('[Focus-based] Showing locations from focused node:', mappedLocations.map(l => l.name));
+    updateVisibleLocations(mappedLocations);
+  }, [updateVisibleLocations]);
+
+  // Update focused node when scroll position changes
+  useEffect(() => {
+    const newFocusedNodeId = calculateFocusedNode();
+    if (newFocusedNodeId !== focusedNodeId) {
+      setFocusedNodeId(newFocusedNodeId);
+    }
+  }, [scrollOffset, calculateFocusedNode, focusedNodeId]);
+
+  // Extract and display locations from the focused node
+  useEffect(() => {
+    if (!focusedNodeId) return;
+
+    // Find the element with this nodeId
+    const focusedElement = flatElements.find(e => e.nodeId === focusedNodeId);
+    if (!focusedElement || !focusedElement.parsedContent) return;
+
+    // Extract all locations from this element with full data
+    const locations: Array<{name: string, lat: number, lng: number, color?: string, photoName?: string, geoId?: string}> = [];
+    focusedElement.parsedContent.forEach(item => {
+      if (item.type === 'geo-mark' && item.lat && item.lng) {
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          locations.push({
+            name: item.text,
+            lat,
+            lng,
+            color: item.color,
+            photoName: item.photoName || undefined,
+            geoId: item.geoId || undefined
+          });
+        }
+      }
+    });
+
+    // Update visible locations for map
+    if (locations.length > 0) {
+      handleLocationFocus(locations);
+    }
+  }, [focusedNodeId, flatElements, handleLocationFocus]);
 
   // Handle sending messages
   const handleSendMessage = async () => {
@@ -1312,7 +1314,7 @@ export default function MockChatScreen() {
     }
   };
 
-  // Locations are now filtered to show only last 2 in visibleLocations state
+  // Locations are now shown based on focused block node in visibleLocations state
 
   // Combine styles
   const styles = StyleSheet.create({
@@ -1541,17 +1543,7 @@ export default function MockChatScreen() {
                       <MessageElementWithFocus
                         element={element}
                         isVisible={true}
-                        isFocused={(() => {
-                          // Check if this element is in the visible viewport
-                          const position = elementPositions.get(element.id);
-                          if (position) {
-                            const itemTop = position.top - scrollOffset;
-                            const itemBottom = position.bottom - scrollOffset;
-                            // Element is focused if it's visible in the viewport
-                            return itemTop < containerHeight && itemBottom > 0;
-                          }
-                          return false;
-                        })()}
+                        isFocused={element.nodeId === focusedNodeId}
                         isAboveFocus={false}
                         backgroundColor="transparent"
                         styles={styles}
