@@ -783,6 +783,7 @@ export default function MapViewSimple({
     lng: number;
     isDragging: boolean;
     segmentIndex: number; // Which segment of the route is being split
+    isNearExistingWaypoint: boolean; // True if cursor is near an existing waypoint
   } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -1199,12 +1200,36 @@ export default function MapViewSimple({
         console.log('[MapViewSimple] Route has', logicalWaypoints.length, 'logical waypoints');
         console.log('[MapViewSimple] Hovering over logical segment', closestPoint.segmentIndex);
 
+        // Check if cursor is near any existing waypoint
+        let isNearExistingWaypoint = false;
+        if (route.waypoints && Array.isArray(route.waypoints)) {
+          const WAYPOINT_PROXIMITY = 20; // pixels - larger than waypoint radius to make clicking easier
+
+          for (const wp of route.waypoints) {
+            try {
+              const [wpX, wpY] = viewport.project([wp.lng, wp.lat]);
+              const distance = Math.sqrt(
+                Math.pow(x - wpX, 2) + Math.pow(y - wpY, 2)
+              );
+
+              if (distance < WAYPOINT_PROXIMITY) {
+                isNearExistingWaypoint = true;
+                console.log('[MapViewSimple] Near existing waypoint, hiding hover circle');
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+
         setHoverWaypoint({
           routeId: route.id,
           lat: closestPoint.lat,
           lng: closestPoint.lng,
           isDragging: false,
           segmentIndex: closestPoint.segmentIndex,
+          isNearExistingWaypoint,
         });
         foundHover = true;
         break;
@@ -1491,35 +1516,38 @@ export default function MapViewSimple({
     }
 
     // Hover/drag waypoint circle (new waypoint being added)
-    // Shadow
-    layers.push(new ScatterplotLayer({
-      id: 'waypoint-shadow',
-      data: [hoverWaypoint],
-      getPosition: (d: any) => [d.lng, d.lat],
-      getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
-      getRadius: 12,
-      radiusMinPixels: 12,
-      radiusMaxPixels: 12,
-      pickable: false,
-      stroked: false,
-      filled: true,
-    }));
+    // Only show if not near an existing waypoint (unless we're dragging)
+    if (!hoverWaypoint.isNearExistingWaypoint || hoverWaypoint.isDragging) {
+      // Shadow
+      layers.push(new ScatterplotLayer({
+        id: 'waypoint-shadow',
+        data: [hoverWaypoint],
+        getPosition: (d: any) => [d.lng, d.lat],
+        getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
+        getRadius: 12,
+        radiusMinPixels: 12,
+        radiusMaxPixels: 12,
+        pickable: false,
+        stroked: false,
+        filled: true,
+      }));
 
-    // Main waypoint circle
-    layers.push(new ScatterplotLayer({
-      id: 'waypoint-circle',
-      data: [hoverWaypoint],
-      getPosition: (d: any) => [d.lng, d.lat],
-      getFillColor: hoverWaypoint.isDragging ? [59, 130, 246, 255] : [255, 255, 255, 255], // Blue when dragging, white otherwise
-      getRadius: 10,
-      radiusMinPixels: 10,
-      radiusMaxPixels: 10,
-      pickable: true,
-      stroked: true,
-      filled: true,
-      lineWidthMinPixels: 2,
-      getLineColor: [59, 130, 246, 255], // #3B82F6
-    }));
+      // Main waypoint circle
+      layers.push(new ScatterplotLayer({
+        id: 'waypoint-circle',
+        data: [hoverWaypoint],
+        getPosition: (d: any) => [d.lng, d.lat],
+        getFillColor: hoverWaypoint.isDragging ? [59, 130, 246, 255] : [255, 255, 255, 255], // Blue when dragging, white otherwise
+        getRadius: 10,
+        radiusMinPixels: 10,
+        radiusMaxPixels: 10,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        lineWidthMinPixels: 2,
+        getLineColor: [59, 130, 246, 255], // #3B82F6
+      }));
+    }
   }
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
