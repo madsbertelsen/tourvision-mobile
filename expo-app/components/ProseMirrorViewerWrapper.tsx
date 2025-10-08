@@ -61,6 +61,7 @@ export function ProseMirrorViewerWrapper({
           focusedNodeId={focusedNodeId}
           editable={editable}
           onChange={onChange}
+          height={height}
         />
       </Suspense>
     </View>

@@ -703,9 +703,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   messageWrapper: {
+    flex: 1,
     marginBottom: 12,
   },
   messageBubble: {
+    flex: 1,
     padding: 12,
     borderRadius: 12,
     maxWidth: '80%',

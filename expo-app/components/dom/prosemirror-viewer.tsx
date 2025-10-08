@@ -17,6 +17,7 @@ interface ProseMirrorViewerProps {
   focusedNodeId?: string | null;
   editable?: boolean;
   onChange?: (doc: any) => void;
+  height?: number | string;
 }
 
 export interface ProseMirrorViewerRef {
@@ -154,7 +155,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     onNodeFocus,
     focusedNodeId,
     editable = false,
-    onChange
+    onChange,
+    height = '100%'
   },
   ref
 ) => {
@@ -422,7 +424,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   };
 
   return (
-    <div className="prosemirror-editor-wrapper">
+    <div className="prosemirror-editor-wrapper" style={{ height: typeof height === 'number' ? `${height}px` : height }}>
       {/* Toolbar - always visible in edit mode, fixed at top */}
       {editable && (
         <div className="prosemirror-toolbar">
