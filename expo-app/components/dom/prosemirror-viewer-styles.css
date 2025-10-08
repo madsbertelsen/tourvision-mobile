@@ -314,55 +314,74 @@ hr {
   background: #2563eb;
 }
 
-/* Fixed menu bar at top */
-.prosemirror-menu-bar {
-  background: #f9fafb;
+/* Toolbar - always visible in edit mode */
+.prosemirror-toolbar {
+  background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
   padding: 8px 12px;
   display: flex;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 2px;
   align-items: center;
 }
 
-.menu-button {
-  padding: 6px 12px;
-  background: white;
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: #e5e7eb;
+  margin: 0 6px;
+}
+
+.toolbar-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
   color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: none;
+  border-radius: 4px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  white-space: nowrap;
+  justify-content: center;
 }
 
-.menu-button:hover:not(:disabled) {
+.toolbar-button:hover:not(:disabled) {
   background: #f3f4f6;
-  border-color: #9ca3af;
 }
 
-.menu-button:active:not(:disabled) {
+.toolbar-button:active:not(:disabled) {
   background: #e5e7eb;
 }
 
-.menu-button:disabled {
-  opacity: 0.5;
+.toolbar-button:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Active/selected state */
-.menu-button.active {
-  background: #3B82F6;
-  color: white;
-  border-color: #3B82F6;
+/* Active/selected state for toggle buttons */
+.toolbar-button.is-active {
+  background: #e5e7eb;
+  color: #1f2937;
 }
 
-.menu-button.active:hover:not(:disabled) {
-  background: #2563eb;
-  border-color: #2563eb;
+.toolbar-button.is-active:hover:not(:disabled) {
+  background: #d1d5db;
+}
+
+/* Special styling for emoji buttons */
+.toolbar-button:has(> :is(span, div)) {
+  font-size: 16px;
 }

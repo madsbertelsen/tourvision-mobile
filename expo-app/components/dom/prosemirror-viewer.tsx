@@ -412,19 +412,73 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     return views;
   }, [editable]);
 
+  // Toolbar command handlers
+  const toggleBold = () => {
+    // TODO: Implement bold toggle
+  };
+
+  const toggleItalic = () => {
+    // TODO: Implement italic toggle
+  };
+
   return (
     <div ref={setContainer} className="prosemirror-viewer-container">
-      {/* Menu bar */}
+      {/* Toolbar - always visible in edit mode */}
       {editable && (
-        <div className="prosemirror-menu-bar">
-          <button
-            className="menu-button"
-            onClick={handleCreateGeoMark}
-            disabled={state.selection.empty}
-            title="Add location marker to selected text"
-          >
-            📍 Add Location
-          </button>
+        <div className="prosemirror-toolbar">
+          {/* Text formatting */}
+          <div className="toolbar-group">
+            <button className="toolbar-button" onClick={toggleBold} title="Bold">
+              <strong>B</strong>
+            </button>
+            <button className="toolbar-button" onClick={toggleItalic} title="Italic">
+              <em>I</em>
+            </button>
+            <button className="toolbar-button" title="Strikethrough">
+              <s>S</s>
+            </button>
+            <button className="toolbar-button" title="Code">
+              <code>&lt;/&gt;</code>
+            </button>
+            <button className="toolbar-button" title="Underline">
+              <u>U</u>
+            </button>
+          </div>
+
+          <div className="toolbar-divider"></div>
+
+          {/* Lists */}
+          <div className="toolbar-group">
+            <button className="toolbar-button" title="Bullet list">
+              ☰
+            </button>
+            <button className="toolbar-button" title="Numbered list">
+              1.
+            </button>
+          </div>
+
+          <div className="toolbar-divider"></div>
+
+          {/* Geo-mark */}
+          <div className="toolbar-group">
+            <button
+              className="toolbar-button"
+              onClick={handleCreateGeoMark}
+              disabled={state.selection.empty}
+              title="Add location marker"
+            >
+              📍
+            </button>
+          </div>
+
+          <div className="toolbar-divider"></div>
+
+          {/* Link */}
+          <div className="toolbar-group">
+            <button className="toolbar-button" title="Add link">
+              🔗
+            </button>
+          </div>
         </div>
       )}
 
