@@ -631,6 +631,9 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         // Get existing waypoints or create new array
         const existingWaypoints = node.attrs.waypoints || [];
 
+        console.log('[TripDetailView] Existing waypoints:', existingWaypoints);
+        console.log('[TripDetailView] Segment index from map:', segmentIndex);
+
         // Insert waypoint at correct index based on which segment was split
         // The route geometry is: [start, ...waypoints, end]
         // If segmentIndex is 0, we're splitting between start and first waypoint (or end)

@@ -92,20 +92,20 @@ function closestPointOnSegment(
   return { x: closestX, y: closestY, distance };
 }
 
-// Find closest point on entire route to cursor
+// Find closest point on entire route to cursor and determine logical segment
 function findClosestPointOnRoute(
   cursorX: number,
   cursorY: number,
   routeCoords: number[][],
-  viewport: any
+  viewport: any,
+  logicalWaypoints: Array<{ lat: number; lng: number }>  // [start, ...customWaypoints, end]
 ): { lat: number; lng: number; distance: number; segmentIndex: number } | null {
   if (!routeCoords || routeCoords.length < 2) return null;
 
   let minDistance = Infinity;
-  let closestPoint: { x: number; y: number } | null = null;
-  let closestSegmentIndex = -1;
+  let closestPoint: { x: number; y: number; lat: number; lng: number } | null = null;
 
-  // Convert route coordinates to screen space and find closest segment
+  // Convert route coordinates to screen space and find closest point
   for (let i = 0; i < routeCoords.length - 1; i++) {
     const [lng1, lat1] = routeCoords[i];
     const [lng2, lat2] = routeCoords[i + 1];
@@ -118,23 +118,49 @@ function findClosestPointOnRoute(
 
       if (result.distance < minDistance) {
         minDistance = result.distance;
-        closestPoint = { x: result.x, y: result.y };
-        closestSegmentIndex = i;
+        const [lng, lat] = viewport.unproject([result.x, result.y]);
+        closestPoint = { x: result.x, y: result.y, lat, lng };
       }
     } catch (e) {
       continue;
     }
   }
 
-  if (!closestPoint || closestSegmentIndex === -1) return null;
+  if (!closestPoint) return null;
 
-  // Convert screen point back to lat/lng
-  try {
-    const [lng, lat] = viewport.unproject([closestPoint.x, closestPoint.y]);
-    return { lat, lng, distance: minDistance, segmentIndex: closestSegmentIndex };
-  } catch (e) {
-    return null;
+  // Now determine which logical segment this point belongs to
+  // by finding which pair of logical waypoints it's between
+  let logicalSegmentIndex = 0;
+
+  if (logicalWaypoints.length >= 2) {
+    let minDistanceToSegment = Infinity;
+
+    for (let i = 0; i < logicalWaypoints.length - 1; i++) {
+      const wp1 = logicalWaypoints[i];
+      const wp2 = logicalWaypoints[i + 1];
+
+      // Calculate distance from point to this logical segment
+      // Simple approach: distance to midpoint of segment
+      const midLat = (wp1.lat + wp2.lat) / 2;
+      const midLng = (wp1.lng + wp2.lng) / 2;
+      const dist = Math.sqrt(
+        Math.pow(closestPoint.lat - midLat, 2) +
+        Math.pow(closestPoint.lng - midLng, 2)
+      );
+
+      if (dist < minDistanceToSegment) {
+        minDistanceToSegment = dist;
+        logicalSegmentIndex = i;
+      }
+    }
   }
+
+  return {
+    lat: closestPoint.lat,
+    lng: closestPoint.lng,
+    distance: minDistance,
+    segmentIndex: logicalSegmentIndex
+  };
 }
 
 
@@ -1147,9 +1173,30 @@ export default function MapViewSimple({
     for (const route of routes) {
       if (!route.geometry?.coordinates) continue;
 
-      const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport);
+      // Build logical waypoints array for this route: [start, ...customWaypoints, end]
+      // We need to find the start and end locations from the locations array
+      const fromLoc = locations.find(loc => loc.id === route.fromId);
+      const toLoc = locations.find(loc => loc.id === route.toId);
+
+      if (!fromLoc || !toLoc) continue;
+
+      const logicalWaypoints = [
+        { lat: fromLoc.lat, lng: fromLoc.lng }
+      ];
+
+      if (route.waypoints && Array.isArray(route.waypoints)) {
+        logicalWaypoints.push(...route.waypoints);
+      }
+
+      logicalWaypoints.push({ lat: toLoc.lat, lng: toLoc.lng });
+
+      const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport, logicalWaypoints);
 
       if (closestPoint && closestPoint.distance < HOVER_THRESHOLD) {
+        console.log('[MapViewSimple] Route has', route.geometry.coordinates.length, 'geometry points');
+        console.log('[MapViewSimple] Route has', logicalWaypoints.length, 'logical waypoints');
+        console.log('[MapViewSimple] Hovering over logical segment', closestPoint.segmentIndex);
+
         setHoverWaypoint({
           routeId: route.id,
           lat: closestPoint.lat,
@@ -1165,7 +1212,7 @@ export default function MapViewSimple({
     if (!foundHover && !isDraggingRef.current) {
       setHoverWaypoint(null);
     }
-  }, [isEditMode, routes, hoverWaypoint]);
+  }, [isEditMode, routes, hoverWaypoint, locations]);
 
   // Handle mouse down on waypoint circle
   const handleMouseDown = useCallback((event: any) => {
