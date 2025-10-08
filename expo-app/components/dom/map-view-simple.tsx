@@ -785,6 +785,7 @@ export default function MapViewSimple({
     segmentIndex: number; // Which segment of the route is being split
     isNearExistingWaypoint: boolean; // True if cursor is near an existing waypoint
   } | null>(null);
+  const [hoveredWaypointIndex, setHoveredWaypointIndex] = useState<number | null>(null); // Index of waypoint being hovered
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
@@ -1202,10 +1203,12 @@ export default function MapViewSimple({
 
         // Check if cursor is near any existing waypoint
         let isNearExistingWaypoint = false;
+        let nearestWaypointIndex: number | null = null;
         if (route.waypoints && Array.isArray(route.waypoints)) {
           const WAYPOINT_PROXIMITY = 20; // pixels - larger than waypoint radius to make clicking easier
 
-          for (const wp of route.waypoints) {
+          for (let i = 0; i < route.waypoints.length; i++) {
+            const wp = route.waypoints[i];
             try {
               const [wpX, wpY] = viewport.project([wp.lng, wp.lat]);
               const distance = Math.sqrt(
@@ -1214,7 +1217,8 @@ export default function MapViewSimple({
 
               if (distance < WAYPOINT_PROXIMITY) {
                 isNearExistingWaypoint = true;
-                console.log('[MapViewSimple] Near existing waypoint, hiding hover circle');
+                nearestWaypointIndex = i;
+                console.log('[MapViewSimple] Near existing waypoint index', i);
                 break;
               }
             } catch (e) {
@@ -1222,6 +1226,8 @@ export default function MapViewSimple({
             }
           }
         }
+
+        setHoveredWaypointIndex(nearestWaypointIndex);
 
         setHoverWaypoint({
           routeId: route.id,
@@ -1238,6 +1244,7 @@ export default function MapViewSimple({
 
     if (!foundHover && !isDraggingRef.current) {
       setHoverWaypoint(null);
+      setHoveredWaypointIndex(null);
     }
   }, [isEditMode, routes, hoverWaypoint, locations]);
 
@@ -1497,15 +1504,33 @@ export default function MapViewSimple({
         id: 'existing-waypoints',
         data: waypointsWithIndex,
         getPosition: (d: any) => [d.lng, d.lat],
-        getFillColor: [239, 68, 68, 255], // Red to indicate deletable
-        getRadius: 6,
+        getFillColor: (d: any) => {
+          // Brighten when hovered
+          if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
+            return [255, 82, 82, 255]; // Lighter red on hover
+          }
+          return [239, 68, 68, 255]; // Red to indicate deletable
+        },
+        getRadius: (d: any) => {
+          // Enlarge when hovered
+          if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
+            return 8; // Larger on hover
+          }
+          return 6;
+        },
         radiusMinPixels: 6,
-        radiusMaxPixels: 6,
+        radiusMaxPixels: 10,
         pickable: true,
         stroked: true,
         filled: true,
         lineWidthMinPixels: 2,
-        getLineColor: [255, 255, 255, 255], // White border
+        getLineColor: (d: any) => {
+          // Thicker white border on hover
+          if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
+            return [255, 255, 255, 255];
+          }
+          return [255, 255, 255, 255];
+        },
         onClick: (info: any) => {
           if (info.object && onRouteWaypointRemove) {
             console.log('[MapViewSimple] Removing waypoint at index', info.object.waypointIndex, 'from route', info.object.routeId);
@@ -1568,6 +1593,11 @@ export default function MapViewSimple({
         layers={layers}
         onClick={handleMapClick}
         getCursor={({ isDragging }: any) => {
+          // Show pointer when hovering over existing waypoint (for deletion)
+          if (isEditMode && hoveredWaypointIndex !== null) {
+            return 'pointer';
+          }
+          // Show grab when hovering over route (for adding waypoint)
           if (isEditMode && hoverWaypoint) {
             return hoverWaypoint.isDragging ? 'grabbing' : 'grab';
           }
