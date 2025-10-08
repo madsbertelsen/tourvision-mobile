@@ -40,6 +40,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [editorState, setEditorState] = useState<EditorState>(() =>
     EditorState.create({ schema })
   );
+  const [isEditMode, setIsEditMode] = useState(false);
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
@@ -555,6 +556,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         </Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
+            style={[styles.viewModeButton, isEditMode && styles.viewModeButtonActive]}
+            onPress={() => setIsEditMode(!isEditMode)}
+          >
+            <Ionicons
+              name={isEditMode ? "create" : "create-outline"}
+              size={20}
+              color={isEditMode ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.viewModeButton}
             onPress={async () => {
               // Force re-parse from HTML
@@ -593,7 +604,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                       onNodeFocus={handleNodeFocus}
                       focusedNodeId={focusedNodeId}
                       height="auto"
-                      editable={!isChatLoading}
+                      editable={isEditMode}
                       onChange={handleDocumentChange}
                     />
                   ) : (
@@ -627,7 +638,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                       onNodeFocus={handleNodeFocus}
                       focusedNodeId={focusedNodeId}
                       height="auto"
-                      editable={!isChatLoading}
+                      editable={isEditMode}
                       onChange={handleDocumentChange}
                     />
                   ) : (
