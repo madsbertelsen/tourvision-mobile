@@ -12,6 +12,8 @@ interface MapViewSimpleWrapperProps {
   height?: number | string;
   center?: { lat: number; lng: number };
   zoom?: number;
+  isEditMode?: boolean;
+  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }) => void;
 }
 
 interface Location {
@@ -30,6 +32,8 @@ export function MapViewSimpleWrapper({
   height = 400,
   center = { lat: 0, lng: 0 },
   zoom = 2,
+  isEditMode = false,
+  onRouteWaypointUpdate,
 }: MapViewSimpleWrapperProps) {
   // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
@@ -96,6 +100,8 @@ export function MapViewSimpleWrapper({
           showItinerary={showItinerary}
           selectedLocationModal={selectedLocationModal}
           onCloseModal={() => setSelectedLocationModal && setSelectedLocationModal(null)}
+          isEditMode={isEditMode}
+          onRouteWaypointUpdate={onRouteWaypointUpdate}
           style={{ width: '100%', height: '100%' }}
         />
       </React.Suspense>

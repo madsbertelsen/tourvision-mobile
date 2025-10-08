@@ -87,7 +87,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           setMessages(trip.messages);
         }
 
-        // Load document if exists
+        // Load document if exists, or create blank one
         if (trip.itineraries && trip.itineraries.length > 0) {
           console.log('[TripDetailView] Loading document from itineraries, count:', trip.itineraries.length);
           const latestItinerary = trip.itineraries[trip.itineraries.length - 1];
@@ -98,7 +98,36 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             console.log('[TripDetailView] EditorState loaded from itinerary');
           }
         } else {
-          console.log('[TripDetailView] No itineraries found in trip');
+          console.log('[TripDetailView] No itineraries found, creating blank document');
+
+          // Create blank ProseMirror document
+          const blankDocument = {
+            type: 'doc',
+            content: [
+              { type: 'paragraph', attrs: { id: `node-${Date.now()}` }, content: [] }
+            ]
+          };
+
+          // Create initial itinerary with blank document
+          const blankItinerary = {
+            messageId: 'manual', // Not from AI
+            document: blankDocument,
+            createdAt: Date.now(),
+          };
+
+          // Save trip with blank itinerary
+          const updatedTrip = {
+            ...trip,
+            itineraries: [blankItinerary],
+          };
+
+          await saveTrip(updatedTrip);
+          setCurrentTrip(updatedTrip);
+
+          // Set editor state to blank document
+          const state = stateFromJSON(blankDocument);
+          setEditorState(state);
+          console.log('[TripDetailView] Blank itinerary created and loaded');
         }
       } catch (error) {
         console.error('Error loading trip:', error);
@@ -350,7 +379,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
   const handleDocumentChange = useCallback(
     async (newDoc: any) => {
-      if (!currentTrip || !currentTrip.itineraries || currentTrip.itineraries.length === 0) return;
+      if (!currentTrip) return;
 
       console.log('[TripDetailView] Document changed, persisting to storage');
       console.log('[TripDetailView] New document has geoMarks:', JSON.stringify(newDoc).includes('geoMark'));
@@ -358,6 +387,26 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       const newState = stateFromJSON(newDoc);
       setEditorState(newState);
 
+      // If no itineraries exist, create the initial one
+      if (!currentTrip.itineraries || currentTrip.itineraries.length === 0) {
+        console.log('[TripDetailView] No itineraries found, creating initial one');
+        const newItinerary = {
+          messageId: 'manual', // Not from AI
+          document: newDoc,
+          createdAt: Date.now(),
+        };
+
+        const updatedTrip = {
+          ...currentTrip,
+          itineraries: [newItinerary],
+        };
+
+        await saveTrip(updatedTrip);
+        setCurrentTrip(updatedTrip);
+        return;
+      }
+
+      // Update existing itinerary
       const updatedItineraries = [...currentTrip.itineraries];
       updatedItineraries[updatedItineraries.length - 1] = {
         ...updatedItineraries[updatedItineraries.length - 1],
@@ -395,6 +444,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       fromId: string;
       toId: string;
       profile: 'walking' | 'driving' | 'cycling' | 'transit';
+      waypoints?: Array<{ lat: number; lng: number }>;
     }>();
 
     let locationIndex = 0;
@@ -431,12 +481,20 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           if (node.attrs.transportFrom && node.attrs.transportProfile) {
             const routeId = `${node.attrs.transportFrom}-to-${locationId}`;
             console.log('[extractLocationsAndRoutes] Adding route:', routeId, node.attrs.transportProfile);
-            routesMap.set(routeId, {
+
+            const routeData: any = {
               id: routeId,
               fromId: node.attrs.transportFrom,
               toId: locationId,
               profile: node.attrs.transportProfile as 'walking' | 'driving' | 'cycling' | 'transit',
-            });
+            };
+
+            // Include waypoints if present
+            if (node.attrs.waypoints && Array.isArray(node.attrs.waypoints)) {
+              routeData.waypoints = node.attrs.waypoints;
+            }
+
+            routesMap.set(routeId, routeData);
           }
 
           locationIndex++;
@@ -498,11 +556,21 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           }
 
           try {
+            // Build waypoints array: start, custom waypoints, end
+            const waypoints = [
+              { lat: fromLoc.lat, lng: fromLoc.lng }
+            ];
+
+            // Add custom waypoints if present
+            if (route.waypoints && Array.isArray(route.waypoints)) {
+              waypoints.push(...route.waypoints);
+              console.log('[TripDetailView] Including', route.waypoints.length, 'custom waypoints');
+            }
+
+            waypoints.push({ lat: toLoc.lat, lng: toLoc.lng });
+
             console.log('[TripDetailView] Calling API for route:', route.profile, fromLoc.name, '->', toLoc.name);
-            const routeDetails = await fetchRouteWithCache(route.profile, [
-              { lat: fromLoc.lat, lng: fromLoc.lng },
-              { lat: toLoc.lat, lng: toLoc.lng }
-            ]);
+            const routeDetails = await fetchRouteWithCache(route.profile, waypoints);
 
             console.log('[TripDetailView] Got route details:', routeDetails.distance, 'meters');
 
@@ -528,6 +596,68 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
     fetchRoutes();
   }, [documentRoutes, documentLocations]);
+
+  // Handle route waypoint updates from map editing
+  const handleRouteWaypointUpdate = useCallback((routeId: string, waypoint: { lat: number; lng: number }) => {
+    if (!editorState) return;
+
+    console.log('[TripDetailView] Updating route waypoint:', routeId, waypoint);
+
+    // Parse routeId to get target geo-mark ID
+    // Route ID format: "{fromGeoId}-to-{toGeoId}"
+    const match = routeId.match(/^(.+)-to-(.+)$/);
+    if (!match) {
+      console.error('[TripDetailView] Invalid route ID format:', routeId);
+      return;
+    }
+
+    const [, fromGeoId, toGeoId] = match;
+    console.log('[TripDetailView] Adding waypoint to route from', fromGeoId, 'to', toGeoId);
+
+    // Find and update the target geo-mark (the destination)
+    let found = false;
+    const tr = editorState.tr;
+
+    editorState.doc.descendants((node, pos) => {
+      if (found) return false; // Stop traversing once found
+
+      if (node.type.name === 'geoMark' && node.attrs.geoId === toGeoId) {
+        console.log('[TripDetailView] Found target geo-mark:', node.attrs.placeName);
+
+        // Get existing waypoints or create new array
+        const existingWaypoints = node.attrs.waypoints || [];
+
+        // Add new waypoint
+        const updatedWaypoints = [
+          ...existingWaypoints,
+          { lat: waypoint.lat, lng: waypoint.lng }
+        ];
+
+        console.log('[TripDetailView] Updated waypoints:', updatedWaypoints);
+
+        // Update the node attributes
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          waypoints: updatedWaypoints,
+        });
+
+        found = true;
+      }
+    });
+
+    if (found) {
+      // Apply transaction
+      const newState = editorState.apply(tr);
+      setEditorState(newState);
+
+      // Save to storage
+      handleDocumentChange(newState.doc.toJSON());
+
+      console.log('[TripDetailView] Waypoint added successfully');
+    } else {
+      console.error('[TripDetailView] Could not find geo-mark with ID:', toGeoId);
+    }
+  }, [editorState, handleDocumentChange]);
 
   if (isLoadingTrip) {
     return (
@@ -616,6 +746,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                 locations={documentLocations}
                 routes={fetchedRoutes}
                 height="100%"
+                isEditMode={isEditMode}
+                onRouteWaypointUpdate={handleRouteWaypointUpdate}
               />
             </View>
           </View>
@@ -644,6 +776,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                 locations={documentLocations}
                 routes={fetchedRoutes}
                 height={300}
+                isEditMode={isEditMode}
+                onRouteWaypointUpdate={handleRouteWaypointUpdate}
               />
             </View>
           </>

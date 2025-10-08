@@ -27,10 +27,11 @@ export interface ProseMirrorViewerRef {
 }
 
 // Geo-mark editor modal component
-function GeoMarkEditor({ node, onSave, onCancel }: {
+function GeoMarkEditor({ node, onSave, onCancel, editorState }: {
   node: ProseMirrorNode;
   onSave: (attrs: any) => void;
   onCancel: () => void;
+  editorState: EditorState;
 }) {
   const [formData, setFormData] = React.useState({
     placeName: node.attrs.placeName || '',
@@ -45,6 +46,20 @@ function GeoMarkEditor({ node, onSave, onCancel }: {
   const [suggestions, setSuggestions] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Collect existing geo-marks from document
+  const existingLocations = React.useMemo(() => {
+    const locations: Array<{ geoId: string; placeName: string }> = [];
+    editorState.doc.descendants((node) => {
+      if (node.type.name === 'geoMark' && node.attrs.geoId && node.attrs.placeName) {
+        locations.push({
+          geoId: node.attrs.geoId,
+          placeName: node.attrs.placeName,
+        });
+      }
+    });
+    return locations;
+  }, [editorState]);
 
   // Fetch location suggestions from Nominatim on mount
   React.useEffect(() => {
@@ -194,12 +209,17 @@ function GeoMarkEditor({ node, onSave, onCancel }: {
           {formData.transportProfile && (
             <div className="form-group">
               <label>Coming from</label>
-              <input
-                type="text"
-                value={formData.transportFrom}
+              <select
+                value={formData.transportFrom || ''}
                 onChange={(e) => setFormData({ ...formData, transportFrom: e.target.value })}
-                placeholder="Previous location ID"
-              />
+              >
+                <option value="">Select previous location...</option>
+                {existingLocations.map((loc) => (
+                  <option key={loc.geoId} value={loc.geoId}>
+                    {loc.placeName}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -428,10 +448,21 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     const { from, to } = state.selection;
     const selectedText = state.doc.textBetween(from, to, ' ');
 
+    // Count existing geo-marks to determine next color
+    let geoMarkCount = 0;
+    state.doc.descendants((node) => {
+      if (node.type.name === 'geoMark') {
+        geoMarkCount++;
+      }
+    });
+
+    // Cycle through colors (10 colors available)
+    const nextColorIndex = geoMarkCount % 10;
+
     // Create geo-mark with initial attributes
     const newState = createGeoMarkFromSelection(state, {
       placeName: selectedText,
-      colorIndex: 0, // Will be customizable in modal
+      colorIndex: nextColorIndex,
     });
 
     if (!newState) return;
@@ -606,6 +637,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           node={editingGeoMark.node}
           onSave={handleGeoMarkUpdate}
           onCancel={() => setEditingGeoMark(null)}
+          editorState={state}
         />,
         document.body
       )}

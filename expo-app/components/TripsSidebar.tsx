@@ -65,6 +65,21 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onTripsChan
     }
   };
 
+  const handleCreateBlankTrip = async () => {
+    try {
+      setIsCreating(true);
+      const newTrip = await createTrip('New Trip');
+      // Select the new trip without initial message
+      onTripSelect(newTrip.id);
+      await loadTrips();
+    } catch (error) {
+      console.error('Error creating trip:', error);
+      Alert.alert('Error', 'Failed to create trip');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleDeleteTrip = async (tripId: string, e?: any) => {
     e?.stopPropagation();
 
@@ -137,13 +152,31 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onTripsChan
         <Text style={styles.title}>My Trips</Text>
       </View>
 
+      {/* New Trip Button */}
+      <View style={styles.newTripSection}>
+        <TouchableOpacity
+          style={styles.newTripButton}
+          onPress={handleCreateBlankTrip}
+          disabled={isCreating}
+        >
+          {isCreating ? (
+            <ActivityIndicator size="small" color="#3B82F6" />
+          ) : (
+            <>
+              <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
+              <Text style={styles.newTripButtonText}>New Trip</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* URL Input Section */}
       <View style={styles.urlInputSection}>
         <View style={styles.urlInputContainer}>
           <Ionicons name="link-outline" size={20} color="#6B7280" style={styles.urlInputIcon} />
           <TextInput
             style={styles.urlInput}
-            placeholder="Paste URL..."
+            placeholder="Paste a travel guide URL to get started..."
             value={urlInput}
             onChangeText={setUrlInput}
             onSubmitEditing={handleSubmitUrl}
@@ -254,6 +287,30 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  newTripSection: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  newTripButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 8,
+  },
+  newTripButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   urlInputSection: {
     flexDirection: 'column',

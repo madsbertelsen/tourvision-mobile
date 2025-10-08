@@ -65,6 +65,76 @@ function getRouteStyle(profile: string) {
   };
 }
 
+// Find closest point on a line segment to a given point
+function closestPointOnSegment(
+  px: number, py: number,
+  x1: number, y1: number,
+  x2: number, y2: number
+): { x: number; y: number; distance: number } {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    // Segment is a point
+    const dist = Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    return { x: x1, y: y1, distance: dist };
+  }
+
+  // Calculate parameter t for the closest point on the line
+  let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t)); // Clamp to segment
+
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+  const distance = Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
+
+  return { x: closestX, y: closestY, distance };
+}
+
+// Find closest point on entire route to cursor
+function findClosestPointOnRoute(
+  cursorX: number,
+  cursorY: number,
+  routeCoords: number[][],
+  viewport: any
+): { lat: number; lng: number; distance: number } | null {
+  if (!routeCoords || routeCoords.length < 2) return null;
+
+  let minDistance = Infinity;
+  let closestPoint: { x: number; y: number } | null = null;
+
+  // Convert route coordinates to screen space and find closest segment
+  for (let i = 0; i < routeCoords.length - 1; i++) {
+    const [lng1, lat1] = routeCoords[i];
+    const [lng2, lat2] = routeCoords[i + 1];
+
+    try {
+      const [x1, y1] = viewport.project([lng1, lat1]);
+      const [x2, y2] = viewport.project([lng2, lat2]);
+
+      const result = closestPointOnSegment(cursorX, cursorY, x1, y1, x2, y2);
+
+      if (result.distance < minDistance) {
+        minDistance = result.distance;
+        closestPoint = { x: result.x, y: result.y };
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!closestPoint) return null;
+
+  // Convert screen point back to lat/lng
+  try {
+    const [lng, lat] = viewport.unproject([closestPoint.x, closestPoint.y]);
+    return { lat, lng, distance: minDistance };
+  } catch (e) {
+    return null;
+  }
+}
+
 
 // Easing function for smooth animations
 function easeInOutCubic(t: number): number {
@@ -83,6 +153,8 @@ interface MapViewSimpleProps {
   showItinerary?: boolean;
   selectedLocationModal?: Location | null;
   onCloseModal?: () => void;
+  isEditMode?: boolean;
+  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }) => void;
 }
 
 // Inner component to handle edge labels and itinerary overlay
@@ -633,6 +705,8 @@ export default function MapViewSimple({
   showItinerary = false,
   selectedLocationModal = null,
   onCloseModal,
+  isEditMode = false,
+  onRouteWaypointUpdate,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -671,6 +745,16 @@ export default function MapViewSimple({
   // Container ref and dimensions for hex grid
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
+
+  // Waypoint editing state
+  const [hoverWaypoint, setHoverWaypoint] = useState<{
+    routeId: string;
+    lat: number;
+    lng: number;
+    isDragging: boolean;
+  } | null>(null);
+  const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
 
   // Animation state
   const animationRef = useRef<{
@@ -1024,8 +1108,100 @@ export default function MapViewSimple({
     animateToLocation(targetState, false);
   }, [locations, followMode, focusedLocation]);
 
+  // Handle mouse move for route editing
+  const handleMouseMove = useCallback((event: any) => {
+    if (!isEditMode || !deckRef.current) return;
+
+    const deck = deckRef.current.deck;
+    if (!deck) return;
+
+    const viewport = deck.getViewports()[0];
+    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    setCursorPosition({ x, y });
+
+    // If dragging, update waypoint position
+    if (isDraggingRef.current && hoverWaypoint) {
+      try {
+        const [lng, lat] = viewport.unproject([x, y]);
+        setHoverWaypoint({
+          ...hoverWaypoint,
+          lat,
+          lng,
+        });
+      } catch (e) {
+        // Ignore projection errors
+      }
+      return;
+    }
+
+    // Check proximity to routes
+    const HOVER_THRESHOLD = 15; // pixels
+    let foundHover = false;
+
+    for (const route of activeRoutes) {
+      if (!route.geometry?.coordinates) continue;
+
+      const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport);
+
+      if (closestPoint && closestPoint.distance < HOVER_THRESHOLD) {
+        setHoverWaypoint({
+          routeId: route.id,
+          lat: closestPoint.lat,
+          lng: closestPoint.lng,
+          isDragging: false,
+        });
+        foundHover = true;
+        break;
+      }
+    }
+
+    if (!foundHover && !isDraggingRef.current) {
+      setHoverWaypoint(null);
+    }
+  }, [isEditMode, activeRoutes, hoverWaypoint]);
+
+  // Handle mouse down on waypoint circle
+  const handleMouseDown = useCallback((event: any) => {
+    if (!isEditMode || !hoverWaypoint) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    isDraggingRef.current = true;
+    setHoverWaypoint({
+      ...hoverWaypoint,
+      isDragging: true,
+    });
+  }, [isEditMode, hoverWaypoint]);
+
+  // Handle mouse up to finalize waypoint placement
+  const handleMouseUp = useCallback(() => {
+    if (!isEditMode || !hoverWaypoint || !isDraggingRef.current) return;
+
+    isDraggingRef.current = false;
+
+    // Call callback to update the geo-mark with new waypoint
+    if (onRouteWaypointUpdate) {
+      onRouteWaypointUpdate(hoverWaypoint.routeId, {
+        lat: hoverWaypoint.lat,
+        lng: hoverWaypoint.lng,
+      });
+    }
+
+    setHoverWaypoint({
+      ...hoverWaypoint,
+      isDragging: false,
+    });
+  }, [isEditMode, hoverWaypoint, onRouteWaypointUpdate]);
+
   // Handle map click
   const handleMapClick = useCallback(() => {
+    // Don't trigger random navigation in edit mode or when clicking waypoint
+    if (isEditMode || hoverWaypoint) return;
+
     const randomLocation = getRandomLocation();
     console.log('Animating to random location:', {
       lng: randomLocation.longitude.toFixed(2),
@@ -1033,7 +1209,7 @@ export default function MapViewSimple({
       zoom: randomLocation.zoom.toFixed(1)
     });
     animateToLocation(randomLocation);
-  }, [animateToLocation]);
+  }, [animateToLocation, isEditMode, hoverWaypoint]);
 
   // Build active itinerary considering selected alternatives
   const activeItinerary: Location[] = [];
@@ -1198,23 +1374,71 @@ export default function MapViewSimple({
       backgroundPadding: [4, 8], // vertical, horizontal padding
       billboard: false,
       pickable: false,
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontFamily: 'Arial, sans-serif',
       fontWeight: 600,
+      characterSet: 'auto', // Automatically detect and load characters from the text
+      fontSettings: {
+        sdf: false, // Disable SDF rendering which can cause issues with non-Latin chars
+      },
+    }));
+  }
+
+  // Waypoint editing circle (edit mode only)
+  if (isEditMode && hoverWaypoint) {
+    // Shadow for waypoint circle
+    layers.push(new ScatterplotLayer({
+      id: 'waypoint-shadow',
+      data: [hoverWaypoint],
+      getPosition: (d: any) => [d.lng, d.lat],
+      getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
+      getRadius: 12,
+      radiusMinPixels: 12,
+      radiusMaxPixels: 12,
+      pickable: false,
+      stroked: false,
+      filled: true,
+    }));
+
+    // Main waypoint circle
+    layers.push(new ScatterplotLayer({
+      id: 'waypoint-circle',
+      data: [hoverWaypoint],
+      getPosition: (d: any) => [d.lng, d.lat],
+      getFillColor: hoverWaypoint.isDragging ? [59, 130, 246, 255] : [255, 255, 255, 255], // Blue when dragging, white otherwise
+      getRadius: 10,
+      radiusMinPixels: 10,
+      radiusMaxPixels: 10,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      lineWidthMinPixels: 2,
+      getLineColor: [59, 130, 246, 255], // #3B82F6
     }));
   }
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   return (
-    <div ref={containerRef} style={{width: "100%", height: "100%", position: "relative"}}>
+    <div
+      ref={containerRef}
+      style={{width: "100%", height: "100%", position: "relative"}}
+      onMouseMove={isEditMode ? handleMouseMove : undefined}
+      onMouseDown={isEditMode ? handleMouseDown : undefined}
+      onMouseUp={isEditMode ? handleMouseUp : undefined}
+    >
       <DeckGL
         ref={deckRef}
         viewState={viewState}
         onViewStateChange={({ viewState }: any) => setViewState(viewState)}
-        controller={true}
+        controller={!isDraggingRef.current} // Disable controller when dragging waypoint
         layers={layers}
         onClick={handleMapClick}
-        getCursor={({ isDragging }: any) => isDragging ? 'grabbing' : 'grab'}
+        getCursor={({ isDragging }: any) => {
+          if (isEditMode && hoverWaypoint) {
+            return hoverWaypoint.isDragging ? 'grabbing' : 'grab';
+          }
+          return isDragging ? 'grabbing' : 'grab';
+        }}
       >
         <MapGL
           mapboxAccessToken={mapboxToken}
