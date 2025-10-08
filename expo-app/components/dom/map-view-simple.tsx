@@ -1137,11 +1137,11 @@ export default function MapViewSimple({
       return;
     }
 
-    // Check proximity to routes
+    // Check proximity to routes (use routes prop directly)
     const HOVER_THRESHOLD = 15; // pixels
     let foundHover = false;
 
-    for (const route of activeRoutes) {
+    for (const route of routes) {
       if (!route.geometry?.coordinates) continue;
 
       const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport);
@@ -1161,7 +1161,7 @@ export default function MapViewSimple({
     if (!foundHover && !isDraggingRef.current) {
       setHoverWaypoint(null);
     }
-  }, [isEditMode, activeRoutes, hoverWaypoint]);
+  }, [isEditMode, routes, hoverWaypoint]);
 
   // Handle mouse down on waypoint circle
   const handleMouseDown = useCallback((event: any) => {
