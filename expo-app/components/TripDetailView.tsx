@@ -16,12 +16,9 @@ import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -43,7 +40,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [editorState, setEditorState] = useState<EditorState>(() =>
     EditorState.create({ schema })
   );
-  const [inputText, setInputText] = useState('');
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
@@ -528,15 +524,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     fetchRoutes();
   }, [documentRoutes, documentLocations]);
 
-  const handleSendMessage = () => {
-    if (!inputText.trim()) return;
-    sendMessage({
-      role: 'user',
-      parts: [{ type: 'text', text: inputText.trim() }],
-    });
-    setInputText('');
-  };
-
   if (isLoadingTrip) {
     return (
       <View style={styles.container}>
@@ -659,32 +646,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           </>
         )}
       </View>
-
-      {/* Chat Input - Fixed at bottom */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={100}
-      >
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Type a message..."
-            multiline
-            maxLength={2000}
-            editable={!isChatLoading}
-            onSubmitEditing={handleSendMessage}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim() || isChatLoading}
-          >
-            <Ionicons name="send" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
     </View>
   );
 }
