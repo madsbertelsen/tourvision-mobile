@@ -422,8 +422,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   };
 
   return (
-    <div ref={setContainer} className="prosemirror-viewer-container">
-      {/* Toolbar - always visible in edit mode */}
+    <div className="prosemirror-editor-wrapper">
+      {/* Toolbar - always visible in edit mode, fixed at top */}
       {editable && (
         <div className="prosemirror-toolbar">
           {/* Text formatting */}
@@ -482,27 +482,29 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
         </div>
       )}
 
-      <ProseMirror
-        mount={mount}
-        state={state}
-        dispatchTransaction={editable ? dispatchTransaction : undefined}
-        nodeViews={nodeViews}
-        editable={() => editable}
-      >
-        <div
-          ref={setMount}
-          className="prosemirror-viewer"
-        />
-      </ProseMirror>
+      <div ref={setContainer} className="prosemirror-viewer-container">
+        <ProseMirror
+          mount={mount}
+          state={state}
+          dispatchTransaction={editable ? dispatchTransaction : undefined}
+          nodeViews={nodeViews}
+          editable={() => editable}
+        >
+          <div
+            ref={setMount}
+            className="prosemirror-viewer"
+          />
+        </ProseMirror>
 
-      {/* Geo-mark editor modal */}
-      {editingGeoMark && (
-        <GeoMarkEditor
-          node={editingGeoMark.node}
-          onSave={handleGeoMarkUpdate}
-          onCancel={() => setEditingGeoMark(null)}
-        />
-      )}
+        {/* Geo-mark editor modal */}
+        {editingGeoMark && (
+          <GeoMarkEditor
+            node={editingGeoMark.node}
+            onSave={handleGeoMarkUpdate}
+            onCancel={() => setEditingGeoMark(null)}
+          />
+        )}
+      </div>
     </div>
   );
 });
