@@ -32,17 +32,14 @@ interface TripDetailViewProps {
   initialMessage?: string;
 }
 
-type ViewMode = 'chat' | 'document';
-
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const router = useRouter();
   const { setFocusedLocation } = useMockContext();
   const { width } = useWindowDimensions();
+  const isLargeScreen = width >= 1024;
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('chat');
-  const [isEditable, setIsEditable] = useState(false);
   const [editorState, setEditorState] = useState<EditorState>(() =>
     EditorState.create({ schema })
   );
@@ -52,9 +49,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
-
-  // Determine if we should show split view (document + map)
-  const isLargeScreen = width >= 1024;
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -68,7 +62,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     onError: (error) => {
       console.error('Chat error:', error);
     },
-    initialMessages: currentTrip?.messages || [],
     id: tripId,
   });
 
@@ -79,7 +72,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     status = 'idle',
   } = chatHelpers;
 
-  const isChatLoading = status === ('in_progress' as any) || status === 'loading';
+  const isChatLoading = status === 'submitted';
 
   // Load trip data
   useEffect(() => {
@@ -194,11 +187,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
       console.log('[TripDetailView] Last assistant message ID:', lastAssistantMessage.id);
 
-      // Check if already exists in storage with actual content
-      const existingItinerary = currentTrip.itineraries?.find(
-        (it: any) => it.messageId === lastAssistantMessage.id
-      );
-
       // Extract text content first
       const textParts = lastAssistantMessage.parts?.filter((part: any) => part.type === 'text') || [];
       const textContent = textParts.map((part: any) => part.text).join('');
@@ -220,25 +208,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       }
 
       console.log('[TripDetailView] Found complete <itinerary> HTML');
-
-      // Check if we already have this exact content parsed
-      if (existingItinerary) {
-        // Compare the HTML content to see if it's the same
-        const storedHtml = existingItinerary.sourceHtml || '';
-        if (storedHtml === textContent) {
-          console.log('[TripDetailView] Itinerary already parsed with same content, skipping');
-          lastProcessedMessageIdRef.current = lastAssistantMessage.id;
-          return;
-        } else {
-          console.log('[TripDetailView] Message content changed, will re-parse');
-          console.log('[TripDetailView] Stored length:', storedHtml.length, 'Current length:', textContent.length);
-          // Remove old itinerary to replace with new parse
-          const filteredItineraries = currentTrip.itineraries?.filter(
-            (it: any) => it.messageId !== lastAssistantMessage.id
-          );
-          currentTrip.itineraries = filteredItineraries || [];
-        }
-      }
 
       // Check if we've already processed this in this session
       if (lastProcessedMessageIdRef.current === lastAssistantMessage.id) {
@@ -297,21 +266,86 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     if (initialMessage && !isLoadingTrip && !initialMessageSentRef.current && currentTrip) {
       initialMessageSentRef.current = true;
       setTimeout(() => {
-        sendMessage({ content: initialMessage });
+        sendMessage({
+          role: 'user',
+          parts: [{ type: 'text', text: initialMessage }],
+        });
         // Clear the initialMessage from URL after sending
         router.setParams({ initialMessage: undefined });
       }, 100);
     }
   }, [initialMessage, isLoadingTrip, currentTrip, sendMessage, router]);
 
+  // Real-time streaming update: Parse latest message HTML during streaming
+  useEffect(() => {
+    console.log('[Streaming] Effect triggered, messages:', messages.length, 'loading:', isChatLoading);
+
+    if (!messages || messages.length === 0) {
+      console.log('[Streaming] No messages, skipping');
+      return;
+    }
+
+    // Find last assistant message
+    const lastAssistantMessage = messages.findLast((msg: any) => msg.role === 'assistant');
+    if (!lastAssistantMessage) {
+      console.log('[Streaming] No assistant message found');
+      return;
+    }
+
+    // Extract text content
+    const textParts = lastAssistantMessage.parts?.filter((part: any) => part.type === 'text') || [];
+    const textContent = textParts.map((part: any) => part.text).join('');
+
+    console.log('[Streaming] Text content length:', textContent.length);
+    console.log('[Streaming] Has itinerary tag:', textContent.includes('<itinerary'));
+
+    // Check if it contains itinerary HTML
+    if (!textContent.includes('<itinerary')) {
+      console.log('[Streaming] No itinerary tag, skipping');
+      return;
+    }
+
+    // Parse the HTML (even if incomplete during streaming)
+    try {
+      const match = textContent.match(/<itinerary[^>]*>([\s\S]*?)(<\/itinerary>|$)/);
+      if (!match) {
+        console.log('[Streaming] No itinerary match found');
+        return;
+      }
+
+      const htmlContent = match[1];
+      console.log('[Streaming] HTML content length:', htmlContent.length);
+      console.log('[Streaming] HTML preview:', htmlContent.substring(0, 200));
+
+      if (!htmlContent || !htmlContent.trim()) {
+        console.log('[Streaming] HTML content is empty');
+        return;
+      }
+
+      // Parse to ProseMirror
+      console.log('[Streaming] Attempting to parse HTML to ProseMirror');
+      const jsonContent = htmlToProsemirror(htmlContent);
+      console.log('[Streaming] Parse result - JSONContent:', !!jsonContent);
+
+      const parsedState = stateFromJSON(jsonContent);
+      console.log('[Streaming] Created state - has doc:', !!parsedState?.doc);
+
+      if (parsedState && parsedState.doc) {
+        console.log('[Streaming] Setting editor state');
+        setEditorState(parsedState);
+      }
+    } catch (error) {
+      console.error('[Streaming] Error parsing streaming HTML:', error);
+      console.log('[Streaming] Error details:', error);
+    }
+  }, [messages]); // Run whenever messages change, not just when streaming completes
+
   // Auto-scroll to bottom
   useEffect(() => {
-    if (viewMode === 'chat') {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages, viewMode]);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages]);
 
   const handleNodeFocus = (nodeId: string | null) => {
     setFocusedNodeId(nodeId);
@@ -323,7 +357,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
       console.log('[TripDetailView] Document changed, persisting to storage');
 
-      const newState = stateFromJSON(newDoc, schema);
+      const newState = stateFromJSON(newDoc);
       setEditorState(newState);
 
       const updatedItineraries = [...currentTrip.itineraries];
@@ -424,6 +458,9 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
   const { locations: documentLocations, routes: documentRoutes } = useMemo(
     () => {
+      if (!editorState?.doc) {
+        return { locations: [], routes: [] };
+      }
       const result = extractLocationsAndRoutes(editorState.doc.toJSON());
       console.log('[TripDetailView] Extracted locations:', result.locations.length);
       console.log('[TripDetailView] Extracted routes:', result.routes.length);
@@ -432,7 +469,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       }
       return result;
     },
-    [editorState.doc, extractLocationsAndRoutes]
+    [editorState?.doc, extractLocationsAndRoutes]
   );
 
   // Fetch actual routes from API when document routes change
@@ -493,7 +530,10 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
-    sendMessage({ content: inputText.trim() });
+    sendMessage({
+      role: 'user',
+      parts: [{ type: 'text', text: inputText.trim() }],
+    });
     setInputText('');
   };
 
@@ -544,157 +584,107 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           >
             <Ionicons name="refresh-outline" size={20} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'chat' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('chat')}
-          >
-            <Ionicons name="chatbubble-outline" size={20} color={viewMode === 'chat' ? '#fff' : '#6B7280'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'document' && styles.viewModeButtonActive]}
-            onPress={() => setViewMode('document')}
-          >
-            <Ionicons name="document-text-outline" size={20} color={viewMode === 'document' ? '#fff' : '#6B7280'} />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Content */}
-      {viewMode === 'chat' ? (
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={100}
-        >
-          {/* Messages */}
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.messagesContainer}
-            contentContainerStyle={styles.messagesContent}
-          >
-            {messages.map((message, index) => {
-              // Extract text content from message parts
-              const textParts = message.parts?.filter((part: any) => part.type === 'text') || [];
-              const textContent = textParts.map((part: any) => part.text).join('');
-
-              // Skip system messages
-              if (message.role === 'system') return null;
-
-              // For user messages, show plain text
-              if (message.role === 'user') {
-                return (
-                  <View key={message.id || index} style={styles.messageWrapper}>
-                    <View style={[styles.messageBubble, styles.userMessage]}>
-                      <Text style={styles.userText}>{textContent}</Text>
-                    </View>
-                  </View>
-                );
-              }
-
-              // For assistant messages, always parse HTML to ProseMirror (even during streaming)
-              let prosemirrorDoc;
-              try {
-                // Always try to parse the HTML content
-                prosemirrorDoc = htmlToProsemirror(textContent);
-              } catch (error) {
-                console.error('[TripDetailView] Error parsing HTML:', error);
-                console.log('[TripDetailView] Content that failed:', textContent);
-                // Fallback to plain paragraph
-                prosemirrorDoc = {
-                  type: 'doc',
-                  content: [{
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: textContent || '' }]
-                  }]
-                };
-              }
-
-              return (
-                <View key={message.id || index} style={styles.messageWrapper}>
-                  <View style={[styles.messageBubble, styles.assistantMessage]}>
-                    <ProseMirrorViewerWrapper
-                      content={prosemirrorDoc}
-                      onNodeFocus={() => {}}
-                      focusedNodeId={null}
-                      height="auto"
-                      editable={false}
-                      onChange={() => {}}
-                    />
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
-
-          {/* Input */}
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Type a message..."
-              multiline
-              maxLength={2000}
-              editable={!isChatLoading}
-              onSubmitEditing={handleSendMessage}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-              onPress={handleSendMessage}
-              disabled={!inputText.trim() || isChatLoading}
+      {/* Content: Unified document + map view */}
+      <View style={styles.documentContainer}>
+        {isLargeScreen ? (
+          // Split view for large screens: document on left, map on right
+          <View style={styles.splitView}>
+            <ScrollView
+              ref={scrollViewRef}
+              style={[styles.documentScrollView, styles.documentScrollViewSplit]}
+              contentContainerStyle={styles.documentScrollContent}
             >
-              <Ionicons name="send" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={styles.documentContainer}>
-          {isLargeScreen ? (
-            // Split view for large screens: document on left, map on right
-            <View style={styles.splitView}>
-              <ScrollView style={[styles.documentScrollView, styles.documentScrollViewSplit]} contentContainerStyle={styles.documentScrollContent}>
-                {/* Document content in message bubble */}
-                <View style={styles.messageWrapper}>
-                  <View style={[styles.messageBubble, styles.assistantMessage]}>
+              {/* Document content */}
+              <View style={styles.messageWrapper}>
+                <View style={[styles.messageBubble, styles.assistantMessage]}>
+                  {editorState?.doc ? (
                     <ProseMirrorViewerWrapper
                       content={editorState.doc.toJSON()}
                       onNodeFocus={handleNodeFocus}
                       focusedNodeId={focusedNodeId}
                       height="auto"
-                      editable={true}
+                      editable={!isChatLoading}
                       onChange={handleDocumentChange}
                     />
-                  </View>
-                </View>
-              </ScrollView>
-              <View style={styles.mapContainer}>
-                <MapViewSimpleWrapper
-                  locations={documentLocations}
-                  routes={fetchedRoutes}
-                  height="100%"
-                />
-              </View>
-            </View>
-          ) : (
-            // Single column view for mobile
-            <ScrollView style={styles.documentScrollView} contentContainerStyle={styles.documentScrollContent}>
-              {/* Document content in message bubble */}
-              <View style={styles.messageWrapper}>
-                <View style={[styles.messageBubble, styles.assistantMessage]}>
-                  <ProseMirrorViewerWrapper
-                    content={editorState.doc.toJSON()}
-                    onNodeFocus={handleNodeFocus}
-                    focusedNodeId={focusedNodeId}
-                    height="auto"
-                    editable={true}
-                    onChange={handleDocumentChange}
-                  />
+                  ) : (
+                    <Text style={styles.loadingText}>Waiting for content...</Text>
+                  )}
                 </View>
               </View>
             </ScrollView>
-          )}
+            <View style={styles.mapContainer}>
+              <MapViewSimpleWrapper
+                locations={documentLocations}
+                routes={fetchedRoutes}
+                height="100%"
+              />
+            </View>
+          </View>
+        ) : (
+          // Single column view for mobile: document above, map below
+          <>
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.documentScrollView}
+              contentContainerStyle={styles.documentScrollContent}
+            >
+              {/* Document content */}
+              <View style={styles.messageWrapper}>
+                <View style={[styles.messageBubble, styles.assistantMessage]}>
+                  {editorState?.doc ? (
+                    <ProseMirrorViewerWrapper
+                      content={editorState.doc.toJSON()}
+                      onNodeFocus={handleNodeFocus}
+                      focusedNodeId={focusedNodeId}
+                      height="auto"
+                      editable={!isChatLoading}
+                      onChange={handleDocumentChange}
+                    />
+                  ) : (
+                    <Text style={styles.loadingText}>Waiting for content...</Text>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+            <View style={styles.mapContainerMobile}>
+              <MapViewSimpleWrapper
+                locations={documentLocations}
+                routes={fetchedRoutes}
+                height={300}
+              />
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Chat Input - Fixed at bottom */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={100}
+      >
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Type a message..."
+            multiline
+            maxLength={2000}
+            editable={!isChatLoading}
+            onSubmitEditing={handleSendMessage}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            onPress={handleSendMessage}
+            disabled={!inputText.trim() || isChatLoading}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-      )}
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -847,6 +837,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
     padding: 16,
     backgroundColor: '#F3F4F6',
+  },
+  mapContainerMobile: {
+    height: 300,
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   documentToolbar: {
     flexDirection: 'row',
