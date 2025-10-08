@@ -582,21 +582,19 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           <View style={styles.splitView}>
             <View style={[styles.documentScrollView, styles.documentScrollViewSplit]}>
               {/* Document content */}
-              <View style={styles.messageWrapper}>
-                <View style={[styles.messageBubble, styles.assistantMessage]}>
-                  {editorState?.doc ? (
-                    <ProseMirrorViewerWrapper
-                      content={editorState.doc.toJSON()}
-                      onNodeFocus={handleNodeFocus}
-                      focusedNodeId={focusedNodeId}
-                      height="100%"
-                      editable={isEditMode}
-                      onChange={handleDocumentChange}
-                    />
-                  ) : (
-                    <Text style={styles.loadingText}>Waiting for content...</Text>
-                  )}
-                </View>
+              <View style={styles.documentContainer}>
+                {editorState?.doc ? (
+                  <ProseMirrorViewerWrapper
+                    content={editorState.doc.toJSON()}
+                    onNodeFocus={handleNodeFocus}
+                    focusedNodeId={focusedNodeId}
+                    height="100%"
+                    editable={isEditMode}
+                    onChange={handleDocumentChange}
+                  />
+                ) : (
+                  <Text style={styles.loadingText}>Waiting for content...</Text>
+                )}
               </View>
             </View>
             <View style={styles.mapContainer}>
@@ -612,21 +610,19 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           <>
             <View style={styles.documentScrollView}>
               {/* Document content */}
-              <View style={styles.messageWrapper}>
-                <View style={[styles.messageBubble, styles.assistantMessage]}>
-                  {editorState?.doc ? (
-                    <ProseMirrorViewerWrapper
-                      content={editorState.doc.toJSON()}
-                      onNodeFocus={handleNodeFocus}
-                      focusedNodeId={focusedNodeId}
-                      height="100%"
-                      editable={isEditMode}
-                      onChange={handleDocumentChange}
-                    />
-                  ) : (
-                    <Text style={styles.loadingText}>Waiting for content...</Text>
-                  )}
-                </View>
+              <View style={styles.documentContainer}>
+                {editorState?.doc ? (
+                  <ProseMirrorViewerWrapper
+                    content={editorState.doc.toJSON()}
+                    onNodeFocus={handleNodeFocus}
+                    focusedNodeId={focusedNodeId}
+                    height="100%"
+                    editable={isEditMode}
+                    onChange={handleDocumentChange}
+                  />
+                ) : (
+                  <Text style={styles.loadingText}>Waiting for content...</Text>
+                )}
               </View>
             </View>
             <View style={styles.mapContainerMobile}>
