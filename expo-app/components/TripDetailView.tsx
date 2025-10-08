@@ -668,6 +668,70 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     }
   }, [editorState, handleDocumentChange]);
 
+  // Handle route waypoint removal from map editing
+  const handleRouteWaypointRemove = useCallback((routeId: string, waypointIndex: number) => {
+    if (!editorState) return;
+
+    console.log('[TripDetailView] Removing waypoint at index', waypointIndex, 'from route', routeId);
+
+    // Parse routeId to get target geo-mark ID
+    const match = routeId.match(/^(.+)-to-(.+)$/);
+    if (!match) {
+      console.error('[TripDetailView] Invalid route ID format:', routeId);
+      return;
+    }
+
+    const [, fromGeoId, toGeoId] = match;
+    console.log('[TripDetailView] Removing waypoint from route from', fromGeoId, 'to', toGeoId);
+
+    // Find and update the target geo-mark
+    let found = false;
+    const tr = editorState.tr;
+
+    editorState.doc.descendants((node, pos) => {
+      if (found) return false;
+
+      if (node.type.name === 'geoMark' && node.attrs.geoId === toGeoId) {
+        console.log('[TripDetailView] Found target geo-mark:', node.attrs.placeName);
+
+        const existingWaypoints = node.attrs.waypoints || [];
+
+        if (waypointIndex < 0 || waypointIndex >= existingWaypoints.length) {
+          console.error('[TripDetailView] Invalid waypoint index:', waypointIndex);
+          return false;
+        }
+
+        // Remove waypoint at index
+        const updatedWaypoints = [...existingWaypoints];
+        updatedWaypoints.splice(waypointIndex, 1);
+
+        console.log('[TripDetailView] Removed waypoint at index', waypointIndex);
+        console.log('[TripDetailView] Updated waypoints:', updatedWaypoints);
+
+        // Update the node attributes
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          waypoints: updatedWaypoints.length > 0 ? updatedWaypoints : null,
+        });
+
+        found = true;
+      }
+    });
+
+    if (found) {
+      // Apply transaction
+      const newState = editorState.apply(tr);
+      setEditorState(newState);
+
+      // Save to storage
+      handleDocumentChange(newState.doc.toJSON());
+
+      console.log('[TripDetailView] Waypoint removed successfully');
+    } else {
+      console.error('[TripDetailView] Could not find geo-mark with ID:', toGeoId);
+    }
+  }, [editorState, handleDocumentChange]);
+
   if (isLoadingTrip) {
     return (
       <View style={styles.container}>
@@ -757,6 +821,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                 height="100%"
                 isEditMode={isEditMode}
                 onRouteWaypointUpdate={handleRouteWaypointUpdate}
+                onRouteWaypointRemove={handleRouteWaypointRemove}
               />
             </View>
           </View>
@@ -787,6 +852,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                 height={300}
                 isEditMode={isEditMode}
                 onRouteWaypointUpdate={handleRouteWaypointUpdate}
+                onRouteWaypointRemove={handleRouteWaypointRemove}
               />
             </View>
           </>

@@ -183,6 +183,7 @@ interface MapViewSimpleProps {
   onCloseModal?: () => void;
   isEditMode?: boolean;
   onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
+  onRouteWaypointRemove?: (routeId: string, waypointIndex: number) => void;
 }
 
 // Inner component to handle edge labels and itinerary overlay
@@ -735,6 +736,7 @@ export default function MapViewSimple({
   onCloseModal,
   isEditMode = false,
   onRouteWaypointUpdate,
+  onRouteWaypointRemove,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -1438,9 +1440,58 @@ export default function MapViewSimple({
     }));
   }
 
-  // Waypoint editing circle (edit mode only)
+  // Existing waypoints visualization (edit mode only, when hovering near route)
   if (isEditMode && hoverWaypoint) {
-    // Shadow for waypoint circle
+    // Find the route being hovered
+    const hoveredRoute = activeRoutes.find(r => r.id === hoverWaypoint.routeId);
+
+    if (hoveredRoute && hoveredRoute.waypoints && hoveredRoute.waypoints.length > 0) {
+      // Add index to each waypoint for deletion
+      const waypointsWithIndex = hoveredRoute.waypoints.map((wp: any, index: number) => ({
+        ...wp,
+        routeId: hoveredRoute.id,
+        waypointIndex: index,
+      }));
+
+      // Shadow for existing waypoints
+      layers.push(new ScatterplotLayer({
+        id: 'existing-waypoints-shadow',
+        data: waypointsWithIndex,
+        getPosition: (d: any) => [d.lng, d.lat],
+        getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
+        getRadius: 8,
+        radiusMinPixels: 8,
+        radiusMaxPixels: 8,
+        pickable: false,
+        stroked: false,
+        filled: true,
+      }));
+
+      // Existing waypoints circles
+      layers.push(new ScatterplotLayer({
+        id: 'existing-waypoints',
+        data: waypointsWithIndex,
+        getPosition: (d: any) => [d.lng, d.lat],
+        getFillColor: [239, 68, 68, 255], // Red to indicate deletable
+        getRadius: 6,
+        radiusMinPixels: 6,
+        radiusMaxPixels: 6,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        lineWidthMinPixels: 2,
+        getLineColor: [255, 255, 255, 255], // White border
+        onClick: (info: any) => {
+          if (info.object && onRouteWaypointRemove) {
+            console.log('[MapViewSimple] Removing waypoint at index', info.object.waypointIndex, 'from route', info.object.routeId);
+            onRouteWaypointRemove(info.object.routeId, info.object.waypointIndex);
+          }
+        },
+      }));
+    }
+
+    // Hover/drag waypoint circle (new waypoint being added)
+    // Shadow
     layers.push(new ScatterplotLayer({
       id: 'waypoint-shadow',
       data: [hoverWaypoint],
