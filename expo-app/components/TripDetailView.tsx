@@ -598,10 +598,14 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   }, [documentRoutes, documentLocations]);
 
   // Handle route waypoint updates from map editing
-  const handleRouteWaypointUpdate = useCallback((routeId: string, waypoint: { lat: number; lng: number }) => {
+  const handleRouteWaypointUpdate = useCallback((
+    routeId: string,
+    waypoint: { lat: number; lng: number },
+    segmentIndex: number
+  ) => {
     if (!editorState) return;
 
-    console.log('[TripDetailView] Updating route waypoint:', routeId, waypoint);
+    console.log('[TripDetailView] Updating route waypoint:', routeId, waypoint, 'at segment', segmentIndex);
 
     // Parse routeId to get target geo-mark ID
     // Route ID format: "{fromGeoId}-to-{toGeoId}"
@@ -627,12 +631,14 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         // Get existing waypoints or create new array
         const existingWaypoints = node.attrs.waypoints || [];
 
-        // Add new waypoint
-        const updatedWaypoints = [
-          ...existingWaypoints,
-          { lat: waypoint.lat, lng: waypoint.lng }
-        ];
+        // Insert waypoint at correct index based on which segment was split
+        // The route geometry is: [start, ...waypoints, end]
+        // If segmentIndex is 0, we're splitting between start and first waypoint (or end)
+        // So we insert at index 0
+        const updatedWaypoints = [...existingWaypoints];
+        updatedWaypoints.splice(segmentIndex, 0, { lat: waypoint.lat, lng: waypoint.lng });
 
+        console.log('[TripDetailView] Inserting waypoint at index', segmentIndex);
         console.log('[TripDetailView] Updated waypoints:', updatedWaypoints);
 
         // Update the node attributes

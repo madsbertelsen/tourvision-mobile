@@ -98,11 +98,12 @@ function findClosestPointOnRoute(
   cursorY: number,
   routeCoords: number[][],
   viewport: any
-): { lat: number; lng: number; distance: number } | null {
+): { lat: number; lng: number; distance: number; segmentIndex: number } | null {
   if (!routeCoords || routeCoords.length < 2) return null;
 
   let minDistance = Infinity;
   let closestPoint: { x: number; y: number } | null = null;
+  let closestSegmentIndex = -1;
 
   // Convert route coordinates to screen space and find closest segment
   for (let i = 0; i < routeCoords.length - 1; i++) {
@@ -118,18 +119,19 @@ function findClosestPointOnRoute(
       if (result.distance < minDistance) {
         minDistance = result.distance;
         closestPoint = { x: result.x, y: result.y };
+        closestSegmentIndex = i;
       }
     } catch (e) {
       continue;
     }
   }
 
-  if (!closestPoint) return null;
+  if (!closestPoint || closestSegmentIndex === -1) return null;
 
   // Convert screen point back to lat/lng
   try {
     const [lng, lat] = viewport.unproject([closestPoint.x, closestPoint.y]);
-    return { lat, lng, distance: minDistance };
+    return { lat, lng, distance: minDistance, segmentIndex: closestSegmentIndex };
   } catch (e) {
     return null;
   }
@@ -154,7 +156,7 @@ interface MapViewSimpleProps {
   selectedLocationModal?: Location | null;
   onCloseModal?: () => void;
   isEditMode?: boolean;
-  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }) => void;
+  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
 }
 
 // Inner component to handle edge labels and itinerary overlay
@@ -752,6 +754,7 @@ export default function MapViewSimple({
     lat: number;
     lng: number;
     isDragging: boolean;
+    segmentIndex: number; // Which segment of the route is being split
   } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -1152,6 +1155,7 @@ export default function MapViewSimple({
           lat: closestPoint.lat,
           lng: closestPoint.lng,
           isDragging: false,
+          segmentIndex: closestPoint.segmentIndex,
         });
         foundHover = true;
         break;
@@ -1185,10 +1189,14 @@ export default function MapViewSimple({
 
     // Call callback to update the geo-mark with new waypoint
     if (onRouteWaypointUpdate) {
-      onRouteWaypointUpdate(hoverWaypoint.routeId, {
-        lat: hoverWaypoint.lat,
-        lng: hoverWaypoint.lng,
-      });
+      onRouteWaypointUpdate(
+        hoverWaypoint.routeId,
+        {
+          lat: hoverWaypoint.lat,
+          lng: hoverWaypoint.lng,
+        },
+        hoverWaypoint.segmentIndex
+      );
     }
 
     setHoverWaypoint({

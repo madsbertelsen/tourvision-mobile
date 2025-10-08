@@ -13,7 +13,7 @@ interface MapViewSimpleWrapperProps {
   center?: { lat: number; lng: number };
   zoom?: number;
   isEditMode?: boolean;
-  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }) => void;
+  onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
 }
 
 interface Location {
