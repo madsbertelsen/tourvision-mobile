@@ -209,6 +209,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         return;
       }
 
+      // Check if we've already saved an itinerary for this message
+      const existingItinerary = currentTrip.itineraries?.find(
+        (it: any) => it.messageId === lastAssistantMessage.id
+      );
+      if (existingItinerary) {
+        console.log('[TripDetailView] Itinerary already exists for this message, skipping');
+        lastProcessedMessageIdRef.current = lastAssistantMessage.id;
+        return;
+      }
+
       console.log('[TripDetailView] Found <itinerary> tag, parsing...');
 
       console.log('[TripDetailView] Parsing itinerary from message:', lastAssistantMessage.id);
@@ -343,6 +353,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       if (!currentTrip || !currentTrip.itineraries || currentTrip.itineraries.length === 0) return;
 
       console.log('[TripDetailView] Document changed, persisting to storage');
+      console.log('[TripDetailView] New document has geoMarks:', JSON.stringify(newDoc).includes('geoMark'));
 
       const newState = stateFromJSON(newDoc);
       setEditorState(newState);
@@ -358,8 +369,11 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         itineraries: updatedItineraries,
       };
 
+      console.log('[TripDetailView] About to save trip with updated document');
       await saveTrip(updatedTrip);
+      console.log('[TripDetailView] Trip saved, updating currentTrip state');
       setCurrentTrip(updatedTrip);
+      console.log('[TripDetailView] currentTrip state updated');
     },
     [currentTrip]
   );

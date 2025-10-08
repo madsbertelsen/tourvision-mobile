@@ -1,6 +1,7 @@
 'use dom';
 
 import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin } from 'prosemirror-state';
 import { Schema, Node as ProseMirrorNode, DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
@@ -41,10 +42,61 @@ function GeoMarkEditor({ node, onSave, onCancel }: {
     colorIndex: node.attrs.colorIndex || 0
   });
 
+  const [suggestions, setSuggestions] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Fetch location suggestions from Nominatim on mount
+  React.useEffect(() => {
+    const searchQuery = node.attrs.placeName;
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=jsonv2&limit=5`,
+          {
+            headers: {
+              'User-Agent': 'TourVision-App' // Nominatim requires a user agent
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch location suggestions');
+        }
+
+        const data = await response.json();
+        setSuggestions(data);
+      } catch (err) {
+        console.error('Error fetching Nominatim suggestions:', err);
+        setError('Unable to fetch location suggestions');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSuggestions();
+  }, []); // Only run on mount
+
   const colors = [
     '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
     '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
   ];
+
+  const handleSuggestionClick = (suggestion: any) => {
+    setFormData({
+      ...formData,
+      placeName: suggestion.display_name,
+      lat: suggestion.lat,
+      lng: suggestion.lon
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +117,43 @@ function GeoMarkEditor({ node, onSave, onCancel }: {
               placeholder="e.g. Eiffel Tower"
               required
             />
+
+            {/* Location suggestions from Nominatim */}
+            {isLoading && (
+              <div className="suggestions-loading">
+                Searching for locations...
+              </div>
+            )}
+
+            {error && (
+              <div className="suggestions-error">
+                {error}
+              </div>
+            )}
+
+            {!isLoading && !error && suggestions.length > 0 && (
+              <div className="suggestions-list">
+                <div className="suggestions-header">Select a location:</div>
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={suggestion.place_id || index}
+                    className="suggestion-item"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                  >
+                    <div className="suggestion-name">{suggestion.display_name}</div>
+                    <div className="suggestion-coords">
+                      {parseFloat(suggestion.lat).toFixed(4)}, {parseFloat(suggestion.lon).toFixed(4)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isLoading && !error && suggestions.length === 0 && formData.placeName && (
+              <div className="suggestions-empty">
+                No locations found. Please enter coordinates manually.
+              </div>
+            )}
           </div>
 
           <div className="form-row">
@@ -305,16 +394,27 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Handle geo-mark updates
   const handleGeoMarkUpdate = (updatedAttrs: any) => {
-    if (!editingGeoMark || !viewRef) return;
+    if (!editingGeoMark) return;
 
+    console.log('[GeoMarkEditor] Saving geo-mark with attrs:', updatedAttrs);
     const { pos, node } = editingGeoMark;
-    const tr = viewRef.state.tr;
 
-    // Update the node attributes
+    // Create transaction to update node attributes
+    const tr = state.tr;
     tr.setNodeMarkup(pos, null, { ...node.attrs, ...updatedAttrs });
 
-    // Dispatch the transaction
-    viewRef.dispatch(tr);
+    // Apply the transaction
+    const newState = state.apply(tr);
+    setState(newState);
+
+    console.log('[GeoMarkEditor] New state created, calling onChange');
+
+    // Notify parent of changes
+    if (onChange) {
+      onChange(newState.doc.toJSON());
+    } else {
+      console.warn('[GeoMarkEditor] No onChange callback provided!');
+    }
 
     // Close editor
     setEditingGeoMark(null);
@@ -498,15 +598,17 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           />
         </ProseMirror>
 
-        {/* Geo-mark editor modal */}
-        {editingGeoMark && (
-          <GeoMarkEditor
-            node={editingGeoMark.node}
-            onSave={handleGeoMarkUpdate}
-            onCancel={() => setEditingGeoMark(null)}
-          />
-        )}
       </div>
+
+      {/* Geo-mark editor modal - rendered via portal to appear above everything */}
+      {editingGeoMark && createPortal(
+        <GeoMarkEditor
+          node={editingGeoMark.node}
+          onSave={handleGeoMarkUpdate}
+          onCancel={() => setEditingGeoMark(null)}
+        />,
+        document.body
+      )}
     </div>
   );
 });
