@@ -314,50 +314,55 @@ hr {
   background: #2563eb;
 }
 
-/* Floating toolbar for geo-mark creation */
-.geo-mark-toolbar {
-  background: white;
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* Fixed menu bar at top */
+.prosemirror-menu-bar {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 12px;
   display: flex;
-  gap: 4px;
-  animation: fadeIn 0.2s ease-out;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.geo-mark-toolbar-button {
-  padding: 8px 16px;
-  background: #3B82F6;
-  color: white;
-  border: none;
+.menu-button {
+  padding: 6px 12px;
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  transition: all 0.15s;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 
-.geo-mark-toolbar-button:hover {
+.menu-button:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.menu-button:active:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.menu-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Active/selected state */
+.menu-button.active {
+  background: #3B82F6;
+  color: white;
+  border-color: #3B82F6;
+}
+
+.menu-button.active:hover:not(:disabled) {
   background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.geo-mark-toolbar-button:active {
-  transform: translateY(0);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  border-color: #2563eb;
 }
