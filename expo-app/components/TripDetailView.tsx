@@ -729,11 +729,11 @@ const styles = StyleSheet.create({
   },
   assistantMessage: {
     backgroundColor: '#fff',
-    alignSelf: 'flex-start',
-    marginRight: '20%',
+    alignSelf: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    width: '80%',
+    width: '100%',
+    maxWidth: 900,
   },
   streamingText: {
     marginLeft: 8,
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   documentScrollViewSplit: {
-    maxWidth: 900,
+    // maxWidth removed - width controlled by assistantMessage maxWidth
   },
   documentScrollContent: {
     padding: 16,
