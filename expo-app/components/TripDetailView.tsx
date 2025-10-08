@@ -16,7 +16,6 @@ import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -44,8 +43,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
-
-  const scrollViewRef = useRef<ScrollView>(null);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -337,13 +334,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     }
   }, [messages]); // Run whenever messages change, not just when streaming completes
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  }, [messages]);
-
   const handleNodeFocus = (nodeId: string | null) => {
     setFocusedNodeId(nodeId);
   };
@@ -590,11 +580,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         {isLargeScreen ? (
           // Split view for large screens: document on left, map on right
           <View style={styles.splitView}>
-            <ScrollView
-              ref={scrollViewRef}
-              style={[styles.documentScrollView, styles.documentScrollViewSplit]}
-              contentContainerStyle={styles.documentScrollContent}
-            >
+            <View style={[styles.documentScrollView, styles.documentScrollViewSplit]}>
               {/* Document content */}
               <View style={styles.messageWrapper}>
                 <View style={[styles.messageBubble, styles.assistantMessage]}>
@@ -603,7 +589,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                       content={editorState.doc.toJSON()}
                       onNodeFocus={handleNodeFocus}
                       focusedNodeId={focusedNodeId}
-                      height="auto"
+                      height="100%"
                       editable={isEditMode}
                       onChange={handleDocumentChange}
                     />
@@ -612,7 +598,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                   )}
                 </View>
               </View>
-            </ScrollView>
+            </View>
             <View style={styles.mapContainer}>
               <MapViewSimpleWrapper
                 locations={documentLocations}
@@ -624,11 +610,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         ) : (
           // Single column view for mobile: document above, map below
           <>
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.documentScrollView}
-              contentContainerStyle={styles.documentScrollContent}
-            >
+            <View style={styles.documentScrollView}>
               {/* Document content */}
               <View style={styles.messageWrapper}>
                 <View style={[styles.messageBubble, styles.assistantMessage]}>
@@ -637,7 +619,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                       content={editorState.doc.toJSON()}
                       onNodeFocus={handleNodeFocus}
                       focusedNodeId={focusedNodeId}
-                      height="auto"
+                      height="100%"
                       editable={isEditMode}
                       onChange={handleDocumentChange}
                     />
@@ -646,7 +628,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                   )}
                 </View>
               </View>
-            </ScrollView>
+            </View>
             <View style={styles.mapContainerMobile}>
               <MapViewSimpleWrapper
                 locations={documentLocations}
