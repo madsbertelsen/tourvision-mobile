@@ -5,6 +5,7 @@ import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin } from 'prosemirror-state';
 import { Schema, Node as ProseMirrorNode, DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import { schema } from '@/utils/prosemirror-schema';
+import { createGeoMarkFromSelection } from '@/utils/prosemirror-transactions';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
@@ -161,6 +162,9 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [editingGeoMark, setEditingGeoMark] = useState<{ pos: number; node: ProseMirrorNode } | null>(null);
   const [viewRef, setViewRef] = useState<any>(null);
+  const [showToolbar, setShowToolbar] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState<{ top: number; left: number } | null>(null);
+  const [creatingNewGeoMark, setCreatingNewGeoMark] = useState(false);
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -225,6 +229,28 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       if (onChange && tr.docChanged) {
         onChange(newState.doc.toJSON());
       }
+
+      // Track selection for toolbar positioning
+      if (editable && !newState.selection.empty) {
+        // Get the DOM coordinates for the selection
+        setTimeout(() => {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            setToolbarPosition({
+              top: rect.top - 50, // 50px above selection
+              left: rect.left + (rect.width / 2) - 75 // Center horizontally (150px width / 2)
+            });
+            setShowToolbar(true);
+          }
+        }, 0);
+      } else {
+        // Hide toolbar when selection is empty
+        setShowToolbar(false);
+      }
+
       return newState;
     });
   };
@@ -315,6 +341,40 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     // Close editor
     setEditingGeoMark(null);
+    setCreatingNewGeoMark(false);
+  };
+
+  // Handle creating a new geo-mark from selection
+  const handleCreateGeoMark = () => {
+    if (!viewRef || !state.selection) return;
+
+    // Get the selected text to use as initial placeName
+    const { from, to } = state.selection;
+    const selectedText = state.doc.textBetween(from, to, ' ');
+
+    // Create geo-mark with initial attributes
+    const newState = createGeoMarkFromSelection(state, {
+      placeName: selectedText,
+      colorIndex: 0, // Will be customizable in modal
+    });
+
+    if (!newState) return;
+
+    // Apply the state change
+    setState(newState);
+    onChange?.(newState.doc.toJSON());
+
+    // Hide toolbar
+    setShowToolbar(false);
+
+    // Find the newly created geo-mark and open editor
+    // The geo-mark should be at the same position as the selection
+    const geoMarkNode = newState.doc.nodeAt(from);
+    if (geoMarkNode && geoMarkNode.type === schema.nodes.geoMark) {
+      setEditingGeoMark({ pos: from, node: geoMarkNode });
+      setViewRef(viewRef);
+      setCreatingNewGeoMark(true);
+    }
   };
 
   // Expose methods via ref
@@ -398,12 +458,36 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
         />
       </ProseMirror>
 
+      {/* Floating toolbar for adding geo-marks */}
+      {showToolbar && toolbarPosition && editable && (
+        <div
+          className="geo-mark-toolbar"
+          style={{
+            position: 'fixed',
+            top: `${toolbarPosition.top}px`,
+            left: `${toolbarPosition.left}px`,
+            zIndex: 9999,
+          }}
+        >
+          <button
+            className="geo-mark-toolbar-button"
+            onClick={handleCreateGeoMark}
+            title="Add Location Marker"
+          >
+            📍 Add Location
+          </button>
+        </div>
+      )}
+
       {/* Geo-mark editor modal */}
       {editingGeoMark && (
         <GeoMarkEditor
           node={editingGeoMark.node}
           onSave={handleGeoMarkUpdate}
-          onCancel={() => setEditingGeoMark(null)}
+          onCancel={() => {
+            setEditingGeoMark(null);
+            setCreatingNewGeoMark(false);
+          }}
         />
       )}
     </div>

@@ -497,3 +497,74 @@ export function stateFromJSON(json: any): EditorState {
     });
   }
 }
+
+/**
+ * Create a geo-mark from the current text selection
+ * Returns the new editor state with the selection wrapped in a geo-mark node
+ */
+export function createGeoMarkFromSelection(
+  state: EditorState,
+  attrs: Partial<{
+    lat: string;
+    lng: string;
+    placeName: string;
+    geoId: string;
+    transportFrom: string;
+    transportProfile: string;
+    coordSource: string;
+    description: string;
+    photoName: string;
+    colorIndex: number;
+  }> = {}
+): EditorState | null {
+  const { from, to, empty } = state.selection;
+
+  // Can't create geo-mark from empty selection
+  if (empty) {
+    console.warn('[createGeoMarkFromSelection] Cannot create geo-mark from empty selection');
+    return null;
+  }
+
+  // Extract the selected text
+  const selectedText = state.doc.textBetween(from, to, ' ');
+
+  if (!selectedText || !selectedText.trim()) {
+    console.warn('[createGeoMarkFromSelection] No text selected');
+    return null;
+  }
+
+  console.log('[createGeoMarkFromSelection] Creating geo-mark from text:', selectedText);
+
+  // Use placeName from attrs or fall back to selected text
+  const placeName = attrs.placeName || selectedText;
+
+  // Generate unique geo-id if not provided
+  const geoId = attrs.geoId || `loc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+  // Create the geo-mark node with the selected text as content
+  const geoMarkNode = schema.nodes.geoMark.create(
+    {
+      lat: attrs.lat || null,
+      lng: attrs.lng || null,
+      placeName,
+      geoId,
+      transportFrom: attrs.transportFrom || null,
+      transportProfile: attrs.transportProfile || null,
+      coordSource: attrs.coordSource || null,
+      description: attrs.description || null,
+      photoName: attrs.photoName || null,
+      colorIndex: attrs.colorIndex ?? 0
+    },
+    schema.text(selectedText)
+  );
+
+  // Create transaction to replace the selection with the geo-mark
+  const tr = state.tr.replaceSelectionWith(geoMarkNode, false);
+
+  // Apply the transaction
+  const newState = state.apply(tr);
+
+  console.log('[createGeoMarkFromSelection] Geo-mark created successfully');
+
+  return newState;
+}
