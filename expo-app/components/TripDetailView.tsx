@@ -932,15 +932,17 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       >
         <BottomSheetView style={styles.bottomSheetContent}>
           {editorState?.doc ? (
-            <ProseMirrorViewerWrapper
-              key={sheetKey}
-              content={editorState.doc.toJSON()}
-              onNodeFocus={handleNodeFocus}
-              focusedNodeId={focusedNodeId}
-              height="100%"
-              editable={isEditMode}
-              onChange={handleDocumentChange}
-            />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+              <ProseMirrorViewerWrapper
+                key={sheetKey}
+                content={editorState.doc.toJSON()}
+                onNodeFocus={handleNodeFocus}
+                focusedNodeId={focusedNodeId}
+                height="100%"
+                editable={isEditMode}
+                onChange={handleDocumentChange}
+              />
+            </View>
           ) : (
             <View style={styles.centerContent}>
               <Text style={styles.loadingText}>Waiting for content...</Text>
