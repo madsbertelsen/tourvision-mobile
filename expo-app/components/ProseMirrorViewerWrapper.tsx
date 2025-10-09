@@ -145,7 +145,6 @@ const styles = StyleSheet.create({
   },
   fullHeight: {
     flex: 1,
-    height: '100%',
   },
   loadingContainer: {
     flex: 1,
