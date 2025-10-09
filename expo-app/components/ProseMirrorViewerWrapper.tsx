@@ -155,7 +155,7 @@ export function ProseMirrorViewerWrapper({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#E5FFE5', // Light green to debug container
     overflow: 'hidden',
   },
   fullHeight: {

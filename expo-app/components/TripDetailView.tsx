@@ -1031,6 +1031,6 @@ const styles = StyleSheet.create({
   },
   bottomSheetContent: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFE5E5', // Light red to debug container
   },
 });
