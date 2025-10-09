@@ -21,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import BottomSheet from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface TripDetailViewProps {
@@ -47,6 +47,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [sheetKey, setSheetKey] = useState(0); // Force re-layout when sheet changes
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [sheetHeight, setSheetHeight] = useState<number | null>(null);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -926,33 +927,43 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             setTimeout(() => {
               console.log('[TripDetailView] Triggering re-layout after animation');
               setSheetKey(prev => prev + 1);
+              setSheetHeight(null); // Reset to trigger re-measurement
             }, 500);
           }
         }}
       >
-        <View
+        <BottomSheetView
           style={styles.bottomSheetContent}
           onLayout={(event) => {
             const { height, width } = event.nativeEvent.layout;
-            console.log('[TripDetailView] Bottom sheet content measured:', width, 'x', height, 'px');
+            console.log('[TripDetailView] BottomSheetView measured:', width, 'x', height, 'px');
+            setSheetHeight(height);
           }}
         >
-          {editorState?.doc ? (
-            <ProseMirrorViewerWrapper
-              key={sheetKey}
-              content={editorState.doc.toJSON()}
-              onNodeFocus={handleNodeFocus}
-              focusedNodeId={focusedNodeId}
-              height="100%"
-              editable={isEditMode}
-              onChange={handleDocumentChange}
-            />
+          {sheetHeight && sheetHeight > 100 ? (
+            <View style={{ height: sheetHeight, width: '100%' }}>
+              {editorState?.doc ? (
+                <ProseMirrorViewerWrapper
+                  key={sheetKey}
+                  content={editorState.doc.toJSON()}
+                  onNodeFocus={handleNodeFocus}
+                  focusedNodeId={focusedNodeId}
+                  height={sheetHeight}
+                  editable={isEditMode}
+                  onChange={handleDocumentChange}
+                />
+              ) : (
+                <View style={styles.centerContent}>
+                  <Text style={styles.loadingText}>Waiting for content...</Text>
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.centerContent}>
-              <Text style={styles.loadingText}>Waiting for content...</Text>
+              <Text style={styles.loadingText}>Measuring sheet...</Text>
             </View>
           )}
-        </View>
+        </BottomSheetView>
       </BottomSheet>
     </GestureHandlerRootView>
   );

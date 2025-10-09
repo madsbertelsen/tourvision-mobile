@@ -103,10 +103,13 @@ export function ProseMirrorViewerWrapper({
   return (
     <>
       <View
-        style={{ flex: 1, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}
+        style={[
+          typeof height === 'number' ? { height, width: '100%' } : { flex: 1 },
+          { borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }
+        ]}
         onLayout={(event) => {
           const { height: h, width: w } = event.nativeEvent.layout;
-          console.log('[ProseMirrorWrapper] Flex wrapper measured:', w, 'x', h, 'px');
+          console.log('[ProseMirrorWrapper] Container measured:', w, 'x', h, 'px');
           setParentDimensions({ width: w, height: h });
         }}
       >
