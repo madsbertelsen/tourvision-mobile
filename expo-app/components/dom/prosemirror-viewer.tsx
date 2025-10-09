@@ -318,13 +318,16 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [content]);
 
+  // Create persistent history plugin
+  const historyPlugin = useMemo(() => history(), []);
+
   // Create editor state with proper state management
   const [state, setState] = useState(() => {
     return EditorState.create({
       doc: initialDoc,
       schema,
       plugins: [
-        history(),
+        historyPlugin,
         keymap({
           'Mod-z': undo,
           'Mod-y': redo,
@@ -341,25 +344,32 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     try {
       const newDoc = content._type ? content : schema.nodeFromJSON(content);
-      // Update the state with new content
-      setState(EditorState.create({
+
+      // Check if this is the initial content load (same as initialDoc)
+      if (state.doc.eq(newDoc)) {
+        return; // No change needed
+      }
+
+      // For external content updates, we need to create a new state
+      // This will reset history, which is expected for external updates
+      const newState = EditorState.create({
         doc: newDoc,
         schema,
         plugins: [
-          history(),
+          historyPlugin,
           keymap({
             'Mod-z': undo,
             'Mod-y': redo,
             'Mod-Shift-z': redo
           }),
           keymap(baseKeymap)
-        ],
-        selection: state.selection // Preserve selection if possible
-      }));
+        ]
+      });
+      setState(newState);
     } catch (error) {
       console.error('Error updating content:', error);
     }
-  }, [content]);
+  }, [content, historyPlugin]);
 
   // Handle transactions when editing
   const dispatchTransaction = (tr: any) => {
@@ -576,20 +586,25 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const sendCommand = useCallback((command: string, params?: any) => {
     console.log('[ProseMirror] Received command:', command, params);
 
-    if (!state) return;
+    if (!state) {
+      console.warn('[ProseMirror] No state available');
+      return;
+    }
+
+    // Create a dispatch function that will apply transactions
+    const dispatch = (tr: any) => {
+      console.log('[ProseMirror] Dispatching transaction for command:', command);
+      dispatchTransaction(tr);
+    };
 
     switch(command) {
       case 'undo':
-        undo(state, (tr) => {
-          const newState = state.apply(tr);
-          setState(newState);
-        });
+        const canUndo = undo(state, dispatch);
+        console.log('[ProseMirror] Undo executed, success:', canUndo);
         break;
       case 'redo':
-        redo(state, (tr) => {
-          const newState = state.apply(tr);
-          setState(newState);
-        });
+        const canRedo = redo(state, dispatch);
+        console.log('[ProseMirror] Redo executed, success:', canRedo);
         break;
       case 'toggleBold':
         // TODO: Implement bold toggle
@@ -621,7 +636,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       default:
         console.warn('[ProseMirror] Unknown command:', command);
     }
-  }, [state, handleCreateGeoMark]);
+  }, [state, handleCreateGeoMark, dispatchTransaction]);
 
   useDOMImperativeHandle(ref, () => ({
     scrollToNode: (...args: any[]) => {
