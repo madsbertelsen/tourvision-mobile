@@ -1,8 +1,7 @@
-import { BottomSheetView, useBottomSheet } from '@gorhom/bottom-sheet';
+import { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { EditorState } from 'prosemirror-state';
-import React, { forwardRef, useImperativeHandle, useRef, useState, useCallback } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 import ProseMirrorViewerWrapper from './ProseMirrorViewerWrapper';
 
 interface TripDocumentSheetProps {
@@ -11,7 +10,7 @@ interface TripDocumentSheetProps {
   focusedNodeId: string | null;
   isEditMode: boolean;
   onChange: (doc: any) => void;
-  snapPoints: string[];
+  sheetHeight: number;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
   onSelectionChange?: (empty: boolean) => void;
@@ -23,40 +22,16 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
   focusedNodeId,
   isEditMode,
   onChange,
-  snapPoints,
+  sheetHeight,
   onShowGeoMarkEditor,
   geoMarkDataToCreate,
   onSelectionChange,
 }, ref) => {
   const viewerRef = useRef<any>(null);
   const screenHeight = Dimensions.get('window').height;
-  const { animatedIndex } = useBottomSheet();
-  const [visibleHeight, setVisibleHeight] = useState(screenHeight * 0.5);
 
-  // Update height callback (must be defined in JS scope for runOnJS)
-  const updateHeight = useCallback((index: number) => {
-    if (index >= 0 && index < snapPoints.length) {
-      const snapPoint = snapPoints[index];
-      const snapPercent = parseInt(snapPoint.replace('%', ''));
-      const calculatedHeight = (screenHeight * snapPercent) / 100 - 60;
-      console.log('[TripDocumentSheet] Index:', index, '→', calculatedHeight.toFixed(0), 'px');
-      setVisibleHeight(calculatedHeight);
-    }
-  }, [snapPoints, screenHeight]);
-
-  // Watch animated index and update height using worklet
-  useAnimatedReaction(
-    () => {
-      return Math.round(animatedIndex.value);
-    },
-    (currentIndex, previousIndex) => {
-      'worklet';
-      if (currentIndex !== previousIndex) {
-        runOnJS(updateHeight)(currentIndex);
-      }
-    },
-    []
-  );
+  // Calculate visible height, with fallback
+  const visibleHeight = sheetHeight > 0 ? sheetHeight - 60 : screenHeight * 0.5 - 60;
 
   // Expose sendCommand to parent
   useImperativeHandle(ref, () => ({

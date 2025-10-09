@@ -55,6 +55,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [sheetHeight, setSheetHeight] = useState(0);
   const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
   const [geoMarkData, setGeoMarkData] = useState<any>(null);
   const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
@@ -970,6 +971,14 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           const { width, height } = event.nativeEvent.layout;
           console.log('[TripDetailView] Map container dimensions:', width, 'x', height);
           setMapDimensions({ width, height });
+
+          /*
+          // Initialize sheet height to default snap point (50%)
+          if (sheetHeight === 0) {
+            const defaultPercent = 50;
+            setSheetHeight((height * defaultPercent) / 100);
+          }
+            */
         }}
       >
         {mapDimensions && (
@@ -989,8 +998,20 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         ref={bottomSheetRef}
         index={1}
         snapPoints={snapPoints}
+        enableDynamicSizing={false}
         enablePanDownToClose={false}
         handleComponent={renderHandle}
+        onChange={(index) => {
+ //         console.log('[TripDetailView] Sheet changed to index', index);
+          if (mapDimensions && index >= 1 ) {
+            const snapPoint = snapPoints[index-1];
+            const snapPercent = parseInt(snapPoint.replace('%', ''));
+            const calculatedHeight = (mapDimensions.height * snapPercent) / 100;
+            console.log('[TripDetailView] Sheet changed to index', index, '→', calculatedHeight.toFixed(0), 'px');
+            console.log('[TripDetailView] calculatedHeight', calculatedHeight);
+            setSheetHeight(calculatedHeight);
+          }
+        }}
       >
         <TripDocumentSheet
           ref={documentRef}
@@ -999,7 +1020,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           focusedNodeId={focusedNodeId}
           isEditMode={isEditMode}
           onChange={handleDocumentChange}
-          snapPoints={snapPoints}
+          sheetHeight={sheetHeight}
           onShowGeoMarkEditor={handleShowGeoMarkEditor}
           geoMarkDataToCreate={geoMarkDataToCreate}
           onSelectionChange={handleSelectionChange}
