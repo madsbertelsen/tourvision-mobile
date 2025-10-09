@@ -930,28 +930,23 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           }
         }}
       >
-        <BottomSheetView style={styles.bottomSheetContent}>
+        <BottomSheetView
+          style={styles.bottomSheetContent}
+          onLayout={(event) => {
+            const { height, width } = event.nativeEvent.layout;
+            console.log('[TripDetailView] BottomSheetView measured:', width, 'x', height, 'px');
+          }}
+        >
           {editorState?.doc ? (
-            <View style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              borderWidth: 3,
-              borderColor: 'purple',
-              borderStyle: 'solid'
-            }}>
-              <ProseMirrorViewerWrapper
-                key={sheetKey}
-                content={editorState.doc.toJSON()}
-                onNodeFocus={handleNodeFocus}
-                focusedNodeId={focusedNodeId}
-                height="100%"
-                editable={isEditMode}
-                onChange={handleDocumentChange}
-              />
-            </View>
+            <ProseMirrorViewerWrapper
+              key={sheetKey}
+              content={editorState.doc.toJSON()}
+              onNodeFocus={handleNodeFocus}
+              focusedNodeId={focusedNodeId}
+              height="100%"
+              editable={isEditMode}
+              onChange={handleDocumentChange}
+            />
           ) : (
             <View style={styles.centerContent}>
               <Text style={styles.loadingText}>Waiting for content...</Text>

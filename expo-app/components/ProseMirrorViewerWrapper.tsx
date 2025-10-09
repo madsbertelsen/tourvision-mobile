@@ -28,7 +28,6 @@ export function ProseMirrorViewerWrapper({
   const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
   const [geoMarkData, setGeoMarkData] = useState<any>(null);
   const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
-  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
 
@@ -99,40 +98,19 @@ export function ProseMirrorViewerWrapper({
     setGeoMarkDataToCreate(null);
   };
 
-  // Style for container
-  const containerStyle = height === '100%'
-    ? [styles.container, styles.absoluteFill]
-    : [styles.container, { height }];
-
-  // Determine effective height to pass to DOM component
-  // When using absolute positioning, we can use 100% directly
-  const effectiveHeight = height === '100%' ? '100%' : height;
+  // Simple flex-based styling
 
   return (
-    <View
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}
-      onLayout={(event) => {
-        const { height: h, width: w } = event.nativeEvent.layout;
-        console.log('[ProseMirrorWrapper] Parent container measured:', w, 'x', h, 'px');
-        setParentDimensions({ width: w, height: h });
-      }}
-    >
+    <>
       <View
-        style={[
-          containerStyle,
-          { borderWidth: 3, borderColor: 'blue', borderStyle: 'solid' }  // Blue border for inner container
-        ]}
+        style={{ flex: 1, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}
         onLayout={(event) => {
-          const { height: layoutHeight, width: layoutWidth } = event.nativeEvent.layout;
-          console.log('[ProseMirrorWrapper] Inner container measured:', layoutWidth, 'x', layoutHeight, 'px');
-          console.log('[ProseMirrorWrapper] height prop:', height);
-          console.log('[ProseMirrorWrapper] containerStyle:', containerStyle);
-          if (height === '100%') {
-            setMeasuredHeight(layoutHeight);
-          }
+          const { height: h, width: w } = event.nativeEvent.layout;
+          console.log('[ProseMirrorWrapper] Flex wrapper measured:', w, 'x', h, 'px');
+          setParentDimensions({ width: w, height: h });
         }}
       >
-        {parentDimensions ? (
+        {parentDimensions && parentDimensions.height > 50 ? (
           <Suspense fallback={
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#3B82F6" />
@@ -149,20 +127,16 @@ export function ProseMirrorViewerWrapper({
               onShowGeoMarkEditor={handleShowGeoMarkEditor}
               geoMarkDataToCreate={geoMarkDataToCreate}
               dom={{
-                matchContents: false,
                 style: {
                   height: parentDimensions.height,
-                  width: parentDimensions.width,
-                  position: 'absolute',
-                  top: 0,
-                  left: 0
+                  width: parentDimensions.width
                 }
               }}
             />
           </Suspense>
         ) : (
           <View style={styles.loadingContainer}>
-            <Text>Measuring container...</Text>
+            <Text>Waiting for layout...</Text>
           </View>
         )}
       </View>
@@ -175,29 +149,11 @@ export function ProseMirrorViewerWrapper({
         onSave={handleGeoMarkSave}
         onCancel={handleGeoMarkCancel}
       />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#E5FFE5', // Light green to debug container
-    overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: 'green',
-    borderStyle: 'solid',
-  },
-  fullHeight: {
-    flex: 1,
-    width: '100%',
-  },
-  absoluteFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
