@@ -288,7 +288,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [editingGeoMark, setEditingGeoMark] = useState<{ pos: number; node: ProseMirrorNode } | null>(null);
   const [viewRef, setViewRef] = useState<any>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(600); // Default height
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -415,15 +414,15 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [mount, focusedNodeId]);
 
-  // Observe container size changes with ResizeObserver
+  // Optional: Log container size changes for debugging (without causing re-renders)
   useEffect(() => {
     if (!container) return;
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { height } = entry.contentRect;
-        console.log('[ProseMirror] ResizeObserver: Container height changed to', height);
-        setContainerHeight(height);
+        // Just log for debugging, don't update state to avoid loops
+        console.log('[ProseMirror] Container resized to', Math.round(height), 'px');
       }
     });
 
@@ -628,7 +627,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   };
 
   return (
-    <div className="prosemirror-editor-wrapper" style={{ height: containerHeight ? `${containerHeight}px` : '100%' }}>
+    <div className="prosemirror-editor-wrapper" style={{ height: '100%' }}>
       {/* Toolbar - always visible in edit mode, fixed at top */}
       {editable && (
         <div className="prosemirror-toolbar">
