@@ -1,6 +1,5 @@
 import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { GeoMarkBottomSheet } from './GeoMarkBottomSheet';
 import type { ProseMirrorViewerRef } from './dom/prosemirror-viewer';
 
@@ -104,7 +103,7 @@ export function ProseMirrorViewerWrapper({
     : [styles.container, { height }];
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <>
       <View style={containerStyle}>
         <Suspense fallback={
           <View style={styles.loadingContainer}>
@@ -133,7 +132,7 @@ export function ProseMirrorViewerWrapper({
         onSave={handleGeoMarkSave}
         onCancel={handleGeoMarkCancel}
       />
-    </GestureHandlerRootView>
+    </>
   );
 }
 
