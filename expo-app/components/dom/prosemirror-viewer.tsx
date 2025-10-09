@@ -26,10 +26,10 @@ interface ProseMirrorViewerProps {
 }
 
 export interface ProseMirrorViewerRef extends DOMImperativeFactory {
-  scrollToNode: (nodeId: string) => void;
-  getState: () => EditorState;
-  createGeoMarkWithData: (geoMarkData: any) => void;
-  sendCommand: (command: string, params?: any) => void;
+  scrollToNode: (...args: any[]) => void;
+  getState: (...args: any[]) => any;
+  createGeoMarkWithData: (...args: any[]) => void;
+  sendCommand: (...args: any[]) => void;
 }
 
 // Geo-mark editor modal component
@@ -599,11 +599,21 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   }, [state, handleCreateGeoMark]);
 
   useDOMImperativeHandle(ref, () => ({
-    scrollToNode,
-    getState,
-    createGeoMarkWithData,
-    sendCommand
-  }), [createGeoMarkWithData, sendCommand]);
+    scrollToNode: (...args: any[]) => {
+      const nodeId = args[0] as string;
+      scrollToNode(nodeId);
+    },
+    getState: () => getState(),
+    createGeoMarkWithData: (...args: any[]) => {
+      const geoMarkData = args[0];
+      createGeoMarkWithData(geoMarkData);
+    },
+    sendCommand: (...args: any[]) => {
+      const command = args[0] as string;
+      const params = args[1];
+      sendCommand(command, params);
+    }
+  }), [scrollToNode, getState, createGeoMarkWithData, sendCommand]);
 
   // Custom node views to add data attributes
   const nodeViews = useMemo(() => {
