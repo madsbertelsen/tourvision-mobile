@@ -16,6 +16,7 @@ import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -43,6 +44,9 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
+  const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -138,6 +142,30 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
     loadTripData();
   }, [tripId]);
+
+  // Listen for keyboard events to adjust map height
+  useEffect(() => {
+    const keyboardWillShowListener = Keyboard.addListener(
+      'keyboardWillShow',
+      (e) => {
+        setIsKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+
+    const keyboardWillHideListener = Keyboard.addListener(
+      'keyboardWillHide',
+      () => {
+        setIsKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
+    };
+  }, []);
 
   // Save messages to trip
   useEffect(() => {
@@ -536,6 +564,12 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     const fetchRoutes = async () => {
       console.log('[TripDetailView] fetchRoutes effect triggered, routes:', documentRoutes.length);
 
+      // Skip fetch if there's a pending waypoint update (to prevent route flash)
+      if (pendingWaypointUpdateRef.current) {
+        console.log('[TripDetailView] Skipping route fetch due to pending waypoint update:', pendingWaypointUpdateRef.current);
+        return;
+      }
+
       if (documentRoutes.length === 0) {
         setFetchedRoutes([]);
         return;
@@ -674,6 +708,27 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
     console.log('[TripDetailView] Removing waypoint at index', waypointIndex, 'from route', routeId);
 
+    // Mark this route as having a pending update to prevent flash
+    pendingWaypointUpdateRef.current = routeId;
+
+    // Optimistically update the displayed routes immediately
+    setFetchedRoutes(prevRoutes => {
+      return prevRoutes.map(route => {
+        if (route.id === routeId && route.waypoints) {
+          const updatedWaypoints = [...route.waypoints];
+          updatedWaypoints.splice(waypointIndex, 1);
+
+          console.log('[TripDetailView] Optimistically removing waypoint from displayed route');
+
+          return {
+            ...route,
+            waypoints: updatedWaypoints.length > 0 ? updatedWaypoints : undefined,
+          };
+        }
+        return route;
+      });
+    });
+
     // Parse routeId to get target geo-mark ID
     const match = routeId.match(/^(.+)-to-(.+)$/);
     if (!match) {
@@ -727,10 +782,72 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       handleDocumentChange(newState.doc.toJSON());
 
       console.log('[TripDetailView] Waypoint removed successfully');
+
+      // Manually trigger route re-fetch with updated document
+      // This ensures we fetch the route with the new waypoints
+      (async () => {
+        // Wait for state to settle
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Extract routes from the new state
+        const { locations, routes } = extractLocationsAndRoutes(newState.doc.toJSON());
+
+        if (routes.length === 0) {
+          setFetchedRoutes([]);
+          pendingWaypointUpdateRef.current = null;
+          return;
+        }
+
+        const locationMap = new Map(locations.map(loc => [loc.id, loc]));
+
+        try {
+          const routePromises = routes.map(async (route: any) => {
+            const fromLoc = locationMap.get(route.fromId);
+            const toLoc = locationMap.get(route.toId);
+
+            if (!fromLoc || !toLoc) {
+              console.warn('[TripDetailView] Missing location for route:', route.id);
+              return null;
+            }
+
+            try {
+              const waypoints = [{ lat: fromLoc.lat, lng: fromLoc.lng }];
+
+              if (route.waypoints && Array.isArray(route.waypoints)) {
+                waypoints.push(...route.waypoints);
+              }
+
+              waypoints.push({ lat: toLoc.lat, lng: toLoc.lng });
+
+              const routeDetails = await fetchRouteWithCache(route.profile, waypoints);
+
+              return {
+                ...route,
+                ...routeDetails,
+              };
+            } catch (error) {
+              console.error(`Failed to fetch route ${route.id}:`, error);
+              return null;
+            }
+          });
+
+          const results = await Promise.all(routePromises);
+          const validRoutes = results.filter(r => r !== null);
+          console.log('[TripDetailView] Re-fetched routes after waypoint removal:', validRoutes.length);
+          setFetchedRoutes(validRoutes);
+        } catch (error) {
+          console.error('Error re-fetching routes:', error);
+        } finally {
+          // Clear pending flag
+          pendingWaypointUpdateRef.current = null;
+        }
+      })();
     } else {
       console.error('[TripDetailView] Could not find geo-mark with ID:', toGeoId);
+      // Clear pending flag if operation failed
+      pendingWaypointUpdateRef.current = null;
     }
-  }, [editorState, handleDocumentChange]);
+  }, [editorState, handleDocumentChange, extractLocationsAndRoutes]);
 
   if (isLoadingTrip) {
     return (
@@ -826,8 +943,21 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             </View>
           </View>
         ) : (
-          // Single column view for mobile: document above, map below
+          // Single column view for mobile: map above, document below
           <>
+            <View style={[
+              styles.mapContainerMobile,
+              isKeyboardVisible && { height: 150 } // Shrink map when keyboard is visible
+            ]}>
+              <MapViewSimpleWrapper
+                locations={documentLocations}
+                routes={fetchedRoutes}
+                height={isKeyboardVisible ? 150 : 300}
+                isEditMode={isEditMode}
+                onRouteWaypointUpdate={handleRouteWaypointUpdate}
+                onRouteWaypointRemove={handleRouteWaypointRemove}
+              />
+            </View>
             <View style={styles.documentScrollView}>
               {/* Document content */}
               <View style={styles.documentContainer}>
@@ -844,16 +974,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
                   <Text style={styles.loadingText}>Waiting for content...</Text>
                 )}
               </View>
-            </View>
-            <View style={styles.mapContainerMobile}>
-              <MapViewSimpleWrapper
-                locations={documentLocations}
-                routes={fetchedRoutes}
-                height={300}
-                isEditMode={isEditMode}
-                onRouteWaypointUpdate={handleRouteWaypointUpdate}
-                onRouteWaypointRemove={handleRouteWaypointRemove}
-              />
             </View>
           </>
         )}

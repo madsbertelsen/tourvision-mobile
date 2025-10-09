@@ -37,7 +37,6 @@ export function MapViewSimpleWrapper({
   onRouteWaypointUpdate,
   onRouteWaypointRemove,
 }: MapViewSimpleWrapperProps) {
-  // console.log('[MapViewSimpleWrapper] Received locations:', locations);
 
   // Get focusedLocation, followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
   let focusedLocation = null;
@@ -86,11 +85,22 @@ export function MapViewSimpleWrapper({
   // If height is a string percentage, use flex: 1 to fill parent
   const containerStyle = height === '100%'
     ? [styles.container, styles.fullHeight]
-    : [styles.container, { height }];
+    : [styles.container, { height: typeof height === 'number' ? height : undefined }];
+
+  // For DOM component, use explicit pixel height if provided
+  const domStyle = height === '100%'
+    ? { width: '100%', height: '100%' }
+    : { width: '100%', height: typeof height === 'number' ? `${height}px` : '400px' };
 
   return (
-    <View style={{ width: '100%', overflow: 'hidden' ,height: "100%"}}>
-      <React.Suspense fallback={<View style={styles.loading} />}>
+    <View style={containerStyle}>
+      <React.Suspense fallback={
+        <View style={[styles.loading, { backgroundColor: '#E5E7EB' }]}>
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            {/* Show loading indicator */}
+          </View>
+        </View>
+      }>
         <MapViewSimpleDOM
           locations={locations}
           center={mapCenter}
@@ -105,7 +115,7 @@ export function MapViewSimpleWrapper({
           isEditMode={isEditMode}
           onRouteWaypointUpdate={onRouteWaypointUpdate}
           onRouteWaypointRemove={onRouteWaypointRemove}
-          style={{ width: '100%', height: '100%' }}
+          style={domStyle}
         />
       </React.Suspense>
     </View>

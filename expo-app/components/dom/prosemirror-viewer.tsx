@@ -1,6 +1,6 @@
 'use dom';
 
-import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin } from 'prosemirror-state';
@@ -19,11 +19,15 @@ interface ProseMirrorViewerProps {
   editable?: boolean;
   onChange?: (doc: any) => void;
   height?: number | string;
+  onMessage?: (event: any) => void;
+  onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
+  geoMarkDataToCreate?: any; // Trigger geo-mark creation when this changes
 }
 
 export interface ProseMirrorViewerRef {
   scrollToNode: (nodeId: string) => void;
   getState: () => EditorState;
+  createGeoMarkWithData: (geoMarkData: any) => void;
 }
 
 // Geo-mark editor modal component
@@ -258,6 +262,15 @@ function GeoMarkEditor({ node, onSave, onCancel, editorState }: {
   );
 }
 
+// Extend window interface for React Native WebView
+declare global {
+  interface Window {
+    ReactNativeWebView?: {
+      postMessage: (message: string) => void;
+    };
+  }
+}
+
 const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProps>((
   {
     content,
@@ -265,7 +278,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     focusedNodeId,
     editable = false,
     onChange,
-    height = '100%'
+    height = '100%',
+    onMessage,
+    onShowGeoMarkEditor,
+    geoMarkDataToCreate
   },
   ref
 ) => {
@@ -273,6 +289,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [editingGeoMark, setEditingGeoMark] = useState<{ pos: number; node: ProseMirrorNode } | null>(null);
   const [viewRef, setViewRef] = useState<any>(null);
+  const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -448,42 +465,80 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     const { from, to } = state.selection;
     const selectedText = state.doc.textBetween(from, to, ' ');
 
+    // Save pending selection for when we receive save message
+    setPendingSelection({ from, to });
+
     // Count existing geo-marks to determine next color
     let geoMarkCount = 0;
+    const existingLocations: Array<{ geoId: string; placeName: string }> = [];
+
     state.doc.descendants((node) => {
       if (node.type.name === 'geoMark') {
         geoMarkCount++;
+        if (node.attrs.geoId && node.attrs.placeName) {
+          existingLocations.push({
+            geoId: node.attrs.geoId,
+            placeName: node.attrs.placeName,
+          });
+        }
       }
     });
 
     // Cycle through colors (10 colors available)
     const nextColorIndex = geoMarkCount % 10;
 
-    // Create geo-mark with initial attributes
-    const newState = createGeoMarkFromSelection(state, {
-      placeName: selectedText,
-      colorIndex: nextColorIndex,
-    });
+    // Call the callback prop to show bottom sheet
+    console.log('[ProseMirror] handleCreateGeoMark called, selectedText:', selectedText);
+    console.log('[ProseMirror] onShowGeoMarkEditor available?', !!onShowGeoMarkEditor);
 
-    if (!newState) return;
-
-    // Apply the state change
-    setState(newState);
-    onChange?.(newState.doc.toJSON());
-
-    // Find the newly created geo-mark and open editor
-    // The geo-mark should be at the same position as the selection
-    const geoMarkNode = newState.doc.nodeAt(from);
-    if (geoMarkNode && geoMarkNode.type === schema.nodes.geoMark) {
-      setEditingGeoMark({ pos: from, node: geoMarkNode });
+    if (onShowGeoMarkEditor) {
+      const data = {
+        placeName: selectedText,
+        colorIndex: nextColorIndex,
+      };
+      console.log('[ProseMirror] Calling onShowGeoMarkEditor with data:', data);
+      onShowGeoMarkEditor(data, existingLocations);
+    } else {
+      console.error('[ProseMirror] onShowGeoMarkEditor callback not provided!');
     }
   };
+
+  // Create geo-mark with data from bottom sheet
+  const createGeoMarkWithData = useCallback((geoMarkData: any) => {
+    console.log('[ProseMirror] Creating geo-mark with data:', geoMarkData);
+
+    if (!pendingSelection || !state) {
+      console.error('[ProseMirror] No pending selection or state');
+      return;
+    }
+
+    // Create geo-mark with the provided data
+    const newState = createGeoMarkFromSelection(state, geoMarkData);
+
+    if (newState) {
+      setState(newState);
+      onChange?.(newState.doc.toJSON());
+      console.log('[ProseMirror] Geo-mark created successfully');
+    }
+
+    // Clear pending selection
+    setPendingSelection(null);
+  }, [state, pendingSelection, onChange]);
+
+  // Watch for geo-mark data prop changes to trigger creation
+  useEffect(() => {
+    if (geoMarkDataToCreate) {
+      console.log('[ProseMirror] geoMarkDataToCreate prop changed, creating geo-mark');
+      createGeoMarkWithData(geoMarkDataToCreate);
+    }
+  }, [geoMarkDataToCreate, createGeoMarkWithData]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     scrollToNode,
-    getState
-  }));
+    getState,
+    createGeoMarkWithData
+  }), [createGeoMarkWithData]);
 
   // Custom node views to add data attributes
   const nodeViews = useMemo(() => {

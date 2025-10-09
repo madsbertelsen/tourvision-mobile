@@ -102,6 +102,9 @@ function findClosestPointOnRoute(
 ): { lat: number; lng: number; distance: number; segmentIndex: number } | null {
   if (!routeCoords || routeCoords.length < 2) return null;
 
+  // Safety check: ensure viewport exists and has project method
+  if (!viewport || typeof viewport.project !== 'function') return null;
+
   let minDistance = Infinity;
   let closestPoint: { x: number; y: number; lat: number; lng: number } | null = null;
 
@@ -303,6 +306,12 @@ function MapContent({
     if (prevCenterRef.current && deckRef.current?.deck) {
       const viewport = deckRef.current.deck.getViewports()[0];
 
+      // Safety check: ensure viewport exists and has project method
+      if (!viewport || typeof viewport.project !== 'function') {
+        prevCenterRef.current = currentCenter;
+        return;
+      }
+
       const prevPoint = viewport.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
       const currentPoint = viewport.project([currentCenter.lng, currentCenter.lat]);
 
@@ -344,6 +353,11 @@ function MapContent({
       if (!deck) return;
 
       const viewport = deck.getViewports()[0];
+
+      // Safety check: ensure viewport exists and has project method
+      if (!viewport || typeof viewport.project !== 'function') {
+        return;
+      }
 
       const mapProjection = (lng: number, lat: number) => {
         try {
@@ -1149,6 +1163,10 @@ export default function MapViewSimple({
     if (!deck) return;
 
     const viewport = deck.getViewports()[0];
+
+    // Safety check: ensure viewport exists and has project method
+    if (!viewport || typeof viewport.project !== 'function') return;
+
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -1580,7 +1598,7 @@ export default function MapViewSimple({
   return (
     <div
       ref={containerRef}
-      style={{width: "100%", height: "100%", position: "relative"}}
+      style={{...style, position: "relative"}}
       onMouseMove={isEditMode ? handleMouseMove : undefined}
       onMouseDown={isEditMode ? handleMouseDown : undefined}
       onMouseUp={isEditMode ? handleMouseUp : undefined}
@@ -1631,6 +1649,10 @@ export default function MapViewSimple({
         if (!deck) return null;
 
         const viewport = deck.getViewports()[0];
+
+        // Safety check: ensure viewport exists and has project method
+        if (!viewport || typeof viewport.project !== 'function') return null;
+
         const [x, y] = viewport.project([selectedLocationModal.lng, selectedLocationModal.lat]);
 
         return (
