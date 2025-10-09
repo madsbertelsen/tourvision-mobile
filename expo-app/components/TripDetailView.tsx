@@ -1,3 +1,4 @@
+import { GeoMarkBottomSheet } from '@/components/GeoMarkBottomSheet';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import { TripDocumentSheet } from '@/components/TripDocumentSheet';
 import { useMockContext } from '@/contexts/MockContext';
@@ -47,6 +48,10 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
   const [sheetHeight, setSheetHeight] = useState<number | undefined>(undefined);
+  const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
+  const [geoMarkData, setGeoMarkData] = useState<any>(null);
+  const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
+  const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -430,6 +435,33 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     },
     [currentTrip]
   );
+
+  // Handle showing geo-mark editor
+  const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
+    console.log('[TripDetailView] Opening geo-mark editor with data:', data);
+    setGeoMarkData(data);
+    setExistingLocations(locations || []);
+    setShowGeoMarkSheet(true);
+  }, []);
+
+  // Handle saving geo-mark
+  const handleGeoMarkSave = (data: any) => {
+    console.log('[TripDetailView] Saving geo-mark:', data);
+    setGeoMarkDataToCreate(data);
+    setShowGeoMarkSheet(false);
+
+    // Reset after a small delay
+    setTimeout(() => {
+      setGeoMarkDataToCreate(null);
+    }, 100);
+  };
+
+  // Handle canceling geo-mark creation
+  const handleGeoMarkCancel = () => {
+    console.log('[TripDetailView] Cancelled geo-mark creation');
+    setShowGeoMarkSheet(false);
+    setGeoMarkDataToCreate(null);
+  };
 
   // Extract locations and routes from the document for map display
   const extractLocationsAndRoutes = useCallback((doc: any) => {
@@ -945,8 +977,19 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           isEditMode={isEditMode}
           onChange={handleDocumentChange}
           sheetHeight={sheetHeight}
+          onShowGeoMarkEditor={handleShowGeoMarkEditor}
+          geoMarkDataToCreate={geoMarkDataToCreate}
         />
       </BottomSheet>
+
+      {/* Geo-mark Bottom Sheet - render as sibling to main BottomSheet */}
+      <GeoMarkBottomSheet
+        isVisible={showGeoMarkSheet}
+        initialData={geoMarkData}
+        existingLocations={existingLocations}
+        onSave={handleGeoMarkSave}
+        onCancel={handleGeoMarkCancel}
+      />
     </GestureHandlerRootView>
   );
 }

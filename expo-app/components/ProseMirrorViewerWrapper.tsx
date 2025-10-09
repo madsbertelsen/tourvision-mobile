@@ -1,6 +1,5 @@
 import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
-import { GeoMarkBottomSheet } from './GeoMarkBottomSheet';
 import type { ProseMirrorViewerRef } from './dom/prosemirror-viewer';
 
 // Lazy load the DOM component
@@ -12,6 +11,8 @@ interface ProseMirrorViewerWrapperProps {
   focusedNodeId?: string | null;
   editable?: boolean;
   onChange?: (doc: any) => void;
+  onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
+  geoMarkDataToCreate?: any;
 }
 
 export function ProseMirrorViewerWrapper({
@@ -19,23 +20,21 @@ export function ProseMirrorViewerWrapper({
   onNodeFocus,
   focusedNodeId,
   editable = false,
-  onChange
+  onChange,
+  onShowGeoMarkEditor,
+  geoMarkDataToCreate
 }: ProseMirrorViewerWrapperProps) {
   const viewerRef = useRef<ProseMirrorViewerRef>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
-  const [geoMarkData, setGeoMarkData] = useState<any>(null);
-  const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
   const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
 
-  // Callback to show geo-mark editor
+  // Pass through to parent callback if provided
   const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
     console.log('[ProseMirrorWrapper] handleShowGeoMarkEditor called with:', data);
-    setGeoMarkData(data);
-    setExistingLocations(locations || []);
-    setShowGeoMarkSheet(true);
-  }, []);
+    if (onShowGeoMarkEditor) {
+      onShowGeoMarkEditor(data, locations);
+    }
+  }, [onShowGeoMarkEditor]);
 
   // Handle loading state
   useEffect(() => {
@@ -63,90 +62,55 @@ export function ProseMirrorViewerWrapper({
 
       console.log('[ProseMirrorWrapper] Received message:', data);
 
-      if (data.type === 'showGeoMarkEditor') {
-        // Show bottom sheet with geo-mark data
-        setGeoMarkData(data.data);
-        setExistingLocations(data.existingLocations || []);
-        setShowGeoMarkSheet(true);
+      if (data.type === 'showGeoMarkEditor' && onShowGeoMarkEditor) {
+        // Pass to parent to show bottom sheet
+        onShowGeoMarkEditor(data.data, data.existingLocations || []);
       }
     } catch (error) {
       console.error('[ProseMirrorWrapper] Error handling message:', error);
     }
   };
 
-  // Handle saving geo-mark from bottom sheet
-  const handleGeoMarkSave = (data: any) => {
-    console.log('[ProseMirrorWrapper] Saving geo-mark:', data);
-
-    // Trigger geo-mark creation by updating the prop
-    setGeoMarkDataToCreate(data);
-
-    setShowGeoMarkSheet(false);
-
-    // Reset after a small delay to allow DOM component to process
-    setTimeout(() => {
-      setGeoMarkDataToCreate(null);
-    }, 100);
-  };
-
-  // Handle canceling geo-mark creation
-  const handleGeoMarkCancel = () => {
-    console.log('[ProseMirrorWrapper] Cancelled geo-mark creation');
-    setShowGeoMarkSheet(false);
-    setGeoMarkDataToCreate(null);
-  };
-
   // Simple flex-based styling
 
   return (
-    <>
-      <View
-        style={{ flex: 1, width: '100%' }}
-        onLayout={(event) => {
-          const { height: h, width: w } = event.nativeEvent.layout;
-          console.log('[ProseMirrorWrapper] Container measured:', w, 'x', h, 'px');
-          setParentDimensions({ width: w, height: h });
-        }}
-      >
-        {parentDimensions && parentDimensions.height > 50 ? (
-          <Suspense fallback={
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-            </View>
-          }>
-            <ProseMirrorViewerDOM
-              ref={viewerRef}
-              content={content}
-              onNodeFocus={onNodeFocus}
-              focusedNodeId={focusedNodeId}
-              editable={editable}
-              onChange={onChange}
-              onShowGeoMarkEditor={handleShowGeoMarkEditor}
-              geoMarkDataToCreate={geoMarkDataToCreate}
-              dom={{
-                style: {
-                  height: '100%',
-                  width: '100%'
-                }
-              }}
-            />
-          </Suspense>
-        ) : (
+    <View
+      style={{ flex: 1, width: '100%' }}
+      onLayout={(event) => {
+        const { height: h, width: w } = event.nativeEvent.layout;
+        console.log('[ProseMirrorWrapper] Container measured:', w, 'x', h, 'px');
+        setParentDimensions({ width: w, height: h });
+      }}
+    >
+      {parentDimensions && parentDimensions.height > 50 ? (
+        <Suspense fallback={
           <View style={styles.loadingContainer}>
-            <Text>Waiting for layout...</Text>
+            <ActivityIndicator size="large" color="#3B82F6" />
           </View>
-        )}
-      </View>
-
-      {/* Geo-mark Bottom Sheet */}
-      <GeoMarkBottomSheet
-        isVisible={showGeoMarkSheet}
-        initialData={geoMarkData}
-        existingLocations={existingLocations}
-        onSave={handleGeoMarkSave}
-        onCancel={handleGeoMarkCancel}
-      />
-    </>
+        }>
+          <ProseMirrorViewerDOM
+            ref={viewerRef}
+            content={content}
+            onNodeFocus={onNodeFocus}
+            focusedNodeId={focusedNodeId}
+            editable={editable}
+            onChange={onChange}
+            onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            geoMarkDataToCreate={geoMarkDataToCreate}
+            dom={{
+              style: {
+                height: '100%',
+                width: '100%'
+              }
+            }}
+          />
+        </Suspense>
+      ) : (
+        <View style={styles.loadingContainer}>
+          <Text>Waiting for layout...</Text>
+        </View>
+      )}
+    </View>
   );
 }
 

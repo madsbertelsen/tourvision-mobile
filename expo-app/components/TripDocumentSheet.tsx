@@ -11,6 +11,8 @@ interface TripDocumentSheetProps {
   isEditMode: boolean;
   onChange: (doc: any) => void;
   sheetHeight?: number;
+  onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
+  geoMarkDataToCreate?: any;
 }
 
 export function TripDocumentSheet({
@@ -20,6 +22,8 @@ export function TripDocumentSheet({
   isEditMode,
   onChange,
   sheetHeight,
+  onShowGeoMarkEditor,
+  geoMarkDataToCreate,
 }: TripDocumentSheetProps) {
   const screenHeight = Dimensions.get('window').height;
 
@@ -42,6 +46,8 @@ export function TripDocumentSheet({
             focusedNodeId={focusedNodeId}
             editable={isEditMode}
             onChange={onChange}
+            onShowGeoMarkEditor={onShowGeoMarkEditor}
+            geoMarkDataToCreate={geoMarkDataToCreate}
             // Don't pass height as prop to avoid re-renders
             // The DOM component will use ResizeObserver to detect container size
           />
