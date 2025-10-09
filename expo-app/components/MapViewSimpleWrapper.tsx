@@ -95,10 +95,8 @@ export function MapViewSimpleWrapper({
   return (
     <View style={containerStyle}>
       <React.Suspense fallback={
-        <View style={[styles.loading, { backgroundColor: '#E5E7EB' }]}>
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text>Loading map...</Text>
-          </View>
+        <View style={styles.loading}>
+          {/* Map loading silently */}
         </View>
       }>
         <MapViewSimpleDOM
@@ -132,6 +130,5 @@ const styles = StyleSheet.create({
   },
   loading: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
   },
 });

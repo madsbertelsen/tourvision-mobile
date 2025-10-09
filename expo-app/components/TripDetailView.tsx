@@ -964,7 +964,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
-    backgroundColor: '#F3F4F6',
     zIndex: 0,
   },
   centerContent: {

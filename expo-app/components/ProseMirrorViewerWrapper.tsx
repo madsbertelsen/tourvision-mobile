@@ -104,8 +104,9 @@ export function ProseMirrorViewerWrapper({
     : [styles.container, { height }];
 
   // Determine effective height to pass to DOM component
+  // Only use measured height if it's a reasonable value (not 0 or 40)
   const effectiveHeight = height === '100%'
-    ? (measuredHeight || '100%')
+    ? (measuredHeight && measuredHeight > 100 ? measuredHeight : '100%')
     : height;
 
   return (
