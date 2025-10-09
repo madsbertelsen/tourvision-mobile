@@ -21,12 +21,14 @@ interface ProseMirrorViewerProps {
   onMessage?: (event: any) => void;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any; // Trigger geo-mark creation when this changes
+  onSelectionChange?: (empty: boolean) => void;
 }
 
 export interface ProseMirrorViewerRef {
   scrollToNode: (nodeId: string) => void;
   getState: () => EditorState;
   createGeoMarkWithData: (geoMarkData: any) => void;
+  sendCommand: (command: string, params?: any) => void;
 }
 
 // Geo-mark editor modal component
@@ -279,7 +281,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     onChange,
     onMessage,
     onShowGeoMarkEditor,
-    geoMarkDataToCreate
+    geoMarkDataToCreate,
+    onSelectionChange
   },
   ref
 ) => {
@@ -351,6 +354,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       // Notify parent of document changes
       if (onChange && tr.docChanged) {
         onChange(newState.doc.toJSON());
+      }
+      // Notify parent of selection changes
+      if (onSelectionChange && (tr.selectionSet || tr.docChanged)) {
+        onSelectionChange(newState.selection.empty);
       }
       return newState;
     });
@@ -551,11 +558,51 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   }, [geoMarkDataToCreate, createGeoMarkWithData]);
 
   // Expose methods via ref
+  // Handle commands from React Native toolbar
+  const sendCommand = useCallback((command: string, params?: any) => {
+    console.log('[ProseMirror] Received command:', command, params);
+
+    if (!state) return;
+
+    switch(command) {
+      case 'toggleBold':
+        // TODO: Implement bold toggle
+        break;
+      case 'toggleItalic':
+        // TODO: Implement italic toggle
+        break;
+      case 'toggleStrike':
+        // TODO: Implement strike toggle
+        break;
+      case 'toggleCode':
+        // TODO: Implement code toggle
+        break;
+      case 'toggleUnderline':
+        // TODO: Implement underline toggle
+        break;
+      case 'toggleBulletList':
+        // TODO: Implement bullet list toggle
+        break;
+      case 'toggleOrderedList':
+        // TODO: Implement ordered list toggle
+        break;
+      case 'createGeoMark':
+        handleCreateGeoMark();
+        break;
+      case 'insertLink':
+        // TODO: Implement link insertion
+        break;
+      default:
+        console.warn('[ProseMirror] Unknown command:', command);
+    }
+  }, [state, handleCreateGeoMark]);
+
   useImperativeHandle(ref, () => ({
     scrollToNode,
     getState,
-    createGeoMarkWithData
-  }), [createGeoMarkWithData]);
+    createGeoMarkWithData,
+    sendCommand
+  }), [createGeoMarkWithData, sendCommand]);
 
   // Custom node views to add data attributes
   const nodeViews = useMemo(() => {
@@ -617,14 +664,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     return views;
   }, [editable]);
 
-  // Toolbar command handlers
-  const toggleBold = () => {
-    // TODO: Implement bold toggle
-  };
-
-  const toggleItalic = () => {
-    // TODO: Implement italic toggle
-  };
 
   return (
     <div className={`prosemirror-editor-wrapper ${editable ? 'edit-mode' : ''}`} style={{ height: '100%' }}>
@@ -641,67 +680,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
             className="prosemirror-viewer"
           />
         </ProseMirror>
-
       </div>
-
-      {/* Toolbar - positioned at bottom after content */}
-      {editable && (
-        <div className="prosemirror-toolbar">
-          {/* Text formatting */}
-          <div className="toolbar-group">
-            <button className="toolbar-button" onClick={toggleBold} title="Bold">
-              <strong>B</strong>
-            </button>
-            <button className="toolbar-button" onClick={toggleItalic} title="Italic">
-              <em>I</em>
-            </button>
-            <button className="toolbar-button" title="Strikethrough">
-              <s>S</s>
-            </button>
-            <button className="toolbar-button" title="Code">
-              <code>&lt;/&gt;</code>
-            </button>
-            <button className="toolbar-button" title="Underline">
-              <u>U</u>
-            </button>
-          </div>
-
-          <div className="toolbar-divider"></div>
-
-          {/* Lists */}
-          <div className="toolbar-group">
-            <button className="toolbar-button" title="Bullet list">
-              ☰
-            </button>
-            <button className="toolbar-button" title="Numbered list">
-              1.
-            </button>
-          </div>
-
-          <div className="toolbar-divider"></div>
-
-          {/* Geo-mark */}
-          <div className="toolbar-group">
-            <button
-              className="toolbar-button"
-              onClick={handleCreateGeoMark}
-              disabled={state.selection.empty}
-              title="Add location marker"
-            >
-              📍
-            </button>
-          </div>
-
-          <div className="toolbar-divider"></div>
-
-          {/* Link */}
-          <div className="toolbar-group">
-            <button className="toolbar-button" title="Add link">
-              🔗
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Geo-mark editor modal - rendered via portal to appear above everything */}
       {editingGeoMark && createPortal(

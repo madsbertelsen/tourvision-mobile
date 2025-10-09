@@ -1,4 +1,4 @@
-import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import type { ProseMirrorViewerRef } from './dom/prosemirror-viewer';
 
@@ -13,20 +13,36 @@ interface ProseMirrorViewerWrapperProps {
   onChange?: (doc: any) => void;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
+  onSelectionChange?: (empty: boolean) => void;
 }
 
-export function ProseMirrorViewerWrapper({
+export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapperProps>(({
   content,
   onNodeFocus,
   focusedNodeId,
   editable = false,
   onChange,
   onShowGeoMarkEditor,
-  geoMarkDataToCreate
-}: ProseMirrorViewerWrapperProps) {
+  geoMarkDataToCreate,
+  onSelectionChange
+}, ref) => {
   const viewerRef = useRef<ProseMirrorViewerRef>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    sendCommand: (command: string, params?: any) => {
+      console.log('[ProseMirrorWrapper] Sending command to DOM:', command, params);
+      viewerRef.current?.sendCommand(command, params);
+    },
+    scrollToNode: (nodeId: string) => {
+      viewerRef.current?.scrollToNode(nodeId);
+    },
+    getState: () => {
+      return viewerRef.current?.getState();
+    }
+  }));
 
   // Pass through to parent callback if provided
   const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
@@ -36,22 +52,20 @@ export function ProseMirrorViewerWrapper({
     }
   }, [onShowGeoMarkEditor]);
 
+  // Handle selection changes from DOM
+  const handleSelectionChange = useCallback((empty: boolean) => {
+    console.log('[ProseMirrorWrapper] Selection changed, empty:', empty);
+    if (onSelectionChange) {
+      onSelectionChange(empty);
+    }
+  }, [onSelectionChange]);
+
   // Handle loading state
   useEffect(() => {
     if (content) {
       setIsLoading(false);
     }
   }, [content]);
-
-  // Helper method to scroll to a specific node
-  const scrollToNode = (nodeId: string) => {
-    viewerRef.current?.scrollToNode(nodeId);
-  };
-
-  // Get the current editor state
-  const getState = () => {
-    return viewerRef.current?.getState();
-  };
 
   // Handle messages from DOM component
   const handleMessage = (event: any) => {
@@ -65,6 +79,9 @@ export function ProseMirrorViewerWrapper({
       if (data.type === 'showGeoMarkEditor' && onShowGeoMarkEditor) {
         // Pass to parent to show bottom sheet
         onShowGeoMarkEditor(data.data, data.existingLocations || []);
+      } else if (data.type === 'selectionChange' && onSelectionChange) {
+        // Handle selection change
+        onSelectionChange(data.empty);
       }
     } catch (error) {
       console.error('[ProseMirrorWrapper] Error handling message:', error);
@@ -97,6 +114,7 @@ export function ProseMirrorViewerWrapper({
             onChange={onChange}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
+            onSelectionChange={handleSelectionChange}
             dom={{
               style: {
                 height: '100%',
@@ -112,7 +130,7 @@ export function ProseMirrorViewerWrapper({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   loadingContainer: {
