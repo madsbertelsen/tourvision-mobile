@@ -117,9 +117,6 @@ export function MapViewSimpleWrapper({
           onRouteWaypointUpdate={onRouteWaypointUpdate}
           onRouteWaypointRemove={onRouteWaypointRemove}
           style={domStyle}
-          dom={{
-            style: domStyle  // Also pass style to the DOM component wrapper
-          }}
         />
       </React.Suspense>
     </View>
