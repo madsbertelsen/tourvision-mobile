@@ -943,7 +943,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapBackground: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
     backgroundColor: '#F3F4F6',
   },
   centerContent: {
