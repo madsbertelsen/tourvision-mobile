@@ -31,7 +31,8 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
   const viewerRef = useRef<any>(null);
 
   // Use provided height or calculate a reasonable default
-  const visibleHeight = sheetHeight || screenHeight * 0.5;
+  // Subtract some padding for the handle and safe areas
+  const visibleHeight = sheetHeight ? sheetHeight - 60 : screenHeight * 0.5;
 
   // Log when height changes
   useEffect(() => {
