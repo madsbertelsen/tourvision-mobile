@@ -21,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface TripDetailViewProps {
@@ -823,6 +823,47 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     }
   }, [editorState, handleDocumentChange, extractLocationsAndRoutes]);
 
+  // Custom handle component for bottom sheet (defined before early returns to satisfy hooks rules)
+  const renderHandle = useCallback(() => (
+    <View style={styles.bottomSheetHandle}>
+      <View style={styles.handleBar} />
+      <View style={styles.handleHeader}>
+        <Text style={styles.handleTitle} numberOfLines={1}>
+          {currentTrip?.title || 'Loading...'}
+        </Text>
+        <View style={styles.handleButtons}>
+          <TouchableOpacity
+            style={[styles.handleButton, isEditMode && styles.handleButtonActive]}
+            onPress={() => setIsEditMode(!isEditMode)}
+          >
+            <Ionicons
+              name={isEditMode ? "create" : "create-outline"}
+              size={20}
+              color={isEditMode ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.handleButton}
+            onPress={async () => {
+              // Force re-parse from HTML
+              if (currentTrip && currentTrip.itineraries && currentTrip.itineraries.length > 0) {
+                const updatedTrip = {
+                  ...currentTrip,
+                  itineraries: []
+                };
+                await saveTrip(updatedTrip);
+                setCurrentTrip(updatedTrip);
+                lastProcessedMessageIdRef.current = null;
+              }
+            }}
+          >
+            <Ionicons name="refresh-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  ), [currentTrip, isEditMode]);
+
   if (isLoadingTrip) {
     return (
       <View style={styles.container}>
@@ -844,47 +885,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       </View>
     );
   }
-
-  // Custom handle component for bottom sheet
-  const renderHandle = useCallback(() => (
-    <View style={styles.bottomSheetHandle}>
-      <View style={styles.handleBar} />
-      <View style={styles.handleHeader}>
-        <Text style={styles.handleTitle} numberOfLines={1}>
-          {currentTrip.title}
-        </Text>
-        <View style={styles.handleButtons}>
-          <TouchableOpacity
-            style={[styles.handleButton, isEditMode && styles.handleButtonActive]}
-            onPress={() => setIsEditMode(!isEditMode)}
-          >
-            <Ionicons
-              name={isEditMode ? "create" : "create-outline"}
-              size={20}
-              color={isEditMode ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.handleButton}
-            onPress={async () => {
-              // Force re-parse from HTML
-              if (currentTrip.itineraries && currentTrip.itineraries.length > 0) {
-                const updatedTrip = {
-                  ...currentTrip,
-                  itineraries: []
-                };
-                await saveTrip(updatedTrip);
-                setCurrentTrip(updatedTrip);
-                lastProcessedMessageIdRef.current = null;
-              }
-            }}
-          >
-            <Ionicons name="refresh-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  ), [currentTrip.title, isEditMode, currentTrip.itineraries]);
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -908,7 +908,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         enablePanDownToClose={false}
         handleComponent={renderHandle}
       >
-        <BottomSheetScrollView style={styles.bottomSheetContent}>
+        <BottomSheetView style={styles.bottomSheetContent}>
           {editorState?.doc ? (
             <ProseMirrorViewerWrapper
               content={editorState.doc.toJSON()}
@@ -923,7 +923,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
               <Text style={styles.loadingText}>Waiting for content...</Text>
             </View>
           )}
-        </BottomSheetScrollView>
+        </BottomSheetView>
       </BottomSheet>
     </GestureHandlerRootView>
   );
@@ -1003,6 +1003,5 @@ const styles = StyleSheet.create({
   bottomSheetContent: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingHorizontal: 20,
   },
 });
