@@ -20,6 +20,11 @@
   box-sizing: border-box;
 }
 
+/* Add padding when in edit mode to account for fixed toolbar */
+.edit-mode .prosemirror-viewer-container {
+  padding-bottom: 60px;
+}
+
 .prosemirror-viewer {
   width: 100%;
   flex: 1;
@@ -348,30 +353,39 @@ hr {
   background: #2563eb;
 }
 
-/* Toolbar - always visible in edit mode, fixed at top */
+/* Toolbar - positioned above keyboard when editing */
 .prosemirror-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 8px 12px;
+  border-top: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   align-items: center;
-  flex-shrink: 0;
-  z-index: 10;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .toolbar-group {
   display: flex;
   gap: 2px;
   align-items: center;
+  flex-shrink: 0; /* Prevent groups from shrinking in horizontal scroll */
 }
 
 .toolbar-divider {
   width: 1px;
   height: 24px;
   background: #e5e7eb;
-  margin: 0 6px;
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .toolbar-button {

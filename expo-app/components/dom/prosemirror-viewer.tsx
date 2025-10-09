@@ -627,8 +627,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   };
 
   return (
-    <div className="prosemirror-editor-wrapper" style={{ height: '100%' }}>
-      {/* Toolbar - always visible in edit mode, fixed at top */}
+    <div className={`prosemirror-editor-wrapper ${editable ? 'edit-mode' : ''}`} style={{ height: '100%' }}>
+      {/* Toolbar - positioned above keyboard when editing */}
       {editable && (
         <div className="prosemirror-toolbar">
           {/* Text formatting */}
