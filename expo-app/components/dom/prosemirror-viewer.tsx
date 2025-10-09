@@ -1,7 +1,8 @@
 'use dom';
 
-import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, forwardRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useDOMImperativeHandle, type DOMImperativeFactory } from 'expo/dom';
 import { ProseMirror } from '@nytimes/react-prosemirror';
 import { EditorState, Plugin } from 'prosemirror-state';
 import { Schema, Node as ProseMirrorNode, DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
@@ -24,7 +25,7 @@ interface ProseMirrorViewerProps {
   onSelectionChange?: (empty: boolean) => void;
 }
 
-export interface ProseMirrorViewerRef {
+export interface ProseMirrorViewerRef extends DOMImperativeFactory {
   scrollToNode: (nodeId: string) => void;
   getState: () => EditorState;
   createGeoMarkWithData: (geoMarkData: any) => void;
@@ -597,7 +598,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [state, handleCreateGeoMark]);
 
-  useImperativeHandle(ref, () => ({
+  useDOMImperativeHandle(ref, () => ({
     scrollToNode,
     getState,
     createGeoMarkWithData,

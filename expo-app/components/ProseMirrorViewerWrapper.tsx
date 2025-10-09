@@ -29,20 +29,37 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
   const viewerRef = useRef<ProseMirrorViewerRef>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [isDOMReady, setIsDOMReady] = useState(false);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     sendCommand: (command: string, params?: any) => {
       console.log('[ProseMirrorWrapper] Sending command to DOM:', command, params);
-      viewerRef.current?.sendCommand(command, params);
+      if (!viewerRef.current) {
+        console.warn('[ProseMirrorWrapper] DOM component not ready yet');
+        return;
+      }
+      if (typeof viewerRef.current.sendCommand !== 'function') {
+        console.error('[ProseMirrorWrapper] sendCommand is not a function on DOM component', viewerRef.current);
+        return;
+      }
+      viewerRef.current.sendCommand(command, params);
     },
     scrollToNode: (nodeId: string) => {
-      viewerRef.current?.scrollToNode(nodeId);
+      if (!viewerRef.current) {
+        console.warn('[ProseMirrorWrapper] DOM component not ready yet');
+        return;
+      }
+      viewerRef.current.scrollToNode(nodeId);
     },
     getState: () => {
-      return viewerRef.current?.getState();
+      if (!viewerRef.current) {
+        console.warn('[ProseMirrorWrapper] DOM component not ready yet');
+        return null;
+      }
+      return viewerRef.current.getState();
     }
-  }));
+  }), []);
 
   // Pass through to parent callback if provided
   const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
