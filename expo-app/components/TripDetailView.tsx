@@ -932,7 +932,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       >
         <BottomSheetView style={styles.bottomSheetContent}>
           {editorState?.doc ? (
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              borderWidth: 3,
+              borderColor: 'purple',
+              borderStyle: 'solid'
+            }}>
               <ProseMirrorViewerWrapper
                 key={sheetKey}
                 content={editorState.doc.toJSON()}
