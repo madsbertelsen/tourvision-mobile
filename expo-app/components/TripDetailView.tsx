@@ -1,6 +1,7 @@
 import { GeoMarkBottomSheet } from '@/components/GeoMarkBottomSheet';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import { TripDocumentSheet } from '@/components/TripDocumentSheet';
+import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
@@ -22,6 +23,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -45,6 +48,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
   const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const documentRef = useRef<any>(null);
+  const [selectionEmpty, setSelectionEmpty] = useState(true);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
   const [sheetHeight, setSheetHeight] = useState<number | undefined>(undefined);
@@ -442,6 +447,17 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     setGeoMarkData(data);
     setExistingLocations(locations || []);
     setShowGeoMarkSheet(true);
+  }, []);
+
+  // Handle toolbar commands
+  const handleToolbarCommand = useCallback((command: string, params?: any) => {
+    console.log('[TripDetailView] Toolbar command:', command, params);
+    documentRef.current?.sendCommand(command, params);
+  }, []);
+
+  // Handle selection changes
+  const handleSelectionChange = useCallback((empty: boolean) => {
+    setSelectionEmpty(empty);
   }, []);
 
   // Handle saving geo-mark
@@ -971,6 +987,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         }}
       >
         <TripDocumentSheet
+          ref={documentRef}
           editorState={editorState}
           onNodeFocus={handleNodeFocus}
           focusedNodeId={focusedNodeId}
@@ -979,6 +996,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           sheetHeight={sheetHeight}
           onShowGeoMarkEditor={handleShowGeoMarkEditor}
           geoMarkDataToCreate={geoMarkDataToCreate}
+          onSelectionChange={handleSelectionChange}
         />
       </BottomSheet>
 
@@ -990,6 +1008,19 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         onSave={handleGeoMarkSave}
         onCancel={handleGeoMarkCancel}
       />
+
+      {/* Hoisted toolbar - outside of BottomSheet for proper keyboard handling */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+        style={styles.toolbarContainer}
+      >
+        <ProseMirrorToolbar
+          editable={isEditMode}
+          selectionEmpty={selectionEmpty}
+          onCommand={handleToolbarCommand}
+        />
+      </KeyboardAvoidingView>
     </GestureHandlerRootView>
   );
 }
@@ -1070,5 +1101,12 @@ const styles = StyleSheet.create({
   },
   handleButtonActive: {
     backgroundColor: '#3B82F6',
+  },
+  toolbarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
 });
