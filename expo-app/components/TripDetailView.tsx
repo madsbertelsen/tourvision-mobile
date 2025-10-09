@@ -1022,6 +1022,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             isEditMode={isEditMode}
             onRouteWaypointUpdate={handleRouteWaypointUpdate}
             onRouteWaypointRemove={handleRouteWaypointRemove}
+            bottomPadding={sheetHeight}
           />
         )}
       </View>

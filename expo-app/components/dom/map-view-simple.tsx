@@ -187,6 +187,7 @@ interface MapViewSimpleProps {
   isEditMode?: boolean;
   onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
   onRouteWaypointRemove?: (routeId: string, waypointIndex: number) => void;
+  bottomPadding?: number;
 }
 
 // Inner component to handle edge labels and itinerary overlay
@@ -751,6 +752,7 @@ export default function MapViewSimple({
   isEditMode = false,
   onRouteWaypointUpdate,
   onRouteWaypointRemove,
+  bottomPadding = 0,
 }: MapViewSimpleProps) {
 
   // Simple controlled viewState - no animations
@@ -760,6 +762,7 @@ export default function MapViewSimple({
     zoom: zoom,
     pitch: 0,
     bearing: 0,
+    padding: { top: 0, bottom: bottomPadding, left: 0, right: 0 },
   });
 
   // Saved view state for restoration when unfocusing
@@ -767,7 +770,16 @@ export default function MapViewSimple({
     longitude: number;
     latitude: number;
     zoom: number;
+    padding?: { top: number; bottom: number; left: number; right: number };
   } | null>(null);
+
+  // Update padding when bottomPadding prop changes
+  useEffect(() => {
+    setViewState(prev => ({
+      ...prev,
+      padding: { top: 0, bottom: bottomPadding, left: 0, right: 0 },
+    }));
+  }, [bottomPadding]);
 
   // Alternative destination selection state (lifted from MapContent)
   const [selectedAlternatives, setSelectedAlternatives] = useState(() => new Map<string, string>());
@@ -960,13 +972,14 @@ export default function MapViewSimple({
       });
 
       // Update view state
-      setViewState({
+      setViewState(prev => ({
+        ...prev,
         longitude: newLongitude,
         latitude: newLatitude,
         zoom: newZoom,
         pitch: 0,
         bearing: 0,
-      });
+      }));
 
       // Continue animation if not complete
       if (progress < 1) {

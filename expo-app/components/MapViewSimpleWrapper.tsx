@@ -15,6 +15,7 @@ interface MapViewSimpleWrapperProps {
   isEditMode?: boolean;
   onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
   onRouteWaypointRemove?: (routeId: string, waypointIndex: number) => void;
+  bottomPadding?: number;
 }
 
 interface Location {
@@ -36,6 +37,7 @@ export function MapViewSimpleWrapper({
   isEditMode = false,
   onRouteWaypointUpdate,
   onRouteWaypointRemove,
+  bottomPadding = 0,
 }: MapViewSimpleWrapperProps) {
 
   // Get focusedLocation, followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
@@ -116,6 +118,7 @@ export function MapViewSimpleWrapper({
           isEditMode={isEditMode}
           onRouteWaypointUpdate={onRouteWaypointUpdate}
           onRouteWaypointRemove={onRouteWaypointRemove}
+          bottomPadding={bottomPadding}
           style={domStyle}
         />
       </React.Suspense>
