@@ -27,6 +27,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TripDetailViewProps {
   tripId: string;
@@ -35,6 +36,7 @@ interface TripDetailViewProps {
 
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { setFocusedLocation } = useMockContext();
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
@@ -1037,7 +1039,10 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       {isEditMode && (
         <View style={[
           styles.toolbarContainer,
-          { bottom: keyboardHeight > 0 ? keyboardHeight : 0 }
+          {
+            bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom,
+            paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom
+          }
         ]}>
           <ProseMirrorToolbar
             editable={isEditMode}
