@@ -1595,10 +1595,21 @@ export default function MapViewSimple({
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
+  // Debug: Check if token is available
+  useEffect(() => {
+    console.log('[MapViewSimple] Mapbox token exists:', !!mapboxToken);
+    console.log('[MapViewSimple] Container style:', style);
+  }, [mapboxToken, style]);
+
   return (
     <div
       ref={containerRef}
-      style={{...style, position: "relative"}}
+      style={{
+        ...style,
+        position: "relative",
+        backgroundColor: '#ffffff',  // Add white background to ensure visibility
+        overflow: 'hidden'
+      }}
       onMouseMove={isEditMode ? handleMouseMove : undefined}
       onMouseDown={isEditMode ? handleMouseDown : undefined}
       onMouseUp={isEditMode ? handleMouseUp : undefined}
