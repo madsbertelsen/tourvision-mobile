@@ -413,9 +413,41 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     }
   }, [messages]); // Run whenever messages change, not just when streaming completes
 
-  const handleNodeFocus = (nodeId: string | null) => {
+  const handleNodeFocus = useCallback((nodeId: string | null) => {
     setFocusedNodeId(nodeId);
-  };
+
+    // If focusing on a node, find its location data and focus the map
+    if (nodeId && editorState?.doc) {
+      let foundLocation: any = null;
+
+      editorState.doc.descendants((node) => {
+        if (node.type.name === 'geoMark' && node.attrs?.geoId === nodeId) {
+          const lat = parseFloat(node.attrs.lat);
+          const lng = parseFloat(node.attrs.lng);
+
+          if (!isNaN(lat) && !isNaN(lng)) {
+            foundLocation = {
+              id: node.attrs.geoId,
+              name: node.attrs.placeName || 'Location',
+              lat,
+              lng,
+              description: node.attrs.description,
+              colorIndex: node.attrs.colorIndex,
+            };
+          }
+          return false; // Stop traversing
+        }
+      });
+
+      if (foundLocation) {
+        console.log('[TripDetailView] Focusing map on geo-mark:', foundLocation.name);
+        setFocusedLocation(foundLocation);
+      }
+    } else {
+      // Clear focus
+      setFocusedLocation(null);
+    }
+  }, [editorState, setFocusedLocation]);
 
   const handleDocumentChange = useCallback(
     async (newDoc: any) => {

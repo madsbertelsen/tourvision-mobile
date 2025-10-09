@@ -697,23 +697,31 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
       span.title = node.attrs?.placeName || 'Location';
 
-      // Make clickable in edit mode
-      if (editable) {
-        span.style.cursor = 'pointer';
-        span.onclick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      // Make clickable
+      span.style.cursor = 'pointer';
+      span.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (editable) {
+          // In edit mode: open editor
           const pos = getPos();
           setEditingGeoMark({ pos, node });
           setViewRef(view);
-        };
-      }
+        } else {
+          // In read mode: focus on map
+          console.log('[ProseMirror] Geo-mark clicked, focusing:', node.attrs?.geoId);
+          if (onNodeFocus && node.attrs?.geoId) {
+            onNodeFocus(node.attrs.geoId);
+          }
+        }
+      };
 
       return { dom: span, contentDOM: span };
     };
 
     return views;
-  }, [editable]);
+  }, [editable, onNodeFocus]);
 
 
   return (
