@@ -628,7 +628,23 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   return (
     <div className={`prosemirror-editor-wrapper ${editable ? 'edit-mode' : ''}`} style={{ height: '100%' }}>
-      {/* Toolbar - positioned above keyboard when editing */}
+      <div ref={setContainer} className="prosemirror-viewer-container">
+        <ProseMirror
+          mount={mount}
+          state={state}
+          dispatchTransaction={editable ? dispatchTransaction : undefined}
+          nodeViews={nodeViews}
+          editable={() => editable}
+        >
+          <div
+            ref={setMount}
+            className="prosemirror-viewer"
+          />
+        </ProseMirror>
+
+      </div>
+
+      {/* Toolbar - positioned at bottom after content */}
       {editable && (
         <div className="prosemirror-toolbar">
           {/* Text formatting */}
@@ -686,22 +702,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           </div>
         </div>
       )}
-
-      <div ref={setContainer} className="prosemirror-viewer-container">
-        <ProseMirror
-          mount={mount}
-          state={state}
-          dispatchTransaction={editable ? dispatchTransaction : undefined}
-          nodeViews={nodeViews}
-          editable={() => editable}
-        >
-          <div
-            ref={setMount}
-            className="prosemirror-viewer"
-          />
-        </ProseMirror>
-
-      </div>
 
       {/* Geo-mark editor modal - rendered via portal to appear above everything */}
       {editingGeoMark && createPortal(
