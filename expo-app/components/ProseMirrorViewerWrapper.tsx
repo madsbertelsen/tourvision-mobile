@@ -28,6 +28,7 @@ export function ProseMirrorViewerWrapper({
   const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
   const [geoMarkData, setGeoMarkData] = useState<any>(null);
   const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
 
   // Callback to show geo-mark editor
@@ -102,9 +103,22 @@ export function ProseMirrorViewerWrapper({
     ? [styles.container, styles.fullHeight]
     : [styles.container, { height }];
 
+  // Determine effective height to pass to DOM component
+  const effectiveHeight = height === '100%'
+    ? (measuredHeight || '100%')
+    : height;
+
   return (
     <>
-      <View style={containerStyle}>
+      <View
+        style={containerStyle}
+        onLayout={(event) => {
+          if (height === '100%') {
+            const { height: layoutHeight } = event.nativeEvent.layout;
+            setMeasuredHeight(layoutHeight);
+          }
+        }}
+      >
         <Suspense fallback={
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3B82F6" />
@@ -117,7 +131,7 @@ export function ProseMirrorViewerWrapper({
             focusedNodeId={focusedNodeId}
             editable={editable}
             onChange={onChange}
-            height={height}
+            height={effectiveHeight}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
           />
