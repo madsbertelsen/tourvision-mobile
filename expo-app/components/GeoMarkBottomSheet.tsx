@@ -376,9 +376,11 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderRadius: 6,
     backgroundColor: '#fff',
+    overflow: 'hidden',
   },
   picker: {
     height: 50,
+    width: '100%',
   },
   suggestionsLoading: {
     flexDirection: 'row',
