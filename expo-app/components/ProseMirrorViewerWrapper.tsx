@@ -10,7 +10,6 @@ interface ProseMirrorViewerWrapperProps {
   content?: any; // ProseMirror JSON document
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
-  height?: number | string;
   editable?: boolean;
   onChange?: (doc: any) => void;
 }
@@ -19,7 +18,6 @@ export function ProseMirrorViewerWrapper({
   content,
   onNodeFocus,
   focusedNodeId,
-  height = '100%',
   editable = false,
   onChange
 }: ProseMirrorViewerWrapperProps) {
@@ -103,10 +101,7 @@ export function ProseMirrorViewerWrapper({
   return (
     <>
       <View
-        style={[
-          typeof height === 'number' ? { height, width: '100%' } : { flex: 1 },
-          { borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }
-        ]}
+        style={{ flex: 1, width: '100%' }}
         onLayout={(event) => {
           const { height: h, width: w } = event.nativeEvent.layout;
           console.log('[ProseMirrorWrapper] Container measured:', w, 'x', h, 'px');
@@ -126,13 +121,12 @@ export function ProseMirrorViewerWrapper({
               focusedNodeId={focusedNodeId}
               editable={editable}
               onChange={onChange}
-              height={parentDimensions.height}
               onShowGeoMarkEditor={handleShowGeoMarkEditor}
               geoMarkDataToCreate={geoMarkDataToCreate}
               dom={{
                 style: {
-                  height: parentDimensions.height,
-                  width: parentDimensions.width
+                  height: '100%',
+                  width: '100%'
                 }
               }}
             />

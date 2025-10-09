@@ -1,16 +1,17 @@
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
-import ProseMirrorViewerWrapper from '@/components/ProseMirrorViewerWrapper';
+import { TripDocumentSheet } from '@/components/TripDocumentSheet';
 import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import { schema } from '@/utils/prosemirror-schema';
 import { stateFromJSON } from '@/utils/prosemirror-transactions';
-import { fetchRouteWithCache, type RouteDetails } from '@/utils/transportation-api';
+import { fetchRouteWithCache } from '@/utils/transportation-api';
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
 import { useChat } from '@ai-sdk/react';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import BottomSheet from '@gorhom/bottom-sheet';
 import { DefaultChatTransport } from 'ai';
+import { useRouter } from 'expo-router';
 import { fetch as expoFetch } from 'expo/fetch';
 import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,7 +22,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface TripDetailViewProps {
@@ -45,9 +45,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
-  const [sheetKey, setSheetKey] = useState(0); // Force re-layout when sheet changes
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [sheetHeight, setSheetHeight] = useState<number | null>(null);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -919,51 +917,18 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         snapPoints={snapPoints}
         enablePanDownToClose={false}
         handleComponent={renderHandle}
-        onAnimate={(fromIndex: number, toIndex: number) => {
-          console.log(`[TripDetailView] Bottom sheet animating from ${fromIndex} to ${toIndex}`);
-          // Only trigger re-layout when animation finishes (toIndex is stable)
-          if (fromIndex !== toIndex) {
-            // Use longer delay to ensure animation is complete
-            setTimeout(() => {
-              console.log('[TripDetailView] Triggering re-layout after animation');
-              setSheetKey(prev => prev + 1);
-              setSheetHeight(null); // Reset to trigger re-measurement
-            }, 500);
-          }
+        onChange={(index) => {
+          console.log('[TripDetailView] Sheet snapped to index:', index);
+          console.log('[TripDetailView] Sheet position:', snapPoints[index]);
         }}
       >
-        <BottomSheetView
-          style={styles.bottomSheetContent}
-          onLayout={(event) => {
-            const { height, width } = event.nativeEvent.layout;
-            console.log('[TripDetailView] BottomSheetView measured:', width, 'x', height, 'px');
-            setSheetHeight(height);
-          }}
-        >
-          {sheetHeight && sheetHeight > 100 ? (
-            <View style={{ height: sheetHeight, width: '100%' }}>
-              {editorState?.doc ? (
-                <ProseMirrorViewerWrapper
-                  key={sheetKey}
-                  content={editorState.doc.toJSON()}
-                  onNodeFocus={handleNodeFocus}
-                  focusedNodeId={focusedNodeId}
-                  height={sheetHeight}
-                  editable={isEditMode}
-                  onChange={handleDocumentChange}
-                />
-              ) : (
-                <View style={styles.centerContent}>
-                  <Text style={styles.loadingText}>Waiting for content...</Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.centerContent}>
-              <Text style={styles.loadingText}>Measuring sheet...</Text>
-            </View>
-          )}
-        </BottomSheetView>
+        <TripDocumentSheet
+          editorState={editorState}
+          onNodeFocus={handleNodeFocus}
+          focusedNodeId={focusedNodeId}
+          isEditMode={isEditMode}
+          onChange={handleDocumentChange}
+        />
       </BottomSheet>
     </GestureHandlerRootView>
   );
@@ -1045,12 +1010,5 @@ const styles = StyleSheet.create({
   },
   handleButtonActive: {
     backgroundColor: '#3B82F6',
-  },
-  bottomSheetContent: {
-    flex: 1,
-    backgroundColor: '#FFE5E5', // Light red to debug container
-    borderWidth: 3,
-    borderColor: 'red',
-    borderStyle: 'solid',
   },
 });

@@ -18,7 +18,6 @@ interface ProseMirrorViewerProps {
   focusedNodeId?: string | null;
   editable?: boolean;
   onChange?: (doc: any) => void;
-  height?: number | string;
   onMessage?: (event: any) => void;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any; // Trigger geo-mark creation when this changes
@@ -278,7 +277,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     focusedNodeId,
     editable = false,
     onChange,
-    height = '100%',
     onMessage,
     onShowGeoMarkEditor,
     geoMarkDataToCreate
@@ -290,6 +288,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [editingGeoMark, setEditingGeoMark] = useState<{ pos: number; node: ProseMirrorNode } | null>(null);
   const [viewRef, setViewRef] = useState<any>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
+  const [containerHeight, setContainerHeight] = useState<number>(600); // Default height
 
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
@@ -415,6 +414,25 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       focusedElement.classList.add('pm-node-focused');
     }
   }, [mount, focusedNodeId]);
+
+  // Observe container size changes with ResizeObserver
+  useEffect(() => {
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { height } = entry.contentRect;
+        console.log('[ProseMirror] ResizeObserver: Container height changed to', height);
+        setContainerHeight(height);
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [container]);
 
   // Scroll to a specific node
   const scrollToNode = (nodeId: string) => {
@@ -610,7 +628,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   };
 
   return (
-    <div className="prosemirror-editor-wrapper" style={{ height: typeof height === 'number' ? `${height}px` : height }}>
+    <div className="prosemirror-editor-wrapper" style={{ height: containerHeight ? `${containerHeight}px` : '100%' }}>
       {/* Toolbar - always visible in edit mode, fixed at top */}
       {editable && (
         <div className="prosemirror-toolbar">
