@@ -1,6 +1,6 @@
 import { BottomSheetView, useBottomSheet } from '@gorhom/bottom-sheet';
 import type { EditorState } from 'prosemirror-state';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import ProseMirrorViewerWrapper from './ProseMirrorViewerWrapper';
@@ -20,28 +20,80 @@ export function TripDocumentSheet({
   isEditMode,
   onChange,
 }: TripDocumentSheetProps) {
-  const { animatedPosition } = useBottomSheet();
-  const [currentPosition, setCurrentPosition] = useState(0);
+  const { animatedPosition, animatedIndex } = useBottomSheet();
+  const [settledHeight, setSettledHeight] = useState<number | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
   const screenHeight = Dimensions.get('window').height;
+  const animationTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Safe way to observe animated position
+  // Track when sheet index changes (more reliable than position tracking)
   useAnimatedReaction(
-    () => animatedPosition.value,
-    (position) => {
+    () => animatedIndex.value,
+    (currentIndex, previousIndex) => {
       'worklet';
-      // Update state on JS thread
-      runOnJS(setCurrentPosition)(position);
+
+      // Index changed means sheet is snapping to a position
+      if (currentIndex !== previousIndex) {
+        runOnJS(() => {
+          setIsAnimating(true);
+        })();
+      }
     },
     []
   );
 
-  // Calculate visible height
-  const visibleHeight = Math.max(100, screenHeight - currentPosition);
+  // Track position changes to detect when animation settles
+  useAnimatedReaction(
+    () => animatedPosition.value,
+    (position) => {
+      'worklet';
 
-  // Log when position changes
+      runOnJS(() => {
+        // Clear any existing timeout
+        if (animationTimeoutRef.current) {
+          clearTimeout(animationTimeoutRef.current);
+        }
+
+        // Set a timeout to detect when animation stops
+        animationTimeoutRef.current = setTimeout(() => {
+          // Animation has stopped, update height
+          const finalHeight = Math.max(100, screenHeight - position);
+          console.log('[TripDocumentSheet] Animation settled at position:', position.toFixed(0), 'Height:', finalHeight.toFixed(0));
+          setSettledHeight(finalHeight);
+          setIsAnimating(false);
+        }, 150); // Wait 150ms of no movement to consider animation complete
+      })();
+    },
+    []
+  );
+
+  // Initialize height on mount
   useEffect(() => {
-    console.log('[TripDocumentSheet] Position:', currentPosition.toFixed(2), 'Visible height:', visibleHeight.toFixed(0));
-  }, [currentPosition, visibleHeight]);
+    // Small delay to ensure animatedPosition is ready
+    const initTimeout = setTimeout(() => {
+      const initialHeight = Math.max(100, screenHeight - animatedPosition.value);
+      console.log('[TripDocumentSheet] Initial height:', initialHeight);
+      setSettledHeight(initialHeight);
+    }, 100);
+
+    // Cleanup function
+    return () => {
+      clearTimeout(initTimeout);
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Use settled height, or fallback to a reasonable default
+  const visibleHeight = settledHeight || Math.max(100, screenHeight - 400);
+
+  // Log when height actually changes
+  useEffect(() => {
+    if (!isAnimating && settledHeight) {
+      console.log('[TripDocumentSheet] Height set to:', settledHeight.toFixed(0));
+    }
+  }, [settledHeight, isAnimating]);
 
 
   return (
