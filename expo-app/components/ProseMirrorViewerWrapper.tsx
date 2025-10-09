@@ -100,17 +100,15 @@ export function ProseMirrorViewerWrapper({
 
   // Style for container
   const containerStyle = height === '100%'
-    ? [styles.container, styles.fullHeight]
+    ? [styles.container, styles.absoluteFill]
     : [styles.container, { height }];
 
   // Determine effective height to pass to DOM component
-  // Only use measured height if it's a reasonable value (not 0 or 40)
-  const effectiveHeight = height === '100%'
-    ? (measuredHeight && measuredHeight > 100 ? measuredHeight : '100%')
-    : height;
+  // When using absolute positioning, we can use 100% directly
+  const effectiveHeight = height === '100%' ? '100%' : height;
 
   return (
-    <View style={{ flex: 1, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}>
       <View
         style={[
           containerStyle,
@@ -159,7 +157,6 @@ export function ProseMirrorViewerWrapper({
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
     backgroundColor: '#E5FFE5', // Light green to debug container
     overflow: 'hidden',
     borderWidth: 3,
@@ -168,6 +165,14 @@ const styles = StyleSheet.create({
   },
   fullHeight: {
     flex: 1,
+    width: '100%',
+  },
+  absoluteFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   loadingContainer: {
     flex: 1,
