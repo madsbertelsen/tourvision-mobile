@@ -1,5 +1,5 @@
 import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { GeoMarkBottomSheet } from './GeoMarkBottomSheet';
 import type { ProseMirrorViewerRef } from './dom/prosemirror-viewer';
 
@@ -132,29 +132,39 @@ export function ProseMirrorViewerWrapper({
           }
         }}
       >
-        <Suspense fallback={
+        {parentDimensions ? (
+          <Suspense fallback={
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#3B82F6" />
+            </View>
+          }>
+            <ProseMirrorViewerDOM
+              ref={viewerRef}
+              content={content}
+              onNodeFocus={onNodeFocus}
+              focusedNodeId={focusedNodeId}
+              editable={editable}
+              onChange={onChange}
+              height={parentDimensions.height}
+              onShowGeoMarkEditor={handleShowGeoMarkEditor}
+              geoMarkDataToCreate={geoMarkDataToCreate}
+              dom={{
+                matchContents: false,
+                style: {
+                  height: parentDimensions.height,
+                  width: parentDimensions.width,
+                  position: 'absolute',
+                  top: 0,
+                  left: 0
+                }
+              }}
+            />
+          </Suspense>
+        ) : (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text>Measuring container...</Text>
           </View>
-        }>
-          <ProseMirrorViewerDOM
-            ref={viewerRef}
-            content={content}
-            onNodeFocus={onNodeFocus}
-            focusedNodeId={focusedNodeId}
-            editable={editable}
-            onChange={onChange}
-            height={parentDimensions ? parentDimensions.height : effectiveHeight}
-            onShowGeoMarkEditor={handleShowGeoMarkEditor}
-            geoMarkDataToCreate={geoMarkDataToCreate}
-            dom={{
-              matchContents: false,
-              style: parentDimensions
-                ? { height: parentDimensions.height, width: parentDimensions.width }
-                : { height: '100%', width: '100%' }
-            }}
-          />
-        </Suspense>
+        )}
       </View>
 
       {/* Geo-mark Bottom Sheet */}
