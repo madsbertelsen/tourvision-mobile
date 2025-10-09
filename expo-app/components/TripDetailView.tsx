@@ -23,8 +23,8 @@ import {
   Text,
   TouchableOpacity,
   View,
-  KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -50,6 +50,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const bottomSheetRef = useRef<BottomSheet>(null);
   const documentRef = useRef<any>(null);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
   const [sheetHeight, setSheetHeight] = useState<number | undefined>(undefined);
@@ -81,6 +82,29 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   } = chatHelpers;
 
   const isChatLoading = status === 'submitted';
+
+  // Set up keyboard listeners
+  useEffect(() => {
+    const showListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        console.log('[TripDetailView] Keyboard height:', e.endCoordinates.height);
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+
+    const hideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   // Load trip data
   useEffect(() => {
@@ -1010,17 +1034,18 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       />
 
       {/* Hoisted toolbar - outside of BottomSheet for proper keyboard handling */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-        style={styles.toolbarContainer}
-      >
-        <ProseMirrorToolbar
-          editable={isEditMode}
-          selectionEmpty={selectionEmpty}
-          onCommand={handleToolbarCommand}
-        />
-      </KeyboardAvoidingView>
+      {isEditMode && (
+        <View style={[
+          styles.toolbarContainer,
+          { bottom: keyboardHeight > 0 ? keyboardHeight : 0 }
+        ]}>
+          <ProseMirrorToolbar
+            editable={isEditMode}
+            selectionEmpty={selectionEmpty}
+            onCommand={handleToolbarCommand}
+          />
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
