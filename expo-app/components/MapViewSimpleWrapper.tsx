@@ -1,7 +1,7 @@
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { useMockContext } from '@/contexts/MockContext';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 
 // Import DOM component - works on all platforms with expo-dom
 const MapViewSimpleDOM = React.lazy(() => import('./dom/map-view-simple'));
@@ -97,7 +97,7 @@ export function MapViewSimpleWrapper({
       <React.Suspense fallback={
         <View style={[styles.loading, { backgroundColor: '#E5E7EB' }]}>
           <View style={{ padding: 20, alignItems: 'center' }}>
-            {/* Show loading indicator */}
+            <Text>Loading map...</Text>
           </View>
         </View>
       }>

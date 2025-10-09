@@ -908,12 +908,16 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         snapPoints={snapPoints}
         enablePanDownToClose={false}
         handleComponent={renderHandle}
-        onChange={(index) => {
-          console.log('[TripDetailView] Bottom sheet changed to index:', index);
-          // Wait for animation to complete before re-measuring
-          setTimeout(() => {
-            setSheetKey(prev => prev + 1);
-          }, 350); // BottomSheet default animation duration is ~300ms
+        onAnimate={(fromIndex: number, toIndex: number) => {
+          console.log(`[TripDetailView] Bottom sheet animating from ${fromIndex} to ${toIndex}`);
+          // Only trigger re-layout when animation finishes (toIndex is stable)
+          if (fromIndex !== toIndex) {
+            // Use longer delay to ensure animation is complete
+            setTimeout(() => {
+              console.log('[TripDetailView] Triggering re-layout after animation');
+              setSheetKey(prev => prev + 1);
+            }, 500);
+          }
         }}
       >
         <BottomSheetView style={styles.bottomSheetContent}>
@@ -951,6 +955,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#F3F4F6',
+    zIndex: 0,
   },
   centerContent: {
     flex: 1,
