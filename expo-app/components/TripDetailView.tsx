@@ -1035,13 +1035,13 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         onCancel={handleGeoMarkCancel}
       />
 
-      {/* Hoisted toolbar - outside of BottomSheet for proper keyboard handling */}
-      {isEditMode && (
+      {/* Hoisted toolbar - only show when keyboard is visible */}
+      {isEditMode && keyboardHeight > 0 && (
         <View style={[
           styles.toolbarContainer,
           {
-            bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom,
-            paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom
+            bottom: keyboardHeight,
+            paddingBottom: 0
           }
         ]}>
           <ProseMirrorToolbar
