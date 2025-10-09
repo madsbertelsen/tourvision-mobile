@@ -11,6 +11,7 @@ import { createGeoMarkFromSelection } from '@/utils/prosemirror-transactions';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
+import { history, undo, redo } from 'prosemirror-history';
 import './prosemirror-viewer-styles.css';
 
 interface ProseMirrorViewerProps {
@@ -323,6 +324,12 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       doc: initialDoc,
       schema,
       plugins: [
+        history(),
+        keymap({
+          'Mod-z': undo,
+          'Mod-y': redo,
+          'Mod-Shift-z': redo
+        }),
         keymap(baseKeymap)
       ]
     });
@@ -339,6 +346,12 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
         doc: newDoc,
         schema,
         plugins: [
+          history(),
+          keymap({
+            'Mod-z': undo,
+            'Mod-y': redo,
+            'Mod-Shift-z': redo
+          }),
           keymap(baseKeymap)
         ],
         selection: state.selection // Preserve selection if possible
@@ -566,6 +579,18 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     if (!state) return;
 
     switch(command) {
+      case 'undo':
+        undo(state, (tr) => {
+          const newState = state.apply(tr);
+          setState(newState);
+        });
+        break;
+      case 'redo':
+        redo(state, (tr) => {
+          const newState = state.apply(tr);
+          setState(newState);
+        });
+        break;
       case 'toggleBold':
         // TODO: Implement bold toggle
         break;

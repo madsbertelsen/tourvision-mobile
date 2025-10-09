@@ -19,6 +19,24 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, onCommand 
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Undo/Redo */}
+        <View style={styles.group}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => onCommand('undo')}
+          >
+            <Text style={styles.buttonText}>↶</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => onCommand('redo')}
+          >
+            <Text style={styles.buttonText}>↷</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
         {/* Text formatting */}
         <View style={styles.group}>
           <TouchableOpacity
