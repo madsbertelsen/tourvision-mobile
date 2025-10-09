@@ -92,6 +92,9 @@ export function MapViewSimpleWrapper({
     ? { width: '100%', height: '100%' }
     : { width: '100%', height: typeof height === 'number' ? `${height}px` : '400px' };
 
+  console.log('[MapViewSimpleWrapper] Height prop:', height);
+  console.log('[MapViewSimpleWrapper] DOM style:', domStyle);
+
   return (
     <View style={containerStyle}>
       <React.Suspense fallback={
@@ -114,6 +117,9 @@ export function MapViewSimpleWrapper({
           onRouteWaypointUpdate={onRouteWaypointUpdate}
           onRouteWaypointRemove={onRouteWaypointRemove}
           style={domStyle}
+          dom={{
+            style: domStyle  // Also pass style to the DOM component wrapper
+          }}
         />
       </React.Suspense>
     </View>
