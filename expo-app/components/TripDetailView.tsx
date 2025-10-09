@@ -45,6 +45,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
+  const [sheetKey, setSheetKey] = useState(0); // Force re-layout when sheet changes
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -907,10 +908,15 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         snapPoints={snapPoints}
         enablePanDownToClose={false}
         handleComponent={renderHandle}
+        onChange={(index) => {
+          console.log('[TripDetailView] Bottom sheet changed to index:', index);
+          setSheetKey(prev => prev + 1); // Force re-layout of content
+        }}
       >
         <BottomSheetView style={styles.bottomSheetContent}>
           {editorState?.doc ? (
             <ProseMirrorViewerWrapper
+              key={sheetKey}
               content={editorState.doc.toJSON()}
               onNodeFocus={handleNodeFocus}
               focusedNodeId={focusedNodeId}

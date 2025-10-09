@@ -115,6 +115,7 @@ export function ProseMirrorViewerWrapper({
         onLayout={(event) => {
           if (height === '100%') {
             const { height: layoutHeight } = event.nativeEvent.layout;
+            console.log('[ProseMirrorWrapper] onLayout measured height:', layoutHeight, 'px');
             setMeasuredHeight(layoutHeight);
           }
         }}
