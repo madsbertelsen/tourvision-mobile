@@ -21,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface TripDetailViewProps {
@@ -930,13 +930,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           }
         }}
       >
-        <BottomSheetView
-          style={styles.bottomSheetContent}
-          onLayout={(event) => {
-            const { height, width } = event.nativeEvent.layout;
-            console.log('[TripDetailView] BottomSheetView measured:', width, 'x', height, 'px');
-          }}
-        >
+        <View style={styles.bottomSheetContent}>
           {editorState?.doc ? (
             <ProseMirrorViewerWrapper
               key={sheetKey}
@@ -952,7 +946,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
               <Text style={styles.loadingText}>Waiting for content...</Text>
             </View>
           )}
-        </BottomSheetView>
+        </View>
       </BottomSheet>
     </GestureHandlerRootView>
   );
