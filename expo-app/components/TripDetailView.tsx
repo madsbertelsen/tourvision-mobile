@@ -46,6 +46,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [sheetKey, setSheetKey] = useState(0); // Force re-layout when sheet changes
+  const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -890,15 +891,24 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Full-screen map background */}
-      <View style={styles.mapBackground}>
-        <MapViewSimpleWrapper
-          locations={documentLocations}
-          routes={fetchedRoutes}
-          height="100%"
-          isEditMode={isEditMode}
-          onRouteWaypointUpdate={handleRouteWaypointUpdate}
-          onRouteWaypointRemove={handleRouteWaypointRemove}
-        />
+      <View
+        style={styles.mapBackground}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          console.log('[TripDetailView] Map container dimensions:', width, 'x', height);
+          setMapDimensions({ width, height });
+        }}
+      >
+        {mapDimensions && (
+          <MapViewSimpleWrapper
+            locations={documentLocations}
+            routes={fetchedRoutes}
+            height={mapDimensions.height}
+            isEditMode={isEditMode}
+            onRouteWaypointUpdate={handleRouteWaypointUpdate}
+            onRouteWaypointRemove={handleRouteWaypointRemove}
+          />
+        )}
       </View>
 
       {/* Bottom sheet with document */}
