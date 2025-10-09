@@ -55,7 +55,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [sheetHeight, setSheetHeight] = useState<number | undefined>(undefined);
   const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
   const [geoMarkData, setGeoMarkData] = useState<any>(null);
   const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
@@ -971,13 +970,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           const { width, height } = event.nativeEvent.layout;
           console.log('[TripDetailView] Map container dimensions:', width, 'x', height);
           setMapDimensions({ width, height });
-
-          // Initialize sheet height based on default snap point (index 1 = 50%)
-          if (!sheetHeight) {
-            const defaultSnapPercent = parseInt(snapPoints[1]);
-            const calculatedHeight = (height * defaultSnapPercent) / 100;
-            setSheetHeight(calculatedHeight);
-          }
         }}
       >
         {mapDimensions && (
@@ -1002,14 +994,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         onChange={(index) => {
           console.log('[TripDetailView] Sheet snapped to index:', index);
           console.log('[TripDetailView] Sheet position:', snapPoints[index]);
-
-          // Calculate height based on snap point
-          if (mapDimensions) {
-            const snapPercent = parseInt(snapPoints[index]);
-            const calculatedHeight = (mapDimensions.height * snapPercent) / 100;
-            console.log('[TripDetailView] Calculated sheet height:', calculatedHeight);
-            setSheetHeight(calculatedHeight);
-          }
         }}
       >
         <TripDocumentSheet
@@ -1019,7 +1003,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           focusedNodeId={focusedNodeId}
           isEditMode={isEditMode}
           onChange={handleDocumentChange}
-          sheetHeight={sheetHeight}
           onShowGeoMarkEditor={handleShowGeoMarkEditor}
           geoMarkDataToCreate={geoMarkDataToCreate}
           onSelectionChange={handleSelectionChange}
