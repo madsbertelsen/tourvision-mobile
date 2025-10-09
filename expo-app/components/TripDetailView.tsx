@@ -972,13 +972,14 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           console.log('[TripDetailView] Map container dimensions:', width, 'x', height);
           setMapDimensions({ width, height });
 
-          /*
-          // Initialize sheet height to default snap point (50%)
+          // Initialize sheet height to default snap point (index 1 = 50%)
           if (sheetHeight === 0) {
-            const defaultPercent = 50;
-            setSheetHeight((height * defaultPercent) / 100);
+            const defaultSnapPoint = snapPoints[1]; // '50%'
+            const defaultPercent = parseInt(defaultSnapPoint.replace('%', ''));
+            const initialHeight = (height * defaultPercent) / 100;
+            console.log('[TripDetailView] Initial sheet height:', initialHeight.toFixed(0), 'px');
+            setSheetHeight(initialHeight);
           }
-            */
         }}
       >
         {mapDimensions && (
@@ -1002,13 +1003,11 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         enablePanDownToClose={false}
         handleComponent={renderHandle}
         onChange={(index) => {
- //         console.log('[TripDetailView] Sheet changed to index', index);
-          if (mapDimensions && index >= 1 ) {
-            const snapPoint = snapPoints[index-1];
+          if (mapDimensions && index >= 0 && index < snapPoints.length) {
+            const snapPoint = snapPoints[index];
             const snapPercent = parseInt(snapPoint.replace('%', ''));
             const calculatedHeight = (mapDimensions.height * snapPercent) / 100;
-            console.log('[TripDetailView] Sheet changed to index', index, '→', calculatedHeight.toFixed(0), 'px');
-            console.log('[TripDetailView] calculatedHeight', calculatedHeight);
+            console.log('[TripDetailView] Sheet index', index, '('+snapPoint+') →', calculatedHeight.toFixed(0), 'px');
             setSheetHeight(calculatedHeight);
           }
         }}

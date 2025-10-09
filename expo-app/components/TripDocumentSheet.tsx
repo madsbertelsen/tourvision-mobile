@@ -69,7 +69,7 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
 const styles = StyleSheet.create({
   bottomSheetContent: {
     flex: 1,
-    backgroundColor: '#EBF5FF',
+    backgroundColor: '#ffffff',
   },
   centerContent: {
     flex: 1,
