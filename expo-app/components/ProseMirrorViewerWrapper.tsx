@@ -109,14 +109,14 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
 
   return (
     <View
-      style={styles.container}
+      style={{ flex: 1, width: '100%' }}
       onLayout={(event) => {
         const { height: h, width: w } = event.nativeEvent.layout;
         console.log('[ProseMirrorWrapper] Container measured:', w, 'x', h, 'px');
         setParentDimensions({ width: w, height: h });
       }}
     >
-      {parentDimensions && parentDimensions.height > 0 ? (
+      {parentDimensions && parentDimensions.height > 50 ? (
         <Suspense fallback={
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3B82F6" />
@@ -150,10 +150,6 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: '100%',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
