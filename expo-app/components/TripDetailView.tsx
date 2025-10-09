@@ -16,13 +16,13 @@ import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Keyboard,
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface TripDetailViewProps {
   tripId: string;
@@ -32,8 +32,6 @@ interface TripDetailViewProps {
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const router = useRouter();
   const { setFocusedLocation } = useMockContext();
-  const { width } = useWindowDimensions();
-  const isLargeScreen = width >= 1024;
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
@@ -45,8 +43,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const lastProcessedMessageIdRef = useRef<string | null>(null);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
   const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -142,30 +140,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
     loadTripData();
   }, [tripId]);
-
-  // Listen for keyboard events to adjust map height
-  useEffect(() => {
-    const keyboardWillShowListener = Keyboard.addListener(
-      'keyboardWillShow',
-      (e) => {
-        setIsKeyboardVisible(true);
-        setKeyboardHeight(e.endCoordinates.height);
-      }
-    );
-
-    const keyboardWillHideListener = Keyboard.addListener(
-      'keyboardWillHide',
-      () => {
-        setIsKeyboardVisible(false);
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardWillShowListener.remove();
-      keyboardWillHideListener.remove();
-    };
-  }, []);
 
   // Save messages to trip
   useEffect(() => {
@@ -871,16 +845,17 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title} numberOfLines={1}>
+  // Custom handle component for bottom sheet
+  const renderHandle = useCallback(() => (
+    <View style={styles.bottomSheetHandle}>
+      <View style={styles.handleBar} />
+      <View style={styles.handleHeader}>
+        <Text style={styles.handleTitle} numberOfLines={1}>
           {currentTrip.title}
         </Text>
-        <View style={styles.headerButtons}>
+        <View style={styles.handleButtons}>
           <TouchableOpacity
-            style={[styles.viewModeButton, isEditMode && styles.viewModeButtonActive]}
+            style={[styles.handleButton, isEditMode && styles.handleButtonActive]}
             onPress={() => setIsEditMode(!isEditMode)}
           >
             <Ionicons
@@ -890,7 +865,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.viewModeButton}
+            style={styles.handleButton}
             onPress={async () => {
               // Force re-parse from HTML
               if (currentTrip.itineraries && currentTrip.itineraries.length > 0) {
@@ -908,89 +883,65 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Content: Unified document + map view */}
-      <View style={styles.documentContainer}>
-        {isLargeScreen ? (
-          // Split view for large screens: document on left, map on right
-          <View style={styles.splitView}>
-            <View style={[styles.documentScrollView, styles.documentScrollViewSplit]}>
-              {/* Document content */}
-              <View style={styles.documentContainer}>
-                {editorState?.doc ? (
-                  <ProseMirrorViewerWrapper
-                    content={editorState.doc.toJSON()}
-                    onNodeFocus={handleNodeFocus}
-                    focusedNodeId={focusedNodeId}
-                    height="100%"
-                    editable={isEditMode}
-                    onChange={handleDocumentChange}
-                  />
-                ) : (
-                  <Text style={styles.loadingText}>Waiting for content...</Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.mapContainer}>
-              <MapViewSimpleWrapper
-                locations={documentLocations}
-                routes={fetchedRoutes}
-                height="100%"
-                isEditMode={isEditMode}
-                onRouteWaypointUpdate={handleRouteWaypointUpdate}
-                onRouteWaypointRemove={handleRouteWaypointRemove}
-              />
-            </View>
-          </View>
-        ) : (
-          // Single column view for mobile: map above, document below
-          <>
-            <View style={[
-              styles.mapContainerMobile,
-              isKeyboardVisible && { height: 150 } // Shrink map when keyboard is visible
-            ]}>
-              <MapViewSimpleWrapper
-                locations={documentLocations}
-                routes={fetchedRoutes}
-                height={isKeyboardVisible ? 150 : 300}
-                isEditMode={isEditMode}
-                onRouteWaypointUpdate={handleRouteWaypointUpdate}
-                onRouteWaypointRemove={handleRouteWaypointRemove}
-              />
-            </View>
-            <View style={styles.documentScrollView}>
-              {/* Document content */}
-              <View style={styles.documentContainer}>
-                {editorState?.doc ? (
-                  <ProseMirrorViewerWrapper
-                    content={editorState.doc.toJSON()}
-                    onNodeFocus={handleNodeFocus}
-                    focusedNodeId={focusedNodeId}
-                    height="100%"
-                    editable={isEditMode}
-                    onChange={handleDocumentChange}
-                  />
-                ) : (
-                  <Text style={styles.loadingText}>Waiting for content...</Text>
-                )}
-              </View>
-            </View>
-          </>
-        )}
-      </View>
     </View>
+  ), [currentTrip.title, isEditMode, currentTrip.itineraries]);
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      {/* Full-screen map background */}
+      <View style={styles.mapBackground}>
+        <MapViewSimpleWrapper
+          locations={documentLocations}
+          routes={fetchedRoutes}
+          height="100%"
+          isEditMode={isEditMode}
+          onRouteWaypointUpdate={handleRouteWaypointUpdate}
+          onRouteWaypointRemove={handleRouteWaypointRemove}
+        />
+      </View>
+
+      {/* Bottom sheet with document */}
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={1}
+        snapPoints={snapPoints}
+        enablePanDownToClose={false}
+        handleComponent={renderHandle}
+      >
+        <BottomSheetScrollView style={styles.bottomSheetContent}>
+          {editorState?.doc ? (
+            <ProseMirrorViewerWrapper
+              content={editorState.doc.toJSON()}
+              onNodeFocus={handleNodeFocus}
+              focusedNodeId={focusedNodeId}
+              height="100%"
+              editable={isEditMode}
+              onChange={handleDocumentChange}
+            />
+          ) : (
+            <View style={styles.centerContent}>
+              <Text style={styles.loadingText}>Waiting for content...</Text>
+            </View>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheet>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  mapBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#F3F4F6',
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     marginTop: 12,
@@ -1003,171 +954,55 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: '600',
   },
-  header: {
+  // Bottom sheet styles
+  bottomSheetHandle: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  handleHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
-  title: {
+  handleTitle: {
     flex: 1,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#111827',
     marginRight: 12,
   },
-  headerButtons: {
+  handleButtons: {
     flexDirection: 'row',
     gap: 8,
   },
-  viewModeButton: {
-    width: 40,
-    height: 40,
+  handleButton: {
+    width: 36,
+    height: 36,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  viewModeButtonActive: {
+  handleButtonActive: {
     backgroundColor: '#3B82F6',
   },
-  messagesContainer: {
+  bottomSheetContent: {
     flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-  },
-  messageWrapper: {
-    flex: 1,
-    marginBottom: 12,
-  },
-  messageBubble: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    maxWidth: '80%',
-  },
-  userMessage: {
-    backgroundColor: '#3B82F6',
-    alignSelf: 'flex-end',
-    marginLeft: '20%',
-  },
-  userText: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  assistantMessage: {
     backgroundColor: '#fff',
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    width: '100%',
-    maxWidth: 900,
-  },
-  streamingText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#6B7280',
-    fontStyle: 'italic',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: '#111827',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-    opacity: 0.5,
-  },
-  documentScrollView: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  documentScrollViewSplit: {
-    // maxWidth removed - width controlled by assistantMessage maxWidth
-  },
-  documentScrollContent: {
-    padding: 16,
-  },
-  documentContainer: {
-    flex: 1,
-  },
-  splitView: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 16,
-  },
-  mapContainer: {
-    flex: 1,
-    minWidth: 0,
-    padding: 16,
-    backgroundColor: '#F3F4F6',
-  },
-  mapContainerMobile: {
-    height: 300,
-    width: '100%',
-    backgroundColor: '#F3F4F6',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  documentToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    gap: 12,
-  },
-  toolbarButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    gap: 6,
-  },
-  toolbarButtonActive: {
-    backgroundColor: '#3B82F6',
-  },
-  toolbarButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  toolbarButtonTextActive: {
-    color: '#fff',
+    paddingHorizontal: 20,
   },
 });
