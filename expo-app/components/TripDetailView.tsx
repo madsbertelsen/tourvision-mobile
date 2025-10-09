@@ -910,7 +910,10 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         handleComponent={renderHandle}
         onChange={(index) => {
           console.log('[TripDetailView] Bottom sheet changed to index:', index);
-          setSheetKey(prev => prev + 1); // Force re-layout of content
+          // Wait for animation to complete before re-measuring
+          setTimeout(() => {
+            setSheetKey(prev => prev + 1);
+          }, 350); // BottomSheet default animation duration is ~300ms
         }}
       >
         <BottomSheetView style={styles.bottomSheetContent}>
