@@ -29,6 +29,7 @@ export function ProseMirrorViewerWrapper({
   const [geoMarkData, setGeoMarkData] = useState<any>(null);
   const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
 
   // Callback to show geo-mark editor
@@ -108,7 +109,14 @@ export function ProseMirrorViewerWrapper({
   const effectiveHeight = height === '100%' ? '100%' : height;
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}>
+    <View
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}
+      onLayout={(event) => {
+        const { height: h, width: w } = event.nativeEvent.layout;
+        console.log('[ProseMirrorWrapper] Parent container measured:', w, 'x', h, 'px');
+        setParentDimensions({ width: w, height: h });
+      }}
+    >
       <View
         style={[
           containerStyle,
@@ -116,7 +124,7 @@ export function ProseMirrorViewerWrapper({
         ]}
         onLayout={(event) => {
           const { height: layoutHeight, width: layoutWidth } = event.nativeEvent.layout;
-          console.log('[ProseMirrorWrapper] onLayout measured:', layoutWidth, 'x', layoutHeight, 'px');
+          console.log('[ProseMirrorWrapper] Inner container measured:', layoutWidth, 'x', layoutHeight, 'px');
           console.log('[ProseMirrorWrapper] height prop:', height);
           console.log('[ProseMirrorWrapper] containerStyle:', containerStyle);
           if (height === '100%') {
@@ -136,9 +144,15 @@ export function ProseMirrorViewerWrapper({
             focusedNodeId={focusedNodeId}
             editable={editable}
             onChange={onChange}
-            height={effectiveHeight}
+            height={parentDimensions ? parentDimensions.height : effectiveHeight}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
+            dom={{
+              matchContents: false,
+              style: parentDimensions
+                ? { height: parentDimensions.height, width: parentDimensions.width }
+                : { height: '100%', width: '100%' }
+            }}
           />
         </Suspense>
       </View>
