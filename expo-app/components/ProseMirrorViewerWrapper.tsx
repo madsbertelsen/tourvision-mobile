@@ -110,13 +110,18 @@ export function ProseMirrorViewerWrapper({
     : height;
 
   return (
-    <>
+    <View style={{ flex: 1, borderWidth: 3, borderColor: 'orange', borderStyle: 'solid' }}>
       <View
-        style={containerStyle}
+        style={[
+          containerStyle,
+          { borderWidth: 3, borderColor: 'blue', borderStyle: 'solid' }  // Blue border for inner container
+        ]}
         onLayout={(event) => {
+          const { height: layoutHeight, width: layoutWidth } = event.nativeEvent.layout;
+          console.log('[ProseMirrorWrapper] onLayout measured:', layoutWidth, 'x', layoutHeight, 'px');
+          console.log('[ProseMirrorWrapper] height prop:', height);
+          console.log('[ProseMirrorWrapper] containerStyle:', containerStyle);
           if (height === '100%') {
-            const { height: layoutHeight } = event.nativeEvent.layout;
-            console.log('[ProseMirrorWrapper] onLayout measured height:', layoutHeight, 'px');
             setMeasuredHeight(layoutHeight);
           }
         }}
@@ -148,7 +153,7 @@ export function ProseMirrorViewerWrapper({
         onSave={handleGeoMarkSave}
         onCancel={handleGeoMarkCancel}
       />
-    </>
+    </View>
   );
 }
 
@@ -157,6 +162,9 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#E5FFE5', // Light green to debug container
     overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'green',
+    borderStyle: 'solid',
   },
   fullHeight: {
     flex: 1,
