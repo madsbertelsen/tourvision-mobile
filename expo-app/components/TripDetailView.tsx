@@ -930,7 +930,13 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           }
         }}
       >
-        <View style={styles.bottomSheetContent}>
+        <View
+          style={styles.bottomSheetContent}
+          onLayout={(event) => {
+            const { height, width } = event.nativeEvent.layout;
+            console.log('[TripDetailView] Bottom sheet content measured:', width, 'x', height, 'px');
+          }}
+        >
           {editorState?.doc ? (
             <ProseMirrorViewerWrapper
               key={sheetKey}
