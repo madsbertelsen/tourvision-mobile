@@ -1,7 +1,8 @@
-import { BottomSheetView } from '@gorhom/bottom-sheet';
+import { BottomSheetView, useBottomSheet } from '@gorhom/bottom-sheet';
 import type { EditorState } from 'prosemirror-state';
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState, useCallback } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 import ProseMirrorViewerWrapper from './ProseMirrorViewerWrapper';
 
 interface TripDocumentSheetProps {
@@ -10,7 +11,7 @@ interface TripDocumentSheetProps {
   focusedNodeId: string | null;
   isEditMode: boolean;
   onChange: (doc: any) => void;
-  sheetHeight?: number;
+  snapPoints: string[];
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
   onSelectionChange?: (empty: boolean) => void;
@@ -22,22 +23,40 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
   focusedNodeId,
   isEditMode,
   onChange,
-  sheetHeight,
+  snapPoints,
   onShowGeoMarkEditor,
   geoMarkDataToCreate,
   onSelectionChange,
 }, ref) => {
-  const screenHeight = Dimensions.get('window').height;
   const viewerRef = useRef<any>(null);
+  const screenHeight = Dimensions.get('window').height;
+  const { animatedIndex } = useBottomSheet();
+  const [visibleHeight, setVisibleHeight] = useState(screenHeight * 0.5);
 
-  // Use provided height or calculate a reasonable default
-  // Subtract some padding for the handle and safe areas
-  const visibleHeight = sheetHeight ? sheetHeight - 60 : screenHeight * 0.5;
+  // Update height callback (must be defined in JS scope for runOnJS)
+  const updateHeight = useCallback((index: number) => {
+    if (index >= 0 && index < snapPoints.length) {
+      const snapPoint = snapPoints[index];
+      const snapPercent = parseInt(snapPoint.replace('%', ''));
+      const calculatedHeight = (screenHeight * snapPercent) / 100 - 60;
+      console.log('[TripDocumentSheet] Index:', index, '→', calculatedHeight.toFixed(0), 'px');
+      setVisibleHeight(calculatedHeight);
+    }
+  }, [snapPoints, screenHeight]);
 
-  // Log when height changes
-  useEffect(() => {
-    console.log('[TripDocumentSheet] Height set to:', visibleHeight.toFixed(0));
-  }, [visibleHeight]);
+  // Watch animated index and update height using worklet
+  useAnimatedReaction(
+    () => {
+      return Math.round(animatedIndex.value);
+    },
+    (currentIndex, previousIndex) => {
+      'worklet';
+      if (currentIndex !== previousIndex) {
+        runOnJS(updateHeight)(currentIndex);
+      }
+    },
+    []
+  );
 
   // Expose sendCommand to parent
   useImperativeHandle(ref, () => ({
@@ -48,7 +67,7 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
   }));
 
   return (
-    <BottomSheetView style={styles.bottomSheetContent}>
+    <BottomSheetView  style={styles.bottomSheetContent}>
       <View style={{ height: visibleHeight, width: '100%' }}>
         {editorState?.doc ? (
           <ProseMirrorViewerWrapper

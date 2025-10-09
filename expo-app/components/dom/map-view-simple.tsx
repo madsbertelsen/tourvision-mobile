@@ -1,10 +1,10 @@
 'use dom';
 
 import type { RouteWithMetadata } from '@/contexts/MockContext';
+import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import DeckGL from '@deck.gl/react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import DeckGL from '@deck.gl/react';
-import { ScatterplotLayer, PathLayer, TextLayer } from '@deck.gl/layers';
 import MapGL from 'react-map-gl/mapbox';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import HexGridOverlay from './hex-grid-overlay';
@@ -1215,9 +1215,7 @@ export default function MapViewSimple({
       const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport, logicalWaypoints);
 
       if (closestPoint && closestPoint.distance < HOVER_THRESHOLD) {
-        console.log('[MapViewSimple] Route has', route.geometry.coordinates.length, 'geometry points');
-        console.log('[MapViewSimple] Route has', logicalWaypoints.length, 'logical waypoints');
-        console.log('[MapViewSimple] Hovering over logical segment', closestPoint.segmentIndex);
+
 
         // Check if cursor is near any existing waypoint
         let isNearExistingWaypoint = false;
@@ -1236,7 +1234,6 @@ export default function MapViewSimple({
               if (distance < WAYPOINT_PROXIMITY) {
                 isNearExistingWaypoint = true;
                 nearestWaypointIndex = i;
-                console.log('[MapViewSimple] Near existing waypoint index', i);
                 break;
               }
             } catch (e) {
