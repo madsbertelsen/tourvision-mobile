@@ -15,14 +15,16 @@ import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/trips-
 interface TripsSidebarProps {
   selectedTripId?: string | null;
   onTripSelect: (tripId: string, initialMessage?: string) => void;
+  onLocationSelect?: (tripId: string, locationId: string, location: any) => void;
   onTripsChange?: () => void;
 }
 
-export default function TripsSidebar({ selectedTripId, onTripSelect, onTripsChange }: TripsSidebarProps) {
+export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationSelect, onTripsChange }: TripsSidebarProps) {
   const [trips, setTrips] = useState<SavedTrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [expandedTrips, setExpandedTrips] = useState<Set<string>>(new Set());
 
   // Load trips on mount
   useEffect(() => {
@@ -134,6 +136,67 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onTripsChan
     return 'Tap to continue conversation';
   };
 
+  // Extract locations from the latest itinerary document
+  const extractLocationsFromTrip = (trip: SavedTrip) => {
+    if (!trip.itineraries || trip.itineraries.length === 0) {
+      return [];
+    }
+
+    const latestItinerary = trip.itineraries[trip.itineraries.length - 1];
+    if (!latestItinerary.document || !latestItinerary.document.content) {
+      return [];
+    }
+
+    const locations: Array<{
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      description?: string;
+      colorIndex?: number;
+      photoName?: string;
+    }> = [];
+
+    const traverse = (node: any) => {
+      if (node.type === 'geoMark' && node.attrs?.lat && node.attrs?.lng) {
+        const lat = parseFloat(node.attrs.lat);
+        const lng = parseFloat(node.attrs.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          locations.push({
+            id: node.attrs.geoId || `loc-${locations.length}`,
+            name: node.attrs.placeName || 'Location',
+            lat,
+            lng,
+            description: node.attrs.description,
+            colorIndex: node.attrs.colorIndex,
+            photoName: node.attrs.photoName,
+          });
+        }
+      }
+      if (node.content) {
+        node.content.forEach(traverse);
+      }
+    };
+
+    if (latestItinerary.document.content) {
+      latestItinerary.document.content.forEach(traverse);
+    }
+
+    return locations;
+  };
+
+  const toggleTripExpanded = (tripId: string) => {
+    setExpandedTrips(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(tripId)) {
+        newSet.delete(tripId);
+      } else {
+        newSet.add(tripId);
+      }
+      return newSet;
+    });
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -215,43 +278,84 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onTripsChan
             </Text>
           </View>
         ) : (
-          trips.map((trip) => (
-            <TouchableOpacity
-              key={trip.id}
-              style={[
-                styles.tripCard,
-                selectedTripId === trip.id && styles.tripCardSelected
-              ]}
-              onPress={() => onTripSelect(trip.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.tripCardContent}>
-                <View style={styles.tripCardHeader}>
-                  <Text style={styles.tripTitle} numberOfLines={1}>{trip.title}</Text>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={(e) => handleDeleteTrip(trip.id, e)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
+          trips.map((trip) => {
+            const locations = extractLocationsFromTrip(trip);
+            const isExpanded = expandedTrips.has(trip.id);
 
-                <Text style={styles.tripPreview} numberOfLines={2}>
-                  {getPreviewText(trip)}
-                </Text>
+            return (
+              <View key={trip.id} style={styles.tripCardContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.tripCard,
+                    selectedTripId === trip.id && styles.tripCardSelected
+                  ]}
+                  onPress={() => onTripSelect(trip.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.tripCardContent}>
+                    <View style={styles.tripCardHeader}>
+                      <View style={styles.tripCardTitleRow}>
+                        {locations.length > 0 && (
+                          <TouchableOpacity
+                            style={styles.expandButton}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              toggleTripExpanded(trip.id);
+                            }}
+                          >
+                            <Ionicons
+                              name={isExpanded ? "chevron-down" : "chevron-forward"}
+                              size={16}
+                              color="#6B7280"
+                            />
+                          </TouchableOpacity>
+                        )}
+                        <Text style={styles.tripTitle} numberOfLines={1}>{trip.title}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={(e) => handleDeleteTrip(trip.id, e)}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
 
-                <View style={styles.tripFooter}>
-                  <View style={styles.tripStats}>
-                    <Ionicons name="chatbubble-outline" size={12} color="#6B7280" />
-                    <Text style={styles.tripStatsText}>{trip.messages.length}</Text>
-                    <Ionicons name="location-outline" size={12} color="#6B7280" style={{ marginLeft: 8 }} />
-                    <Text style={styles.tripStatsText}>{trip.locations.length}</Text>
+                    <Text style={styles.tripPreview} numberOfLines={2}>
+                      {getPreviewText(trip)}
+                    </Text>
+
+                    <View style={styles.tripFooter}>
+                      <View style={styles.tripStats}>
+                        <Ionicons name="chatbubble-outline" size={12} color="#6B7280" />
+                        <Text style={styles.tripStatsText}>{trip.messages.length}</Text>
+                        <Ionicons name="location-outline" size={12} color="#6B7280" style={{ marginLeft: 8 }} />
+                        <Text style={styles.tripStatsText}>{locations.length}</Text>
+                      </View>
+                      <Text style={styles.tripDate}>{formatDate(trip.updatedAt)}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.tripDate}>{formatDate(trip.updatedAt)}</Text>
-                </View>
+                </TouchableOpacity>
+
+                {/* Nested locations */}
+                {isExpanded && locations.length > 0 && (
+                  <View style={styles.locationsContainer}>
+                    {locations.map((location) => (
+                      <TouchableOpacity
+                        key={location.id}
+                        style={styles.locationItem}
+                        onPress={() => onLocationSelect?.(trip.id, location.id, location)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.locationDot} />
+                        <Ionicons name="location" size={14} color="#6B7280" style={{ marginRight: 6 }} />
+                        <Text style={styles.locationName} numberOfLines={1}>{location.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
-            </TouchableOpacity>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -432,5 +536,46 @@ const styles = StyleSheet.create({
   tripDate: {
     fontSize: 11,
     color: '#9CA3AF',
+  },
+  tripCardContainer: {
+    marginBottom: 10,
+  },
+  tripCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  expandButton: {
+    padding: 4,
+    marginRight: 4,
+  },
+  locationsContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginTop: 4,
+    marginLeft: 8,
+    padding: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: '#E5E7EB',
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  locationDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#9CA3AF',
+    marginRight: 8,
+  },
+  locationName: {
+    flex: 1,
+    fontSize: 13,
+    color: '#374151',
   },
 });

@@ -22,11 +22,30 @@ function CustomDrawerContent(props: any) {
     props.navigation.closeDrawer();
   };
 
+  const handleLocationSelect = (tripId: string, locationId: string, location: any) => {
+    // Navigate to location detail page
+    router.push({
+      pathname: `/(mock)/trip/${tripId}/location/${locationId}`,
+      params: {
+        id: locationId,
+        name: location.name,
+        lat: location.lat.toString(),
+        lng: location.lng.toString(),
+        description: location.description || '',
+        colorIndex: location.colorIndex?.toString() || '0',
+        photoName: location.photoName || '',
+      }
+    });
+    // Close drawer on mobile
+    props.navigation.closeDrawer();
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <TripsSidebar
         selectedTripId={null}
         onTripSelect={handleTripSelect}
+        onLocationSelect={handleLocationSelect}
       />
     </View>
   );
@@ -64,6 +83,7 @@ function MockLayoutContent() {
         options={{
           title: 'Trip Detail',
           drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Hide header for nested stack
         }}
       />
       <Drawer.Screen
