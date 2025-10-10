@@ -814,6 +814,7 @@ export default function MapViewSimple({
   const [hoveredWaypointIndex, setHoveredWaypointIndex] = useState<number | null>(null); // Index of waypoint being hovered
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
   // Animation state
   const animationRef = useRef<{
@@ -1186,6 +1187,22 @@ export default function MapViewSimple({
 
     setCursorPosition({ x, y });
 
+    // Check if we should start dragging (moved more than threshold)
+    if (dragStartPos.current && !isDraggingRef.current) {
+      const dx = x - dragStartPos.current.x;
+      const dy = y - dragStartPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Start drag only if moved more than 10px (prevents accidental drags from taps)
+      if (distance > 10 && hoverWaypoint) {
+        isDraggingRef.current = true;
+        setHoverWaypoint({
+          ...hoverWaypoint,
+          isDragging: true,
+        });
+      }
+    }
+
     // If dragging, update waypoint position
     if (isDraggingRef.current && hoverWaypoint) {
       try {
@@ -1283,35 +1300,39 @@ export default function MapViewSimple({
     event.preventDefault();
     event.stopPropagation();
 
-    isDraggingRef.current = true;
-    setHoverWaypoint({
-      ...hoverWaypoint,
-      isDragging: true,
-    });
+    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // Record start position for drag threshold detection
+    dragStartPos.current = { x, y };
   }, [isEditMode, hoverWaypoint]);
 
   // Handle mouse up to finalize waypoint placement
   const handleMouseUp = useCallback(() => {
-    if (!isEditMode || !hoverWaypoint || !isDraggingRef.current) return;
+    // Only create waypoint if we actually dragged
+    if (isEditMode && hoverWaypoint && isDraggingRef.current) {
+      // Call callback to update the geo-mark with new waypoint
+      if (onRouteWaypointUpdate) {
+        onRouteWaypointUpdate(
+          hoverWaypoint.routeId,
+          {
+            lat: hoverWaypoint.lat,
+            lng: hoverWaypoint.lng,
+          },
+          hoverWaypoint.segmentIndex
+        );
+      }
 
-    isDraggingRef.current = false;
-
-    // Call callback to update the geo-mark with new waypoint
-    if (onRouteWaypointUpdate) {
-      onRouteWaypointUpdate(
-        hoverWaypoint.routeId,
-        {
-          lat: hoverWaypoint.lat,
-          lng: hoverWaypoint.lng,
-        },
-        hoverWaypoint.segmentIndex
-      );
+      setHoverWaypoint({
+        ...hoverWaypoint,
+        isDragging: false,
+      });
     }
 
-    setHoverWaypoint({
-      ...hoverWaypoint,
-      isDragging: false,
-    });
+    // Reset drag state
+    isDraggingRef.current = false;
+    dragStartPos.current = null;
   }, [isEditMode, hoverWaypoint, onRouteWaypointUpdate]);
 
   // Handle map click
@@ -1551,11 +1572,22 @@ export default function MapViewSimple({
         filled: true,
         lineWidthMinPixels: 3,
         getLineColor: [255, 255, 255, 255],
-        onClick: (info: any) => {
+        onClick: (info: any, event: any) => {
           if (info.object && onRouteWaypointRemove) {
             console.log('[MapViewSimple] Removing waypoint at index', info.object.waypointIndex, 'from route', info.object.routeId);
             onRouteWaypointRemove(info.object.routeId, info.object.waypointIndex);
+
+            // Clear hover state to prevent accidental waypoint creation
+            setHoverWaypoint(null);
+            setHoveredWaypointIndex(null);
+
+            // Stop propagation to prevent creating new waypoint
+            if (event && event.stopPropagation) {
+              event.stopPropagation();
+            }
+            return true; // Indicate event was handled
           }
+          return false;
         },
       }));
     }
