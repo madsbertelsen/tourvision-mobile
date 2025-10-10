@@ -3,9 +3,11 @@
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import DeckGL from '@deck.gl/react';
+import { MapboxOverlay } from '@deck.gl/mapbox';
+import type { MapboxOverlayProps } from '@deck.gl/mapbox';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import MapLibreMap from 'react-map-gl/maplibre';
+import MapLibreMap, { useControl } from 'react-map-gl/maplibre';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import HexGridOverlay from './hex-grid-overlay';
 
@@ -170,6 +172,33 @@ function findClosestPointOnRoute(
 // Easing function for smooth animations
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// DeckOverlay component using useControl hook for proper globe projection sync
+function DeckOverlay({
+  layers,
+  onClick,
+  getCursor,
+  interleaved = true,
+}: {
+  layers: any[];
+  onClick?: (info: any) => void;
+  getCursor?: (state: any) => string;
+  interleaved?: boolean;
+}) {
+  const overlay = useControl<MapboxOverlay>(
+    () => new MapboxOverlay({
+      interleaved,
+      layers,
+    })
+  );
+
+  // Update overlay props when layers or handlers change
+  React.useEffect(() => {
+    overlay.setProps({ layers, onClick, getCursor });
+  }, [overlay, layers, onClick, getCursor]);
+
+  return null;
 }
 
 interface MapViewSimpleProps {
