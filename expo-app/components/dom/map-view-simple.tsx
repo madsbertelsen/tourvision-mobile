@@ -827,6 +827,12 @@ export default function MapViewSimple({
 
   const deckRef = useRef<any>(null);
 
+  // Track current viewState in a ref so animateToLocation can access it without dependency
+  const viewStateRef = useRef(viewState);
+  useEffect(() => {
+    viewStateRef.current = viewState;
+  }, [viewState]);
+
   // Generate random location on Earth
   const getRandomLocation = () => {
     // Random latitude between -60 and 70 (avoiding extreme poles)
@@ -849,9 +855,9 @@ export default function MapViewSimple({
     const startTime = performance.now();
     // Use ref to get current viewState to avoid dependency
     const startState = {
-      longitude: viewState.longitude,
-      latitude: viewState.latitude,
-      zoom: viewState.zoom
+      longitude: viewStateRef.current.longitude,
+      latitude: viewStateRef.current.latitude,
+      zoom: viewStateRef.current.zoom
     };
     const duration = 2000; // 2 second animation
 
@@ -1030,8 +1036,13 @@ export default function MapViewSimple({
 
     if (focusedLocation) {
       // Save current view state before animating to focused location
-      console.log('Saving current view state before focusing:', viewState);
-      setSavedViewState({ ...viewState });
+      const currentView = viewStateRef.current;
+      console.log('Saving current view state before focusing:', currentView);
+      setSavedViewState({
+        longitude: currentView.longitude,
+        latitude: currentView.latitude,
+        zoom: currentView.zoom
+      });
 
       // Animate to the focused location with closer zoom (forward: pan then zoom)
       const targetState = {
@@ -1061,7 +1072,7 @@ export default function MapViewSimple({
         setMarkerTrail([]);
       }
     };
-  }, [focusedLocation, animateToLocation]);
+  }, [focusedLocation, animateToLocation, savedViewState]);
 
   // Update container dimensions for hex grid
   useEffect(() => {
@@ -1094,10 +1105,11 @@ export default function MapViewSimple({
 
     if (selectedLocationModal) {
       // Save current view state before zooming
+      const currentView = viewStateRef.current;
       setSavedViewState({
-        longitude: viewState.longitude,
-        latitude: viewState.latitude,
-        zoom: viewState.zoom,
+        longitude: currentView.longitude,
+        latitude: currentView.latitude,
+        zoom: currentView.zoom,
       });
 
       // Animate to the selected location with detail zoom level
@@ -1124,7 +1136,7 @@ export default function MapViewSimple({
         setMarkerTrail([]);
       }
     };
-  }, [selectedLocationModal, animateToLocation, savedViewState, viewState]);
+  }, [selectedLocationModal, animateToLocation, savedViewState]);
 
   // Track previous bounds to prevent redundant animations
   const prevBoundsRef = useRef<string | null>(null);
