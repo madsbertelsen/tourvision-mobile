@@ -206,13 +206,26 @@ function MapViewNative({
             id="routes"
             shape={routesGeoJSON}
           >
+            {/* Route outline for better visibility */}
+            <Mapbox.LineLayer
+              id="route-outline"
+              style={{
+                lineColor: '#000000',
+                lineWidth: 5,
+                lineCap: 'round',
+                lineJoin: 'round',
+                lineOpacity: 0.3,
+              }}
+            />
+            {/* Main route line */}
             <Mapbox.LineLayer
               id="route-lines"
               style={{
-                lineColor: ['get', 'color'],
+                lineColor: '#3B82F6', // Bright blue color
                 lineWidth: 3,
                 lineCap: 'round',
                 lineJoin: 'round',
+                lineDasharray: [2, 1], // Dashed line for better visibility
               }}
             />
           </Mapbox.ShapeSource>
