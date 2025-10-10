@@ -166,6 +166,17 @@ function MapViewNative({
           animationDuration={0}
         />
 
+        {/* Atmosphere to set white/light background for space */}
+        <Mapbox.Atmosphere
+          style={{
+            color: 'rgba(255, 255, 255, 1)',
+            highColor: 'rgba(255, 255, 255, 1)',
+            horizonBlend: 0.1,
+            spaceColor: 'rgba(255, 255, 255, 1)', // White space instead of black
+            starIntensity: 0, // No stars in white background
+          }}
+        />
+
         {/* Routes Layer */}
         {routeFeatures.length > 0 && (
           <Mapbox.ShapeSource
