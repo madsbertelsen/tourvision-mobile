@@ -42,19 +42,28 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: pre-wrap; /* Required by ProseMirror */
-
-  /* Comprehensive iOS/WebKit selection menu prevention */
-  -webkit-touch-callout: none !important; /* Disable callout menu */
-  -webkit-user-select: text !important; /* Allow text selection */
-  user-select: text !important; /* Standard property */
   -webkit-tap-highlight-color: transparent !important; /* Remove tap highlight */
   -webkit-text-size-adjust: 100% !important; /* Prevent text size adjustment */
 }
 
-/* Apply to all child elements for thorough coverage */
-.ProseMirror *,
-.ProseMirror *::before,
-.ProseMirror *::after {
+/* Selection menu prevention only in read mode */
+.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror {
+  -webkit-touch-callout: none !important; /* Disable callout menu in read mode */
+  -webkit-user-select: text !important; /* Allow text selection */
+  user-select: text !important; /* Standard property */
+}
+
+/* Allow normal selection behavior in edit mode */
+.prosemirror-editor-wrapper.edit-mode .ProseMirror {
+  -webkit-touch-callout: default !important; /* Allow callout menu in edit mode */
+  -webkit-user-select: auto !important; /* Normal selection behavior */
+  user-select: auto !important; /* Standard property */
+}
+
+/* Apply to all child elements for thorough coverage - only in read mode */
+.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *,
+.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *::before,
+.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *::after {
   -webkit-touch-callout: none !important;
   -webkit-tap-highlight-color: transparent !important;
 }

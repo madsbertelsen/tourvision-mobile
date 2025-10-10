@@ -765,9 +765,15 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   }, [editable, onNodeFocus]);
 
 
-  // Prevent native selection menu on iOS/WebKit
+  // Prevent native selection menu on iOS/WebKit - only in read mode
   useEffect(() => {
     if (!mount) return;
+
+    // Only apply selection menu prevention in read mode
+    // In edit mode, we need normal touch/selection behavior
+    if (editable) {
+      return; // Skip all prevention in edit mode
+    }
 
     // Prevent context menu (right-click and long-press)
     const handleContextMenu = (e: Event) => {
@@ -874,7 +880,7 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       document.removeEventListener('selectionchange', handleSelectionChange);
       observer.disconnect();
     };
-  }, [mount]);
+  }, [mount, editable]);
 
   return (
     <div className={`prosemirror-editor-wrapper ${editable ? 'edit-mode' : ''}`} style={{ height: '100%' }}>
