@@ -17,6 +17,7 @@ export interface RouteWithMetadata extends RouteDetails {
   fromId: string; // Origin location ID
   toId: string; // Destination location ID
   profile: 'walking' | 'driving' | 'cycling' | 'transit';
+  waypoints?: Array<{ lat: number; lng: number }>; // Custom waypoints for route
 }
 
 interface MockContextType {

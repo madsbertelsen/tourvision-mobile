@@ -1580,17 +1580,24 @@ export default function MapViewSimple({
     }));
   }
 
-  // Location markers - small black dots with elevation to prevent z-fighting
+  // Location markers - larger dots with stroke for visibility on globe
   layersArray.push(new ScatterplotLayer({
     id: 'location-markers',
     data: locations,
-    getPosition: (d: Location) => [d.lng, d.lat, 10], // Add elevation
-    getFillColor: [0, 0, 0, 255],
-    getRadius: 2,
+    getPosition: (d: Location) => [d.lng, d.lat],
+    getFillColor: (d: Location) => {
+      const index = locations.indexOf(d);
+      const colorIndex = d.colorIndex ?? index;
+      const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+      return hexToRgb(color, 1);
+    },
+    getRadius: 8,
     radiusUnits: 'pixels',
     pickable: false,
-    stroked: false,
+    stroked: true,
     filled: true,
+    lineWidthMinPixels: 2,
+    getLineColor: [255, 255, 255, 255],
   }));
 
   // Location labels - rendered with TextLayer for performance
@@ -1598,29 +1605,25 @@ export default function MapViewSimple({
     layersArray.push(new TextLayer({
       id: 'location-labels',
       data: locations,
-      getPosition: (d: Location) => [d.lng, d.lat, 20], // Add elevation above markers
+      getPosition: (d: Location) => [d.lng, d.lat],
       getText: (d: Location) => d.name.split(',')[0],
       getColor: [31, 41, 55, 255], // #1f2937
-      getSize: 12,
-      getPixelOffset: [20, 0], // 20px to the right of marker
-      getTextAnchor: 'start',
-      getAlignmentBaseline: 'center',
+      getSize: 14,
+      getPixelOffset: [0, -16], // Above marker
+      getTextAnchor: 'middle',
+      getAlignmentBaseline: 'bottom',
       background: true,
-      getBackgroundColor: (d: Location) => {
-        const index = locations.indexOf(d);
-        const colorIndex = d.colorIndex ?? index;
-        const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-        // Convert hex to RGB with 20% opacity for background
-        return hexToRgb(color, 0.2);
-      },
-      backgroundPadding: [4, 8], // vertical, horizontal padding
+      getBackgroundColor: [255, 255, 255, 230],
+      backgroundPadding: [2, 4],
       billboard: true, // Always face the camera on globe
       pickable: false,
       fontFamily: 'Arial, sans-serif',
       fontWeight: 600,
       characterSet: 'auto', // Automatically detect and load characters from the text
       fontSettings: {
-        sdf: false, // Disable SDF rendering which can cause issues with non-Latin chars
+        sdf: true, // Enable SDF for better rendering on globe
+        buffer: 4,
+        radius: 8,
       },
     }));
   }
