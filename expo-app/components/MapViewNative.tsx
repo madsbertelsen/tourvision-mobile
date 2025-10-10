@@ -200,7 +200,7 @@ function MapViewNative({
           }}
         />
 
-        {/* Routes Layer */}
+        {/* Routes Layer - rendered first so it appears below markers */}
         {routeFeatures.length > 0 && (
           <Mapbox.ShapeSource
             id="routes"
@@ -231,7 +231,7 @@ function MapViewNative({
           </Mapbox.ShapeSource>
         )}
 
-        {/* Location Markers */}
+        {/* Location Markers - rendered after routes so they appear on top */}
         {locations.length > 0 && (
           <Mapbox.ShapeSource
             id="locations"
