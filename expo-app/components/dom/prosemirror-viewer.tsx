@@ -277,11 +277,42 @@ declare global {
   }
 }
 
-// Polyfill/stub webkit if it doesn't exist to prevent errors
-if (typeof window !== 'undefined' && !window.webkit) {
-  (window as any).webkit = {
-    messageHandlers: {}
-  };
+// Polyfill/stub webkit and ReactNativeWebView if they don't exist to prevent errors
+if (typeof window !== 'undefined') {
+  if (!window.webkit) {
+    (window as any).webkit = {
+      messageHandlers: {
+        ReactNativeWebView: {
+          postMessage: (message: string) => {
+            console.log('[ProseMirror] Stubbed webkit postMessage:', message);
+          }
+        }
+      }
+    };
+  } else if (!window.webkit.messageHandlers) {
+    (window.webkit as any).messageHandlers = {
+      ReactNativeWebView: {
+        postMessage: (message: string) => {
+          console.log('[ProseMirror] Stubbed webkit postMessage:', message);
+        }
+      }
+    };
+  } else if (!window.webkit.messageHandlers.ReactNativeWebView) {
+    (window.webkit.messageHandlers as any).ReactNativeWebView = {
+      postMessage: (message: string) => {
+        console.log('[ProseMirror] Stubbed webkit postMessage:', message);
+      }
+    };
+  }
+
+  // Also stub window.ReactNativeWebView if needed
+  if (!window.ReactNativeWebView) {
+    (window as any).ReactNativeWebView = {
+      postMessage: (message: string) => {
+        console.log('[ProseMirror] Stubbed ReactNativeWebView postMessage:', message);
+      }
+    };
+  }
 }
 
 const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProps>((
