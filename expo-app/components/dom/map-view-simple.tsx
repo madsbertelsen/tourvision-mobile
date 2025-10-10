@@ -3,9 +3,9 @@
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import DeckGL from '@deck.gl/react';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import MapGL from 'react-map-gl/mapbox';
+import MapLibreMap from 'react-map-gl/maplibre';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import HexGridOverlay from './hex-grid-overlay';
 
@@ -1721,11 +1721,12 @@ export default function MapViewSimple({
             return hoverWaypoint.isDragging ? 'grabbing' : 'grab';
           }
           return isDragging ? 'grabbing' : 'grab';
+          
         }}
       >
-        <MapGL
-          mapboxAccessToken={mapboxToken}
-          mapStyle={selectedLocationModal ? "mapbox://styles/mapbox/standard" : "mapbox://styles/mapbox/light-v11"}
+        <MapLibreMap
+          mapStyle="https://demotiles.maplibre.org/style.json"
+          projection={{ type: 'globe' }}
         />
       </DeckGL>
 

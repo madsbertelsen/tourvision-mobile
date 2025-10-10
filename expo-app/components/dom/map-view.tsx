@@ -1,10 +1,10 @@
 'use dom';
 
-import 'mapbox-gl/dist/mapbox-gl.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, PathLayer, TextLayer, IconLayer } from '@deck.gl/layers';
-import MapGL from 'react-map-gl/mapbox';
+import MapLibreMap from 'react-map-gl/maplibre';
 
 interface Location {
   id: string;
@@ -313,9 +313,9 @@ export default function MapView({
         onClick={handleClick}
         getCursor={({ isHovering }: any) => isHovering ? 'pointer' : 'grab'}
       >
-        <MapGL
-          mapboxAccessToken={mapboxToken}
-          mapStyle="mapbox://styles/mapbox/light-v11"
+        <MapLibreMap
+          mapStyle="https://demotiles.maplibre.org/style.json"
+          projection={{ type: 'globe' }}
           onLoad={() => setMapLoaded(true)}
         />
       </DeckGL>
