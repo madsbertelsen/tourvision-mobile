@@ -111,9 +111,32 @@ function MapViewNative({
 
   // Convert routes to GeoJSON LineStrings
   const routeFeatures = routes
-    .filter(route => route.geometry && Array.isArray(route.geometry) && route.geometry.length > 0)
+    .filter(route => {
+      // Check if route has geometry in GeoJSON format or as array
+      if (route.geometry) {
+        if (route.geometry.type === 'LineString' && route.geometry.coordinates) {
+          return route.geometry.coordinates.length > 0;
+        }
+        if (Array.isArray(route.geometry)) {
+          return route.geometry.length > 0;
+        }
+      }
+      return false;
+    })
     .map((route) => {
-      const coordinates = route.geometry.map(point => [point[0], point[1]]);
+      let coordinates: number[][];
+
+      // Handle both GeoJSON format and plain array format
+      if (route.geometry.type === 'LineString' && route.geometry.coordinates) {
+        // GeoJSON format from API
+        coordinates = route.geometry.coordinates;
+      } else if (Array.isArray(route.geometry)) {
+        // Plain array format (legacy)
+        coordinates = route.geometry.map(point => [point[0], point[1]]);
+      } else {
+        coordinates = [];
+      }
+
       return {
         type: 'Feature' as const,
         id: route.id,
