@@ -1520,8 +1520,7 @@ export default function MapViewSimple({
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
         getRadius: 20,
-        radiusMinPixels: 20,
-        radiusMaxPixels: 20,
+        radiusUnits: 'pixels',
         pickable: false,
         stroked: false,
         filled: true,
@@ -1546,19 +1545,12 @@ export default function MapViewSimple({
           }
           return 18; // Base size (36px diameter for touch)
         },
-        radiusMinPixels: 18,
-        radiusMaxPixels: 24,
+        radiusUnits: 'pixels',
         pickable: true,
         stroked: true,
         filled: true,
         lineWidthMinPixels: 3,
-        getLineColor: (d: any) => {
-          // Thicker white border on hover
-          if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
-            return [255, 255, 255, 255];
-          }
-          return [255, 255, 255, 255];
-        },
+        getLineColor: [255, 255, 255, 255],
         onClick: (info: any) => {
           if (info.object && onRouteWaypointRemove) {
             console.log('[MapViewSimple] Removing waypoint at index', info.object.waypointIndex, 'from route', info.object.routeId);
@@ -1578,8 +1570,7 @@ export default function MapViewSimple({
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
         getRadius: 24,
-        radiusMinPixels: 24,
-        radiusMaxPixels: 24,
+        radiusUnits: 'pixels',
         pickable: false,
         stroked: false,
         filled: true,
@@ -1592,8 +1583,7 @@ export default function MapViewSimple({
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: hoverWaypoint.isDragging ? [59, 130, 246, 255] : [255, 255, 255, 255], // Blue when dragging, white otherwise
         getRadius: 22,
-        radiusMinPixels: 22,
-        radiusMaxPixels: 22,
+        radiusUnits: 'pixels',
         pickable: true,
         stroked: true,
         filled: true,
