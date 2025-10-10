@@ -41,6 +41,7 @@
   box-sizing: border-box;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  white-space: pre-wrap; /* Required by ProseMirror */
 
   /* Comprehensive iOS/WebKit selection menu prevention */
   -webkit-touch-callout: none !important; /* Disable callout menu */

@@ -271,7 +271,17 @@ declare global {
     ReactNativeWebView?: {
       postMessage: (message: string) => void;
     };
+    webkit?: {
+      messageHandlers?: any;
+    };
   }
+}
+
+// Polyfill/stub webkit if it doesn't exist to prevent errors
+if (typeof window !== 'undefined' && !window.webkit) {
+  (window as any).webkit = {
+    messageHandlers: {}
+  };
 }
 
 const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProps>((
