@@ -91,6 +91,12 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       (e) => {
         console.log('[TripDetailView] Keyboard height:', e.endCoordinates.height);
         setKeyboardHeight(e.endCoordinates.height);
+
+        // Expand bottom sheet to 90% when keyboard appears
+        if (bottomSheetRef.current) {
+          console.log('[TripDetailView] Expanding sheet to 90% due to keyboard');
+          bottomSheetRef.current.snapToIndex(2); // Index 2 = '90%'
+        }
       }
     );
 
@@ -98,6 +104,12 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => {
         setKeyboardHeight(0);
+
+        // Return to 50% when keyboard disappears
+        if (bottomSheetRef.current) {
+          console.log('[TripDetailView] Restoring sheet to 50% after keyboard hide');
+          bottomSheetRef.current.snapToIndex(1); // Index 1 = '50%'
+        }
       }
     );
 
