@@ -65,7 +65,7 @@ Description: "${description}"
 
           {/* Single Line Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Single Line Input</Text>
+            <Text style={styles.label}>Single Line Input (No Accessory)</Text>
             <TextInput
               style={styles.input}
               value={singleLine}
@@ -75,6 +75,7 @@ Description: "${description}"
               returnKeyType="done"
               autoCorrect={true}
               autoCapitalize="sentences"
+              inputAccessoryViewID="none"
             />
             <Text style={styles.hint}>Length: {singleLine.length} characters</Text>
           </View>
@@ -147,6 +148,21 @@ Description: "${description}"
             <Text style={styles.hint}>
               Characters: {description.length} | Words: {description.split(/\s+/).filter(w => w.length > 0).length}
             </Text>
+          </View>
+
+          {/* Special Input with Numeric Keyboard (for comparison) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Numeric Input (No Accessory Bar)</Text>
+            <TextInput
+              style={styles.input}
+              value={singleLine}
+              onChangeText={setSingleLine}
+              placeholder="This uses numeric keyboard..."
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              returnKeyType="done"
+            />
+            <Text style={styles.hint}>Note: Numeric keyboards typically don't show accessory view</Text>
           </View>
 
           {/* Action Buttons */}

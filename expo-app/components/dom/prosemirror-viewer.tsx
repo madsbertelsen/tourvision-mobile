@@ -337,33 +337,81 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Hide iOS keyboard accessory view on mount
   useEffect(() => {
-    // Add meta tag to disable input accessory view
-    const meta = document.createElement('meta');
-    meta.name = 'viewport';
-    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    document.head.appendChild(meta);
-
-    // Additional attempt to hide accessory view via input mode
+    // Only run these modifications if in WebView context
     if (typeof window !== 'undefined' && window.webkit) {
-      // Inject CSS to hide accessory view
+      // Inject comprehensive CSS to hide keyboard accessory
       const style = document.createElement('style');
       style.textContent = `
+        /* Hide all input accessories */
         input::-webkit-inner-spin-button,
         input::-webkit-outer-spin-button,
         input::-webkit-clear-button,
         input::-webkit-calendar-picker-indicator {
-          display: none;
-          -webkit-appearance: none;
+          display: none !important;
+          -webkit-appearance: none !important;
         }
 
-        [contenteditable] {
+        /* Configure contenteditable for minimal keyboard UI */
+        [contenteditable],
+        .ProseMirror {
           -webkit-user-modify: read-write-plaintext-only !important;
+          -webkit-user-select: text !important;
+          user-select: text !important;
+          outline: none !important;
+        }
+
+        /* Additional iOS-specific styles */
+        .ProseMirror:focus {
+          outline: none !important;
         }
       `;
       document.head.appendChild(style);
 
+      // Inject JavaScript to configure contenteditable elements
+      const configScript = document.createElement('script');
+      configScript.textContent = `
+        (function() {
+          // Override default contenteditable behavior
+          document.addEventListener('focusin', function(e) {
+            if (e.target.contentEditable === 'true' || e.target.classList.contains('ProseMirror')) {
+              // Set attributes to minimize keyboard UI (but keep keyboard visible)
+              e.target.setAttribute('autocorrect', 'off');
+              e.target.setAttribute('autocapitalize', 'off');
+              e.target.setAttribute('spellcheck', 'false');
+              e.target.setAttribute('autocomplete', 'off');
+
+              // Prevent default accessory view behavior
+              e.target.setAttribute('inputAccessoryViewID', '');
+            }
+          }, true);
+
+          // Handle keyboard appearance
+          document.addEventListener('touchstart', function(e) {
+            // Check if touching contenteditable
+            const target = e.target;
+            if (target.contentEditable === 'true' || target.closest('[contenteditable="true"]')) {
+              // Signal to native that we want minimal keyboard
+              if (window.webkit && window.webkit.messageHandlers) {
+                try {
+                  window.webkit.messageHandlers.ReactNativeWebView.postMessage(
+                    JSON.stringify({
+                      type: 'keyboard-config',
+                      hideAccessory: true
+                    })
+                  );
+                } catch(err) {
+                  console.log('[Keyboard] Could not send message to native');
+                }
+              }
+            }
+          }, { passive: true });
+        })();
+      `;
+      document.head.appendChild(configScript);
+
       return () => {
         style.remove();
+        configScript.remove();
       };
     }
   }, []);
