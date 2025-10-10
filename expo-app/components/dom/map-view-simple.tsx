@@ -1350,56 +1350,65 @@ export default function MapViewSimple({
   }, [animateToLocation, isEditMode, hoverWaypoint]);
 
   // Build active itinerary considering selected alternatives
-  const activeItinerary: Location[] = [];
-  const processedIndices = new Set<number>();
+  const activeItinerary = React.useMemo(() => {
+    const itinerary: Location[] = [];
+    const processedIndices = new Set<number>();
 
-  locations.forEach((location, index) => {
-    if (processedIndices.has(index)) return;
+    locations.forEach((location, index) => {
+      if (processedIndices.has(index)) return;
 
-    // Add current location to itinerary
-    activeItinerary.push(location);
-    processedIndices.add(index);
+      // Add current location to itinerary
+      itinerary.push(location);
+      processedIndices.add(index);
 
-    // Check if there are alternatives from this location
-    const routesFromHere = routes.filter(r => r.fromId === location.id);
-    const alternativeLocationIds = routesFromHere.map(r => r.toId);
+      // Check if there are alternatives from this location
+      const routesFromHere = routes.filter(r => r.fromId === location.id);
+      const alternativeLocationIds = routesFromHere.map(r => r.toId);
 
-    // Find which of the next locations are alternatives
-    const alternatives: Array<{ location: Location; index: number }> = [];
-    for (let i = index + 1; i < locations.length; i++) {
-      if (processedIndices.has(i)) continue;
-      const loc = locations[i];
-      if (alternativeLocationIds.includes(loc.id)) {
-        alternatives.push({ location: loc, index: i });
+      // Find which of the next locations are alternatives
+      const alternatives: Array<{ location: Location; index: number }> = [];
+      for (let i = index + 1; i < locations.length; i++) {
+        if (processedIndices.has(i)) continue;
+        const loc = locations[i];
+        if (alternativeLocationIds.includes(loc.id)) {
+          alternatives.push({ location: loc, index: i });
+        }
       }
-    }
 
-    // If there are alternatives, get the selected one
-    if (alternatives.length > 0) {
-      const groupId = `alt-${location.id}`;
-      const selectedAltId = selectedAlternatives.get(groupId) || alternatives[0].location.id;
-      const selectedAlt = alternatives.find(a => a.location.id === selectedAltId) || alternatives[0];
+      // If there are alternatives, get the selected one
+      if (alternatives.length > 0) {
+        const groupId = `alt-${location.id}`;
+        const selectedAltId = selectedAlternatives.get(groupId) || alternatives[0].location.id;
+        const selectedAlt = alternatives.find(a => a.location.id === selectedAltId) || alternatives[0];
 
-      // Add selected alternative to itinerary
-      activeItinerary.push(selectedAlt.location);
-      // Mark all alternatives as processed
-      alternatives.forEach(alt => processedIndices.add(alt.index));
-    }
-  });
+        // Add selected alternative to itinerary
+        itinerary.push(selectedAlt.location);
+        // Mark all alternatives as processed
+        alternatives.forEach(alt => processedIndices.add(alt.index));
+      }
+    });
+
+    return itinerary;
+  }, [locations, routes, selectedAlternatives]);
 
   // Build set of active route pairs from the computed itinerary
-  const activeRoutePairs = new Set<string>();
-  for (let i = 0; i < activeItinerary.length - 1; i++) {
-    const fromLoc = activeItinerary[i];
-    const toLoc = activeItinerary[i + 1];
-    activeRoutePairs.add(`${fromLoc.id}-${toLoc.id}`);
-  }
+  const activeRoutePairs = React.useMemo(() => {
+    const pairs = new Set<string>();
+    for (let i = 0; i < activeItinerary.length - 1; i++) {
+      const fromLoc = activeItinerary[i];
+      const toLoc = activeItinerary[i + 1];
+      pairs.add(`${fromLoc.id}-${toLoc.id}`);
+    }
+    return pairs;
+  }, [activeItinerary]);
 
   // Filter routes to only show those in active itinerary
-  const activeRoutes = routes.filter((route) => {
-    const pairKey = `${route.fromId}-${route.toId}`;
-    return activeRoutePairs.has(pairKey);
-  });
+  const activeRoutes = React.useMemo(() => {
+    return routes.filter((route) => {
+      const pairKey = `${route.fromId}-${route.toId}`;
+      return activeRoutePairs.has(pairKey);
+    });
+  }, [routes, activeRoutePairs]);
 
   // Create deck.gl layers - use useMemo to prevent layer reuse errors
   const layers = React.useMemo(() => {
@@ -1635,8 +1644,6 @@ export default function MapViewSimple({
     hoveredWaypointIndex,
     selectedRoute,
     onRouteWaypointRemove,
-    setHoverWaypoint,
-    setHoveredWaypointIndex,
   ]);
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
