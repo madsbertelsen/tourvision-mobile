@@ -1,12 +1,12 @@
 'use dom';
 
 import type { RouteWithMetadata } from '@/contexts/MockContext';
-import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import MapLibreMap, { useControl } from 'react-map-gl/maplibre';
-import type { MapRef } from 'react-map-gl/maplibre';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import MapLibreMap, { useControl, Source, Layer } from 'react-map-gl/maplibre';
+import type { MapRef, CircleLayer, SymbolLayer } from 'react-map-gl/maplibre';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import HexGridOverlay from './hex-grid-overlay';
 
@@ -840,6 +840,42 @@ export default function MapViewSimple({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
 
+  // Create GeoJSON for location markers
+  const locationsGeoJSON = useMemo(() => {
+    if (!locations.length) {
+      return {
+        type: 'FeatureCollection' as const,
+        features: [],
+      };
+    }
+
+    const geoJSON = {
+      type: 'FeatureCollection' as const,
+      features: locations.map((location, index) => {
+        const colorIndex = location.colorIndex ?? index;
+        const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
+
+        return {
+          type: 'Feature' as const,
+          id: location.id,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: [location.lng, location.lat],
+          },
+          properties: {
+            id: location.id,
+            name: location.name.split(',')[0], // First part only
+            color,
+            colorIndex,
+          },
+        };
+      }),
+    };
+
+    console.log('[MapViewSimple] Created GeoJSON with', geoJSON.features.length, 'features:', geoJSON);
+    return geoJSON;
+  }, [locations]);
+
   // Waypoint editing state
   const [hoverWaypoint, setHoverWaypoint] = useState<{
     routeId: string;
@@ -1125,6 +1161,7 @@ export default function MapViewSimple({
     window.addEventListener('resize', updateDimensions);
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
+
 
   // Track previous selectedLocationModal to detect changes
   const prevSelectedLocationModalRef = useRef<Location | null>(null);
@@ -1580,53 +1617,8 @@ export default function MapViewSimple({
     }));
   }
 
-  // Location markers - larger dots with stroke for visibility on globe
-  layersArray.push(new ScatterplotLayer({
-    id: 'location-markers',
-    data: locations,
-    getPosition: (d: Location) => [d.lng, d.lat],
-    getFillColor: (d: Location) => {
-      const index = locations.indexOf(d);
-      const colorIndex = d.colorIndex ?? index;
-      const color = MARKER_COLORS[colorIndex % MARKER_COLORS.length];
-      return hexToRgb(color, 1);
-    },
-    getRadius: 8,
-    radiusUnits: 'pixels',
-    pickable: false,
-    stroked: true,
-    filled: true,
-    lineWidthMinPixels: 2,
-    getLineColor: [255, 255, 255, 255],
-  }));
-
-  // Location labels - rendered with TextLayer for performance
-  if (!selectedLocationModal) {
-    layersArray.push(new TextLayer({
-      id: 'location-labels',
-      data: locations,
-      getPosition: (d: Location) => [d.lng, d.lat],
-      getText: (d: Location) => d.name.split(',')[0],
-      getColor: [31, 41, 55, 255], // #1f2937
-      getSize: 14,
-      getPixelOffset: [0, -16], // Above marker
-      getTextAnchor: 'middle',
-      getAlignmentBaseline: 'bottom',
-      background: true,
-      getBackgroundColor: [255, 255, 255, 230],
-      backgroundPadding: [2, 4],
-      billboard: true, // Always face the camera on globe
-      pickable: false,
-      fontFamily: 'Arial, sans-serif',
-      fontWeight: 600,
-      characterSet: 'auto', // Automatically detect and load characters from the text
-      fontSettings: {
-        sdf: true, // Enable SDF for better rendering on globe
-        buffer: 4,
-        radius: 8,
-      },
-    }));
-  }
+  // NOTE: Location markers and labels are now rendered using MapLibre native layers (see MapLibreMap component)
+  // This avoids z-fighting and rendering issues with globe projection
 
   // Existing waypoints visualization (edit mode only, when hovering near route)
   if (isEditMode && hoverWaypoint) {
@@ -1783,6 +1775,45 @@ export default function MapViewSimple({
           'grab'
         }
       >
+        {/* MapLibre native location markers and labels - render BEFORE DeckOverlay */}
+        {!selectedLocationModal && locations.length > 0 && (
+          <Source
+            id="location-markers"
+            type="geojson"
+            data={locationsGeoJSON}
+          >
+            {/* Circle markers */}
+            <Layer
+              id="location-circles"
+              type="circle"
+              paint={{
+                'circle-radius': 8,
+                'circle-color': ['get', 'color'],
+                'circle-stroke-color': '#ffffff',
+                'circle-stroke-width': 2,
+              }}
+            />
+
+            {/* Labels */}
+            <Layer
+              id="location-labels"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-size': 14,
+                'text-anchor': 'top',
+                'text-offset': [0, 1],
+              }}
+              paint={{
+                'text-color': '#1f2937',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 2,
+                'text-halo-blur': 1,
+              }}
+            />
+          </Source>
+        )}
+
         <DeckOverlay
           layers={layersArray}
           onClick={handleMapClick}
