@@ -1580,11 +1580,11 @@ export default function MapViewSimple({
     }));
   }
 
-  // Location markers - small black dots
+  // Location markers - small black dots with elevation to prevent z-fighting
   layersArray.push(new ScatterplotLayer({
     id: 'location-markers',
     data: locations,
-    getPosition: (d: Location) => [d.lng, d.lat],
+    getPosition: (d: Location) => [d.lng, d.lat, 10], // Add elevation
     getFillColor: [0, 0, 0, 255],
     getRadius: 2,
     radiusUnits: 'pixels',
@@ -1598,7 +1598,7 @@ export default function MapViewSimple({
     layersArray.push(new TextLayer({
       id: 'location-labels',
       data: locations,
-      getPosition: (d: Location) => [d.lng, d.lat],
+      getPosition: (d: Location) => [d.lng, d.lat, 20], // Add elevation above markers
       getText: (d: Location) => d.name.split(',')[0],
       getColor: [31, 41, 55, 255], // #1f2937
       getSize: 12,
@@ -1614,7 +1614,7 @@ export default function MapViewSimple({
         return hexToRgb(color, 0.2);
       },
       backgroundPadding: [4, 8], // vertical, horizontal padding
-      billboard: false,
+      billboard: true, // Always face the camera on globe
       pickable: false,
       fontFamily: 'Arial, sans-serif',
       fontWeight: 600,
