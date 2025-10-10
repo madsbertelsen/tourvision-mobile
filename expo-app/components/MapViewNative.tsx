@@ -147,9 +147,9 @@ function MapViewNative({
     <View style={[containerStyle, { backgroundColor: '#ffffff' }]}>
       <Mapbox.MapView
         ref={mapRef}
-        style={[styles.map, { backgroundColor: '#ffffff' }]}
+        style={[styles.map, { backgroundColor: '#f0f0f0' }]}
         onDidFinishLoadingMap={() => setMapLoaded(true)}
-        styleURL="https://demotiles.maplibre.org/style.json"
+        styleURL={Mapbox.StyleURL.Light}
         logoEnabled={false}
         compassEnabled={true}
         rotateEnabled={true}
