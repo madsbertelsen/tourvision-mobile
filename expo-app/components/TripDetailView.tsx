@@ -1035,6 +1035,9 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         enableDynamicSizing={false}
         enablePanDownToClose={false}
         handleComponent={renderHandle}
+        keyboardBehavior="extend"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         onChange={(index) => {
           if (mapDimensions && index >= 0 && index < snapPoints.length) {
             const snapPoint = snapPoints[index];
