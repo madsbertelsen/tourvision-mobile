@@ -622,6 +622,93 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [geoMarkDataToCreate, createGeoMarkWithData]);
 
+  // Handle messages from native iOS menu
+  useEffect(() => {
+    const handleNativeMenuMessage = (event: MessageEvent) => {
+      // Check if the message is from our native menu
+      if (event.data && event.data.source === 'nativeMenu') {
+        console.log('[ProseMirror] Received native menu message:', event.data);
+
+        const { action, data } = event.data;
+
+        switch (action) {
+          case 'createLocation':
+            // Handle creating a location/geo-mark from selected text
+            if (data.selectedText) {
+              console.log('[ProseMirror] Creating location from native menu:', data.selectedText);
+
+              // If we have a selection, use it
+              if (state.selection && !state.selection.empty) {
+                setPendingSelection({
+                  from: state.selection.from,
+                  to: state.selection.to
+                });
+
+                // Count existing geo-marks for color assignment
+                let geoMarkCount = 0;
+                const existingLocations: Array<{ geoId: string; placeName: string }> = [];
+
+                state.doc.descendants((node) => {
+                  if (node.type.name === 'geoMark') {
+                    geoMarkCount++;
+                    if (node.attrs.geoId && node.attrs.placeName) {
+                      existingLocations.push({
+                        geoId: node.attrs.geoId,
+                        placeName: node.attrs.placeName,
+                      });
+                    }
+                  }
+                });
+
+                const nextColorIndex = geoMarkCount % 10;
+
+                // Show the geo-mark editor with the selected text
+                if (onShowGeoMarkEditor) {
+                  onShowGeoMarkEditor({
+                    placeName: data.selectedText,
+                    colorIndex: nextColorIndex,
+                  }, existingLocations);
+                }
+              }
+            }
+            break;
+
+          case 'addNote':
+            // Handle adding a note to selected text
+            if (data.selectedText && state.selection && !state.selection.empty) {
+              console.log('[ProseMirror] Adding note from native menu:', data.selectedText);
+
+              // Create a transaction to add a comment/note mark
+              const tr = state.tr;
+              const { from, to } = state.selection;
+
+              // You can customize this to add a different type of annotation
+              // For now, we'll wrap it in emphasis as an example
+              const emphasisMark = schema.marks.em;
+              if (emphasisMark) {
+                tr.addMark(from, to, emphasisMark.create());
+                dispatchTransaction(tr);
+              }
+
+              // Alternatively, you could show a note editor dialog
+              // or create a different kind of annotation
+            }
+            break;
+
+          default:
+            console.log('[ProseMirror] Unknown native menu action:', action);
+        }
+      }
+    };
+
+    // Listen for messages from the native layer
+    window.addEventListener('message', handleNativeMenuMessage);
+
+    return () => {
+      window.removeEventListener('message', handleNativeMenuMessage);
+    };
+  }, [state, onShowGeoMarkEditor, dispatchTransaction]);
+
   // Expose methods via ref
   // Handle commands from React Native toolbar
   const sendCommand = useCallback((command: string, params?: any) => {
