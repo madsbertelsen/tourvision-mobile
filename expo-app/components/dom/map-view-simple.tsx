@@ -1401,18 +1401,19 @@ export default function MapViewSimple({
     return activeRoutePairs.has(pairKey);
   });
 
-  // Create deck.gl layers
-  const layers: any[] = [];
+  // Create deck.gl layers - use useMemo to prevent layer reuse errors
+  const layers = React.useMemo(() => {
+    const layersArray: any[] = [];
 
-  // Route layers
-  activeRoutes.forEach((route) => {
+    // Route layers
+    activeRoutes.forEach((route) => {
     if (!route.geometry || !route.geometry.coordinates) return;
 
     const routeStyle = getRouteStyle(route.profile);
     const isSelected = selectedRoute === route.id;
     const color = hexToRgb(routeStyle.color, isSelected ? 1 : 0.7);
 
-    layers.push(new PathLayer({
+    layersArray.push(new PathLayer({
       id: `route-${route.id}`,
       data: [{ path: route.geometry.coordinates }],
       getPath: (d: any) => d.path,
@@ -1428,7 +1429,7 @@ export default function MapViewSimple({
 
   // Marker trail layer
   if (markerTrail.length > 1) {
-    layers.push(new PathLayer({
+    layersArray.push(new PathLayer({
       id: 'marker-trail',
       data: [{ path: markerTrail }],
       getPath: (d: any) => d.path,
@@ -1443,7 +1444,7 @@ export default function MapViewSimple({
 
   // Flying marker shadow
   if (flyingMarker && flyingMarker.visible) {
-    layers.push(new ScatterplotLayer({
+    layersArray.push(new ScatterplotLayer({
       id: 'marker-shadow',
       data: [flyingMarker],
       getPosition: (d: any) => [d.longitude, d.latitude],
@@ -1458,7 +1459,7 @@ export default function MapViewSimple({
 
   // Flying marker
   if (flyingMarker && flyingMarker.visible) {
-    layers.push(new ScatterplotLayer({
+    layersArray.push(new ScatterplotLayer({
       id: 'flying-marker',
       data: [flyingMarker],
       getPosition: (d: any) => [d.longitude, d.latitude],
@@ -1474,7 +1475,7 @@ export default function MapViewSimple({
   }
 
   // Location markers - small black dots
-  layers.push(new ScatterplotLayer({
+  layersArray.push(new ScatterplotLayer({
     id: 'location-markers',
     data: locations,
     getPosition: (d: Location) => [d.lng, d.lat],
@@ -1488,7 +1489,7 @@ export default function MapViewSimple({
 
   // Location labels - rendered with TextLayer for performance
   if (!selectedLocationModal) {
-    layers.push(new TextLayer({
+    layersArray.push(new TextLayer({
       id: 'location-labels',
       data: locations,
       getPosition: (d: Location) => [d.lng, d.lat],
@@ -1532,7 +1533,7 @@ export default function MapViewSimple({
       }));
 
       // Shadow for existing waypoints
-      layers.push(new ScatterplotLayer({
+      layersArray.push(new ScatterplotLayer({
         id: 'existing-waypoints-shadow',
         data: waypointsWithIndex,
         getPosition: (d: any) => [d.lng, d.lat],
@@ -1545,7 +1546,7 @@ export default function MapViewSimple({
       }));
 
       // Existing waypoints circles
-      layers.push(new ScatterplotLayer({
+      layersArray.push(new ScatterplotLayer({
         id: 'existing-waypoints',
         data: waypointsWithIndex,
         getPosition: (d: any) => [d.lng, d.lat],
@@ -1593,7 +1594,7 @@ export default function MapViewSimple({
     // Only show if not near an existing waypoint (unless we're dragging)
     if (!hoverWaypoint.isNearExistingWaypoint || hoverWaypoint.isDragging) {
       // Shadow
-      layers.push(new ScatterplotLayer({
+      layersArray.push(new ScatterplotLayer({
         id: 'waypoint-shadow',
         data: [hoverWaypoint],
         getPosition: (d: any) => [d.lng, d.lat],
@@ -1606,7 +1607,7 @@ export default function MapViewSimple({
       }));
 
       // Main waypoint circle
-      layers.push(new ScatterplotLayer({
+      layersArray.push(new ScatterplotLayer({
         id: 'waypoint-circle',
         data: [hoverWaypoint],
         getPosition: (d: any) => [d.lng, d.lat],
@@ -1621,6 +1622,22 @@ export default function MapViewSimple({
       }));
     }
   }
+
+    return layersArray;
+  }, [
+    activeRoutes,
+    markerTrail,
+    flyingMarker,
+    locations,
+    selectedLocationModal,
+    isEditMode,
+    hoverWaypoint,
+    hoveredWaypointIndex,
+    selectedRoute,
+    onRouteWaypointRemove,
+    setHoverWaypoint,
+    setHoveredWaypointIndex,
+  ]);
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
