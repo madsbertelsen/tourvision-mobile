@@ -1448,9 +1448,10 @@ export default function MapViewSimple({
     });
   }, [routes, activeRoutePairs]);
 
-  // Create deck.gl layers - use useMemo to prevent layer reuse errors
-  const layers = React.useMemo(() => {
-    const layersArray: any[] = [];
+  // Create deck.gl layers - must create NEW instances on every render
+  // Note: Don't memoize this! deck.gl requires fresh layer instances each render.
+  // deck.gl is optimized to efficiently compare layers and only update when needed.
+  const layersArray: any[] = [];
 
     // Route layers
     activeRoutes.forEach((route) => {
@@ -1670,20 +1671,6 @@ export default function MapViewSimple({
     }
   }
 
-    return layersArray;
-  }, [
-    activeRoutes,
-    markerTrail,
-    flyingMarker,
-    locations,
-    selectedLocationModal,
-    isEditMode,
-    hoverWaypoint,
-    hoveredWaypointIndex,
-    selectedRoute,
-    onRouteWaypointRemove,
-  ]);
-
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
   // Debug: Check if token is available
@@ -1710,7 +1697,7 @@ export default function MapViewSimple({
         viewState={viewState}
         onViewStateChange={({ viewState }: any) => setViewState(viewState)}
         controller={!isDraggingRef.current} // Disable controller when dragging waypoint
-        layers={layers}
+        layers={layersArray}
         onClick={handleMapClick}
         getCursor={({ isDragging }: any) => {
           // Show pointer when hovering over existing waypoint (for deletion)
