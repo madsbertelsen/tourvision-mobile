@@ -1,10 +1,11 @@
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { useMockContext } from '@/contexts/MockContext';
 import React from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 
-// Import DOM component - works on all platforms with expo-dom
+// Import both native and DOM components
 const MapViewSimpleDOM = React.lazy(() => import('./dom/map-view-simple'));
+const MapViewNative = React.lazy(() => import('./MapViewNative'));
 
 interface MapViewSimpleWrapperProps {
   locations?: Location[];
@@ -102,6 +103,10 @@ export function MapViewSimpleWrapper({
 
   console.log('[MapViewSimpleWrapper] Height prop:', height);
   console.log('[MapViewSimpleWrapper] DOM style:', domStyle);
+  console.log('[MapViewSimpleWrapper] Platform:', Platform.OS);
+
+  // Use native map on iOS/Android, DOM component on web
+  const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
 
   return (
     <View style={containerStyle}>
@@ -110,23 +115,39 @@ export function MapViewSimpleWrapper({
           {/* Map loading silently */}
         </View>
       }>
-        <MapViewSimpleDOM
-          locations={locations}
-          center={mapCenter}
-          zoom={mapZoom}
-          focusedLocation={focusedLocation}
-          followMode={followMode}
-          routes={visibleRoutes}
-          selectedRoute={selectedRoute}
-          showItinerary={showItinerary}
-          selectedLocationModal={selectedLocationModal}
-          onCloseModal={() => setSelectedLocationModal && setSelectedLocationModal(null)}
-          isEditMode={isEditMode}
-          onRouteWaypointUpdate={onRouteWaypointUpdate}
-          onRouteWaypointRemove={onRouteWaypointRemove}
-          bottomPadding={bottomPadding}
-          style={domStyle}
-        />
+        {isNativePlatform ? (
+          <MapViewNative
+            locations={locations}
+            routes={visibleRoutes}
+            height={height}
+            center={mapCenter}
+            zoom={mapZoom}
+            focusedLocation={focusedLocation}
+            isEditMode={isEditMode}
+            onRouteWaypointUpdate={onRouteWaypointUpdate}
+            onRouteWaypointRemove={onRouteWaypointRemove}
+            bottomPadding={bottomPadding}
+            style={containerStyle}
+          />
+        ) : (
+          <MapViewSimpleDOM
+            locations={locations}
+            center={mapCenter}
+            zoom={mapZoom}
+            focusedLocation={focusedLocation}
+            followMode={followMode}
+            routes={visibleRoutes}
+            selectedRoute={selectedRoute}
+            showItinerary={showItinerary}
+            selectedLocationModal={selectedLocationModal}
+            onCloseModal={() => setSelectedLocationModal && setSelectedLocationModal(null)}
+            isEditMode={isEditMode}
+            onRouteWaypointUpdate={onRouteWaypointUpdate}
+            onRouteWaypointRemove={onRouteWaypointRemove}
+            bottomPadding={bottomPadding}
+            style={domStyle}
+          />
+        )}
       </React.Suspense>
     </View>
   );
