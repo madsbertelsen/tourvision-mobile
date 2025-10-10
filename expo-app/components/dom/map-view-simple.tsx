@@ -2,12 +2,11 @@
 
 import type { RouteWithMetadata } from '@/contexts/MockContext';
 import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
-import DeckGL from '@deck.gl/react';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import type { MapboxOverlayProps } from '@deck.gl/mapbox';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import MapLibreMap, { useControl } from 'react-map-gl/maplibre';
+import type { MapRef } from 'react-map-gl/maplibre';
 import { calculateEdgeLabels, type EdgeGridData } from './edge-label-layout';
 import HexGridOverlay from './hex-grid-overlay';
 
@@ -99,13 +98,16 @@ function findClosestPointOnRoute(
   cursorX: number,
   cursorY: number,
   routeCoords: number[][],
-  viewport: any,
+  mapProjection: {
+    project: (lngLat: [number, number]) => { x: number; y: number } | null;
+    unproject: (point: [number, number]) => { lng: number; lat: number } | null;
+  },
   logicalWaypoints: Array<{ lat: number; lng: number }>  // [start, ...customWaypoints, end]
 ): { lat: number; lng: number; distance: number; segmentIndex: number } | null {
   if (!routeCoords || routeCoords.length < 2) return null;
 
-  // Safety check: ensure viewport exists and has project method
-  if (!viewport || typeof viewport.project !== 'function') return null;
+  // Safety check: ensure map projection exists and has project method
+  if (!mapProjection || typeof mapProjection.project !== 'function') return null;
 
   let minDistance = Infinity;
   let closestPoint: { x: number; y: number; lat: number; lng: number } | null = null;
@@ -116,15 +118,18 @@ function findClosestPointOnRoute(
     const [lng2, lat2] = routeCoords[i + 1];
 
     try {
-      const [x1, y1] = viewport.project([lng1, lat1]);
-      const [x2, y2] = viewport.project([lng2, lat2]);
+      const point1 = mapProjection.project([lng1, lat1]);
+      const point2 = mapProjection.project([lng2, lat2]);
 
-      const result = closestPointOnSegment(cursorX, cursorY, x1, y1, x2, y2);
+      if (!point1 || !point2) continue;
+
+      const result = closestPointOnSegment(cursorX, cursorY, point1.x, point1.y, point2.x, point2.y);
 
       if (result.distance < minDistance) {
         minDistance = result.distance;
-        const [lng, lat] = viewport.unproject([result.x, result.y]);
-        closestPoint = { x: result.x, y: result.y, lat, lng };
+        const unprojected = mapProjection.unproject([result.x, result.y]);
+        if (!unprojected) continue;
+        closestPoint = { x: result.x, y: result.y, lat: unprojected.lat, lng: unprojected.lng };
       }
     } catch (e) {
       continue;
@@ -240,7 +245,7 @@ function MapContent({
   selectedAlternatives: Map<string, string>,
   setSelectedAlternatives: React.Dispatch<React.SetStateAction<Map<string, string>>>,
   showItinerary: boolean,
-  deckRef: React.RefObject<any>,
+  deckRef: React.RefObject<MapRef | null>,
   selectedLocationModal: Location | null,
 }) {
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -277,9 +282,9 @@ function MapContent({
     if (!deckRef.current) return;
 
     const updateSize = () => {
-      const deck = deckRef.current?.deck;
-      if (deck) {
-        const canvas = deck.canvas;
+      const map = deckRef.current;
+      if (map) {
+        const canvas = map.getCanvas();
         if (canvas) {
           setViewportSize({
             width: canvas.width,
@@ -333,21 +338,26 @@ function MapContent({
     }
 
     // If we have a previous center, calculate the pixel delta (panning only)
-    if (prevCenterRef.current && deckRef.current?.deck) {
-      const viewport = deckRef.current.deck.getViewports()[0];
+    if (prevCenterRef.current && deckRef.current) {
+      const map = deckRef.current;
 
-      // Safety check: ensure viewport exists and has project method
-      if (!viewport || typeof viewport.project !== 'function') {
+      // Safety check: ensure map exists and has project method
+      if (!map || typeof map.project !== 'function') {
         prevCenterRef.current = currentCenter;
         return;
       }
 
-      const prevPoint = viewport.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
-      const currentPoint = viewport.project([currentCenter.lng, currentCenter.lat]);
+      const prevPoint = map.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
+      const currentPoint = map.project([currentCenter.lng, currentCenter.lat]);
+
+      if (!prevPoint || !currentPoint) {
+        prevCenterRef.current = currentCenter;
+        return;
+      }
 
       // Invert delta: when map center moves right, grid should move left (and vice versa)
-      const deltaX = prevPoint[0] - currentPoint[0];
-      const deltaY = prevPoint[1] - currentPoint[1];
+      const deltaX = prevPoint.x - currentPoint.x;
+      const deltaY = prevPoint.y - currentPoint.y;
 
       // Update translation offset
       setGridTranslate(prev => ({
@@ -379,20 +389,19 @@ function MapContent({
     setIsRecalculating(true);
 
     const recalculate = () => {
-      const deck = deckRef.current?.deck;
-      if (!deck) return;
+      const map = deckRef.current;
+      if (!map) return;
 
-      const viewport = deck.getViewports()[0];
-
-      // Safety check: ensure viewport exists and has project method
-      if (!viewport || typeof viewport.project !== 'function') {
+      // Safety check: ensure map exists and has project method
+      if (!map || typeof map.project !== 'function') {
         return;
       }
 
       const mapProjection = (lng: number, lat: number) => {
         try {
-          const point = viewport.project([lng, lat]);
-          return { x: point[0], y: point[1] };
+          const point = map.project([lng, lat]);
+          if (!point) return null;
+          return { x: point.x, y: point.y };
         } catch {
           return null;
         }
@@ -854,7 +863,7 @@ export default function MapViewSimple({
     duration: number;
   } | null>(null);
 
-  const deckRef = useRef<any>(null);
+  const deckRef = useRef<MapRef | null>(null);
 
   // Track current viewState in a ref so animateToLocation can access it without dependency
   const viewStateRef = useRef(viewState);
@@ -1252,13 +1261,11 @@ export default function MapViewSimple({
   const handleMouseMove = useCallback((event: any) => {
     if (!isEditMode || !deckRef.current) return;
 
-    const deck = deckRef.current.deck;
-    if (!deck) return;
+    const map = deckRef.current;
+    if (!map) return;
 
-    const viewport = deck.getViewports()[0];
-
-    // Safety check: ensure viewport exists and has project method
-    if (!viewport || typeof viewport.project !== 'function') return;
+    // Safety check: ensure map exists and has project method
+    if (typeof map.project !== 'function' || typeof map.unproject !== 'function') return;
 
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -1285,17 +1292,25 @@ export default function MapViewSimple({
     // If dragging, update waypoint position
     if (isDraggingRef.current && hoverWaypoint) {
       try {
-        const [lng, lat] = viewport.unproject([x, y]);
-        setHoverWaypoint({
-          ...hoverWaypoint,
-          lat,
-          lng,
-        });
+        const unprojected = map.unproject([x, y]);
+        if (unprojected) {
+          setHoverWaypoint({
+            ...hoverWaypoint,
+            lat: unprojected.lat,
+            lng: unprojected.lng,
+          });
+        }
       } catch (e) {
         // Ignore projection errors
       }
       return;
     }
+
+    // Create map projection object
+    const mapProjection = {
+      project: (lngLat: [number, number]) => map.project(lngLat),
+      unproject: (point: [number, number]) => map.unproject(point),
+    };
 
     // Check proximity to routes (use routes prop directly)
     const HOVER_THRESHOLD = 30; // pixels - increased for touch input
@@ -1321,7 +1336,7 @@ export default function MapViewSimple({
 
       logicalWaypoints.push({ lat: toLoc.lat, lng: toLoc.lng });
 
-      const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, viewport, logicalWaypoints);
+      const closestPoint = findClosestPointOnRoute(x, y, route.geometry.coordinates, mapProjection, logicalWaypoints);
 
       if (closestPoint && closestPoint.distance < HOVER_THRESHOLD) {
 
@@ -1335,9 +1350,11 @@ export default function MapViewSimple({
           for (let i = 0; i < route.waypoints.length; i++) {
             const wp = route.waypoints[i];
             try {
-              const [wpX, wpY] = viewport.project([wp.lng, wp.lat]);
+              const wpPoint = map.project([wp.lng, wp.lat]);
+              if (!wpPoint) continue;
+
               const distance = Math.sqrt(
-                Math.pow(x - wpX, 2) + Math.pow(y - wpY, 2)
+                Math.pow(x - wpPoint.x, 2) + Math.pow(y - wpPoint.y, 2)
               );
 
               if (distance < WAYPOINT_PROXIMITY) {
@@ -1733,31 +1750,52 @@ export default function MapViewSimple({
       onMouseDown={isEditMode ? handleMouseDown : undefined}
       onMouseUp={isEditMode ? handleMouseUp : undefined}
     >
-      <DeckGL
+      <MapLibreMap
         ref={deckRef}
-        viewState={viewState}
-        onViewStateChange={({ viewState }: any) => setViewState(viewState)}
-        controller={!isDraggingRef.current} // Disable controller when dragging waypoint
-        layers={layersArray}
-        onClick={handleMapClick}
-        getCursor={({ isDragging }: any) => {
-          // Show pointer when hovering over existing waypoint (for deletion)
-          if (isEditMode && hoveredWaypointIndex !== null) {
-            return 'pointer';
-          }
-          // Show grab when hovering over route (for adding waypoint)
-          if (isEditMode && hoverWaypoint) {
-            return hoverWaypoint.isDragging ? 'grabbing' : 'grab';
-          }
-          return isDragging ? 'grabbing' : 'grab';
-          
+        mapStyle="https://demotiles.maplibre.org/style.json"
+        projection={{ type: 'globe' }}
+        {...viewState}
+        onMove={(evt) => {
+          setViewState({
+            longitude: evt.viewState.longitude,
+            latitude: evt.viewState.latitude,
+            zoom: evt.viewState.zoom,
+            pitch: evt.viewState.pitch || 0,
+            bearing: evt.viewState.bearing || 0,
+            padding: {
+              top: evt.viewState.padding?.top ?? 0,
+              bottom: evt.viewState.padding?.bottom ?? bottomPadding,
+              left: evt.viewState.padding?.left ?? 0,
+              right: evt.viewState.padding?.right ?? 0,
+            },
+          });
         }}
+        style={{ width: '100%', height: '100%' }}
+        interactive={!isDraggingRef.current}
+        cursor={
+          // Show pointer when hovering over existing waypoint (for deletion)
+          isEditMode && hoveredWaypointIndex !== null ? 'pointer' :
+          // Show grab when hovering over route (for adding waypoint)
+          isEditMode && hoverWaypoint ? (hoverWaypoint.isDragging ? 'grabbing' : 'grab') :
+          'grab'
+        }
       >
-        <MapLibreMap
-          mapStyle="https://demotiles.maplibre.org/style.json"
-          projection={{ type: 'globe' }}
+        <DeckOverlay
+          layers={layersArray}
+          onClick={handleMapClick}
+          getCursor={({ isDragging }: any) => {
+            // Show pointer when hovering over existing waypoint (for deletion)
+            if (isEditMode && hoveredWaypointIndex !== null) {
+              return 'pointer';
+            }
+            // Show grab when hovering over route (for adding waypoint)
+            if (isEditMode && hoverWaypoint) {
+              return hoverWaypoint.isDragging ? 'grabbing' : 'grab';
+            }
+            return isDragging ? 'grabbing' : 'grab';
+          }}
         />
-      </DeckGL>
+      </MapLibreMap>
 
       {/* Render edge labels and itinerary overlay */}
       <MapContent
@@ -1775,16 +1813,14 @@ export default function MapViewSimple({
 
       {/* Hexagonal Grid Overlay */}
       {selectedLocationModal && containerDims.width > 0 && deckRef.current && (() => {
-        // Project lat/lng to screen coordinates
-        const deck = deckRef.current.deck;
-        if (!deck) return null;
+        // Project lat/lng to screen coordinates using MapLibre's project method
+        const map = deckRef.current;
+        if (!map) return null;
 
-        const viewport = deck.getViewports()[0];
+        const point = map.project([selectedLocationModal.lng, selectedLocationModal.lat]);
+        if (!point) return null;
 
-        // Safety check: ensure viewport exists and has project method
-        if (!viewport || typeof viewport.project !== 'function') return null;
-
-        const [x, y] = viewport.project([selectedLocationModal.lng, selectedLocationModal.lat]);
+        const [x, y] = [point.x, point.y];
 
         return (
           <HexGridOverlay
