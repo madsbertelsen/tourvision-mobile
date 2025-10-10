@@ -335,6 +335,39 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [viewRef, setViewRef] = useState<any>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
 
+  // Hide iOS keyboard accessory view on mount
+  useEffect(() => {
+    // Add meta tag to disable input accessory view
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(meta);
+
+    // Additional attempt to hide accessory view via input mode
+    if (typeof window !== 'undefined' && window.webkit) {
+      // Inject CSS to hide accessory view
+      const style = document.createElement('style');
+      style.textContent = `
+        input::-webkit-inner-spin-button,
+        input::-webkit-outer-spin-button,
+        input::-webkit-clear-button,
+        input::-webkit-calendar-picker-indicator {
+          display: none;
+          -webkit-appearance: none;
+        }
+
+        [contenteditable] {
+          -webkit-user-modify: read-write-plaintext-only !important;
+        }
+      `;
+      document.head.appendChild(style);
+
+      return () => {
+        style.remove();
+      };
+    }
+  }, []);
+
   // Convert JSON content to ProseMirror document
   const initialDoc = useMemo(() => {
     if (!content) {

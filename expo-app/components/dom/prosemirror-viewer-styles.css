@@ -44,6 +44,29 @@
   white-space: pre-wrap; /* Required by ProseMirror */
 }
 
+/* Hide iOS keyboard accessory view (input accessory toolbar) */
+.ProseMirror::-webkit-input-placeholder {
+  color: transparent;
+}
+
+/* Disable iOS input accessory view */
+.prosemirror-viewer [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Additional iOS-specific styles to prevent accessory view */
+@supports (-webkit-touch-callout: none) {
+  /* iOS-specific styles */
+  .ProseMirror {
+    -webkit-user-modify: read-write-plaintext-only;
+  }
+
+  .prosemirror-viewer [contenteditable] {
+    -webkit-user-modify: read-write-plaintext-only;
+  }
+}
+
 /* Block elements */
 .pm-paragraph {
   margin: 0 0 16px 0;
