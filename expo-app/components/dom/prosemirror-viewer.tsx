@@ -509,6 +509,271 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     });
   };
 
+  // Custom context menu for text selection on iOS
+  // NOTE: Disabled in favor of native iOS menu (see DomWebViewExtension.swift)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !editable) return;
+    // Skip JavaScript menu - using native iOS menu instead
+    return;
+
+    let customMenu: HTMLDivElement | null = null;
+    let selectionCheckTimer: NodeJS.Timeout | null = null;
+
+    const showCustomMenu = (x: number, y: number, selectedText: string) => {
+      // Remove existing menu
+      hideCustomMenu();
+
+      // Create menu container
+      customMenu = document.createElement('div');
+      customMenu.className = 'custom-selection-menu';
+      customMenu.style.cssText = `
+        position: fixed;
+        left: ${x}px;
+        top: ${y}px;
+        background: rgba(60, 60, 67, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 14px;
+        padding: 6px;
+        display: flex;
+        gap: 2px;
+        z-index: 99999;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        transform: translateX(-50%) translateY(calc(-100% - 12px));
+        min-width: 220px;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `;
+
+      // Create Location button
+      const locationBtn = document.createElement('button');
+      locationBtn.innerHTML = '<span style="margin-right: 4px;">📍</span>Location';
+      locationBtn.style.cssText = `
+        background: transparent;
+        border: none;
+        color: white;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        -webkit-tap-highlight-color: transparent;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s ease;
+      `;
+
+      locationBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        locationBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+      });
+
+      locationBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        locationBtn.style.background = 'transparent';
+        handleCreateLocation(selectedText);
+        hideCustomMenu();
+      });
+
+      locationBtn.addEventListener('touchcancel', () => {
+        locationBtn.style.background = 'transparent';
+      });
+
+      // Create Note button
+      const noteBtn = document.createElement('button');
+      noteBtn.innerHTML = '<span style="margin-right: 4px;">📝</span>Note';
+      noteBtn.style.cssText = locationBtn.style.cssText;
+
+      noteBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        noteBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+      });
+
+      noteBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        noteBtn.style.background = 'transparent';
+        handleAddNote(selectedText);
+        hideCustomMenu();
+      });
+
+      noteBtn.addEventListener('touchcancel', () => {
+        noteBtn.style.background = 'transparent';
+      });
+
+      customMenu.appendChild(locationBtn);
+      customMenu.appendChild(noteBtn);
+      document.body.appendChild(customMenu);
+
+      console.log('[ProseMirror] Custom menu shown for text:', selectedText);
+    };
+
+    const hideCustomMenu = () => {
+      if (customMenu) {
+        customMenu.remove();
+        customMenu = null;
+      }
+    };
+
+    const handleCreateLocation = (text: string) => {
+      console.log('[ProseMirror] Create Location:', text);
+
+      // Store the current selection range before it gets cleared
+      if (state.selection && !state.selection.empty) {
+        setPendingSelection({
+          from: state.selection.from,
+          to: state.selection.to
+        });
+
+        // Count existing geo-marks for color assignment
+        let geoMarkCount = 0;
+        const existingLocations: Array<{ geoId: string; placeName: string }> = [];
+
+        state.doc.descendants((node) => {
+          if (node.type.name === 'geoMark') {
+            geoMarkCount++;
+            if (node.attrs.geoId && node.attrs.placeName) {
+              existingLocations.push({
+                geoId: node.attrs.geoId,
+                placeName: node.attrs.placeName,
+              });
+            }
+          }
+        });
+
+        const nextColorIndex = geoMarkCount % 10;
+
+        // Show the geo-mark editor
+        if (onShowGeoMarkEditor) {
+          onShowGeoMarkEditor({
+            placeName: text,
+            colorIndex: nextColorIndex,
+          }, existingLocations);
+        }
+      }
+    };
+
+    const handleAddNote = (text: string) => {
+      console.log('[ProseMirror] Add Note:', text);
+
+      if (state.selection && !state.selection.empty) {
+        // Update state directly within the effect
+        setState(prevState => {
+          const tr = prevState.tr;
+          const { from, to } = prevState.selection;
+
+          // Add emphasis mark as an example annotation
+          const emphasisMark = schema.marks.em;
+          if (emphasisMark) {
+            tr.addMark(from, to, emphasisMark.create());
+          }
+
+          const newState = prevState.apply(tr);
+
+          // Notify parent of changes
+          if (onChange) {
+            onChange(newState.doc.toJSON());
+          }
+
+          return newState;
+        });
+      }
+    };
+
+    const checkSelection = () => {
+      const selection = window.getSelection();
+
+      if (!selection || selection.isCollapsed) {
+        hideCustomMenu();
+        return;
+      }
+
+      const selectedText = selection.toString().trim();
+      if (!selectedText) {
+        hideCustomMenu();
+        return;
+      }
+
+      console.log('[ProseMirror] 📝 Text selected:', selectedText);
+
+      // Check if selection is within ProseMirror
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      const prosemirrorElement = (container.nodeType === Node.ELEMENT_NODE
+        ? container
+        : container.parentElement
+      )?.closest('.ProseMirror');
+
+      if (!prosemirrorElement) {
+        console.log('[ProseMirror] ❌ Selection not in ProseMirror element');
+        hideCustomMenu();
+        return;
+      }
+
+      console.log('[ProseMirror] ✅ Selection in ProseMirror, showing custom menu');
+
+      // Get selection bounding rect
+      const rect = range.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top;
+
+      // Show menu
+      showCustomMenu(x, y, selectedText);
+    };
+
+    // Start periodic check for selection
+    const startSelectionCheck = () => {
+      if (selectionCheckTimer) {
+        clearInterval(selectionCheckTimer);
+      }
+      selectionCheckTimer = setInterval(checkSelection, 200);
+    };
+
+    // Stop checking when touch ends
+    const stopSelectionCheck = () => {
+      if (selectionCheckTimer) {
+        clearInterval(selectionCheckTimer);
+        selectionCheckTimer = null;
+      }
+    };
+
+    // Listen for selection changes
+    document.addEventListener('selectionchange', checkSelection);
+
+    // Start checking on touch
+    document.addEventListener('touchstart', startSelectionCheck, { passive: true });
+    document.addEventListener('touchend', () => {
+      // Check one more time after touch ends
+      setTimeout(checkSelection, 100);
+      setTimeout(stopSelectionCheck, 500);
+    }, { passive: true });
+
+    // Hide menu on tap outside
+    const handleTouchStart = (e: TouchEvent) => {
+      if (customMenu && !customMenu.contains(e.target as Node)) {
+        // Don't hide immediately - give buttons a chance to handle the touch
+        setTimeout(() => {
+          if (customMenu) {
+            hideCustomMenu();
+          }
+        }, 50);
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+
+    return () => {
+      document.removeEventListener('selectionchange', checkSelection);
+      document.removeEventListener('touchstart', startSelectionCheck);
+      document.removeEventListener('touchstart', handleTouchStart);
+      if (selectionCheckTimer) {
+        clearInterval(selectionCheckTimer);
+      }
+      hideCustomMenu();
+    };
+  }, [editable, state, onShowGeoMarkEditor, onChange]);
+
   // Handle scroll-based focus detection
   useEffect(() => {
     if (!container || !mount) return;
