@@ -1202,7 +1202,7 @@ export default function MapViewSimple({
     }
 
     // Check proximity to routes (use routes prop directly)
-    const HOVER_THRESHOLD = 15; // pixels
+    const HOVER_THRESHOLD = 30; // pixels - increased for touch input
     let foundHover = false;
 
     for (const route of routes) {
@@ -1234,7 +1234,7 @@ export default function MapViewSimple({
         let isNearExistingWaypoint = false;
         let nearestWaypointIndex: number | null = null;
         if (route.waypoints && Array.isArray(route.waypoints)) {
-          const WAYPOINT_PROXIMITY = 20; // pixels - larger than waypoint radius to make clicking easier
+          const WAYPOINT_PROXIMITY = 48; // pixels - increased for touch input (matches mobile UI guidelines)
 
           for (let i = 0; i < route.waypoints.length; i++) {
             const wp = route.waypoints[i];
@@ -1519,9 +1519,9 @@ export default function MapViewSimple({
         data: waypointsWithIndex,
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
-        getRadius: 8,
-        radiusMinPixels: 8,
-        radiusMaxPixels: 8,
+        getRadius: 20,
+        radiusMinPixels: 20,
+        radiusMaxPixels: 20,
         pickable: false,
         stroked: false,
         filled: true,
@@ -1542,16 +1542,16 @@ export default function MapViewSimple({
         getRadius: (d: any) => {
           // Enlarge when hovered
           if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
-            return 8; // Larger on hover
+            return 24; // Larger on hover (48px diameter)
           }
-          return 6;
+          return 18; // Base size (36px diameter for touch)
         },
-        radiusMinPixels: 6,
-        radiusMaxPixels: 10,
+        radiusMinPixels: 18,
+        radiusMaxPixels: 24,
         pickable: true,
         stroked: true,
         filled: true,
-        lineWidthMinPixels: 2,
+        lineWidthMinPixels: 3,
         getLineColor: (d: any) => {
           // Thicker white border on hover
           if (hoveredWaypointIndex !== null && d.waypointIndex === hoveredWaypointIndex) {
@@ -1577,9 +1577,9 @@ export default function MapViewSimple({
         data: [hoverWaypoint],
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: [0, 0, 0, 51], // rgba(0, 0, 0, 0.2)
-        getRadius: 12,
-        radiusMinPixels: 12,
-        radiusMaxPixels: 12,
+        getRadius: 24,
+        radiusMinPixels: 24,
+        radiusMaxPixels: 24,
         pickable: false,
         stroked: false,
         filled: true,
@@ -1591,13 +1591,13 @@ export default function MapViewSimple({
         data: [hoverWaypoint],
         getPosition: (d: any) => [d.lng, d.lat],
         getFillColor: hoverWaypoint.isDragging ? [59, 130, 246, 255] : [255, 255, 255, 255], // Blue when dragging, white otherwise
-        getRadius: 10,
-        radiusMinPixels: 10,
-        radiusMaxPixels: 10,
+        getRadius: 22,
+        radiusMinPixels: 22,
+        radiusMaxPixels: 22,
         pickable: true,
         stroked: true,
         filled: true,
-        lineWidthMinPixels: 2,
+        lineWidthMinPixels: 3,
         getLineColor: [59, 130, 246, 255], // #3B82F6
       }));
     }
