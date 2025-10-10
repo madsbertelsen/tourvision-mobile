@@ -771,6 +771,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     // Prevent context menu (right-click and long-press)
     const handleContextMenu = (e: Event) => {
+      // Only handle events within the ProseMirror editor
+      if (!mount.contains(e.target as HTMLElement)) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       return false;
@@ -792,14 +796,19 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     // Prevent default behavior for touch events that trigger selection UI
     const handleTouchStart = (e: TouchEvent) => {
+      // Only handle events within the ProseMirror editor
+      const target = e.target as HTMLElement;
+      if (!mount.contains(target)) {
+        return; // Don't interfere with events outside the editor
+      }
+
       // Track touch duration to detect long press
       const touchStartTime = Date.now();
-      const target = e.target as HTMLElement;
 
       const handleTouchEnd = (endEvent: TouchEvent) => {
         const touchDuration = Date.now() - touchStartTime;
         // If it's a long press (> 500ms), prevent default behavior
-        if (touchDuration > 500) {
+        if (touchDuration > 500 && mount.contains(endEvent.target as HTMLElement)) {
           endEvent.preventDefault();
           endEvent.stopPropagation();
         }
@@ -822,6 +831,10 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     // Prevent the callout menu on link elements
     const handleTouchCallout = (e: Event) => {
+      // Only handle events within the ProseMirror editor
+      if (!mount.contains(e.target as HTMLElement)) {
+        return;
+      }
       e.preventDefault();
       return false;
     };
