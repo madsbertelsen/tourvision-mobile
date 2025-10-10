@@ -847,7 +847,12 @@ export default function MapViewSimple({
     }
 
     const startTime = performance.now();
-    const startState = { ...viewState };
+    // Use ref to get current viewState to avoid dependency
+    const startState = {
+      longitude: viewState.longitude,
+      latitude: viewState.latitude,
+      zoom: viewState.zoom
+    };
     const duration = 2000; // 2 second animation
 
     animationRef.current = {
@@ -1004,7 +1009,7 @@ export default function MapViewSimple({
 
     // Start the animation
     animationRef.current.frameId = requestAnimationFrame(animate);
-  }, [viewState]);
+  }, []); // Empty dependencies - uses viewState directly from closure at call time
 
   // Track previous focusedLocation to detect changes
   const prevFocusedLocationRef = useRef<FocusedLocation | null>(null);
@@ -1045,7 +1050,18 @@ export default function MapViewSimple({
 
     // Update the ref to track current focusedLocation
     prevFocusedLocationRef.current = focusedLocation;
-  }, [focusedLocation]);
+
+    // Cleanup: cancel animation if component unmounts or dependencies change
+    return () => {
+      if (animationRef.current?.frameId) {
+        cancelAnimationFrame(animationRef.current.frameId);
+        animationRef.current = null;
+        setIsAnimating(false);
+        setFlyingMarker(null);
+        setMarkerTrail([]);
+      }
+    };
+  }, [focusedLocation, animateToLocation]);
 
   // Update container dimensions for hex grid
   useEffect(() => {
@@ -1097,6 +1113,17 @@ export default function MapViewSimple({
     }
 
     prevSelectedLocationModalRef.current = selectedLocationModal;
+
+    // Cleanup: cancel animation if component unmounts or dependencies change
+    return () => {
+      if (animationRef.current?.frameId) {
+        cancelAnimationFrame(animationRef.current.frameId);
+        animationRef.current = null;
+        setIsAnimating(false);
+        setFlyingMarker(null);
+        setMarkerTrail([]);
+      }
+    };
   }, [selectedLocationModal, animateToLocation, savedViewState, viewState]);
 
   // Track previous bounds to prevent redundant animations
@@ -1167,7 +1194,18 @@ export default function MapViewSimple({
 
     // Smoothly animate to fit bounds
     animateToLocation(targetState, false);
-  }, [locations, followMode, focusedLocation]);
+
+    // Cleanup: cancel animation if component unmounts or dependencies change
+    return () => {
+      if (animationRef.current?.frameId) {
+        cancelAnimationFrame(animationRef.current.frameId);
+        animationRef.current = null;
+        setIsAnimating(false);
+        setFlyingMarker(null);
+        setMarkerTrail([]);
+      }
+    };
+  }, [locations, followMode, focusedLocation, animateToLocation]);
 
   // Handle mouse move for route editing
   const handleMouseMove = useCallback((event: any) => {
