@@ -144,10 +144,10 @@ function MapViewNative({
   ];
 
   return (
-    <View style={containerStyle}>
+    <View style={[containerStyle, { backgroundColor: '#ffffff' }]}>
       <Mapbox.MapView
         ref={mapRef}
-        style={styles.map}
+        style={[styles.map, { backgroundColor: '#ffffff' }]}
         onDidFinishLoadingMap={() => setMapLoaded(true)}
         styleURL="https://demotiles.maplibre.org/style.json"
         logoEnabled={false}
