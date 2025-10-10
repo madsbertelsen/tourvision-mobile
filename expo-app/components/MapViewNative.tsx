@@ -149,12 +149,13 @@ function MapViewNative({
         ref={mapRef}
         style={styles.map}
         onDidFinishLoadingMap={() => setMapLoaded(true)}
-        styleURL={Mapbox.StyleURL.Street}
+        styleURL="https://demotiles.maplibre.org/style.json"
         logoEnabled={false}
         compassEnabled={true}
-        rotateEnabled={false}
-        pitchEnabled={false}
+        rotateEnabled={true}
+        pitchEnabled={true}
         attributionEnabled={false}
+        projection="globe"
       >
         <Mapbox.Camera
           ref={cameraRef}
