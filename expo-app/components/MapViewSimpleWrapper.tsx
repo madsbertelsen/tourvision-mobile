@@ -12,6 +12,7 @@ interface MapViewSimpleWrapperProps {
   height?: number | string;
   center?: { lat: number; lng: number };
   zoom?: number;
+  focusedLocation?: { id: string; name: string; lat: number; lng: number } | null;
   isEditMode?: boolean;
   onRouteWaypointUpdate?: (routeId: string, waypoint: { lat: number; lng: number }, segmentIndex: number) => void;
   onRouteWaypointRemove?: (routeId: string, waypointIndex: number) => void;
@@ -34,14 +35,16 @@ export function MapViewSimpleWrapper({
   height = 400,
   center = { lat: 0, lng: 0 },
   zoom = 2,
+  focusedLocation: propFocusedLocation,
   isEditMode = false,
   onRouteWaypointUpdate,
   onRouteWaypointRemove,
   bottomPadding = 0,
 }: MapViewSimpleWrapperProps) {
 
-  // Get focusedLocation, followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
-  let focusedLocation = null;
+  // Get followMode, routes, showItinerary, mapCenter, mapZoom, and modal state from context
+  // Use propFocusedLocation if provided, otherwise try to get from context
+  let focusedLocation = propFocusedLocation !== undefined ? propFocusedLocation : null;
   let followMode = false;
   let allRoutes: RouteWithMetadata[] = propRoutes || [];
   let selectedRoute = null;
@@ -52,7 +55,10 @@ export function MapViewSimpleWrapper({
   let setSelectedLocationModal: ((location: Location | null) => void) | null = null;
   try {
     const context = useMockContext();
-    focusedLocation = context.focusedLocation;
+    // Only use context focusedLocation if no prop was provided
+    if (propFocusedLocation === undefined) {
+      focusedLocation = context.focusedLocation;
+    }
     followMode = context.followMode;
     // Use prop routes if provided, otherwise use context routes
     allRoutes = propRoutes || context.routes;

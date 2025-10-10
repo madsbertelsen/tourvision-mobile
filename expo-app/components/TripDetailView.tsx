@@ -2,7 +2,6 @@ import { GeoMarkBottomSheet } from '@/components/GeoMarkBottomSheet';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { TripDocumentSheet } from '@/components/TripDocumentSheet';
-import { useMockContext } from '@/contexts/MockContext';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import { schema } from '@/utils/prosemirror-schema';
@@ -37,10 +36,10 @@ interface TripDetailViewProps {
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { setFocusedLocation } = useMockContext();
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const [focusedLocation, setFocusedLocation] = useState<{ id: string; name: string; lat: number; lng: number } | null>(null);
   const [editorState, setEditorState] = useState<EditorState>(() =>
     EditorState.create({ schema })
   );
@@ -1019,6 +1018,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
             locations={documentLocations}
             routes={fetchedRoutes}
             height={mapDimensions.height}
+            focusedLocation={focusedLocation}
             isEditMode={isEditMode}
             onRouteWaypointUpdate={handleRouteWaypointUpdate}
             onRouteWaypointRemove={handleRouteWaypointRemove}

@@ -836,6 +836,12 @@ export default function MapViewSimple({
   // Track if map is currently animating
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Track if map has loaded
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Track if we're in a programmatic animation (to skip onMove handler)
+  const isAnimatingRef = useRef(false);
+
   // Container ref and dimensions for hex grid
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
@@ -941,6 +947,9 @@ export default function MapViewSimple({
       targetState: target,
       duration,
     };
+
+    // IMPORTANT: Set ref FIRST before any state updates to prevent re-entry
+    isAnimatingRef.current = true; // Mark that we're in a programmatic animation
 
     // Set animating flag to hide edge labels during animation
     setIsAnimating(true);
@@ -1067,6 +1076,11 @@ export default function MapViewSimple({
         bearing: 0,
       }));
 
+      // Debug log every 10 frames
+      if (Math.floor(progress * 100) % 10 === 0) {
+        console.log(`[Animation] Progress: ${(progress * 100).toFixed(0)}%, pos: ${newLatitude.toFixed(4)}, ${newLongitude.toFixed(4)}, zoom: ${newZoom.toFixed(2)}`);
+      }
+
       // Continue animation if not complete
       if (progress < 1) {
         animationRef.current.frameId = requestAnimationFrame(animate);
@@ -1078,6 +1092,7 @@ export default function MapViewSimple({
 
         // Clear animating flag to show edge labels again
         setIsAnimating(false);
+        isAnimatingRef.current = false; // Mark animation complete
 
         console.log('Animation complete. New location:', {
           lng: newLongitude.toFixed(2),
@@ -1094,24 +1109,42 @@ export default function MapViewSimple({
   // Track previous focusedLocation to detect changes
   const prevFocusedLocationRef = useRef<FocusedLocation | null>(null);
 
-  // Watch for focusedLocation changes
+  // Watch for focusedLocation changes - using manual comparison instead of effect deps
   useEffect(() => {
+    // Check if focusedLocation actually changed compared to our ref
     const prevFocusedLocation = prevFocusedLocationRef.current;
 
-    // Check if focusedLocation actually changed
     const focusedLocationChanged =
       (!prevFocusedLocation && focusedLocation) ||
       (prevFocusedLocation && !focusedLocation) ||
       (prevFocusedLocation && focusedLocation && prevFocusedLocation.id !== focusedLocation.id);
 
+    console.log('[FocusEffect] Change detection:', {
+      prevFocusedLocation: prevFocusedLocation?.id,
+      focusedLocation: focusedLocation?.id,
+      changed: focusedLocationChanged,
+      isAnimating: isAnimatingRef.current
+    });
+
+    // Only proceed if location actually changed
     if (!focusedLocationChanged) {
-      return; // No change, don't animate
+      return;
     }
+
+    // Skip if we're currently animating
+    if (isAnimatingRef.current) {
+      console.log('[FocusEffect] Already animating, will queue change');
+      // Store the pending location change to process after animation
+      return;
+    }
+
+    // Update the ref to track current focusedLocation
+    prevFocusedLocationRef.current = focusedLocation;
 
     if (focusedLocation) {
       // Save current view state before animating to focused location
       const currentView = viewStateRef.current;
-      console.log('Saving current view state before focusing:', currentView);
+      console.log('[FocusEffect] Saving current view state before focusing:', currentView);
       setSavedViewState({
         longitude: currentView.longitude,
         latitude: currentView.latitude,
@@ -1124,29 +1157,18 @@ export default function MapViewSimple({
         latitude: focusedLocation.lat,
         zoom: 12, // Zoom in closer for location details
       };
-      console.log('Animating to focused location:', focusedLocation.name, targetState);
+      console.log('[FocusEffect] Animating to focused location:', focusedLocation.name, targetState);
       animateToLocation(targetState, false);
-    } else if (savedViewState) {
-      // focusedLocation became null and we have a saved state - restore it (reverse: zoom out then pan)
-      console.log('Restoring saved view state:', savedViewState);
-      animateToLocation(savedViewState, true);
-      setSavedViewState(null); // Clear after restoring
-    }
-
-    // Update the ref to track current focusedLocation
-    prevFocusedLocationRef.current = focusedLocation;
-
-    // Cleanup: cancel animation if component unmounts or dependencies change
-    return () => {
-      if (animationRef.current?.frameId) {
-        cancelAnimationFrame(animationRef.current.frameId);
-        animationRef.current = null;
-        setIsAnimating(false);
-        setFlyingMarker(null);
-        setMarkerTrail([]);
+    } else {
+      // focusedLocation became null - check if we have a saved state to restore
+      const currentSavedState = savedViewState;
+      if (currentSavedState) {
+        console.log('[FocusEffect] Restoring saved view state:', currentSavedState);
+        animateToLocation(currentSavedState, true);
+        setSavedViewState(null); // Clear after restoring
       }
-    };
-  }, [focusedLocation, animateToLocation, savedViewState]);
+    }
+  }); // No dependencies - runs on every render but checks manually
 
   // Update container dimensions for hex grid
   useEffect(() => {
@@ -1207,20 +1229,55 @@ export default function MapViewSimple({
         cancelAnimationFrame(animationRef.current.frameId);
         animationRef.current = null;
         setIsAnimating(false);
+        isAnimatingRef.current = false; // Clear animation flag
         setFlyingMarker(null);
         setMarkerTrail([]);
       }
     };
-  }, [selectedLocationModal, animateToLocation, savedViewState]);
+  }, [selectedLocationModal]); // animateToLocation is stable, savedViewState accessed locally
 
   // Track previous bounds to prevent redundant animations
   const prevBoundsRef = useRef<string | null>(null);
 
+  // Track if we've done the initial focus on trip open
+  const hasInitialFocusedRef = useRef(false);
+
+  // Track previous location IDs to detect when trip changes
+  const prevLocationIdsRef = useRef<string>('');
+
   // Follow mode: auto-fit bounds to visible locations
   useEffect(() => {
+    console.log('[MapViewSimple] Follow mode effect triggered:', {
+      followMode,
+      locationsCount: locations.length,
+      focusedLocation: focusedLocation?.id || null,
+      mapLoaded,
+      deckRefExists: !!deckRef.current,
+      hasInitialFocused: hasInitialFocusedRef.current,
+    });
+
     // Only auto-fit if followMode is enabled, we have locations, and no focused location
     if (!followMode || locations.length === 0 || focusedLocation) {
+      console.log('[MapViewSimple] Skipping follow mode - conditions not met');
       return;
+    }
+
+    // Wait for map to be loaded before initial focus
+    if (!mapLoaded || !deckRef.current) {
+      console.log('[MapViewSimple] Waiting for map to load before initial focus');
+      return;
+    }
+
+    // Check if locations have changed (different trip)
+    const currentLocationIds = locations.map(loc => loc.id).join(',');
+    if (prevLocationIdsRef.current !== currentLocationIds) {
+      // Locations changed - reset initial focus flag
+      console.log('[MapViewSimple] Locations changed, resetting initial focus flag', {
+        previous: prevLocationIdsRef.current,
+        current: currentLocationIds,
+      });
+      hasInitialFocusedRef.current = false;
+      prevLocationIdsRef.current = currentLocationIds;
     }
 
     // Calculate bounding box for all locations
@@ -1266,18 +1323,23 @@ export default function MapViewSimple({
     // Create a stable key for the bounds to detect actual changes
     const boundsKey = `${minLat.toFixed(4)},${maxLat.toFixed(4)},${minLng.toFixed(4)},${maxLng.toFixed(4)},${targetZoom}`;
 
-    // Only animate if bounds actually changed
-    if (prevBoundsRef.current === boundsKey) {
+    // Check if this is the initial focus (first time with locations)
+    const isInitialFocus = !hasInitialFocusedRef.current;
+
+    // Only animate if bounds actually changed OR this is the initial focus
+    if (!isInitialFocus && prevBoundsRef.current === boundsKey) {
       return;
     }
 
-    console.log('Follow mode: fitting bounds to locations', {
+    console.log('[MapViewSimple] Follow mode: fitting bounds to locations', {
+      isInitialFocus,
       locations: locations.length,
       bounds: { minLat, maxLat, minLng, maxLng },
       target: targetState
     });
 
     prevBoundsRef.current = boundsKey;
+    hasInitialFocusedRef.current = true; // Mark that we've done initial focus
 
     // Smoothly animate to fit bounds
     animateToLocation(targetState, false);
@@ -1292,7 +1354,7 @@ export default function MapViewSimple({
         setMarkerTrail([]);
       }
     };
-  }, [locations, followMode, focusedLocation, animateToLocation]);
+  }, [locations, followMode, focusedLocation, mapLoaded]); // animateToLocation is stable
 
   // Handle mouse move for route editing
   const handleMouseMove = useCallback((event: any) => {
@@ -1543,32 +1605,53 @@ export default function MapViewSimple({
     });
   }, [routes, activeRoutePairs]);
 
+  // Create GeoJSON for routes
+  const routesGeoJSON = useMemo(() => {
+    if (!activeRoutes.length) {
+      return {
+        type: 'FeatureCollection' as const,
+        features: [],
+      };
+    }
+
+    const geoJSON = {
+      type: 'FeatureCollection' as const,
+      features: activeRoutes
+        .filter(route => route.geometry && route.geometry.coordinates)
+        .map((route) => {
+          const routeStyle = getRouteStyle(route.profile);
+          const isSelected = selectedRoute === route.id;
+
+          return {
+            type: 'Feature' as const,
+            id: route.id,
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: route.geometry.coordinates,
+            },
+            properties: {
+              id: route.id,
+              profile: route.profile,
+              color: routeStyle.color,
+              width: isSelected ? routeStyle.width + 2 : routeStyle.width,
+              opacity: isSelected ? 1 : 0.7,
+              dashArray: routeStyle.dasharray,
+            },
+          };
+        }),
+    };
+
+    console.log('[MapViewSimple] Created routes GeoJSON with', geoJSON.features.length, 'routes');
+    return geoJSON;
+  }, [activeRoutes, selectedRoute]);
+
   // Create deck.gl layers - must create NEW instances on every render
   // Note: Don't memoize this! deck.gl requires fresh layer instances each render.
   // deck.gl is optimized to efficiently compare layers and only update when needed.
   const layersArray: any[] = [];
 
-    // Route layers
-    activeRoutes.forEach((route) => {
-    if (!route.geometry || !route.geometry.coordinates) return;
-
-    const routeStyle = getRouteStyle(route.profile);
-    const isSelected = selectedRoute === route.id;
-    const color = hexToRgb(routeStyle.color, isSelected ? 1 : 0.7);
-
-    layersArray.push(new PathLayer({
-      id: `route-${route.id}`,
-      data: [{ path: route.geometry.coordinates }],
-      getPath: (d: any) => d.path,
-      getColor: color,
-      getWidth: isSelected ? routeStyle.width + 2 : routeStyle.width,
-      widthMinPixels: 2,
-      pickable: false,
-      capRounded: true,
-      jointRounded: true,
-      getDashArray: routeStyle.dasharray || undefined,
-    }));
-  });
+  // NOTE: Routes are now rendered using MapLibre native layers (see MapLibreMap component)
+  // This avoids z-fighting and rendering issues with globe projection
 
   // Marker trail layer
   if (markerTrail.length > 1) {
@@ -1750,7 +1833,16 @@ export default function MapViewSimple({
         mapStyle="https://demotiles.maplibre.org/style.json"
         projection={{ type: 'globe' }}
         {...viewState}
+        onLoad={() => {
+          console.log('[MapViewSimple] Map loaded, setting mapLoaded state');
+          setMapLoaded(true);
+        }}
         onMove={(evt) => {
+          // Skip onMove handler during programmatic animations to prevent interference
+          if (isAnimatingRef.current) {
+            return;
+          }
+
           setViewState({
             longitude: evt.viewState.longitude,
             latitude: evt.viewState.latitude,
@@ -1775,7 +1867,36 @@ export default function MapViewSimple({
           'grab'
         }
       >
-        {/* MapLibre native location markers and labels - render BEFORE DeckOverlay */}
+        {/* MapLibre native routes - render BEFORE location markers */}
+        {!selectedLocationModal && routesGeoJSON.features.length > 0 && (
+          <Source
+            id="routes"
+            type="geojson"
+            data={routesGeoJSON}
+          >
+            <Layer
+              id="route-lines"
+              type="line"
+              paint={{
+                'line-color': ['get', 'color'],
+                'line-width': ['get', 'width'],
+                'line-opacity': ['get', 'opacity'],
+                'line-dasharray': [
+                  'case',
+                  ['has', 'dashArray'],
+                  ['get', 'dashArray'],
+                  ['literal', [1, 0]], // Solid line (no dash)
+                ],
+              }}
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+            />
+          </Source>
+        )}
+
+        {/* MapLibre native location markers and labels - render AFTER routes */}
         {!selectedLocationModal && locations.length > 0 && (
           <Source
             id="location-markers"
