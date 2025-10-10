@@ -42,66 +42,6 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: pre-wrap; /* Required by ProseMirror */
-  -webkit-tap-highlight-color: transparent !important; /* Remove tap highlight */
-  -webkit-text-size-adjust: 100% !important; /* Prevent text size adjustment */
-}
-
-/* Selection menu prevention only in read mode */
-.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror {
-  -webkit-touch-callout: none !important; /* Disable callout menu in read mode */
-  -webkit-user-select: text !important; /* Allow text selection */
-  user-select: text !important; /* Standard property */
-}
-
-/* Allow normal selection behavior in edit mode */
-.prosemirror-editor-wrapper.edit-mode .ProseMirror {
-  -webkit-touch-callout: default !important; /* Allow callout menu in edit mode */
-  -webkit-user-select: auto !important; /* Normal selection behavior */
-  user-select: auto !important; /* Standard property */
-}
-
-/* Apply to all child elements for thorough coverage - only in read mode */
-.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *,
-.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *::before,
-.prosemirror-editor-wrapper:not(.edit-mode) .ProseMirror *::after {
-  -webkit-touch-callout: none !important;
-  -webkit-tap-highlight-color: transparent !important;
-}
-
-/* Specific rules for interactive elements */
-.ProseMirror a,
-.ProseMirror button,
-.ProseMirror [contenteditable],
-.ProseMirror [role="button"] {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important; /* Prevent selection on interactive elements */
-  user-select: none !important;
-}
-
-/* Custom selection styling to override native behavior */
-.ProseMirror::selection,
-.ProseMirror *::selection {
-  background-color: rgba(59, 130, 246, 0.3) !important;
-  color: inherit !important;
-}
-
-.ProseMirror::-webkit-selection,
-.ProseMirror *::-webkit-selection {
-  background-color: rgba(59, 130, 246, 0.3) !important;
-  color: inherit !important;
-}
-
-.ProseMirror::-moz-selection,
-.ProseMirror *::-moz-selection {
-  background-color: rgba(59, 130, 246, 0.3) !important;
-  color: inherit !important;
-}
-
-/* Prevent magnifying glass on iOS */
-.ProseMirror input,
-.ProseMirror textarea {
-  font-size: 16px !important; /* Prevents zoom on iOS */
-  -webkit-touch-callout: none !important;
 }
 
 /* Block elements */

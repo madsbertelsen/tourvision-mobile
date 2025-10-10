@@ -765,122 +765,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   }, [editable, onNodeFocus]);
 
 
-  // Prevent native selection menu on iOS/WebKit - only in read mode
-  useEffect(() => {
-    if (!mount) return;
-
-    // Only apply selection menu prevention in read mode
-    // In edit mode, we need normal touch/selection behavior
-    if (editable) {
-      return; // Skip all prevention in edit mode
-    }
-
-    // Prevent context menu (right-click and long-press)
-    const handleContextMenu = (e: Event) => {
-      // Only handle events within the ProseMirror editor
-      if (!mount.contains(e.target as HTMLElement)) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    };
-
-    // Prevent text selection menu on selection change
-    const handleSelectionChange = () => {
-      // Clear any native selection UI that might appear
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        // Keep the selection but prevent the menu
-        const range = selection.getRangeAt(0);
-        selection.removeAllRanges();
-        setTimeout(() => {
-          selection.addRange(range);
-        }, 0);
-      }
-    };
-
-    // Prevent default behavior for touch events that trigger selection UI
-    const handleTouchStart = (e: TouchEvent) => {
-      // Only handle events within the ProseMirror editor
-      const target = e.target as HTMLElement;
-      if (!mount.contains(target)) {
-        return; // Don't interfere with events outside the editor
-      }
-
-      // Track touch duration to detect long press
-      const touchStartTime = Date.now();
-
-      const handleTouchEnd = (endEvent: TouchEvent) => {
-        const touchDuration = Date.now() - touchStartTime;
-        // If it's a long press (> 500ms), prevent default behavior
-        if (touchDuration > 500 && mount.contains(endEvent.target as HTMLElement)) {
-          endEvent.preventDefault();
-          endEvent.stopPropagation();
-        }
-        document.removeEventListener('touchend', handleTouchEnd);
-      };
-
-      document.addEventListener('touchend', handleTouchEnd);
-
-      // Prevent multi-touch gestures that might trigger selection
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-
-    // Handle copy/cut/paste events to prevent the menu but allow the action
-    const handleClipboard = (e: ClipboardEvent) => {
-      // Allow the clipboard operation but prevent the menu
-      e.stopPropagation();
-    };
-
-    // Prevent the callout menu on link elements
-    const handleTouchCallout = (e: Event) => {
-      // Only handle events within the ProseMirror editor
-      if (!mount.contains(e.target as HTMLElement)) {
-        return;
-      }
-      e.preventDefault();
-      return false;
-    };
-
-    // Add all event listeners
-    mount.addEventListener('contextmenu', handleContextMenu, { capture: true });
-    mount.addEventListener('selectstart', handleTouchCallout, { capture: true });
-    mount.addEventListener('touchstart', handleTouchStart, { passive: false });
-    mount.addEventListener('copy', handleClipboard, { capture: true });
-    mount.addEventListener('cut', handleClipboard, { capture: true });
-    mount.addEventListener('paste', handleClipboard, { capture: true });
-
-    // Listen for selection changes globally
-    document.addEventListener('selectionchange', handleSelectionChange);
-
-    // Also apply to all child elements for thorough coverage
-    const applyToChildren = () => {
-      const allElements = mount.querySelectorAll('*');
-      allElements.forEach(el => {
-        (el as HTMLElement).style.webkitTouchCallout = 'none';
-        (el as HTMLElement).style.webkitUserSelect = 'text';
-      });
-    };
-
-    // Apply immediately and after any DOM changes
-    applyToChildren();
-    const observer = new MutationObserver(applyToChildren);
-    observer.observe(mount, { childList: true, subtree: true });
-
-    return () => {
-      mount.removeEventListener('contextmenu', handleContextMenu);
-      mount.removeEventListener('selectstart', handleTouchCallout);
-      mount.removeEventListener('touchstart', handleTouchStart);
-      mount.removeEventListener('copy', handleClipboard);
-      mount.removeEventListener('cut', handleClipboard);
-      mount.removeEventListener('paste', handleClipboard);
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      observer.disconnect();
-    };
-  }, [mount, editable]);
 
   return (
     <div className={`prosemirror-editor-wrapper ${editable ? 'edit-mode' : ''}`} style={{ height: '100%' }}>
@@ -895,7 +779,6 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
           <div
             ref={setMount}
             className="prosemirror-viewer"
-            onContextMenu={(e) => e.preventDefault()}
           />
         </ProseMirror>
       </div>
