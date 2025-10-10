@@ -248,15 +248,18 @@ function MapContent({
     if (!deckRef.current) return;
 
     const updateSize = () => {
-      const deck = deckRef.current?.deck;
-      if (deck) {
-        const canvas = deck.canvas;
-        if (canvas) {
+      try {
+        const deck = deckRef.current?.deck;
+        if (deck && deck.canvas) {
+          const canvas = deck.canvas;
           setViewportSize({
             width: canvas.width,
             height: canvas.height,
           });
         }
+      } catch (e) {
+        // Ignore errors during deck initialization
+        console.warn('[MapContent] Error updating size:', e);
       }
     };
 
@@ -305,26 +308,31 @@ function MapContent({
 
     // If we have a previous center, calculate the pixel delta (panning only)
     if (prevCenterRef.current && deckRef.current?.deck) {
-      const viewport = deckRef.current.deck.getViewports()[0];
+      try {
+        const viewport = deckRef.current.deck.getViewports()[0];
 
-      // Safety check: ensure viewport exists and has project method
-      if (!viewport || typeof viewport.project !== 'function') {
-        prevCenterRef.current = currentCenter;
-        return;
+        // Safety check: ensure viewport exists and has project method
+        if (!viewport || typeof viewport.project !== 'function') {
+          prevCenterRef.current = currentCenter;
+          return;
+        }
+
+        const prevPoint = viewport.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
+        const currentPoint = viewport.project([currentCenter.lng, currentCenter.lat]);
+
+        // Invert delta: when map center moves right, grid should move left (and vice versa)
+        const deltaX = prevPoint[0] - currentPoint[0];
+        const deltaY = prevPoint[1] - currentPoint[1];
+
+        // Update translation offset
+        setGridTranslate(prev => ({
+          x: prev.x + deltaX,
+          y: prev.y + deltaY
+        }));
+      } catch (e) {
+        // Ignore errors during animation
+        console.warn('[MapContent] Error updating grid translation:', e);
       }
-
-      const prevPoint = viewport.project([prevCenterRef.current.lng, prevCenterRef.current.lat]);
-      const currentPoint = viewport.project([currentCenter.lng, currentCenter.lat]);
-
-      // Invert delta: when map center moves right, grid should move left (and vice versa)
-      const deltaX = prevPoint[0] - currentPoint[0];
-      const deltaY = prevPoint[1] - currentPoint[1];
-
-      // Update translation offset
-      setGridTranslate(prev => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
-      }));
     }
 
     prevCenterRef.current = currentCenter;
@@ -350,48 +358,54 @@ function MapContent({
     setIsRecalculating(true);
 
     const recalculate = () => {
-      const deck = deckRef.current?.deck;
-      if (!deck) return;
+      try {
+        const deck = deckRef.current?.deck;
+        if (!deck) return;
 
-      const viewport = deck.getViewports()[0];
+        const viewport = deck.getViewports()[0];
 
-      // Safety check: ensure viewport exists and has project method
-      if (!viewport || typeof viewport.project !== 'function') {
-        return;
-      }
-
-      const mapProjection = (lng: number, lat: number) => {
-        try {
-          const point = viewport.project([lng, lat]);
-          return { x: point[0], y: point[1] };
-        } catch {
-          return null;
+        // Safety check: ensure viewport exists and has project method
+        if (!viewport || typeof viewport.project !== 'function') {
+          return;
         }
-      };
 
-      const newGridData = calculateEdgeLabels(
-        locations,
-        mapProjection,
-        viewportSize.width,
-        viewportSize.height,
-        MARKER_COLORS,
-        routes
-      );
+        const mapProjection = (lng: number, lat: number) => {
+          try {
+            const point = viewport.project([lng, lat]);
+            return { x: point[0], y: point[1] };
+          } catch {
+            return null;
+          }
+        };
 
-      setEdgeGridData(newGridData);
+        const newGridData = calculateEdgeLabels(
+          locations,
+          mapProjection,
+          viewportSize.width,
+          viewportSize.height,
+          MARKER_COLORS,
+          routes
+        );
 
-      // Reset translation after recalculation
-      setGridTranslate({ x: 0, y: 0 });
-      prevCenterRef.current = { lng: viewState.longitude, lat: viewState.latitude };
+        setEdgeGridData(newGridData);
 
-      // Mark recalculation complete and trigger animation
-      setIsRecalculating(false);
-      setShouldAnimateLabels(true);
+        // Reset translation after recalculation
+        setGridTranslate({ x: 0, y: 0 });
+        prevCenterRef.current = { lng: viewState.longitude, lat: viewState.latitude };
 
-      // Reset animation flag after transition completes
-      setTimeout(() => {
-        setShouldAnimateLabels(false);
-      }, 300);
+        // Mark recalculation complete and trigger animation
+        setIsRecalculating(false);
+        setShouldAnimateLabels(true);
+
+        // Reset animation flag after transition completes
+        setTimeout(() => {
+          setShouldAnimateLabels(false);
+        }, 300);
+      } catch (e) {
+        // Ignore errors during deck initialization
+        console.warn('[MapContent] Error recalculating edge labels:', e);
+        setIsRecalculating(false);
+      }
     };
 
     // Recalculate immediately on zoom change
@@ -1453,8 +1467,8 @@ export default function MapViewSimple({
   // deck.gl is optimized to efficiently compare layers and only update when needed.
   const layersArray: any[] = [];
 
-    // Route layers
-    activeRoutes.forEach((route) => {
+  // Route layers
+  activeRoutes.forEach((route) => {
     if (!route.geometry || !route.geometry.coordinates) return;
 
     const routeStyle = getRouteStyle(route.profile);
