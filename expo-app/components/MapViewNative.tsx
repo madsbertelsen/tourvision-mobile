@@ -88,6 +88,13 @@ function MapViewNative({
     }
   }, [focusedLocation, mapLoaded]);
 
+  // Helper function to extract city name from full address
+  const getShortLocationName = (fullName: string): string => {
+    // Split by comma and take the first part (city name)
+    const parts = fullName.split(',');
+    return parts[0]?.trim() || fullName;
+  };
+
   // Convert locations to GeoJSON for markers
   const locationFeatures = locations.map((location) => ({
     type: 'Feature' as const,
@@ -98,7 +105,7 @@ function MapViewNative({
     },
     properties: {
       id: location.id,
-      name: location.name,
+      name: getShortLocationName(location.name),
       description: location.description,
       colorIndex: location.colorIndex || 0,
     },

@@ -84,7 +84,8 @@ extension WKWebView {
                 children: [createLocationAction, addNoteAction]
             )
 
-            builder.insertSibling(customMenu, afterMenu: .standardEdit)
+            // Insert our custom menu BEFORE the standard edit menu to appear first
+            builder.insertSibling(customMenu, beforeMenu: .standardEdit)
             print("[DomWebViewExtension] ✅ Custom menu items added to builder")
         }
     }

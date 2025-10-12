@@ -1,4 +1,3 @@
-import { GeoMarkBottomSheet } from '@/components/GeoMarkBottomSheet';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { TripDocumentSheet } from '@/components/TripDocumentSheet';
@@ -12,7 +11,7 @@ import { useChat } from '@ai-sdk/react';
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { DefaultChatTransport } from 'ai';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { fetch as expoFetch } from 'expo/fetch';
 import { EditorState } from 'prosemirror-state';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,6 +34,7 @@ interface TripDetailViewProps {
 
 export default function TripDetailView({ tripId, initialMessage }: TripDetailViewProps) {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(true);
@@ -46,19 +46,58 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
   const [isEditMode, setIsEditMode] = useState(false);
   const initialMessageSentRef = useRef(false);
   const lastProcessedMessageIdRef = useRef<string | null>(null);
+  const wasInEditModeRef = useRef(false);
   const [fetchedRoutes, setFetchedRoutes] = useState<any[]>([]);
   const pendingWaypointUpdateRef = useRef<string | null>(null); // Track pending waypoint updates to prevent route flash
   const bottomSheetRef = useRef<BottomSheet>(null);
   const documentRef = useRef<any>(null);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const snapPoints = useMemo(() => ['15%', '50%', '90%'], []);
+  const snapPoints = useMemo(() => ['15%', '50%', '90%', '100%'], []);
   const [mapDimensions, setMapDimensions] = useState<{ width: number; height: number } | null>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
-  const [showGeoMarkSheet, setShowGeoMarkSheet] = useState(false);
-  const [geoMarkData, setGeoMarkData] = useState<any>(null);
-  const [existingLocations, setExistingLocations] = useState<Array<{ geoId: string; placeName: string }>>([]);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
+
+  // Track last processed location to prevent duplicates
+  const lastProcessedLocationRef = useRef<string | null>(null);
+
+  // Listen for location data returned from create-location modal
+  useFocusEffect(
+    useCallback(() => {
+      if (params.savedLocation) {
+        // Prevent duplicate processing
+        const locationStr = typeof params.savedLocation === 'string'
+          ? params.savedLocation
+          : JSON.stringify(params.savedLocation);
+
+        if (lastProcessedLocationRef.current === locationStr) {
+          console.log('[TripDetailView] Already processed this location, skipping');
+          return;
+        }
+
+        try {
+          const locationData = typeof params.savedLocation === 'string'
+            ? JSON.parse(params.savedLocation)
+            : params.savedLocation;
+
+          console.log('[TripDetailView] Received location data from modal:', locationData);
+          lastProcessedLocationRef.current = locationStr;
+
+          setGeoMarkDataToCreate(locationData);
+
+          // Clear the param
+          router.setParams({ savedLocation: undefined });
+
+          // Reset after creation
+          setTimeout(() => {
+            setGeoMarkDataToCreate(null);
+          }, 100);
+        } catch (error) {
+          console.error('[TripDetailView] Failed to parse saved location:', error);
+        }
+      }
+    }, [params.savedLocation, router])
+  );
 
   // API URL for chat
   const apiUrl = generateAPIUrl('/api/chat-simple');
@@ -84,6 +123,25 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
 
   const isChatLoading = status === 'submitted';
 
+  // Handle edit mode changes - expand sheet to 100% when entering edit mode
+  useEffect(() => {
+    if (isEditMode && !wasInEditModeRef.current) {
+      // Entering edit mode
+      console.log('[TripDetailView] Entering edit mode, expanding sheet to 100%');
+      wasInEditModeRef.current = true;
+      if (bottomSheetRef.current) {
+        bottomSheetRef.current.snapToIndex(3); // Index 3 = '100%'
+      }
+    } else if (!isEditMode && wasInEditModeRef.current) {
+      // Exiting edit mode
+      console.log('[TripDetailView] Exiting edit mode, restoring sheet to 50%');
+      wasInEditModeRef.current = false;
+      if (bottomSheetRef.current) {
+        bottomSheetRef.current.snapToIndex(1); // Index 1 = '50%'
+      }
+    }
+  }, [isEditMode]);
+
   // Set up keyboard listeners
   useEffect(() => {
     const showListener = Keyboard.addListener(
@@ -92,10 +150,10 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
         console.log('[TripDetailView] Keyboard height:', e.endCoordinates.height);
         setKeyboardHeight(e.endCoordinates.height);
 
-        // Expand bottom sheet to 90% when keyboard appears
+        // Expand bottom sheet to 100% when keyboard appears
         if (bottomSheetRef.current) {
-          console.log('[TripDetailView] Expanding sheet to 90% due to keyboard');
-          bottomSheetRef.current.snapToIndex(2); // Index 2 = '90%'
+          console.log('[TripDetailView] Expanding sheet to 100% due to keyboard');
+          bottomSheetRef.current.snapToIndex(3); // Index 3 = '100%'
         }
       }
     );
@@ -105,8 +163,8 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       () => {
         setKeyboardHeight(0);
 
-        // Return to 50% when keyboard disappears
-        if (bottomSheetRef.current) {
+        // Return to 50% when keyboard disappears (but only if not in edit mode)
+        if (bottomSheetRef.current && !isEditMode) {
           console.log('[TripDetailView] Restoring sheet to 50% after keyboard hide');
           bottomSheetRef.current.snapToIndex(1); // Index 1 = '50%'
         }
@@ -117,7 +175,7 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
       showListener.remove();
       hideListener.remove();
     };
-  }, []);
+  }, [isEditMode]);
 
   // Load trip data
   useEffect(() => {
@@ -510,13 +568,20 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     [currentTrip]
   );
 
-  // Handle showing geo-mark editor
+  // Handle showing geo-mark editor - navigate to modal route
   const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
     console.log('[TripDetailView] Opening geo-mark editor with data:', data);
-    setGeoMarkData(data);
-    setExistingLocations(locations || []);
-    setShowGeoMarkSheet(true);
-  }, []);
+
+    // Navigate to create-location modal with initial data
+    router.push({
+      pathname: '/create-location',
+      params: {
+        placeName: data?.placeName || '',
+        lat: data?.lat || '',
+        lng: data?.lng || '',
+      },
+    });
+  }, [router]);
 
   // Handle toolbar commands
   const handleToolbarCommand = useCallback((command: string, params?: any) => {
@@ -529,24 +594,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
     setSelectionEmpty(empty);
   }, []);
 
-  // Handle saving geo-mark
-  const handleGeoMarkSave = (data: any) => {
-    console.log('[TripDetailView] Saving geo-mark:', data);
-    setGeoMarkDataToCreate(data);
-    setShowGeoMarkSheet(false);
-
-    // Reset after a small delay
-    setTimeout(() => {
-      setGeoMarkDataToCreate(null);
-    }, 100);
-  };
-
-  // Handle canceling geo-mark creation
-  const handleGeoMarkCancel = () => {
-    console.log('[TripDetailView] Cancelled geo-mark creation');
-    setShowGeoMarkSheet(false);
-    setGeoMarkDataToCreate(null);
-  };
 
   // Extract locations and routes from the document for map display
   const extractLocationsAndRoutes = useCallback((doc: any) => {
@@ -1073,15 +1120,6 @@ export default function TripDetailView({ tripId, initialMessage }: TripDetailVie
           onSelectionChange={handleSelectionChange}
         />
       </BottomSheet>
-
-      {/* Geo-mark Bottom Sheet - render as sibling to main BottomSheet */}
-      <GeoMarkBottomSheet
-        isVisible={showGeoMarkSheet}
-        initialData={geoMarkData}
-        existingLocations={existingLocations}
-        onSave={handleGeoMarkSave}
-        onCancel={handleGeoMarkCancel}
-      />
 
       {/* Hoisted toolbar - only show when keyboard is visible */}
       {isEditMode && keyboardHeight > 0 && (

@@ -14,6 +14,7 @@ interface TripDocumentSheetProps {
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
   onSelectionChange?: (empty: boolean) => void;
+  onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
 }
 
 export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
@@ -26,6 +27,7 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
   onShowGeoMarkEditor,
   geoMarkDataToCreate,
   onSelectionChange,
+  onGeoMarkNavigate,
 }, ref) => {
   const viewerRef = useRef<any>(null);
   const screenHeight = Dimensions.get('window').height;
@@ -55,6 +57,7 @@ export const TripDocumentSheet = forwardRef<any, TripDocumentSheetProps>(({
             onShowGeoMarkEditor={onShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
             onSelectionChange={onSelectionChange}
+            onGeoMarkNavigate={onGeoMarkNavigate}
           />
         ) : (
           <View style={styles.centerContent}>

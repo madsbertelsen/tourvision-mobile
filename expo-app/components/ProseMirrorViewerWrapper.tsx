@@ -14,6 +14,7 @@ interface ProseMirrorViewerWrapperProps {
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
   onSelectionChange?: (empty: boolean) => void;
+  onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
 }
 
 export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapperProps>(({
@@ -24,7 +25,8 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
   onChange,
   onShowGeoMarkEditor,
   geoMarkDataToCreate,
-  onSelectionChange
+  onSelectionChange,
+  onGeoMarkNavigate
 }, ref) => {
   const viewerRef = useRef<ProseMirrorViewerRef>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,6 +134,7 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
             onSelectionChange={handleSelectionChange}
+            onGeoMarkNavigate={onGeoMarkNavigate}
             dom={{
               style: {
                 height: '100%',
