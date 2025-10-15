@@ -145,12 +145,20 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Trips</Text>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => router.push('/(mock)/prosemirror-test')}
-        >
-          <Text style={styles.testButtonText}>Test Editor</Text>
-        </TouchableOpacity>
+        <View style={styles.testButtons}>
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={() => router.push('/(mock)/link-preview-test')}
+          >
+            <Text style={styles.testButtonText}>Link Preview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={() => router.push('/(mock)/prosemirror-test')}
+          >
+            <Text style={styles.testButtonText}>Test Editor</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* URL Input Section */}
@@ -270,6 +278,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  testButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
   testButton: {
     paddingHorizontal: 12,

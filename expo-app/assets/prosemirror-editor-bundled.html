@@ -17,14 +17,14 @@
     }
 
     #editor-container {
-      padding: 16px;
+      padding: 0;
       min-height: 100vh;
       background: white;
     }
 
     .ProseMirror {
       outline: none;
-      padding: 16px;
+      padding: 0;
       min-height: 300px;
       background: white;
       border: 1px solid #e0e0e0;
@@ -89,14 +89,80 @@
       background: #f44336;
     }
 
-    #editor-container {
+    #editor-wrapper {
       margin-top: 40px;
+    }
+
+    #toolbar {
+      display: flex;
+      gap: 4px;
+      padding: 8px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    #toolbar button {
+      padding: 6px 12px;
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #toolbar button:hover {
+      background: #f3f4f6;
+      border-color: #9ca3af;
+    }
+
+    #toolbar button:active {
+      background: #e5e7eb;
+      transform: scale(0.98);
+    }
+
+    #toolbar button.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #2563eb;
+    }
+
+    #toolbar button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #toolbar .separator {
+      width: 1px;
+      height: 24px;
+      background: #e5e7eb;
+      margin: 0 4px;
+    }
+
+    #editor-container {
+      padding: 0;
     }
   </style>
 </head>
 <body>
   <div class="status-bar" id="status">Loading ProseMirror...</div>
-  <div id="editor-container"></div>
+  <div id="editor-wrapper">
+    <div id="toolbar">
+      <button id="btn-paragraph" title="Paragraph">P</button>
+      <button id="btn-h1" title="Heading 1">H1</button>
+      <button id="btn-h2" title="Heading 2">H2</button>
+      <button id="btn-h3" title="Heading 3">H3</button>
+      <div class="separator"></div>
+      <button id="btn-bold" title="Bold">B</button>
+      <button id="btn-italic" title="Italic">I</button>
+    </div>
+    <div id="editor-container"></div>
+  </div>
 
   <script>
     console.log('[WebView] Script starting...');
@@ -222,11 +288,154 @@
               empty: newSelection.empty
             });
           }
+
+          // Update toolbar button states
+          if (typeof updateToolbar === 'function') {
+            updateToolbar();
+          }
         }
       });
 
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
+
+      // Toolbar command functions
+      function setBlockType(nodeType, attrs = {}) {
+        return function(state, dispatch) {
+          const { from, to } = state.selection;
+          const { $from } = state.selection;
+
+          // Get the parent node
+          const parentDepth = $from.depth;
+          const parent = $from.node(parentDepth);
+
+          if (dispatch) {
+            const tr = state.tr.setBlockType(from, to, nodeType, attrs);
+            dispatch(tr);
+          }
+          return true;
+        };
+      }
+
+      function toggleMark(markType) {
+        return function(state, dispatch) {
+          const { from, to } = state.selection;
+          const hasMark = state.doc.rangeHasMark(from, to, markType);
+
+          if (dispatch) {
+            if (hasMark) {
+              dispatch(state.tr.removeMark(from, to, markType));
+            } else {
+              dispatch(state.tr.addMark(from, to, markType.create()));
+            }
+          }
+          return true;
+        };
+      }
+
+      function isNodeTypeActive(state, nodeType, attrs = {}) {
+        const { $from, to } = state.selection;
+        const node = $from.parent;
+
+        if (node.type.name !== nodeType.name) {
+          return false;
+        }
+
+        // Check attributes match
+        for (let key in attrs) {
+          if (node.attrs[key] !== attrs[key]) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      function isMarkActive(state, markType) {
+        const { from, to } = state.selection;
+        return state.doc.rangeHasMark(from, to, markType);
+      }
+
+      // Update toolbar button states
+      function updateToolbar() {
+        const state = editorView.state;
+
+        // Update block type buttons
+        document.getElementById('btn-paragraph').classList.toggle(
+          'active',
+          isNodeTypeActive(state, schema.nodes.paragraph)
+        );
+        document.getElementById('btn-h1').classList.toggle(
+          'active',
+          isNodeTypeActive(state, schema.nodes.heading, { level: 1 })
+        );
+        document.getElementById('btn-h2').classList.toggle(
+          'active',
+          isNodeTypeActive(state, schema.nodes.heading, { level: 2 })
+        );
+        document.getElementById('btn-h3').classList.toggle(
+          'active',
+          isNodeTypeActive(state, schema.nodes.heading, { level: 3 })
+        );
+
+        // Update mark buttons
+        if (schema.marks.strong) {
+          document.getElementById('btn-bold').classList.toggle(
+            'active',
+            isMarkActive(state, schema.marks.strong)
+          );
+        }
+        if (schema.marks.em) {
+          document.getElementById('btn-italic').classList.toggle(
+            'active',
+            isMarkActive(state, schema.marks.em)
+          );
+        }
+      }
+
+      // Wire up toolbar buttons
+      document.getElementById('btn-paragraph').addEventListener('click', function() {
+        const command = setBlockType(schema.nodes.paragraph);
+        command(editorView.state, editorView.dispatch);
+        editorView.focus();
+      });
+
+      document.getElementById('btn-h1').addEventListener('click', function() {
+        const command = setBlockType(schema.nodes.heading, { level: 1 });
+        command(editorView.state, editorView.dispatch);
+        editorView.focus();
+      });
+
+      document.getElementById('btn-h2').addEventListener('click', function() {
+        const command = setBlockType(schema.nodes.heading, { level: 2 });
+        command(editorView.state, editorView.dispatch);
+        editorView.focus();
+      });
+
+      document.getElementById('btn-h3').addEventListener('click', function() {
+        const command = setBlockType(schema.nodes.heading, { level: 3 });
+        command(editorView.state, editorView.dispatch);
+        editorView.focus();
+      });
+
+      if (schema.marks.strong) {
+        document.getElementById('btn-bold').addEventListener('click', function() {
+          const command = toggleMark(schema.marks.strong);
+          command(editorView.state, editorView.dispatch);
+          editorView.focus();
+        });
+      }
+
+      if (schema.marks.em) {
+        document.getElementById('btn-italic').addEventListener('click', function() {
+          const command = toggleMark(schema.marks.em);
+          command(editorView.state, editorView.dispatch);
+          editorView.focus();
+        });
+      }
+
+      // Update toolbar on initial load
+      updateToolbar();
 
       // Add click handler for geo-marks
       document.querySelector('#editor-container').addEventListener('click', function(e) {

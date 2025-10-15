@@ -102,6 +102,31 @@ function MockLayoutContent() {
           presentation: 'modal',
         }}
       />
+      <Drawer.Screen
+        name="prosemirror-test"
+        options={{
+          title: 'ProseMirror Test',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+        }}
+      />
+      <Drawer.Screen
+        name="location-preview/[id]"
+        options={{
+          title: 'Location Preview',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+          presentation: 'modal',
+        }}
+      />
+      <Drawer.Screen
+        name="link-preview-test"
+        options={{
+          title: 'Link Preview Test',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+        }}
+      />
     </Drawer>
   );
 }

@@ -117,14 +117,24 @@ export default function CreateLocationScreen() {
 
     console.log('[CreateLocation] Saving location:', geoMarkData);
 
-    // Navigate back to the trip screen with the saved location data
+    // Navigate back with the saved location data
     if (params.tripId) {
-      router.navigate({
-        pathname: `/(mock)/trip/${params.tripId}`,
-        params: {
-          savedLocation: JSON.stringify(geoMarkData)
-        }
-      });
+      // Check if this is from prosemirror-test or a real trip
+      if (params.tripId === 'prosemirror-test') {
+        router.navigate({
+          pathname: '/(mock)/prosemirror-test',
+          params: {
+            savedLocation: JSON.stringify(geoMarkData)
+          }
+        });
+      } else {
+        router.navigate({
+          pathname: `/(mock)/trip/${params.tripId}`,
+          params: {
+            savedLocation: JSON.stringify(geoMarkData)
+          }
+        });
+      }
     } else {
       // Fallback to router.back() if tripId is not available
       console.warn('[CreateLocation] No tripId available, falling back to router.back()');

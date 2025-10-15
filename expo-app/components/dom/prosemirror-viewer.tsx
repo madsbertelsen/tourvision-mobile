@@ -14,12 +14,19 @@ import { baseKeymap } from 'prosemirror-commands';
 import { history, undo, redo } from 'prosemirror-history';
 import './prosemirror-viewer-styles.css';
 
+interface ContentUpdate {
+  doc: any; // ProseMirror JSON document
+  revision: number; // Increment this to trigger external updates
+  source?: 'external' | 'streaming' | 'init'; // Source of the update
+}
+
 interface ProseMirrorViewerProps {
-  content?: any; // ProseMirror JSON document
+  content?: any; // Deprecated: use contentUpdate instead
+  contentUpdate?: ContentUpdate; // New: revision-based content updates
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
   editable?: boolean;
-  onChange?: (doc: any) => void;
+  onChange?: (doc: any, revision: number) => void; // Now includes revision
   onMessage?: (event: any) => void;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any; // Trigger geo-mark creation when this changes
@@ -319,6 +326,7 @@ if (typeof window !== 'undefined') {
 const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProps>((
   {
     content,
+    contentUpdate,
     onNodeFocus,
     focusedNodeId,
     editable = false,
@@ -337,8 +345,11 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [viewRef, setViewRef] = useState<any>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
 
-  // Track whether we're in the middle of updating to prevent circular updates
-  const isUpdatingRef = useRef(false);
+  // Track the last applied revision to prevent re-applying same content
+  const lastAppliedRevisionRef = useRef<number>(0);
+
+  // Track the current revision for internal changes
+  const currentRevisionRef = useRef<number>(0);
 
   // Hide iOS keyboard accessory view on mount
   useEffect(() => {

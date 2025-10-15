@@ -1,6 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 
 export interface ProseMirrorWebViewRef {
   sendCommand: (command: string, params?: any) => void;
@@ -43,6 +44,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     const webViewRef = useRef<WebView>(null);
     const [isReady, setIsReady] = useState(false);
     const lastProcessedGeoMarkRef = useRef<string | null>(null);
+    const lastContentHashRef = useRef<string | null>(null);
+    const isInternalChangeRef = useRef(false);
 
     // Send message to WebView
     const sendMessage = useCallback((message: any) => {
@@ -80,6 +83,26 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             case 'ready':
               console.log('[ProseMirrorWebView] WebView is ready');
               setIsReady(true);
+
+              // Inject shared CSS styles with consistent padding
+              const sharedCSS = toCSS(PROSE_STYLES);
+              const cssInjection = `
+                (function() {
+                  // Find or create shared styles element
+                  let styleEl = document.getElementById('shared-prose-styles');
+                  if (!styleEl) {
+                    styleEl = document.createElement('style');
+                    styleEl.id = 'shared-prose-styles';
+                    document.head.appendChild(styleEl);
+                  }
+                  styleEl.textContent = ${JSON.stringify(sharedCSS)} +
+                    '\\n#editor-container { padding: 0 !important; }' +
+                    '\\n.ProseMirror { padding: 16px !important; }';
+                  console.log('[WebView] Injected shared CSS styles with 16px padding');
+                })();
+              `;
+              webViewRef.current?.injectJavaScript(cssInjection);
+
               // Send initial content once ready
               if (content) {
                 sendMessage({ type: 'setContent', content });
@@ -101,7 +124,15 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             case 'documentChange':
               if (onChange) {
+                // Mark this as an internal change to prevent circular updates
+                isInternalChangeRef.current = true;
+                const docHash = JSON.stringify(data.doc);
+                lastContentHashRef.current = docHash;
                 onChange(data.doc);
+                // Reset flag after a short delay
+                setTimeout(() => {
+                  isInternalChangeRef.current = false;
+                }, 100);
               }
               break;
 
@@ -139,10 +170,24 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
     // Update content when it changes externally
     useEffect(() => {
-      if (isReady && content) {
-        console.log('[ProseMirrorWebView] Sending content update to WebView');
-        sendMessage({ type: 'setContent', content });
+      if (!isReady || !content) return;
+
+      // Skip if this is from our own onChange callback
+      if (isInternalChangeRef.current) {
+        console.log('[ProseMirrorWebView] Skipping content update (internal change)');
+        return;
       }
+
+      // Check if content actually changed
+      const contentHash = JSON.stringify(content);
+      if (contentHash === lastContentHashRef.current) {
+        console.log('[ProseMirrorWebView] Skipping content update (unchanged)');
+        return;
+      }
+
+      console.log('[ProseMirrorWebView] Sending external content update to WebView');
+      lastContentHashRef.current = contentHash;
+      sendMessage({ type: 'setContent', content });
     }, [content, isReady, sendMessage]);
 
     // Update editable state when it changes
@@ -277,9 +322,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           mixedContentMode="always"
           // Disable zoom
           scalesPageToFit={false}
-          // Allow network access for CDN scripts
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
           // Enable debugging
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;

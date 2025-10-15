@@ -1,7 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
-import { router } from 'expo-router';
+import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
 /**
  * Test screen for WebView + Vanilla JavaScript ProseMirror approach
@@ -19,9 +21,14 @@ import { router } from 'expo-router';
  */
 export default function ProseMirrorTestScreen() {
   const editorRef = useRef<ProseMirrorWebViewRef>(null);
+  const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const [isEditMode, setIsEditMode] = useState(false);
-  const [lastSavedDoc, setLastSavedDoc] = useState<any>(null);
+  const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [currentRevision, setCurrentRevision] = useState(0);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
+  const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
+  const lastProcessedLocationRef = useRef<string | null>(null);
 
   // Sample content for testing
   const sampleContent = {
@@ -43,7 +50,7 @@ export default function ProseMirrorTestScreen() {
         type: 'paragraph',
         attrs: { id: 'para-2' },
         content: [
-          { type: 'text', text: 'Try editing this text! Click Edit Mode to start typing.' }
+          { type: 'text', text: 'Try editing this text! Click Edit Mode to start typing. Your changes are automatically saved!' }
         ]
       },
       {
@@ -52,16 +59,21 @@ export default function ProseMirrorTestScreen() {
         content: [
           { type: 'text', text: 'Visit ' },
           {
-            type: 'geoMark',
-            attrs: {
-              geoId: 'test-loc-1',
-              placeName: 'Eiffel Tower',
-              lat: '48.8584',
-              lng: '2.2945',
-              colorIndex: 0,
-              coordSource: 'manual'
-            },
-            content: [{ type: 'text', text: 'Eiffel Tower' }]
+            type: 'text',
+            text: 'Eiffel Tower',
+            marks: [
+              {
+                type: 'geoMark',
+                attrs: {
+                  geoId: 'test-loc-1',
+                  placeName: 'Eiffel Tower',
+                  lat: '48.8584',
+                  lng: '2.2945',
+                  colorIndex: 0,
+                  coordSource: 'manual'
+                }
+              }
+            ]
           },
           { type: 'text', text: ' in Paris!' }
         ]
@@ -69,9 +81,58 @@ export default function ProseMirrorTestScreen() {
     ]
   };
 
+  // Initialize with sample content on mount
+  useEffect(() => {
+    if (!currentDoc) {
+      console.log('[ProseMirrorTest] Initializing with sample content');
+      setCurrentDoc(sampleContent);
+      setCurrentRevision(1);
+    }
+  }, []);
+
+  // Listen for location data returned from create-location modal
+  useFocusEffect(
+    useCallback(() => {
+      if (params.savedLocation) {
+        const locationStr = typeof params.savedLocation === 'string'
+          ? params.savedLocation
+          : JSON.stringify(params.savedLocation);
+
+        if (lastProcessedLocationRef.current === locationStr) {
+          console.log('[ProseMirrorTest] Already processed this location, skipping');
+          return;
+        }
+
+        try {
+          const locationData = typeof params.savedLocation === 'string'
+            ? JSON.parse(params.savedLocation)
+            : params.savedLocation;
+
+          console.log('[ProseMirrorTest] Received location data from modal:', locationData);
+          lastProcessedLocationRef.current = locationStr;
+
+          // Set the data to create - this will be picked up by the WebView
+          setGeoMarkDataToCreate(locationData);
+
+          // Clear the params immediately to avoid re-processing
+          router.setParams({ savedLocation: undefined });
+
+          // Clear the data after a longer timeout to ensure component has processed it
+          setTimeout(() => {
+            console.log('[ProseMirrorTest] Clearing geoMarkDataToCreate');
+            setGeoMarkDataToCreate(null);
+          }, 1000);
+        } catch (error) {
+          console.error('[ProseMirrorTest] Failed to parse saved location:', error);
+        }
+      }
+    }, [params.savedLocation, router])
+  );
+
   const handleDocumentChange = (doc: any) => {
-    console.log('[ProseMirrorTest] Document changed:', doc);
-    setLastSavedDoc(doc);
+    console.log('[ProseMirrorTest] Document changed, saving...');
+    setCurrentDoc(doc);
+    // Don't increment revision for internal changes - only for external updates
   };
 
   const handleSelectionChange = (empty: boolean) => {
@@ -88,25 +149,34 @@ export default function ProseMirrorTestScreen() {
 
   const handleGeoMarkNavigate = (attrs: any) => {
     console.log('[ProseMirrorTest] Navigate to location:', attrs);
-    alert(`Navigate to: ${attrs.placeName}\nLat: ${attrs.lat}, Lng: ${attrs.lng}`);
+
+    // Navigate to location preview screen
+    router.push({
+      pathname: '/(mock)/location-preview/[id]',
+      params: {
+        id: attrs.geoId || 'unknown',
+        name: attrs.placeName || 'Location',
+        lat: attrs.lat || '0',
+        lng: attrs.lng || '0',
+        description: attrs.description || '',
+        colorIndex: attrs.colorIndex?.toString() || '0',
+      },
+    });
   };
 
   const handleShowGeoMarkEditor = (data: any, locations: any[]) => {
     console.log('[ProseMirrorTest] Show geo-mark editor:', data, locations);
 
-    // For testing, just create a simple location
-    const geoMarkData = {
-      geoId: `test-loc-${Date.now()}`,
-      placeName: data.placeName || 'New Location',
-      lat: '48.8566',
-      lng: '2.3522',
-      colorIndex: data.colorIndex || 0,
-      description: 'Test location',
-      coordSource: 'manual'
-    };
-
-    // Send the geo-mark data back to the WebView
-    editorRef.current?.createGeoMarkWithData(geoMarkData);
+    // Navigate to create-location screen
+    router.push({
+      pathname: '/(mock)/create-location',
+      params: {
+        tripId: 'prosemirror-test', // Use a test trip ID
+        placeName: data.placeName || '',
+        lat: data.lat || '',
+        lng: data.lng || '',
+      },
+    });
   };
 
   const toggleEditMode = () => {
@@ -114,8 +184,9 @@ export default function ProseMirrorTestScreen() {
   };
 
   const loadSampleContent = () => {
-    // The content will be passed via props and the WebView will handle it
-    console.log('[ProseMirrorTest] Sample content loaded');
+    console.log('[ProseMirrorTest] Loading sample content with new revision');
+    setCurrentDoc(sampleContent);
+    setCurrentRevision(prev => prev + 1); // Increment revision to trigger update
   };
 
   const createGeoMark = () => {
@@ -134,7 +205,7 @@ export default function ProseMirrorTestScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
@@ -190,25 +261,34 @@ export default function ProseMirrorTestScreen() {
         </Text>
       </View>
 
-      {/* Editor with Keyboard-Aware Toolbar */}
+      {/* Editor - Keep WebView mounted but hidden in read mode */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <View style={styles.editorContainer}>
+        {/* WebView - Always mounted, hidden in read mode */}
+        <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
           <ProseMirrorWebView
             ref={editorRef}
-            content={sampleContent}
+            content={currentDoc}
             editable={isEditMode}
             onChange={handleDocumentChange}
             onSelectionChange={handleSelectionChange}
             onGeoMarkNavigate={handleGeoMarkNavigate}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            geoMarkDataToCreate={geoMarkDataToCreate}
           />
         </View>
 
-        {/* Keyboard Toolbar */}
+        {/* Native Renderer - Only visible in read mode */}
+        {!isEditMode && (
+          <View style={styles.nativeRendererContainer}>
+            <ProseMirrorNativeRenderer content={currentDoc} />
+          </View>
+        )}
+
+        {/* Keyboard Toolbar - Only in edit mode */}
         {isEditMode && (
           <View style={styles.toolbar}>
             <TouchableOpacity
@@ -251,13 +331,13 @@ export default function ProseMirrorTestScreen() {
       </KeyboardAvoidingView>
 
       {/* Debug Info */}
-      {lastSavedDoc && (
+      {currentDoc && (
         <View style={styles.debugInfo}>
           <Text style={styles.debugText}>
             Last saved: {new Date().toLocaleTimeString()}
           </Text>
           <Text style={styles.debugText} numberOfLines={2}>
-            Doc nodes: {lastSavedDoc.content?.length || 0}
+            Doc nodes: {currentDoc.content?.length || 0} | Revision: {currentRevision}
           </Text>
         </View>
       )}
@@ -344,6 +424,23 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  hidden: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  nativeRendererContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#ffffff',
   },
   toolbar: {
