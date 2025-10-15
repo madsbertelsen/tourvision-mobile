@@ -197,9 +197,11 @@
 
           // Send document changes to native
           if (transaction.docChanged) {
+            const docJSON = newState.doc.toJSON();
+            console.log('[WebView] Document changed, sending to native:', JSON.stringify(docJSON));
             sendMessageToNative({
               type: 'documentChange',
-              doc: newState.doc.toJSON()
+              doc: docJSON
             });
           }
 
@@ -383,21 +385,46 @@
 
           switch (data.type) {
             case 'setContent':
-              console.log('[WebView] Setting content:', data.content);
+              console.log('[WebView] Setting content:', JSON.stringify(data.content));
               if (data.content && editorView) {
-                const newState = EditorState.create({
-                  doc: schema.nodeFromJSON(data.content),
-                  plugins: state.plugins
-                });
-                editorView.updateState(newState);
-                state = newState;
+                try {
+                  const doc = schema.nodeFromJSON(data.content);
+                  console.log('[WebView] Created doc from JSON:', doc.toString());
+                  console.log('[WebView] Doc content:', doc.content.toString());
 
-                // Send updated toolbar state after loading content
-                const toolbarState = getToolbarState();
-                sendMessageToNative({
-                  type: 'toolbarStateChange',
-                  state: toolbarState
-                });
+                  // Check for headings in the document
+                  let hasHeadings = false;
+                  doc.descendants((node) => {
+                    if (node.type.name === 'heading') {
+                      console.log('[WebView] Found heading node, level:', node.attrs.level);
+                      hasHeadings = true;
+                    }
+                  });
+                  console.log('[WebView] Document has headings:', hasHeadings);
+
+                  // Create new state with fresh plugins
+                  const newState = EditorState.create({
+                    doc: doc,
+                    schema: schema,
+                    plugins: [
+                      history(),
+                      keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                      keymap(baseKeymap)
+                    ]
+                  });
+                  editorView.updateState(newState);
+                  state = newState;
+
+                  // Send updated toolbar state after loading content
+                  const toolbarState = getToolbarState();
+                  sendMessageToNative({
+                    type: 'toolbarStateChange',
+                    state: toolbarState
+                  });
+                } catch (e) {
+                  console.error('[WebView] Error creating doc from JSON:', e);
+                  console.error('[WebView] Content was:', JSON.stringify(data.content));
+                }
               }
               break;
 

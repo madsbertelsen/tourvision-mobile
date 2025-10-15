@@ -98,6 +98,7 @@ export default function TripLayout() {
         // Load document from trip
         if (trip.document) {
           console.log('[TripLayout] Loading document from trip');
+          console.log('[TripLayout] Loaded document structure:', JSON.stringify(trip.document));
           setCurrentDoc(trip.document);
         } else {
           console.log('[TripLayout] No document found, creating blank');
@@ -120,6 +121,7 @@ export default function TripLayout() {
   const handleDocumentChange = useCallback(
     async (doc: any) => {
       console.log('[TripLayout] Document changed, saving...');
+      console.log('[TripLayout] Document structure:', JSON.stringify(doc));
       setCurrentDoc(doc);
 
       if (!currentTrip) {
@@ -136,6 +138,7 @@ export default function TripLayout() {
       await saveTrip(updatedTrip);
       setCurrentTrip(updatedTrip);
       console.log('[TripLayout] Document saved to local storage');
+      console.log('[TripLayout] Saved document structure:', JSON.stringify(doc));
     },
     [currentTrip]
   );
