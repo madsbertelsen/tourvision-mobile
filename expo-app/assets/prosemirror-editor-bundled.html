@@ -186,7 +186,8 @@
       editorView = new EditorView(document.querySelector('#editor-container'), {
         state: state,
         dispatchTransaction(transaction) {
-          const newState = editorView.state.apply(transaction);
+          const oldState = editorView.state;
+          const newState = oldState.apply(transaction);
           editorView.updateState(newState);
 
           // Send document changes to native
@@ -194,6 +195,17 @@
             sendMessageToNative({
               type: 'documentChange',
               doc: newState.doc.toJSON()
+            });
+          }
+
+          // Send selection changes to native
+          const oldSelection = oldState.selection;
+          const newSelection = newState.selection;
+          if (!oldSelection.eq(newSelection)) {
+            console.log('[WebView] Selection changed, empty:', newSelection.empty);
+            sendMessageToNative({
+              type: 'selectionChange',
+              empty: newSelection.empty
             });
           }
         }
@@ -207,6 +219,65 @@
         type: 'ready',
         message: 'ProseMirror editor initialized'
       });
+
+      // Listen for iOS custom menu actions
+      // iOS will trigger this when custom menu items are selected
+      document.addEventListener('selectionchange', function() {
+        console.log('[WebView] Selection changed via DOM');
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+          const selectedText = selection.toString();
+          console.log('[WebView] Selected text from DOM:', selectedText);
+        }
+      });
+
+      // Intercept iOS UIMenuItem actions via a hidden input trick
+      // When iOS menu items are clicked, we can detect it through focus/blur events
+      let lastSelectedText = '';
+      let pendingGeoMarkCreation = false;
+
+      // Store selection when text is selected
+      document.addEventListener('selectionchange', function() {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+          lastSelectedText = selection.toString();
+          console.log('[WebView] Stored selected text:', lastSelectedText);
+        }
+      });
+
+      // Create a global function that iOS can call
+      window.createLocationFromSelection = function() {
+        console.log('[WebView] createLocationFromSelection called!');
+        const { state } = editorView;
+        const { selection } = state;
+
+        if (selection.empty) {
+          console.warn('[WebView] No text selected');
+          return;
+        }
+
+        const selectedText = state.doc.textBetween(
+          selection.from,
+          selection.to,
+          ' '
+        );
+
+        console.log('[WebView] Creating location from iOS menu for:', selectedText);
+
+        // Send request to show geo-mark editor
+        sendMessageToNative({
+          type: 'showGeoMarkEditor',
+          data: {
+            placeName: selectedText,
+            from: selection.from,
+            to: selection.to
+          },
+          existingLocations: []
+        });
+      };
+
+      // Expose to window for iOS to call
+      window.handleCreateLocation = window.createLocationFromSelection;
 
       // Listen for messages from React Native
       window.addEventListener('message', function(event) {
@@ -241,6 +312,68 @@
                 sendMessageToNative({
                   type: 'stateResponse',
                   state: editorView.state.doc.toJSON()
+                });
+              }
+              break;
+
+            case 'createGeoMark':
+              console.log('[WebView] Creating geo-mark with data:', data.geoMarkData);
+              if (editorView && data.geoMarkData) {
+                const { state, dispatch } = editorView;
+                const { selection } = state;
+                const { from, to } = selection;
+
+                // For now, just replace selected text with the place name
+                // In a full implementation, you'd create a custom geo-mark node
+                const tr = state.tr.replaceWith(
+                  from,
+                  to,
+                  schema.text(data.geoMarkData.placeName + ' 📍')
+                );
+                dispatch(tr);
+
+                console.log('[WebView] Geo-mark created successfully');
+                sendMessageToNative({
+                  type: 'info',
+                  message: 'Location created: ' + data.geoMarkData.placeName
+                });
+              }
+              break;
+
+            case 'command':
+              console.log('[WebView] Executing command:', data.command);
+              if (data.command === 'createGeoMark' && editorView) {
+                const { state, dispatch } = editorView;
+                const { selection } = state;
+
+                // Check if there's selected text
+                if (selection.empty) {
+                  console.warn('[WebView] No text selected for geo-mark');
+                  sendMessageToNative({
+                    type: 'error',
+                    message: 'Please select text to create a location'
+                  });
+                  break;
+                }
+
+                // Get selected text
+                const selectedText = state.doc.textBetween(
+                  selection.from,
+                  selection.to,
+                  ' '
+                );
+
+                console.log('[WebView] Selected text:', selectedText);
+
+                // Send request to show geo-mark editor with selected text
+                sendMessageToNative({
+                  type: 'showGeoMarkEditor',
+                  data: {
+                    placeName: selectedText,
+                    from: selection.from,
+                    to: selection.to
+                  },
+                  existingLocations: []
                 });
               }
               break;

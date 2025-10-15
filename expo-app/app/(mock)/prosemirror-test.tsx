@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { router } from 'expo-router';
 
@@ -77,6 +77,13 @@ export default function ProseMirrorTestScreen() {
   const handleSelectionChange = (empty: boolean) => {
     console.log('[ProseMirrorTest] Selection empty:', empty);
     setSelectionEmpty(empty);
+
+    // If text is selected and we're in edit mode, prepare for iOS menu action
+    if (!empty && isEditMode) {
+      console.log('[ProseMirrorTest] Text selected, iOS menu may appear');
+      // Set a flag that iOS menu might be triggered
+      // We'll handle the actual trigger via the iOS menu callback
+    }
   };
 
   const handleGeoMarkNavigate = (attrs: any) => {
@@ -112,10 +119,15 @@ export default function ProseMirrorTestScreen() {
   };
 
   const createGeoMark = () => {
+    console.log('[ProseMirrorTest] Create Location button clicked');
+    console.log('[ProseMirrorTest] Selection empty:', selectionEmpty);
+
     if (selectionEmpty) {
       alert('Please select some text first!');
       return;
     }
+
+    console.log('[ProseMirrorTest] Sending createGeoMark command to WebView');
     editorRef.current?.sendCommand('createGeoMark');
   };
 
@@ -156,6 +168,18 @@ export default function ProseMirrorTestScreen() {
         <TouchableOpacity onPress={loadSampleContent} style={styles.button}>
           <Text style={styles.buttonText}>Load Sample</Text>
         </TouchableOpacity>
+
+        {/* Simulate iOS menu action */}
+        {!selectionEmpty && isEditMode && (
+          <TouchableOpacity
+            onPress={() => editorRef.current?.triggerCreateLocation()}
+            style={[styles.button, { backgroundColor: '#10b981' }]}
+          >
+            <Text style={[styles.buttonText, { color: 'white' }]}>
+              📍 iOS Menu Test
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Info Banner */}
@@ -166,18 +190,65 @@ export default function ProseMirrorTestScreen() {
         </Text>
       </View>
 
-      {/* Editor */}
-      <View style={styles.editorContainer}>
-        <ProseMirrorWebView
-          ref={editorRef}
-          content={sampleContent}
-          editable={isEditMode}
-          onChange={handleDocumentChange}
-          onSelectionChange={handleSelectionChange}
-          onGeoMarkNavigate={handleGeoMarkNavigate}
-          onShowGeoMarkEditor={handleShowGeoMarkEditor}
-        />
-      </View>
+      {/* Editor with Keyboard-Aware Toolbar */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <View style={styles.editorContainer}>
+          <ProseMirrorWebView
+            ref={editorRef}
+            content={sampleContent}
+            editable={isEditMode}
+            onChange={handleDocumentChange}
+            onSelectionChange={handleSelectionChange}
+            onGeoMarkNavigate={handleGeoMarkNavigate}
+            onShowGeoMarkEditor={handleShowGeoMarkEditor}
+          />
+        </View>
+
+        {/* Keyboard Toolbar */}
+        {isEditMode && (
+          <View style={styles.toolbar}>
+            <TouchableOpacity
+              onPress={() => editorRef.current?.triggerCreateLocation()}
+              style={[styles.toolbarButton, selectionEmpty && styles.toolbarButtonDisabled]}
+              disabled={selectionEmpty}
+            >
+              <Text style={styles.toolbarButtonText}>📍 Create Location</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('bold')}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>B</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('italic')}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>I</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('undo')}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>↶</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('redo')}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>↷</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </KeyboardAvoidingView>
 
       {/* Debug Info */}
       {lastSavedDoc && (
@@ -268,9 +339,40 @@ const styles = StyleSheet.create({
     color: '#92400e',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   editorContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 8,
+    alignItems: 'center',
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  toolbarButtonDisabled: {
+    opacity: 0.5,
+  },
+  toolbarButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
   },
   debugInfo: {
     padding: 12,

@@ -7,6 +7,7 @@ export interface ProseMirrorWebViewRef {
   scrollToNode: (nodeId: string) => void;
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
+  triggerCreateLocation: () => void;
 }
 
 interface ProseMirrorWebViewProps {
@@ -191,6 +192,21 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
         createGeoMarkWithData: (geoMarkData: any) => {
           console.log('[ProseMirrorWebView] Creating geo-mark with data:', geoMarkData);
           sendMessage({ type: 'createGeoMark', geoMarkData });
+        },
+        triggerCreateLocation: () => {
+          console.log('[ProseMirrorWebView] Triggering create location from iOS menu');
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                if (window.createLocationFromSelection) {
+                  window.createLocationFromSelection();
+                } else {
+                  console.warn('[WebView] createLocationFromSelection not found');
+                }
+              })();
+              true;
+            `);
+          }
         },
       }),
       [sendMessage]
