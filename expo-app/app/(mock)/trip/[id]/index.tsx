@@ -1,101 +1,213 @@
-import ProseMirrorViewerWrapper from '@/components/ProseMirrorViewerWrapper';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState, useCallback } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
+import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
+import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 
 export default function TripDocumentView() {
   console.log('[TripDocumentView] Component mounted');
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     tripId,
-    editorState,
+    currentTrip,
+    currentDoc,
     isEditMode,
-    focusedNodeId,
+    setIsEditMode,
+    selectionEmpty,
+    setSelectionEmpty,
     geoMarkDataToCreate,
-    handleNodeFocus,
     handleDocumentChange,
     handleShowGeoMarkEditor,
-    handleSelectionChange,
     documentRef,
   } = useTripContext();
 
-  console.log('[TripDocumentView] Rendering with editorState:', !!editorState?.doc);
+  const [toolbarState, setToolbarState] = useState({
+    paragraph: false,
+    h1: false,
+    h2: false,
+    h3: false,
+    bold: false,
+    italic: false,
+  });
 
-  // Cache content to prevent passing new references while editing
-  const lastContentRef = React.useRef<any>(null);
-  const wasEditModeRef = React.useRef(isEditMode);
+  const handleSelectionChange = useCallback((empty: boolean) => {
+    console.log('[TripDocumentView] Selection empty:', empty);
+    setSelectionEmpty(empty);
+  }, [setSelectionEmpty]);
 
-  // Detect mode changes
-  if (wasEditModeRef.current !== isEditMode) {
-    console.log('[TripDocumentView] Edit mode changed:', wasEditModeRef.current, '->', isEditMode);
+  const handleToolbarStateChange = useCallback((state: any) => {
+    console.log('[TripDocumentView] Toolbar state changed:', state);
+    setToolbarState(state);
+  }, []);
 
-    // Only clear cache when entering edit mode (read -> edit)
-    // When exiting edit mode (edit -> read), keep the cached content to preserve changes
-    if (isEditMode && !wasEditModeRef.current) {
-      console.log('[TripDocumentView] Entering edit mode, clearing content cache');
-      lastContentRef.current = null;
-    } else {
-      console.log('[TripDocumentView] Exiting edit mode, keeping cached content');
-    }
+  const handleGeoMarkNavigate = useCallback((attrs: any) => {
+    console.log('[TripDocumentView] Navigate to location:', attrs);
 
-    wasEditModeRef.current = isEditMode;
-  }
-
-  const content = useMemo(() => {
-    if (!editorState?.doc) return null;
-
-    // While in edit mode and we have cached content, keep returning it
-    // This prevents the content prop from changing during saves
-    if (isEditMode && lastContentRef.current) {
-      console.log('[TripDocumentView] Returning cached content (edit mode)');
-      return lastContentRef.current;
-    }
-
-    // Update cache with new content
-    const newContent = editorState.doc.toJSON();
-    console.log('[TripDocumentView] Computing new content (cache miss or read mode)');
-    lastContentRef.current = newContent;
-    return newContent;
-  }, [editorState?.doc, isEditMode]);
-
-  // Handle geo-mark click for navigation
-  const handleGeoMarkNavigate = useCallback((geoMarkAttrs: any) => {
-    console.log('[TripDocumentView] Navigating to location:', geoMarkAttrs.placeName);
-
-    // Navigate to location detail route
+    // Navigate to location preview screen
     router.push({
-      pathname: `/(mock)/trip/${tripId}/location/${geoMarkAttrs.geoId}`,
+      pathname: '/(mock)/location-preview/[id]',
       params: {
-        id: geoMarkAttrs.geoId,
-        name: geoMarkAttrs.placeName || 'Location',
-        lat: geoMarkAttrs.lat,
-        lng: geoMarkAttrs.lng,
-        description: geoMarkAttrs.description || '',
-        colorIndex: geoMarkAttrs.colorIndex?.toString() || '0',
-        photoName: geoMarkAttrs.photoName || '',
+        id: attrs.geoId || 'unknown',
+        name: attrs.placeName || 'Location',
+        lat: attrs.lat || '0',
+        lng: attrs.lng || '0',
+        description: attrs.description || '',
+        colorIndex: attrs.colorIndex?.toString() || '0',
       },
     });
-  }, [router, tripId]);
+  }, []);
+
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+  };
+
+  const createGeoMark = () => {
+    console.log('[TripDocumentView] Create Location button clicked');
+    console.log('[TripDocumentView] Selection empty:', selectionEmpty);
+
+    if (selectionEmpty) {
+      alert('Please select some text first!');
+      return;
+    }
+
+    console.log('[TripDocumentView] Sending createGeoMark command to WebView');
+    (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('createGeoMark');
+  };
 
   return (
     <View style={styles.container}>
-      {content ? (
-        <ProseMirrorViewerWrapper
-          ref={documentRef}
-          content={content}
-          onNodeFocus={handleNodeFocus}
-          focusedNodeId={focusedNodeId}
-          editable={isEditMode}
-          onChange={handleDocumentChange}
-          onShowGeoMarkEditor={handleShowGeoMarkEditor}
-          geoMarkDataToCreate={geoMarkDataToCreate}
-          onSelectionChange={handleSelectionChange}
-          onGeoMarkNavigate={handleGeoMarkNavigate}
-        />
-      ) : (
-        <View style={styles.centerContent}>
-          <Text style={styles.loadingText}>Waiting for content...</Text>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title} numberOfLines={1}>
+          {currentTrip?.title || 'Trip'}
+        </Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {/* Controls */}
+      <View style={styles.controls}>
+        <TouchableOpacity
+          onPress={toggleEditMode}
+          style={[styles.button, isEditMode && styles.buttonActive]}
+        >
+          <Text style={[styles.buttonText, isEditMode && styles.buttonTextActive]}>
+            {isEditMode ? 'Read Mode' : 'Edit Mode'}
+          </Text>
+        </TouchableOpacity>
+
+        {isEditMode && (
+          <TouchableOpacity
+            onPress={createGeoMark}
+            style={[styles.button, selectionEmpty && styles.buttonDisabled]}
+            disabled={selectionEmpty}
+          >
+            <Text style={[styles.buttonText, selectionEmpty && styles.buttonTextDisabled]}>
+              Create Location
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Info Banner */}
+      <View style={styles.infoBanner}>
+        <Text style={styles.infoText}>
+          Platform: {Platform.OS} | Edit: {isEditMode ? 'ON' : 'OFF'} |
+          Selection: {selectionEmpty ? 'Empty' : 'Has text'}
+        </Text>
+      </View>
+
+      {/* Editor - Keep WebView mounted but hidden in read mode */}
+      <KeyboardAvoidingView
+        style={styles.editorWrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        {/* WebView - Always mounted, hidden in read mode */}
+        <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
+          <ProseMirrorWebView
+            ref={documentRef}
+            content={currentDoc}
+            editable={isEditMode}
+            onChange={handleDocumentChange}
+            onSelectionChange={handleSelectionChange}
+            onToolbarStateChange={handleToolbarStateChange}
+            onGeoMarkNavigate={handleGeoMarkNavigate}
+            onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            geoMarkDataToCreate={geoMarkDataToCreate}
+          />
+        </View>
+
+        {/* Native Renderer - Only visible in read mode */}
+        {!isEditMode && (
+          <View style={styles.nativeRendererContainer}>
+            <ProseMirrorNativeRenderer content={currentDoc} />
+          </View>
+        )}
+
+        {/* Toolbar - Only in edit mode */}
+        {isEditMode && (
+          <View style={styles.toolbar}>
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setParagraph')}
+              style={[styles.toolbarButton, toolbarState.paragraph && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.paragraph && styles.toolbarButtonTextActive]}>P</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 1 })}
+              style={[styles.toolbarButton, toolbarState.h1 && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.h1 && styles.toolbarButtonTextActive]}>H1</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 2 })}
+              style={[styles.toolbarButton, toolbarState.h2 && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.h2 && styles.toolbarButtonTextActive]}>H2</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 3 })}
+              style={[styles.toolbarButton, toolbarState.h3 && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.h3 && styles.toolbarButtonTextActive]}>H3</Text>
+            </TouchableOpacity>
+
+            <View style={styles.separator} />
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleBold')}
+              style={[styles.toolbarButton, toolbarState.bold && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.bold && styles.toolbarButtonTextActive]}>B</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleItalic')}
+              style={[styles.toolbarButton, toolbarState.italic && styles.toolbarButtonActive]}
+            >
+              <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </KeyboardAvoidingView>
+
+      {/* Debug Info */}
+      {currentDoc && (
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>
+            Last saved: {new Date().toLocaleTimeString()}
+          </Text>
+          <Text style={styles.debugText} numberOfLines={2}>
+            Doc nodes: {currentDoc.content?.length || 0} | Trip: {currentTrip?.title || 'N/A'}
+          </Text>
         </View>
       )}
     </View>
@@ -107,15 +219,148 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
   },
-  loadingText: {
-    marginTop: 12,
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+    textAlign: 'center',
+  },
+  controls: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+  },
+  button: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  buttonActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  buttonTextActive: {
+    color: '#ffffff',
+  },
+  buttonTextDisabled: {
+    color: '#9ca3af',
+  },
+  infoBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fef3c7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fbbf24',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#92400e',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  editorWrapper: {
+    flex: 1,
+  },
+  editorContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  hidden: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  nativeRendererContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#ffffff',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 8,
+    alignItems: 'center',
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  toolbarButtonActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  toolbarButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  toolbarButtonTextActive: {
+    color: '#ffffff',
+  },
+  separator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 4,
+  },
+  debugInfo: {
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  debugText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
