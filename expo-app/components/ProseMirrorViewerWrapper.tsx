@@ -17,7 +17,7 @@ interface ProseMirrorViewerWrapperProps {
   onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
 }
 
-export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapperProps>(({
+const ProseMirrorViewerWrapperComponent = forwardRef<any, ProseMirrorViewerWrapperProps>(({
   content,
   onNodeFocus,
   focusedNodeId,
@@ -32,6 +32,11 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
   const [isLoading, setIsLoading] = useState(true);
   const [parentDimensions, setParentDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isDOMReady, setIsDOMReady] = useState(false);
+
+  // Log when geoMarkDataToCreate prop changes
+  useEffect(() => {
+    console.log('[ProseMirrorWrapper] geoMarkDataToCreate prop received:', geoMarkDataToCreate);
+  }, [geoMarkDataToCreate]);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -151,6 +156,11 @@ export const ProseMirrorViewerWrapper = forwardRef<any, ProseMirrorViewerWrapper
     </View>
   );
 });
+
+ProseMirrorViewerWrapperComponent.displayName = 'ProseMirrorViewerWrapper';
+
+// Export the component directly - React.lazy doesn't work well with memo+forwardRef
+export const ProseMirrorViewerWrapper = ProseMirrorViewerWrapperComponent;
 
 const styles = StyleSheet.create({
   loadingContainer: {

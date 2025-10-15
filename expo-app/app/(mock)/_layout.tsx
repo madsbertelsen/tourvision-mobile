@@ -93,6 +93,15 @@ function MockLayoutContent() {
           drawerLabel: () => null, // Hide from drawer menu
         }}
       />
+      <Drawer.Screen
+        name="create-location"
+        options={{
+          title: 'Create Location',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+          presentation: 'modal',
+        }}
+      />
     </Drawer>
   );
 }

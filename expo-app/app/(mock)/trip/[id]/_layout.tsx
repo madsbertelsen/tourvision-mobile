@@ -129,13 +129,17 @@ export default function TripLayout() {
           console.log('[TripLayout] Received location data from modal:', locationData);
           lastProcessedLocationRef.current = locationStr;
 
+          // Set the data to create - this will be picked up by the DOM component
           setGeoMarkDataToCreate(locationData);
 
+          // Clear the params immediately to avoid re-processing
           router.setParams({ savedLocation: undefined });
 
+          // Clear the data after a longer timeout to ensure component has processed it
           setTimeout(() => {
+            console.log('[TripLayout] Clearing geoMarkDataToCreate');
             setGeoMarkDataToCreate(null);
-          }, 100);
+          }, 1000);
         } catch (error) {
           console.error('[TripLayout] Failed to parse saved location:', error);
         }
@@ -299,7 +303,10 @@ export default function TripLayout() {
     saveMessages();
   }, [messages]);
 
-  // Sync editor state with itineraries
+  // Track the last itinerary we synced to prevent circular updates
+  const lastSyncedItineraryRef = useRef<string | null>(null);
+
+  // Sync editor state with itineraries (only when itinerary actually changes)
   useEffect(() => {
     if (!currentTrip?.itineraries || currentTrip.itineraries.length === 0) {
       return;
@@ -309,6 +316,18 @@ export default function TripLayout() {
     if (!latestItinerary.document) {
       return;
     }
+
+    // Create a hash of the itinerary to detect actual changes
+    const itineraryHash = JSON.stringify(latestItinerary.document);
+
+    // Only update if this is a different itinerary
+    if (itineraryHash === lastSyncedItineraryRef.current) {
+      console.log('[TripLayout] Itinerary unchanged, skipping editorState update');
+      return;
+    }
+
+    console.log('[TripLayout] Itinerary changed, updating editorState');
+    lastSyncedItineraryRef.current = itineraryHash;
 
     const newState = stateFromJSON(latestItinerary.document);
     setEditorState(newState);
@@ -476,12 +495,18 @@ export default function TripLayout() {
 
   const handleDocumentChange = useCallback(
     async (newDoc: any) => {
-      if (!currentTrip) return;
+      console.log('[TripLayout] ========== handleDocumentChange called ==========');
+      console.log('[TripLayout] New doc:', newDoc);
 
-      console.log('[TripLayout] Document changed, persisting to storage');
+      if (!currentTrip) {
+        console.error('[TripLayout] ❌ No currentTrip, cannot save');
+        return;
+      }
 
-      const newState = stateFromJSON(newDoc);
-      setEditorState(newState);
+      console.log('[TripLayout] ✅ Persisting document to storage');
+
+      // Don't call setEditorState here - the ProseMirror component already has the correct state
+      // Calling setEditorState causes the component to remount and lose cursor position
 
       if (!currentTrip.itineraries || currentTrip.itineraries.length === 0) {
         const newItinerary = {
@@ -497,6 +522,9 @@ export default function TripLayout() {
 
         await saveTrip(updatedTrip);
         setCurrentTrip(updatedTrip);
+
+        // Update the ref to prevent the sync effect from triggering
+        lastSyncedItineraryRef.current = JSON.stringify(newDoc);
         return;
       }
 
@@ -513,6 +541,11 @@ export default function TripLayout() {
 
       await saveTrip(updatedTrip);
       setCurrentTrip(updatedTrip);
+
+      // Update the ref to prevent the sync effect from triggering
+      lastSyncedItineraryRef.current = JSON.stringify(newDoc);
+
+      console.log('[TripLayout] ✅ Document saved successfully to storage!');
     },
     [currentTrip]
   );
@@ -521,14 +554,15 @@ export default function TripLayout() {
     console.log('[TripLayout] Opening geo-mark editor with data:', data);
 
     router.push({
-      pathname: '/create-location',
+      pathname: '/(mock)/create-location',
       params: {
+        tripId: tripId,
         placeName: data?.placeName || '',
         lat: data?.lat || '',
         lng: data?.lng || '',
       },
     });
-  }, [router]);
+  }, [router, tripId]);
 
   const handleToolbarCommand = useCallback((command: string, params?: any) => {
     console.log('[TripLayout] Toolbar command:', command, params);

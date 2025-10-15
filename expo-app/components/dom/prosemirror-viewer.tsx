@@ -337,6 +337,9 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const [viewRef, setViewRef] = useState<any>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number } | null>(null);
 
+  // Track whether we're in the middle of updating to prevent circular updates
+  const isUpdatingRef = useRef(false);
+
   // Hide iOS keyboard accessory view on mount
   useEffect(() => {
     // Only run these modifications if in WebView context
@@ -466,6 +469,12 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   useEffect(() => {
     if (!content) return;
 
+    // Ignore content updates that came from our own onChange
+    if (isUpdatingRef.current) {
+      console.log('[ProseMirror] Ignoring content update from own onChange (preventing cursor jump)');
+      return;
+    }
+
     try {
       const newDoc = content._type ? content : schema.nodeFromJSON(content);
 
@@ -473,6 +482,8 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
       if (state.doc.eq(newDoc)) {
         return; // No change needed
       }
+
+      console.log('[ProseMirror] External content update detected, creating new state');
 
       // For external content updates, we need to create a new state
       // This will reset history, which is expected for external updates
@@ -495,18 +506,96 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
   }, [content, historyPlugin]);
 
+  // Debounce timer for saves
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSaveRef = useRef<{ doc: any } | null>(null);
+
+  // Flush any pending saves when component unmounts or becomes non-editable
+  useEffect(() => {
+    return () => {
+      // On unmount, immediately save any pending changes
+      if (pendingSaveRef.current && onChange) {
+        console.log('[ProseMirror] Flushing pending save on unmount');
+        onChange(pendingSaveRef.current.doc);
+        pendingSaveRef.current = null;
+      }
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, [onChange]);
+
+  // Also flush when switching from editable to non-editable
+  useEffect(() => {
+    console.log('[ProseMirror] Edit mode changed to:', editable, '| Has pending save:', !!pendingSaveRef.current);
+
+    if (!editable && pendingSaveRef.current && onChange) {
+      console.log('[ProseMirror] ✅ FLUSHING pending save (exiting edit mode)');
+      console.log('[ProseMirror] ✅ Pending doc to save:', pendingSaveRef.current.doc);
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+        console.log('[ProseMirror] ✅ Cleared debounce timeout');
+      }
+
+      onChange(pendingSaveRef.current.doc);
+      pendingSaveRef.current = null;
+
+      // Also reset the updating flag immediately
+      isUpdatingRef.current = false;
+      console.log('[ProseMirror] ✅ Flush complete, isUpdatingRef reset to false');
+    } else if (!editable && !pendingSaveRef.current) {
+      console.log('[ProseMirror] ⚠️ Exiting edit mode but no pending save');
+    }
+  }, [editable, onChange]);
+
   // Handle transactions when editing
   const dispatchTransaction = (tr: any) => {
     setState(prevState => {
       const newState = prevState.apply(tr);
-      // Notify parent of document changes
+
+      // Set flag to indicate we're updating from internal edit
+      isUpdatingRef.current = true;
+
+      // Debounce document saves to prevent excessive re-renders while typing
       if (onChange && tr.docChanged) {
-        onChange(newState.doc.toJSON());
+        // Store the pending document
+        const docJSON = newState.doc.toJSON();
+        pendingSaveRef.current = { doc: docJSON };
+
+        // Clear any pending save timer
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Save after 1 second of no changes
+        saveTimeoutRef.current = setTimeout(() => {
+          console.log('[ProseMirror] Debounced save triggered');
+          if (pendingSaveRef.current) {
+            onChange(pendingSaveRef.current.doc);
+            pendingSaveRef.current = null;
+          }
+          saveTimeoutRef.current = null;
+
+          // Reset flag after save completes
+          setTimeout(() => {
+            isUpdatingRef.current = false;
+          }, 100);
+        }, 1000);
+      } else if (!tr.docChanged) {
+        // If no document changes, reset flag immediately
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 100);
       }
-      // Notify parent of selection changes
+
+      // Notify parent of selection changes immediately (not debounced)
       if (onSelectionChange && (tr.selectionSet || tr.docChanged)) {
         onSelectionChange(newState.selection.empty);
       }
+
       return newState;
     });
   };
@@ -942,10 +1031,13 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
   // Create geo-mark with data from bottom sheet
   const createGeoMarkWithData = useCallback((geoMarkData: any) => {
-    console.log('[ProseMirror] Creating geo-mark with data:', geoMarkData);
+    console.log('[ProseMirror] ======= createGeoMarkWithData called =======');
+    console.log('[ProseMirror] Geo-mark data:', geoMarkData);
+    console.log('[ProseMirror] Pending selection:', pendingSelection);
+    console.log('[ProseMirror] Current state:', state ? 'available' : 'null');
 
     if (!state) {
-      console.error('[ProseMirror] No editor state available');
+      console.error('[ProseMirror] ERROR: No editor state available');
       return;
     }
 
@@ -953,18 +1045,18 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
 
     if (pendingSelection) {
       // If we have a selection, create geo-mark from it
-      console.log('[ProseMirror] Creating geo-mark from selection:', pendingSelection);
+      console.log('[ProseMirror] ✅ Creating geo-mark from selection:', pendingSelection);
       newState = createGeoMarkFromSelection(state, geoMarkData);
       setPendingSelection(null);
     } else {
       // No selection - insert at the end of the document
-      console.log('[ProseMirror] No selection, inserting geo-mark at end of document');
+      console.log('[ProseMirror] ⚠️ No pending selection, inserting geo-mark at end of document');
 
       const tr = state.tr;
       const endPos = state.doc.content.size;
 
-      // Generate unique ID for the geo-mark
-      const geoId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      // Use provided geoId or generate a new one
+      const geoId = geoMarkData.geoId || `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
       // Create the geo-mark node
       const geoMarkNode = state.schema.nodes.geoMark.create({
@@ -999,9 +1091,19 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
     }
 
     if (newState) {
+      console.log('[ProseMirror] ✅ Applying new state with geo-mark');
       setState(newState);
-      onChange?.(newState.doc.toJSON());
-      console.log('[ProseMirror] Geo-mark created successfully');
+
+      if (onChange) {
+        console.log('[ProseMirror] ✅ Calling onChange to persist document');
+        onChange(newState.doc.toJSON());
+      } else {
+        console.warn('[ProseMirror] ⚠️ No onChange callback available');
+      }
+
+      console.log('[ProseMirror] ✅ Geo-mark created successfully! Document now has', newState.doc.content.size, 'nodes');
+    } else {
+      console.error('[ProseMirror] ❌ Failed to create new state for geo-mark');
     }
   }, [state, pendingSelection, onChange]);
 
@@ -1010,13 +1112,18 @@ const ProseMirrorViewer = forwardRef<ProseMirrorViewerRef, ProseMirrorViewerProp
   const lastProcessedGeoMarkRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!geoMarkDataToCreate) return;
+    console.log('[ProseMirror] geoMarkDataToCreate changed:', geoMarkDataToCreate);
+
+    if (!geoMarkDataToCreate) {
+      console.log('[ProseMirror] geoMarkDataToCreate is null, skipping');
+      return;
+    }
 
     // Use JSON serialization for deep equality check
     const dataKey = JSON.stringify(geoMarkDataToCreate);
 
     if (dataKey !== lastProcessedGeoMarkRef.current) {
-      console.log('[ProseMirror] geoMarkDataToCreate prop changed, creating geo-mark');
+      console.log('[ProseMirror] NEW geo-mark data detected, creating geo-mark:', geoMarkDataToCreate);
       lastProcessedGeoMarkRef.current = dataKey;
       createGeoMarkWithData(geoMarkDataToCreate);
     } else {

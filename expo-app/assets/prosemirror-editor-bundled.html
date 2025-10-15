@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ProseMirror Editor</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+
+    #editor-container {
+      padding: 16px;
+      min-height: 100vh;
+      background: white;
+    }
+
+    .ProseMirror {
+      outline: none;
+      padding: 16px;
+      min-height: 300px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+
+    .ProseMirror h1 {
+      font-size: 2em;
+      margin: 0.67em 0;
+      font-weight: bold;
+    }
+
+    .ProseMirror h2 {
+      font-size: 1.5em;
+      margin: 0.75em 0;
+      font-weight: bold;
+    }
+
+    .ProseMirror p {
+      margin: 1em 0;
+    }
+
+    .ProseMirror ul, .ProseMirror ol {
+      padding-left: 30px;
+    }
+
+    .ProseMirror strong {
+      font-weight: bold;
+    }
+
+    .ProseMirror em {
+      font-style: italic;
+    }
+
+    .status-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #4caf50;
+      color: white;
+      padding: 8px 16px;
+      font-size: 12px;
+      z-index: 1000;
+    }
+
+    .status-bar.error {
+      background: #f44336;
+    }
+
+    #editor-container {
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="status-bar" id="status">Loading ProseMirror...</div>
+  <div id="editor-container"></div>
+
+  <script>
+    console.log('[WebView] Script starting...');
+
+    // Set up message handler
+    function sendMessageToNative(message) {
+      try {
+        const json = JSON.stringify(message);
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(json);
+        } else {
+          console.warn('[WebView] ReactNativeWebView not available');
+        }
+      } catch (e) {
+        console.error('[WebView] Error sending message:', e);
+      }
+    }
+
+    function setStatus(text, isError = false) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = text;
+      statusEl.className = isError ? 'status-bar error' : 'status-bar';
+    }
+
+    // Handle errors
+    window.addEventListener('error', function(e) {
+      console.error('[WebView] Error:', e.message, e.filename, e.lineno);
+      setStatus('Error: ' + e.message, true);
+      sendMessageToNative({
+        type: 'error',
+        message: e.message,
+        filename: e.filename,
+        lineno: e.lineno
+      });
+    });
+
+    // Load ProseMirror bundle
+    console.log('[WebView] About to load ProseMirror bundle...');
+    setStatus('Loading ProseMirror bundle...');
+  </script>
+
+  <!-- INLINE PROSEMIRROR BUNDLE WILL BE INSERTED HERE -->
+  <script id="prosemirror-bundle">
+    // This will be replaced with the actual bundle content
+    console.log('[WebView] ProseMirror bundle placeholder');
+  </script>
+
+  <script>
+    console.log('[WebView] Checking if ProseMirror loaded...');
+    console.log('[WebView] window.PM exists:', typeof window.PM !== 'undefined');
+    console.log('[WebView] PM contents:', window.PM);
+
+    if (typeof window.PM === 'undefined') {
+      setStatus('ERROR: ProseMirror failed to load', true);
+      sendMessageToNative({
+        type: 'error',
+        message: 'ProseMirror bundle did not load'
+      });
+    } else {
+      setStatus('ProseMirror loaded successfully!');
+
+      // Initialize editor
+      const { EditorState } = window.PM.state;
+      const { EditorView } = window.PM.view;
+      const { schema } = window.PM;
+      const { keymap } = window.PM;
+      const { history, undo, redo } = window.PM.history;
+      const { baseKeymap } = window.PM.commands;
+
+      console.log('[WebView] Creating editor state...');
+
+      let editorView = null;
+
+      // Create initial document with some test content
+      const { DOMParser: PMDOMParser } = window.PM.model;
+
+      // Create a simple test document
+      const doc = schema.node('doc', null, [
+        schema.node('paragraph', null, [
+          schema.text('Welcome to ProseMirror! This editor is working correctly.')
+        ]),
+        schema.node('paragraph', null, [
+          schema.text('Click "Load Sample" to load the test content, or enable "Edit Mode" to start typing.')
+        ])
+      ]);
+
+      // Create initial editor state
+      let state = EditorState.create({
+        doc: doc,
+        schema: schema,
+        plugins: [
+          history(),
+          keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+          keymap(baseKeymap)
+        ]
+      });
+
+      console.log('[WebView] Creating editor view...');
+
+      // Create editor view
+      editorView = new EditorView(document.querySelector('#editor-container'), {
+        state: state,
+        dispatchTransaction(transaction) {
+          const newState = editorView.state.apply(transaction);
+          editorView.updateState(newState);
+
+          // Send document changes to native
+          if (transaction.docChanged) {
+            sendMessageToNative({
+              type: 'documentChange',
+              doc: newState.doc.toJSON()
+            });
+          }
+        }
+      });
+
+      console.log('[WebView] Editor created successfully');
+      setStatus('Editor ready');
+
+      // Send ready message
+      sendMessageToNative({
+        type: 'ready',
+        message: 'ProseMirror editor initialized'
+      });
+
+      // Listen for messages from React Native
+      window.addEventListener('message', function(event) {
+        console.log('[WebView] Received message:', event.data);
+
+        try {
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+
+          switch (data.type) {
+            case 'setContent':
+              console.log('[WebView] Setting content:', data.content);
+              if (data.content && editorView) {
+                const newState = EditorState.create({
+                  doc: schema.nodeFromJSON(data.content),
+                  plugins: state.plugins
+                });
+                editorView.updateState(newState);
+                state = newState;
+              }
+              break;
+
+            case 'setEditable':
+              console.log('[WebView] Setting editable:', data.editable);
+              if (editorView) {
+                editorView.setProps({ editable: () => data.editable });
+              }
+              break;
+
+            case 'getState':
+              console.log('[WebView] Getting state');
+              if (editorView) {
+                sendMessageToNative({
+                  type: 'stateResponse',
+                  state: editorView.state.doc.toJSON()
+                });
+              }
+              break;
+
+            default:
+              console.warn('[WebView] Unknown message type:', data.type);
+          }
+        } catch (e) {
+          console.error('[WebView] Error handling message:', e);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
