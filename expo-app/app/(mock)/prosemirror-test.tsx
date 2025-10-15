@@ -28,6 +28,14 @@ export default function ProseMirrorTestScreen() {
   const [currentRevision, setCurrentRevision] = useState(0);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
+  const [toolbarState, setToolbarState] = useState({
+    paragraph: false,
+    h1: false,
+    h2: false,
+    h3: false,
+    bold: false,
+    italic: false,
+  });
   const lastProcessedLocationRef = useRef<string | null>(null);
 
   // Sample content for testing
@@ -145,6 +153,11 @@ export default function ProseMirrorTestScreen() {
       // Set a flag that iOS menu might be triggered
       // We'll handle the actual trigger via the iOS menu callback
     }
+  };
+
+  const handleToolbarStateChange = (state: any) => {
+    console.log('[ProseMirrorTest] Toolbar state changed:', state);
+    setToolbarState(state);
   };
 
   const handleGeoMarkNavigate = (attrs: any) => {
@@ -275,6 +288,7 @@ export default function ProseMirrorTestScreen() {
             editable={isEditMode}
             onChange={handleDocumentChange}
             onSelectionChange={handleSelectionChange}
+            onToolbarStateChange={handleToolbarStateChange}
             onGeoMarkNavigate={handleGeoMarkNavigate}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
@@ -293,46 +307,46 @@ export default function ProseMirrorTestScreen() {
           <View style={styles.toolbar}>
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('setParagraph')}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.paragraph && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>P</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.paragraph && styles.toolbarButtonTextActive]}>P</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('setHeading', { level: 1 })}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.h1 && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>H1</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.h1 && styles.toolbarButtonTextActive]}>H1</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('setHeading', { level: 2 })}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.h2 && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>H2</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.h2 && styles.toolbarButtonTextActive]}>H2</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('setHeading', { level: 3 })}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.h3 && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>H3</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.h3 && styles.toolbarButtonTextActive]}>H3</Text>
             </TouchableOpacity>
 
             <View style={styles.separator} />
 
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('toggleBold')}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.bold && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>B</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.bold && styles.toolbarButtonTextActive]}>B</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => editorRef.current?.sendCommand('toggleItalic')}
-              style={styles.toolbarButton}
+              style={[styles.toolbarButton, toolbarState.italic && styles.toolbarButtonActive]}
             >
-              <Text style={styles.toolbarButtonText}>I</Text>
+              <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -471,10 +485,17 @@ const styles = StyleSheet.create({
     minWidth: 40,
     alignItems: 'center',
   },
+  toolbarButtonActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
   toolbarButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+  },
+  toolbarButtonTextActive: {
+    color: '#ffffff',
   },
   separator: {
     width: 1,

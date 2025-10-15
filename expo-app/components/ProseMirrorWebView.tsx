@@ -21,6 +21,7 @@ interface ProseMirrorWebViewProps {
   geoMarkDataToCreate?: any;
   onSelectionChange?: (empty: boolean) => void;
   onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
+  onToolbarStateChange?: (state: any) => void;
 }
 
 // We'll load the HTML from the assets folder
@@ -38,6 +39,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       geoMarkDataToCreate,
       onSelectionChange,
       onGeoMarkNavigate,
+      onToolbarStateChange,
     },
     ref
   ) => {
@@ -142,6 +144,12 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               }
               break;
 
+            case 'toolbarStateChange':
+              if (onToolbarStateChange) {
+                onToolbarStateChange(data.state);
+              }
+              break;
+
             case 'showGeoMarkEditor':
               if (onShowGeoMarkEditor) {
                 onShowGeoMarkEditor(data.data, data.existingLocations || []);
@@ -165,7 +173,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.error('[ProseMirrorWebView] Error handling message:', error);
         }
       },
-      [onChange, onSelectionChange, onShowGeoMarkEditor, onGeoMarkNavigate, content, editable, sendMessage]
+      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, content, editable, sendMessage]
     );
 
     // Update content when it changes externally

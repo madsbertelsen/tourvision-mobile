@@ -212,12 +212,56 @@
               type: 'selectionChange',
               empty: newSelection.empty
             });
+
+            // Send toolbar state update
+            const toolbarState = getToolbarState();
+            sendMessageToNative({
+              type: 'toolbarStateChange',
+              state: toolbarState
+            });
           }
         }
       });
 
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
+
+      // Helper functions for toolbar state
+      function isNodeTypeActive(state, nodeType, attrs = {}) {
+        const { $from } = state.selection;
+        const node = $from.parent;
+
+        if (node.type.name !== nodeType.name) {
+          return false;
+        }
+
+        // Check attributes match
+        for (let key in attrs) {
+          if (node.attrs[key] !== attrs[key]) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      function isMarkActive(state, markType) {
+        const { from, to } = state.selection;
+        return state.doc.rangeHasMark(from, to, markType);
+      }
+
+      // Get current toolbar state based on selection
+      function getToolbarState() {
+        const state = editorView.state;
+        return {
+          paragraph: isNodeTypeActive(state, schema.nodes.paragraph),
+          h1: isNodeTypeActive(state, schema.nodes.heading, { level: 1 }),
+          h2: isNodeTypeActive(state, schema.nodes.heading, { level: 2 }),
+          h3: isNodeTypeActive(state, schema.nodes.heading, { level: 3 }),
+          bold: schema.marks.strong ? isMarkActive(state, schema.marks.strong) : false,
+          italic: schema.marks.em ? isMarkActive(state, schema.marks.em) : false
+        };
+      }
 
       // Add click handler for geo-marks
       document.querySelector('#editor-container').addEventListener('click', function(e) {
@@ -242,6 +286,13 @@
       sendMessageToNative({
         type: 'ready',
         message: 'ProseMirror editor initialized'
+      });
+
+      // Send initial toolbar state
+      const initialToolbarState = getToolbarState();
+      sendMessageToNative({
+        type: 'toolbarStateChange',
+        state: initialToolbarState
       });
 
       // Listen for iOS custom menu actions
