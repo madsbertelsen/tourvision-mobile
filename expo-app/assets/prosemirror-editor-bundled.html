@@ -279,9 +279,29 @@
       // Expose to window for iOS to call
       window.handleCreateLocation = window.createLocationFromSelection;
 
-      // Listen for messages from React Native
+      // Listen for messages from React Native and native iOS menu
       window.addEventListener('message', function(event) {
         console.log('[WebView] Received message:', event.data);
+
+        // Handle native iOS menu actions
+        if (event.data && event.data.source === 'nativeMenu') {
+          console.log('[WebView] Native menu action:', event.data.action);
+
+          if (event.data.action === 'createLocation') {
+            console.log('[WebView] Create location from native menu:', event.data.data.selectedText);
+            // Trigger the create location function
+            if (window.createLocationFromSelection) {
+              window.createLocationFromSelection();
+            }
+            return;
+          }
+
+          if (event.data.action === 'addNote') {
+            console.log('[WebView] Add note from native menu:', event.data.data.selectedText);
+            // Handle add note action
+            return;
+          }
+        }
 
         try {
           const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
