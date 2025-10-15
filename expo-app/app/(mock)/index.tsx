@@ -145,20 +145,6 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Trips</Text>
-        <View style={styles.testButtons}>
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={() => router.push('/(mock)/link-preview-test')}
-          >
-            <Text style={styles.testButtonText}>Link Preview</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={() => router.push('/(mock)/prosemirror-test')}
-          >
-            <Text style={styles.testButtonText}>Test Editor</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* URL Input Section */}
@@ -265,9 +251,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#fff',
@@ -278,23 +261,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-  },
-  testButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  testButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  testButtonText: {
-    color: '#3B82F6',
-    fontSize: 13,
-    fontWeight: '600',
   },
   urlInputSection: {
     flexDirection: 'row',
