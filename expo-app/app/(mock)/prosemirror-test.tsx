@@ -263,9 +263,9 @@ export default function ProseMirrorTestScreen() {
 
       {/* Editor - Keep WebView mounted but hidden in read mode */}
       <KeyboardAvoidingView
+        style={styles.editorWrapper}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {/* WebView - Always mounted, hidden in read mode */}
         <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
@@ -288,43 +288,51 @@ export default function ProseMirrorTestScreen() {
           </View>
         )}
 
-        {/* Keyboard Toolbar - Only in edit mode */}
+        {/* Toolbar - Only in edit mode */}
         {isEditMode && (
           <View style={styles.toolbar}>
             <TouchableOpacity
-              onPress={() => editorRef.current?.triggerCreateLocation()}
-              style={[styles.toolbarButton, selectionEmpty && styles.toolbarButtonDisabled]}
-              disabled={selectionEmpty}
+              onPress={() => editorRef.current?.sendCommand('setParagraph')}
+              style={styles.toolbarButton}
             >
-              <Text style={styles.toolbarButtonText}>📍 Create Location</Text>
+              <Text style={styles.toolbarButtonText}>P</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => editorRef.current?.sendCommand('bold')}
+              onPress={() => editorRef.current?.sendCommand('setHeading', { level: 1 })}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>H1</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('setHeading', { level: 2 })}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>H2</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('setHeading', { level: 3 })}
+              style={styles.toolbarButton}
+            >
+              <Text style={styles.toolbarButtonText}>H3</Text>
+            </TouchableOpacity>
+
+            <View style={styles.separator} />
+
+            <TouchableOpacity
+              onPress={() => editorRef.current?.sendCommand('toggleBold')}
               style={styles.toolbarButton}
             >
               <Text style={styles.toolbarButtonText}>B</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => editorRef.current?.sendCommand('italic')}
+              onPress={() => editorRef.current?.sendCommand('toggleItalic')}
               style={styles.toolbarButton}
             >
               <Text style={styles.toolbarButtonText}>I</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => editorRef.current?.sendCommand('undo')}
-              style={styles.toolbarButton}
-            >
-              <Text style={styles.toolbarButtonText}>↶</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => editorRef.current?.sendCommand('redo')}
-              style={styles.toolbarButton}
-            >
-              <Text style={styles.toolbarButtonText}>↷</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -419,7 +427,7 @@ const styles = StyleSheet.create({
     color: '#92400e',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  keyboardAvoidingView: {
+  editorWrapper: {
     flex: 1,
   },
   editorContainer: {
@@ -463,13 +471,16 @@ const styles = StyleSheet.create({
     minWidth: 40,
     alignItems: 'center',
   },
-  toolbarButtonDisabled: {
-    opacity: 0.5,
-  },
   toolbarButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+  },
+  separator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 4,
   },
   debugInfo: {
     padding: 12,
