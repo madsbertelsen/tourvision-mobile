@@ -391,6 +391,13 @@
                 });
                 editorView.updateState(newState);
                 state = newState;
+
+                // Send updated toolbar state after loading content
+                const toolbarState = getToolbarState();
+                sendMessageToNative({
+                  type: 'toolbarStateChange',
+                  state: toolbarState
+                });
               }
               break;
 
