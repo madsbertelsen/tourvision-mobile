@@ -59,6 +59,20 @@
       font-style: italic;
     }
 
+    .ProseMirror .geo-mark {
+      background-color: rgba(59, 130, 246, 0.2);
+      padding: 2px 4px;
+      border-radius: 3px;
+      cursor: pointer;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    .ProseMirror .geo-mark:hover {
+      background-color: rgba(59, 130, 246, 0.3);
+      border-bottom-color: rgba(59, 130, 246, 0.8);
+    }
+
     .status-bar {
       position: fixed;
       top: 0;
@@ -214,6 +228,25 @@
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
 
+      // Add click handler for geo-marks
+      document.querySelector('#editor-container').addEventListener('click', function(e) {
+        if (e.target.classList.contains('geo-mark')) {
+          const attrs = {
+            geoId: e.target.getAttribute('data-geo-id'),
+            placeName: e.target.getAttribute('data-place-name'),
+            lat: e.target.getAttribute('data-lat'),
+            lng: e.target.getAttribute('data-lng'),
+            colorIndex: parseInt(e.target.getAttribute('data-color-index') || '0'),
+            coordSource: e.target.getAttribute('data-coord-source')
+          };
+          console.log('[WebView] Geo-mark clicked:', attrs);
+          sendMessageToNative({
+            type: 'geoMarkNavigate',
+            attrs: attrs
+          });
+        }
+      });
+
       // Send ready message
       sendMessageToNative({
         type: 'ready',
@@ -343,13 +376,24 @@
                 const { selection } = state;
                 const { from, to } = selection;
 
-                // For now, just replace selected text with the place name
-                // In a full implementation, you'd create a custom geo-mark node
-                const tr = state.tr.replaceWith(
-                  from,
-                  to,
-                  schema.text(data.geoMarkData.placeName + ' 📍')
-                );
+                // Create a geoMark mark with the location data
+                const geoMarkType = schema.marks.geoMark;
+                if (!geoMarkType) {
+                  console.error('[WebView] geoMark mark type not found in schema');
+                  break;
+                }
+
+                const mark = geoMarkType.create({
+                  geoId: data.geoMarkData.geoId,
+                  placeName: data.geoMarkData.placeName,
+                  lat: data.geoMarkData.lat,
+                  lng: data.geoMarkData.lng,
+                  colorIndex: data.geoMarkData.colorIndex || 0,
+                  coordSource: data.geoMarkData.coordSource || 'manual'
+                });
+
+                // Add the mark to the selected text
+                const tr = state.tr.addMark(from, to, mark);
                 dispatch(tr);
 
                 console.log('[WebView] Geo-mark created successfully');

@@ -1,6 +1,6 @@
 "use strict";
 var PMBundle = (() => {
-  // node_modules/orderedmap/dist/index.js
+  // ../node_modules/orderedmap/dist/index.js
   function OrderedMap(content) {
     this.content = content;
   }
@@ -119,7 +119,7 @@ var PMBundle = (() => {
   };
   var dist_default = OrderedMap;
 
-  // node_modules/prosemirror-model/dist/index.js
+  // ../node_modules/prosemirror-model/dist/index.js
   function findDiffStart(a, b, pos) {
     for (let i = 0; ; i++) {
       if (i == a.childCount || i == b.childCount)
@@ -3306,7 +3306,7 @@ var PMBundle = (() => {
     return { dom, contentDOM };
   }
 
-  // node_modules/prosemirror-transform/dist/index.js
+  // ../node_modules/prosemirror-transform/dist/index.js
   var lower16 = 65535;
   var factor16 = Math.pow(2, 16);
   function makeRecover(index, offset) {
@@ -5067,7 +5067,7 @@ var PMBundle = (() => {
     }
   };
 
-  // node_modules/prosemirror-state/dist/index.js
+  // ../node_modules/prosemirror-state/dist/index.js
   var classesById = /* @__PURE__ */ Object.create(null);
   var Selection = class {
     /**
@@ -5994,7 +5994,7 @@ var PMBundle = (() => {
     }
   };
 
-  // node_modules/prosemirror-view/dist/index.js
+  // ../node_modules/prosemirror-view/dist/index.js
   var domIndex = function(node) {
     for (var index = 0; ; index++) {
       node = node.previousSibling;
@@ -11157,7 +11157,7 @@ var PMBundle = (() => {
       throw new RangeError("Plugins passed directly to the view must not have a state component");
   }
 
-  // node_modules/prosemirror-schema-basic/dist/index.js
+  // ../node_modules/prosemirror-schema-basic/dist/index.js
   var pDOM = ["p", 0];
   var blockquoteDOM = ["blockquote", 0];
   var hrDOM = ["hr"];
@@ -11356,7 +11356,7 @@ var PMBundle = (() => {
   };
   var schema = new Schema({ nodes, marks });
 
-  // node_modules/prosemirror-schema-list/dist/index.js
+  // ../node_modules/prosemirror-schema-list/dist/index.js
   var olDOM = ["ol", 0];
   var ulDOM = ["ul", 0];
   var liDOM = ["li", 0];
@@ -11398,7 +11398,7 @@ var PMBundle = (() => {
     });
   }
 
-  // node_modules/w3c-keyname/index.js
+  // ../node_modules/w3c-keyname/index.js
   var base = {
     8: "Backspace",
     9: "Tab",
@@ -11504,7 +11504,7 @@ var PMBundle = (() => {
     return name;
   }
 
-  // node_modules/prosemirror-keymap/dist/index.js
+  // ../node_modules/prosemirror-keymap/dist/index.js
   var mac3 = typeof navigator != "undefined" && /Mac|iP(hone|[oa]d)/.test(navigator.platform);
   var windows2 = typeof navigator != "undefined" && /Win/.test(navigator.platform);
   function normalizeKeyName(name) {
@@ -11583,7 +11583,7 @@ var PMBundle = (() => {
     };
   }
 
-  // node_modules/rope-sequence/dist/index.js
+  // ../node_modules/rope-sequence/dist/index.js
   var GOOD_LEAF_SIZE = 200;
   var RopeSequence = function RopeSequence2() {
   };
@@ -11766,7 +11766,7 @@ var PMBundle = (() => {
   })(RopeSequence);
   var dist_default2 = RopeSequence;
 
-  // node_modules/prosemirror-history/dist/index.js
+  // ../node_modules/prosemirror-history/dist/index.js
   var max_empty_items = 500;
   var Branch = class _Branch {
     constructor(items, eventCount) {
@@ -12119,7 +12119,7 @@ var PMBundle = (() => {
   var undoNoScroll = buildCommand(false, false);
   var redoNoScroll = buildCommand(true, false);
 
-  // node_modules/prosemirror-commands/dist/index.js
+  // ../node_modules/prosemirror-commands/dist/index.js
   var deleteSelection = (state, dispatch) => {
     if (state.selection.empty)
       return false;
@@ -12508,10 +12508,45 @@ var PMBundle = (() => {
   var mac4 = typeof navigator != "undefined" ? /Mac|iP(hone|[oa]d)/.test(navigator.platform) : typeof os != "undefined" && os.platform ? os.platform() == "darwin" : false;
   var baseKeymap = mac4 ? macBaseKeymap : pcBaseKeymap;
 
-  // assets/prosemirror-bundle-src.js
+  // prosemirror-bundle-src.js
   var mySchema = new Schema({
     nodes: addListNodes(schema.spec.nodes, "paragraph block*", "block"),
-    marks: schema.spec.marks
+    marks: schema.spec.marks.addToEnd("geoMark", {
+      attrs: {
+        geoId: { default: null },
+        placeName: { default: "" },
+        lat: { default: "" },
+        lng: { default: "" },
+        colorIndex: { default: 0 },
+        coordSource: { default: "manual" }
+      },
+      inclusive: false,
+      parseDOM: [{
+        tag: "span.geo-mark",
+        getAttrs(dom) {
+          return {
+            geoId: dom.getAttribute("data-geo-id"),
+            placeName: dom.getAttribute("data-place-name"),
+            lat: dom.getAttribute("data-lat"),
+            lng: dom.getAttribute("data-lng"),
+            colorIndex: parseInt(dom.getAttribute("data-color-index") || "0"),
+            coordSource: dom.getAttribute("data-coord-source") || "manual"
+          };
+        }
+      }],
+      toDOM(mark) {
+        return ["span", {
+          class: "geo-mark",
+          "data-geo-id": mark.attrs.geoId,
+          "data-place-name": mark.attrs.placeName,
+          "data-lat": mark.attrs.lat,
+          "data-lng": mark.attrs.lng,
+          "data-color-index": mark.attrs.colorIndex,
+          "data-coord-source": mark.attrs.coordSource,
+          style: "background-color: rgba(59, 130, 246, 0.2); padding: 2px 4px; border-radius: 3px; cursor: pointer;"
+        }, 0];
+      }
+    })
   });
   window.PM = {
     state: { EditorState },
