@@ -219,6 +219,60 @@ const marks: { [key: string]: MarkSpec } = {
 
       return ["span", attrs, 0];
     }
+  },
+
+  // Custom mark for comments/annotations
+  comment: {
+    attrs: {
+      commentId: { default: null },
+      userId: { default: null },
+      userName: { default: "" },
+      content: { default: "" },
+      createdAt: { default: null },
+      resolved: { default: false },
+      replies: { default: null } // Array of reply objects
+    },
+    inclusive: false,
+    parseDOM: [{
+      tag: "span.comment-mark",
+      getAttrs(dom: any) {
+        const repliesStr = dom.getAttribute("data-replies");
+        let replies = null;
+        if (repliesStr) {
+          try {
+            replies = JSON.parse(repliesStr);
+          } catch (e) {
+            console.error('Failed to parse replies:', e);
+          }
+        }
+
+        return {
+          commentId: dom.getAttribute("data-comment-id"),
+          userId: dom.getAttribute("data-user-id"),
+          userName: dom.getAttribute("data-user-name") || "",
+          content: dom.getAttribute("data-content") || "",
+          createdAt: dom.getAttribute("data-created-at"),
+          resolved: dom.getAttribute("data-resolved") === "true",
+          replies
+        };
+      }
+    }],
+    toDOM(mark) {
+      const attrs: any = {
+        class: "comment-mark",
+        "data-comment": "true"
+      };
+
+      if (mark.attrs.commentId) attrs["data-comment-id"] = mark.attrs.commentId;
+      if (mark.attrs.userId) attrs["data-user-id"] = mark.attrs.userId;
+      if (mark.attrs.userName) attrs["data-user-name"] = mark.attrs.userName;
+      if (mark.attrs.content) attrs["data-content"] = mark.attrs.content;
+      if (mark.attrs.createdAt) attrs["data-created-at"] = mark.attrs.createdAt;
+      if (mark.attrs.resolved !== undefined) attrs["data-resolved"] = mark.attrs.resolved.toString();
+      if (mark.attrs.replies) attrs["data-replies"] = JSON.stringify(mark.attrs.replies);
+
+      return ["span", attrs, 0];
+    }
   }
 };
 

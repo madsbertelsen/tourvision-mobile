@@ -1,7 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
+import CommentModal from '@/components/CommentModal';
 import { router, useLocalSearchParams } from 'expo-router';
 import { getTrip, saveTrip } from '@/utils/trips-storage';
 
@@ -42,6 +44,14 @@ export default function EditLocationInfoScreen() {
     italic: false,
   });
 
+  // Comment modal state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentData, setCommentData] = useState<{
+    selectedText: string;
+    from: number;
+    to: number;
+  } | null>(null);
+
   // Load existing location document
   useEffect(() => {
     const loadDocument = async () => {
@@ -81,6 +91,27 @@ export default function EditLocationInfoScreen() {
   const handleToolbarStateChange = useCallback((state: any) => {
     setToolbarState(state);
   }, []);
+
+  const handleShowCommentEditor = useCallback((data: { selectedText: string; from: number; to: number }) => {
+    console.log('[EditLocationInfo] Showing comment editor for:', data);
+    setCommentData(data);
+    setShowCommentModal(true);
+  }, []);
+
+  const handleSaveComment = useCallback((comment: any) => {
+    console.log('[EditLocationInfo] Saving comment:', comment);
+
+    if (commentData && documentRef.current) {
+      // Send command to ProseMirror WebView to create the comment
+      documentRef.current.sendCommand('createComment', {
+        ...comment,
+        from: commentData.from,
+        to: commentData.to,
+      });
+    }
+
+    setCommentData(null);
+  }, [commentData]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -182,6 +213,7 @@ export default function EditLocationInfoScreen() {
             editable={true}
             onChange={handleDocumentChange}
             onToolbarStateChange={handleToolbarStateChange}
+            onShowCommentEditor={handleShowCommentEditor}
           />
         </View>
 
@@ -230,8 +262,28 @@ export default function EditLocationInfoScreen() {
           >
             <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
           </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            onPress={() => documentRef.current?.sendCommand('addComment')}
+            style={styles.toolbarButton}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color="#374151" />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Comment Modal */}
+      <CommentModal
+        visible={showCommentModal}
+        onClose={() => {
+          setShowCommentModal(false);
+          setCommentData(null);
+        }}
+        onSave={handleSaveComment}
+        selectedText={commentData?.selectedText}
+      />
     </View>
   );
 }

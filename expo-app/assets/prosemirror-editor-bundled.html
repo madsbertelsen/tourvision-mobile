@@ -74,6 +74,25 @@
       border-bottom-color: rgba(59, 130, 246, 0.8);
     }
 
+    .ProseMirror .comment-mark {
+      background-color: rgba(251, 191, 36, 0.3);
+      border-bottom: 2px solid rgba(251, 191, 36, 0.6);
+      cursor: pointer;
+      padding: 1px 0;
+      transition: all 0.2s ease;
+    }
+
+    .ProseMirror .comment-mark:hover {
+      background-color: rgba(251, 191, 36, 0.4);
+      border-bottom-color: rgba(251, 191, 36, 0.9);
+    }
+
+    .ProseMirror .comment-mark[data-resolved="true"] {
+      background-color: rgba(156, 163, 175, 0.2);
+      border-bottom-color: rgba(156, 163, 175, 0.4);
+      opacity: 0.7;
+    }
+
     .status-bar {
       display: none; /* Hidden to save space */
     }
@@ -265,7 +284,7 @@
         };
       }
 
-      // Add click handler for geo-marks
+      // Add click handler for geo-marks and comments
       document.querySelector('#editor-container').addEventListener('click', function(e) {
         if (e.target.classList.contains('geo-mark')) {
           const attrs = {
@@ -279,6 +298,33 @@
           console.log('[WebView] Geo-mark clicked:', attrs);
           sendMessageToNative({
             type: 'geoMarkNavigate',
+            attrs: attrs
+          });
+        }
+
+        if (e.target.classList.contains('comment-mark')) {
+          const repliesStr = e.target.getAttribute('data-replies');
+          let replies = null;
+          if (repliesStr) {
+            try {
+              replies = JSON.parse(repliesStr);
+            } catch (err) {
+              console.error('[WebView] Error parsing replies:', err);
+            }
+          }
+
+          const attrs = {
+            commentId: e.target.getAttribute('data-comment-id'),
+            userId: e.target.getAttribute('data-user-id'),
+            userName: e.target.getAttribute('data-user-name') || '',
+            content: e.target.getAttribute('data-content') || '',
+            createdAt: e.target.getAttribute('data-created-at'),
+            resolved: e.target.getAttribute('data-resolved') === 'true',
+            replies: replies
+          };
+          console.log('[WebView] Comment clicked:', attrs);
+          sendMessageToNative({
+            type: 'commentClick',
             attrs: attrs
           });
         }
@@ -558,6 +604,56 @@
                     },
                     existingLocations: []
                   });
+                  break;
+
+                case 'addComment':
+                  // Check if there's selected text
+                  if (selection.empty) {
+                    console.warn('[WebView] No text selected for comment');
+                    sendMessageToNative({
+                      type: 'error',
+                      message: 'Please select text to add a comment'
+                    });
+                    break;
+                  }
+
+                  // Get selected text
+                  const commentSelectedText = state.doc.textBetween(from, to, ' ');
+                  console.log('[WebView] Selected text for comment:', commentSelectedText);
+
+                  // Send request to show comment editor
+                  sendMessageToNative({
+                    type: 'showCommentEditor',
+                    data: {
+                      selectedText: commentSelectedText,
+                      from: selection.from,
+                      to: selection.to
+                    }
+                  });
+                  break;
+
+                case 'createComment':
+                  // Create a comment mark with the provided data
+                  if (data.params && schema.marks.comment) {
+                    const commentMark = schema.marks.comment.create({
+                      commentId: data.params.commentId,
+                      userId: data.params.userId,
+                      userName: data.params.userName,
+                      content: data.params.content,
+                      createdAt: data.params.createdAt,
+                      resolved: data.params.resolved || false,
+                      replies: data.params.replies || null
+                    });
+
+                    const commentTr = state.tr.addMark(
+                      data.params.from || from,
+                      data.params.to || to,
+                      commentMark
+                    );
+                    dispatch(commentTr);
+                    console.log('[WebView] Comment created successfully');
+                    editorView.focus();
+                  }
                   break;
 
                 default:

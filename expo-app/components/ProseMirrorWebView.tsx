@@ -22,6 +22,8 @@ interface ProseMirrorWebViewProps {
   onSelectionChange?: (empty: boolean) => void;
   onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
   onToolbarStateChange?: (state: any) => void;
+  onShowCommentEditor?: (data: { selectedText: string; from: number; to: number }) => void;
+  onCommentClick?: (commentAttrs: any) => void;
 }
 
 // We'll load the HTML from the assets folder
@@ -40,6 +42,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       onSelectionChange,
       onGeoMarkNavigate,
       onToolbarStateChange,
+      onShowCommentEditor,
+      onCommentClick,
     },
     ref
   ) => {
@@ -162,6 +166,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               }
               break;
 
+            case 'showCommentEditor':
+              if (onShowCommentEditor) {
+                onShowCommentEditor(data.data);
+              }
+              break;
+
+            case 'commentClick':
+              if (onCommentClick) {
+                onCommentClick(data.attrs);
+              }
+              break;
+
             case 'stateResponse':
               console.log('[ProseMirrorWebView] State response:', data.state);
               break;
@@ -173,7 +189,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.error('[ProseMirrorWebView] Error handling message:', error);
         }
       },
-      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, content, editable, sendMessage]
+      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, onShowCommentEditor, onCommentClick, content, editable, sendMessage]
     );
 
     // Update content when it changes externally
