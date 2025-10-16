@@ -6,14 +6,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
 import Mapbox from '@rnmapbox/maps';
-import { getTrip } from '@/utils/trips-storage';
+import { getTrip, saveTrip } from '@/utils/trips-storage';
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 
 // Set Mapbox access token
@@ -51,6 +52,10 @@ export default function LocationDetailScreen() {
 
   const [locationDocument, setLocationDocument] = useState<any>(null);
   const [contextDocument, setContextDocument] = useState<any>(null);
+  const [transportProfile, setTransportProfile] = useState<string | null>(null);
+  const [transportFrom, setTransportFrom] = useState<string | null>(null);
+  const [availableLocations, setAvailableLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const [isSavingTransport, setIsSavingTransport] = useState(false);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
   // Use bookmark hook
@@ -84,8 +89,8 @@ export default function LocationDetailScreen() {
                 setLocationDocument(null);
               }
 
-              // Load context document from geo-mark in trip.document
-              const findContextDocument = (node: any): any => {
+              // Load context document and transport settings from geo-mark in trip.document
+              const findGeoMark = (node: any): any => {
                 if (!node) return null;
 
                 // Check text nodes for geo-mark marks
@@ -93,15 +98,15 @@ export default function LocationDetailScreen() {
                   const geoMarkMark = node.marks.find(
                     (mark: any) => mark.type === 'geoMark' && mark.attrs?.geoId === geoId
                   );
-                  if (geoMarkMark?.attrs?.contextDocument) {
-                    return geoMarkMark.attrs.contextDocument;
+                  if (geoMarkMark) {
+                    return geoMarkMark.attrs;
                   }
                 }
 
                 // Recursively search children
                 if (node.content) {
                   for (const child of node.content) {
-                    const found = findContextDocument(child);
+                    const found = findGeoMark(child);
                     if (found) return found;
                   }
                 }
@@ -109,7 +114,8 @@ export default function LocationDetailScreen() {
                 return null;
               };
 
-              const foundContext = trip.document ? findContextDocument(trip.document) : null;
+              const geoMarkAttrs = trip.document ? findGeoMark(trip.document) : null;
+              const foundContext = geoMarkAttrs?.contextDocument || null;
               if (foundContext) {
                 setContextDocument(foundContext);
               } else if (contextDocParam) {
@@ -124,6 +130,43 @@ export default function LocationDetailScreen() {
               } else {
                 setContextDocument(null);
               }
+
+              // Load transport settings from geoMark
+              setTransportProfile(geoMarkAttrs?.transportProfile || null);
+              setTransportFrom(geoMarkAttrs?.transportFrom || null);
+
+              // Extract all geo-marks from trip document to populate available locations
+              const extractAllGeoMarks = (node: any): Array<{ id: string; name: string }> => {
+                const locations: Array<{ id: string; name: string }> = [];
+
+                const traverse = (n: any) => {
+                  if (!n) return;
+
+                  if (n.type === 'text' && n.marks) {
+                    n.marks.forEach((mark: any) => {
+                      if (mark.type === 'geoMark' && mark.attrs?.geoId && mark.attrs?.placeName) {
+                        // Don't include current location
+                        if (mark.attrs.geoId !== geoId) {
+                          locations.push({
+                            id: mark.attrs.geoId,
+                            name: mark.attrs.placeName
+                          });
+                        }
+                      }
+                    });
+                  }
+
+                  if (n.content) {
+                    n.content.forEach((child: any) => traverse(child));
+                  }
+                };
+
+                traverse(node);
+                return locations;
+              };
+
+              const locations = trip.document ? extractAllGeoMarks(trip.document) : [];
+              setAvailableLocations(locations);
             }
           } catch (e) {
             console.error('Failed to load documents:', e);
@@ -163,6 +206,76 @@ export default function LocationDetailScreen() {
 
   // Extract short name (first part before comma) for header
   const shortName = name.split(',')[0].trim();
+
+  // Save transport settings to geoMark
+  const handleSaveTransport = async () => {
+    if (!tripId) return;
+
+    setIsSavingTransport(true);
+    try {
+      const trip = await getTrip(tripId);
+      if (!trip || !trip.document) {
+        Alert.alert('Error', 'Trip document not found');
+        return;
+      }
+
+      const geoId = locationId || id;
+
+      // Update geo-mark with new transport settings
+      const updateGeoMarkTransport = (node: any): any => {
+        if (!node) return node;
+
+        // If this is a text node with marks, check for geo-mark
+        if (node.type === 'text' && node.marks) {
+          const updatedMarks = node.marks.map((mark: any) => {
+            // If this is a geo-mark with matching geoId, update transport settings
+            if (mark.type === 'geoMark' && mark.attrs?.geoId === geoId) {
+              return {
+                ...mark,
+                attrs: {
+                  ...mark.attrs,
+                  transportProfile: transportProfile,
+                  transportFrom: transportFrom,
+                },
+              };
+            }
+            return mark;
+          });
+
+          if (JSON.stringify(updatedMarks) !== JSON.stringify(node.marks)) {
+            return {
+              ...node,
+              marks: updatedMarks,
+            };
+          }
+        }
+
+        // Recursively update children
+        if (node.content) {
+          return {
+            ...node,
+            content: node.content.map((child: any) => updateGeoMarkTransport(child)),
+          };
+        }
+
+        return node;
+      };
+
+      const updatedDocument = updateGeoMarkTransport(trip.document);
+
+      await saveTrip({
+        ...trip,
+        document: updatedDocument,
+      });
+
+      Alert.alert('Success', 'Transport settings saved');
+    } catch (error) {
+      console.error('Failed to save transport settings:', error);
+      Alert.alert('Error', 'Failed to save transport settings');
+    } finally {
+      setIsSavingTransport(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -241,6 +354,151 @@ export default function LocationDetailScreen() {
             </Mapbox.PointAnnotation>
           </Mapbox.MapView>
         </View>
+
+        {/* Transport Configuration */}
+        {tripId && (
+          <View style={styles.transportSection}>
+            <View style={styles.transportHeader}>
+              <Ionicons name="car" size={18} color="#f59e0b" />
+              <Text style={styles.transportTitle}>Planned Transport</Text>
+            </View>
+
+            {/* Transportation Profile */}
+            <View style={styles.transportRow}>
+              <Text style={styles.transportLabel}>Mode</Text>
+              <View style={styles.transportOptions}>
+                <TouchableOpacity
+                  style={[
+                    styles.transportOption,
+                    transportProfile === 'driving' && styles.transportOptionActive
+                  ]}
+                  onPress={() => setTransportProfile('driving')}
+                >
+                  <Ionicons
+                    name="car"
+                    size={20}
+                    color={transportProfile === 'driving' ? '#fff' : '#6b7280'}
+                  />
+                  <Text
+                    style={[
+                      styles.transportOptionText,
+                      transportProfile === 'driving' && styles.transportOptionTextActive
+                    ]}
+                  >
+                    Drive
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.transportOption,
+                    transportProfile === 'walking' && styles.transportOptionActive
+                  ]}
+                  onPress={() => setTransportProfile('walking')}
+                >
+                  <Ionicons
+                    name="walk"
+                    size={20}
+                    color={transportProfile === 'walking' ? '#fff' : '#6b7280'}
+                  />
+                  <Text
+                    style={[
+                      styles.transportOptionText,
+                      transportProfile === 'walking' && styles.transportOptionTextActive
+                    ]}
+                  >
+                    Walk
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.transportOption,
+                    transportProfile === 'cycling' && styles.transportOptionActive
+                  ]}
+                  onPress={() => setTransportProfile('cycling')}
+                >
+                  <Ionicons
+                    name="bicycle"
+                    size={20}
+                    color={transportProfile === 'cycling' ? '#fff' : '#6b7280'}
+                  />
+                  <Text
+                    style={[
+                      styles.transportOptionText,
+                      transportProfile === 'cycling' && styles.transportOptionTextActive
+                    ]}
+                  >
+                    Bike
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Route From Location */}
+            {transportProfile && (
+              <View style={styles.transportRow}>
+                <Text style={styles.transportLabel}>From</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.locationScroll}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.locationOption,
+                      !transportFrom && styles.locationOptionActive
+                    ]}
+                    onPress={() => setTransportFrom(null)}
+                  >
+                    <Text
+                      style={[
+                        styles.locationOptionText,
+                        !transportFrom && styles.locationOptionTextActive
+                      ]}
+                    >
+                      Not set
+                    </Text>
+                  </TouchableOpacity>
+
+                  {availableLocations.map((loc) => (
+                    <TouchableOpacity
+                      key={loc.id}
+                      style={[
+                        styles.locationOption,
+                        transportFrom === loc.id && styles.locationOptionActive
+                      ]}
+                      onPress={() => setTransportFrom(loc.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.locationOptionText,
+                          transportFrom === loc.id && styles.locationOptionTextActive
+                        ]}
+                      >
+                        {loc.name.split(',')[0].trim()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Save Button */}
+            {transportProfile && (
+              <TouchableOpacity
+                style={styles.saveTransportButton}
+                onPress={handleSaveTransport}
+                disabled={isSavingTransport}
+              >
+                <Text style={styles.saveTransportButtonText}>
+                  {isSavingTransport ? 'Saving...' : 'Save Transport Settings'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
             {/* Context-Specific Notes */}
             {(contextDocument || tripId) && (
               <View style={styles.documentSection}>
@@ -445,5 +703,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     fontStyle: 'italic',
+  },
+  transportSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  transportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  transportTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  transportRow: {
+    marginBottom: 16,
+  },
+  transportLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  transportOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  transportOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+  },
+  transportOptionActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  transportOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  transportOptionTextActive: {
+    color: '#fff',
+  },
+  locationScroll: {
+    flexGrow: 0,
+  },
+  locationOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginRight: 8,
+  },
+  locationOptionActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  locationOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  locationOptionTextActive: {
+    color: '#fff',
+  },
+  saveTransportButton: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveTransportButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
