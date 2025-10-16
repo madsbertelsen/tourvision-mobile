@@ -97,25 +97,43 @@ export default function CreateLocationScreen() {
 
   // Update map to show all suggestions or fit to selected
   useEffect(() => {
-    if (!cameraRef.current || suggestions.length === 0) return;
-
-    if (suggestions.length === 1) {
-      // Single location - center on it
-      cameraRef.current.setCamera({
-        centerCoordinate: [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)],
-        zoomLevel: 14,
-        animationDuration: 500,
-      });
-    } else {
-      // Multiple locations - fit all in view
-      const coordinates = suggestions.map(s => [parseFloat(s.lon), parseFloat(s.lat)]);
-      cameraRef.current.fitBounds(
-        [Math.min(...coordinates.map(c => c[0])), Math.min(...coordinates.map(c => c[1]))],
-        [Math.max(...coordinates.map(c => c[0])), Math.max(...coordinates.map(c => c[1]))],
-        [50, 50, 50, 50], // padding
-        500 // animation duration
-      );
+    console.log('[CreateLocation] Camera useEffect triggered, suggestions:', suggestions.length);
+    if (!cameraRef.current || suggestions.length === 0) {
+      console.log('[CreateLocation] Skipping camera update - no ref or suggestions');
+      return;
     }
+
+    // Add a small delay to ensure the map is ready
+    const timer = setTimeout(() => {
+      if (suggestions.length === 1) {
+        // Single location - center on it
+        console.log('[CreateLocation] Setting camera to single location:', suggestions[0].display_name);
+        cameraRef.current?.setCamera({
+          centerCoordinate: [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)],
+          zoomLevel: 14,
+          animationDuration: 500,
+        });
+      } else {
+        // Multiple locations - fit all in view
+        const coordinates = suggestions.map(s => [parseFloat(s.lon), parseFloat(s.lat)]);
+        console.log('[CreateLocation] Fitting bounds for', coordinates.length, 'locations');
+        const lons = coordinates.map(c => c[0]);
+        const lats = coordinates.map(c => c[1]);
+        const bounds = [
+          [Math.min(...lons), Math.min(...lats)], // southwest
+          [Math.max(...lons), Math.max(...lats)], // northeast
+        ];
+        console.log('[CreateLocation] Bounds:', bounds);
+        cameraRef.current?.fitBounds(
+          bounds[0],
+          bounds[1],
+          [50, 50, 50, 50], // padding
+          500 // animation duration
+        );
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [suggestions]);
 
   // When selection changes, highlight it on the map
@@ -239,6 +257,11 @@ export default function CreateLocationScreen() {
             <Mapbox.Camera
               ref={cameraRef}
               zoomLevel={14}
+              centerCoordinate={
+                suggestions.length > 0
+                  ? [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)]
+                  : [0, 0]
+              }
               animationDuration={500}
             />
 
