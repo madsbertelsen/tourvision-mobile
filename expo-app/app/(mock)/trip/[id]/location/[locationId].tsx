@@ -253,17 +253,18 @@ export default function LocationDetailScreen() {
                   </View>
                   {tripId && (
                     <TouchableOpacity
-                      onPress={() =>
+                      onPress={() => {
+                        const path = `/(mock)/trip/${tripId}/location/${locationId || id}/edit-visit` as any;
                         router.push({
-                          pathname: 'edit-visit' as any,
+                          pathname: path,
                           params: {
                             locationId: locationId || id,
                             tripId,
                             name,
                             contextDocument: contextDocument ? JSON.stringify(contextDocument) : undefined,
                           },
-                        })
-                      }
+                        });
+                      }}
                       style={styles.editButton}
                     >
                       <Ionicons name="pencil" size={16} color="#3B82F6" />
@@ -288,16 +289,17 @@ export default function LocationDetailScreen() {
                     <Text style={styles.documentTitle}>General Information</Text>
                   </View>
                   <TouchableOpacity
-                    onPress={() =>
+                    onPress={() => {
+                      const path = `/(mock)/trip/${tripId}/location/${locationId || id}/edit-info` as any;
                       router.push({
-                        pathname: 'edit-info' as any,
+                        pathname: path,
                         params: {
                           locationId: locationId || id,
                           tripId,
                           name,
                         },
-                      })
-                    }
+                      });
+                    }}
                     style={styles.editButton}
                   >
                     <Ionicons name="pencil" size={16} color="#10b981" />
