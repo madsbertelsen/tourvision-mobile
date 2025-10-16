@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,25 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Mapbox from '@rnmapbox/maps';
+
+// Set Mapbox access token
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAP_HEIGHT = 250;
 
 export default function LocationPreviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const cameraRef = useRef<Mapbox.Camera>(null);
+
   const {
     id,
     name,
@@ -31,6 +41,19 @@ export default function LocationPreviewScreen() {
     description?: string;
     colorIndex?: string;
   };
+
+  // Center camera on location when screen loads
+  useEffect(() => {
+    if (cameraRef.current && lat && lng) {
+      setTimeout(() => {
+        cameraRef.current?.setCamera({
+          centerCoordinate: [parseFloat(lng), parseFloat(lat)],
+          zoomLevel: 14,
+          animationDuration: 800,
+        });
+      }, 100);
+    }
+  }, [lat, lng]);
 
   // Format coordinates for display
   const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
@@ -83,6 +106,39 @@ export default function LocationPreviewScreen() {
             <Ionicons name="location-sharp" size={14} color="#6b7280" />
             <Text style={styles.subtitleText}>Location</Text>
           </View>
+        </View>
+
+        {/* Map View */}
+        <View style={styles.mapContainer}>
+          <Mapbox.MapView
+            style={styles.map}
+            styleURL={Mapbox.StyleURL.Street}
+            zoomEnabled={true}
+            scrollEnabled={true}
+            pitchEnabled={false}
+            rotateEnabled={true}
+          >
+            <Mapbox.Camera
+              ref={cameraRef}
+              zoomLevel={14}
+              centerCoordinate={[parseFloat(lng), parseFloat(lat)]}
+              animationDuration={800}
+            />
+
+            {/* Location Marker */}
+            <Mapbox.PointAnnotation
+              id={`location-${id}`}
+              coordinate={[parseFloat(lng), parseFloat(lat)]}
+            >
+              <View style={styles.markerContainer}>
+                <Ionicons
+                  name="location"
+                  size={40}
+                  color="#3B82F6"
+                />
+              </View>
+            </Mapbox.PointAnnotation>
+          </Mapbox.MapView>
         </View>
 
         {/* Description */}
@@ -263,5 +319,20 @@ const styles = StyleSheet.create({
   infoCardText: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  mapContainer: {
+    height: MAP_HEIGHT,
+    backgroundColor: '#E5E5EA',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  map: {
+    flex: 1,
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
