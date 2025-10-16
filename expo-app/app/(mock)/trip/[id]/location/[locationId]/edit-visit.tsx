@@ -62,18 +62,33 @@ export default function EditVisitNotesScreen() {
       }
 
       // Find and update all geo-marks with matching geoId
+      // Geo-marks are marks on text nodes, not standalone nodes
       const updateGeoMarks = (node: any): any => {
         if (!node) return node;
 
-        // If this is a geo-mark with matching geoId, update its contextDocument
-        if (node.type === 'geoMark' && node.attrs?.geoId === locationId) {
-          return {
-            ...node,
-            attrs: {
-              ...node.attrs,
-              contextDocument: currentDoc,
-            },
-          };
+        // If this is a text node with marks, check for geo-mark
+        if (node.type === 'text' && node.marks) {
+          const updatedMarks = node.marks.map((mark: any) => {
+            // If this is a geo-mark with matching geoId, update its contextDocument
+            if (mark.type === 'geoMark' && mark.attrs?.geoId === locationId) {
+              return {
+                ...mark,
+                attrs: {
+                  ...mark.attrs,
+                  contextDocument: currentDoc,
+                },
+              };
+            }
+            return mark;
+          });
+
+          // Only return updated node if marks actually changed
+          if (JSON.stringify(updatedMarks) !== JSON.stringify(node.marks)) {
+            return {
+              ...node,
+              marks: updatedMarks,
+            };
+          }
         }
 
         // Recursively update children
