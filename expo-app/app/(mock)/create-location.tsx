@@ -255,24 +255,26 @@ export default function CreateLocationScreen() {
                     setSelectedIndex(index);
                   }}
                 >
-                  <View style={[
-                    styles.marker,
-                    isSelected && styles.markerSelected
-                  ]}>
-                    <Ionicons
-                      name={isSelected ? "location" : "location-outline"}
-                      size={isSelected ? 40 : 28}
-                      color={isSelected ? "#007AFF" : "#8E8E93"}
-                    />
-                  </View>
-                  {/* Label for unselected markers */}
-                  {!isSelected && (
-                    <View style={styles.markerLabel}>
-                      <Text style={styles.markerLabelText} numberOfLines={1}>
-                        {suggestion.display_name.split(',')[0]}
-                      </Text>
+                  <View style={styles.markerContainer}>
+                    <View style={[
+                      styles.marker,
+                      isSelected && styles.markerSelected
+                    ]}>
+                      <Ionicons
+                        name={isSelected ? "location" : "location-outline"}
+                        size={isSelected ? 40 : 28}
+                        color={isSelected ? "#007AFF" : "#8E8E93"}
+                      />
                     </View>
-                  )}
+                    {/* Label for unselected markers */}
+                    {!isSelected && (
+                      <View style={styles.markerLabel}>
+                        <Text style={styles.markerLabelText} numberOfLines={1}>
+                          {suggestion.display_name.split(',')[0]}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </Mapbox.PointAnnotation>
               );
             })}
@@ -427,6 +429,10 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   marker: {
     alignItems: 'center',
