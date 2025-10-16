@@ -95,16 +95,33 @@ export default function CreateLocationScreen() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Update map when selection changes
+  // Update map to show all suggestions or fit to selected
   useEffect(() => {
-    if (selectedLocation && cameraRef.current) {
+    if (!cameraRef.current || suggestions.length === 0) return;
+
+    if (suggestions.length === 1) {
+      // Single location - center on it
       cameraRef.current.setCamera({
-        centerCoordinate: [parseFloat(selectedLocation.lon), parseFloat(selectedLocation.lat)],
+        centerCoordinate: [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)],
         zoomLevel: 14,
         animationDuration: 500,
       });
+    } else {
+      // Multiple locations - fit all in view
+      const coordinates = suggestions.map(s => [parseFloat(s.lon), parseFloat(s.lat)]);
+      cameraRef.current.fitBounds(
+        [Math.min(...coordinates.map(c => c[0])), Math.min(...coordinates.map(c => c[1]))],
+        [Math.max(...coordinates.map(c => c[0])), Math.max(...coordinates.map(c => c[1]))],
+        [50, 50, 50, 50], // padding
+        500 // animation duration
+      );
     }
-  }, [selectedIndex, selectedLocation]);
+  }, [suggestions]);
+
+  // When selection changes, highlight it on the map
+  useEffect(() => {
+    // The map will re-render with updated markers showing selection
+  }, [selectedIndex]);
 
   const handleSave = () => {
     if (!selectedLocation) {
@@ -209,7 +226,7 @@ export default function CreateLocationScreen() {
       )}
 
       {/* Map View */}
-      {selectedLocation && (
+      {suggestions.length > 0 && (
         <View style={styles.mapContainer}>
           <Mapbox.MapView
             style={styles.map}
@@ -222,36 +239,56 @@ export default function CreateLocationScreen() {
             <Mapbox.Camera
               ref={cameraRef}
               zoomLevel={14}
-              centerCoordinate={[
-                parseFloat(selectedLocation.lon),
-                parseFloat(selectedLocation.lat)
-              ]}
               animationDuration={500}
             />
 
-            {/* Marker for selected location */}
-            <Mapbox.PointAnnotation
-              id="selected-location"
-              coordinate={[
-                parseFloat(selectedLocation.lon),
-                parseFloat(selectedLocation.lat)
-              ]}
-            >
-              <View style={styles.marker}>
-                <Ionicons name="location" size={32} color="#007AFF" />
-              </View>
-            </Mapbox.PointAnnotation>
+            {/* Markers for all suggestions */}
+            {suggestions.map((suggestion, index) => {
+              const isSelected = index === selectedIndex;
+              return (
+                <Mapbox.PointAnnotation
+                  key={suggestion.place_id}
+                  id={`location-${suggestion.place_id}`}
+                  coordinate={[parseFloat(suggestion.lon), parseFloat(suggestion.lat)]}
+                  onSelected={() => {
+                    console.log('[CreateLocation] Marker tapped, selecting index:', index);
+                    setSelectedIndex(index);
+                  }}
+                >
+                  <View style={[
+                    styles.marker,
+                    isSelected && styles.markerSelected
+                  ]}>
+                    <Ionicons
+                      name={isSelected ? "location" : "location-outline"}
+                      size={isSelected ? 40 : 28}
+                      color={isSelected ? "#007AFF" : "#8E8E93"}
+                    />
+                  </View>
+                  {/* Label for unselected markers */}
+                  {!isSelected && (
+                    <View style={styles.markerLabel}>
+                      <Text style={styles.markerLabelText} numberOfLines={1}>
+                        {suggestion.display_name.split(',')[0]}
+                      </Text>
+                    </View>
+                  )}
+                </Mapbox.PointAnnotation>
+              );
+            })}
           </Mapbox.MapView>
 
-          {/* Location info overlay */}
-          <View style={styles.locationInfoOverlay}>
-            <Text style={styles.locationName} numberOfLines={2}>
-              {selectedLocation.display_name}
-            </Text>
-            <Text style={styles.locationCoords}>
-              {parseFloat(selectedLocation.lat).toFixed(6)}, {parseFloat(selectedLocation.lon).toFixed(6)}
-            </Text>
-          </View>
+          {/* Location info overlay for selected location */}
+          {selectedLocation && (
+            <View style={styles.locationInfoOverlay}>
+              <Text style={styles.locationName} numberOfLines={2}>
+                {selectedLocation.display_name}
+              </Text>
+              <Text style={styles.locationCoords}>
+                {parseFloat(selectedLocation.lat).toFixed(6)}, {parseFloat(selectedLocation.lon).toFixed(6)}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -394,6 +431,25 @@ const styles = StyleSheet.create({
   marker: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  markerSelected: {
+    transform: [{ scale: 1.1 }],
+  },
+  markerLabel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 4,
+    maxWidth: 120,
+    borderWidth: 1,
+    borderColor: '#E1E1E1',
+  },
+  markerLabelText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#000',
+    textAlign: 'center',
   },
   locationInfoOverlay: {
     position: 'absolute',
