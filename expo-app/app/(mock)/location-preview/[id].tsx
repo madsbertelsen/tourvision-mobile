@@ -32,7 +32,8 @@ export default function LocationPreviewScreen() {
     lat,
     lng,
     description,
-    colorIndex
+    colorIndex,
+    tripId
   } = params as {
     id: string;
     name: string;
@@ -40,6 +41,18 @@ export default function LocationPreviewScreen() {
     lng: string;
     description?: string;
     colorIndex?: string;
+    tripId?: string;
+  };
+
+  // Handle back navigation
+  const handleBack = () => {
+    if (tripId) {
+      // Navigate back to the specific trip
+      router.push(`/(mock)/trip/${tripId}`);
+    } else {
+      // Fallback to regular back navigation
+      router.back();
+    }
   };
 
   // Center camera on location when screen loads
@@ -91,7 +104,7 @@ export default function LocationPreviewScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.closeButton}>
           <Ionicons name="close" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Location</Text>

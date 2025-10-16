@@ -55,9 +55,10 @@ export default function TripDocumentView() {
         lng: attrs.lng || '0',
         description: attrs.description || '',
         colorIndex: attrs.colorIndex?.toString() || '0',
+        tripId: tripId, // Pass tripId so we can navigate back properly
       },
     });
-  }, []);
+  }, [tripId]);
 
   const toggleEditMode = () => {
     setIsEditMode(!isEditMode);
@@ -145,7 +146,7 @@ export default function TripDocumentView() {
         {/* Native Renderer - Only visible in read mode */}
         {!isEditMode && (
           <View style={styles.nativeRendererContainer}>
-            <ProseMirrorNativeRenderer content={currentDoc} />
+            <ProseMirrorNativeRenderer content={currentDoc} tripId={tripId} />
           </View>
         )}
 

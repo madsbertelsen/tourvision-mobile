@@ -5,13 +5,14 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface ProseMirrorNativeRendererProps {
   content: any; // ProseMirror JSON document
+  tripId?: string; // Optional tripId for proper back navigation
 }
 
 /**
  * Renders a ProseMirror document as native React Native components.
  * Used for read-only viewing with native Link Preview support.
  */
-export default function ProseMirrorNativeRenderer({ content }: ProseMirrorNativeRendererProps) {
+export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirrorNativeRendererProps) {
   if (!content) {
     return (
       <View style={styles.emptyContainer}>
@@ -144,19 +145,26 @@ export default function ProseMirrorNativeRenderer({ content }: ProseMirrorNative
   const renderGeoMark = (text: string, attrs: any, index: number) => {
     const { geoId, placeName, lat, lng, description, colorIndex } = attrs || {};
 
+    const params: any = {
+      id: geoId || 'unknown',
+      name: placeName || text,
+      lat: lat || '0',
+      lng: lng || '0',
+      description: description || '',
+      colorIndex: colorIndex?.toString() || '0',
+    };
+
+    // Add tripId if available for proper back navigation
+    if (tripId) {
+      params.tripId = tripId;
+    }
+
     return (
       <Link
         key={index}
         href={{
           pathname: '/(mock)/location-preview/[id]',
-          params: {
-            id: geoId || 'unknown',
-            name: placeName || text,
-            lat: lat || '0',
-            lng: lng || '0',
-            description: description || '',
-            colorIndex: colorIndex?.toString() || '0',
-          },
+          params,
         }}
       >
         <Link.Trigger asChild>
