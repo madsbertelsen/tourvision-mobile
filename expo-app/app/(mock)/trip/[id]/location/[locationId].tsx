@@ -161,6 +161,9 @@ export default function LocationDetailScreen() {
     ? `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=600&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`
     : null;
 
+  // Extract short name (first part before comma) for header
+  const shortName = name.split(',')[0].trim();
+
   return (
     <View style={styles.container}>
       {/* Navigation Header */}
@@ -168,7 +171,7 @@ export default function LocationDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.navigationTitle}>Location</Text>
+        <Text style={styles.navigationTitle} numberOfLines={1}>{shortName}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -208,7 +211,7 @@ export default function LocationDetailScreen() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.locationName}>{name}</Text>
+          <Text style={styles.locationName}>{shortName}</Text>
           <View style={styles.subtitle}>
             <Ionicons name="location-sharp" size={14} color="#6b7280" />
             <Text style={styles.subtitleText}>Attraction</Text>
