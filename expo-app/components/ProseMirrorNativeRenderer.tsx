@@ -46,13 +46,16 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
         );
 
       case 'paragraph':
-        // Check if paragraph contains geo-marks (as marks on text nodes)
+        // Check if paragraph contains geo-marks or comments (as marks on text nodes)
         const hasGeoMarks = node.content?.some((child: any) =>
           child.marks?.some((mark: any) => mark.type === 'geoMark')
         );
+        const hasComments = node.content?.some((child: any) =>
+          child.marks?.some((mark: any) => mark.type === 'comment')
+        );
 
-        if (hasGeoMarks) {
-          // Use View for paragraphs with geo-marks (required for Link.Preview)
+        if (hasGeoMarks || hasComments) {
+          // Use View for paragraphs with geo-marks or comments (required for styled marks)
           return (
             <View key={index} style={styles.paragraphWithLinks}>
               {renderInlineContent(node.content, true)}
@@ -113,7 +116,22 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
           return renderGeoMark(node.text, geoMarkMark.attrs, index);
         }
 
-        // Regular text without geo-mark
+        // Check if this text has a comment mark
+        const commentMark = node.marks?.find((mark: any) => mark.type === 'comment');
+
+        if (commentMark) {
+          // Render with comment styling
+          const commentStyle = commentMark.attrs?.resolved
+            ? styles.commentResolved
+            : styles.comment;
+          return (
+            <Text key={index} style={[styles.inlineText, commentStyle]}>
+              {node.text}
+            </Text>
+          );
+        }
+
+        // Regular text without geo-mark or comment
         // In headings, don't apply fontSize - let the heading style handle it
         const textStyle: any[] = inHeading ? [] : (inViewContext ? [styles.inlineText] : [styles.text]);
 
@@ -260,6 +278,21 @@ const styles = StyleSheet.create({
     color: proseStyles.geoMark.color,
     fontWeight: proseStyles.geoMark.fontWeight as any,
     fontSize: PROSE_STYLES.paragraph.fontSize,
+  },
+  // Comment mark styles
+  comment: {
+    backgroundColor: 'rgba(251, 191, 36, 0.3)', // Amber/yellow background
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(251, 191, 36, 0.6)',
+    paddingVertical: 1,
+  },
+  commentResolved: {
+    backgroundColor: 'rgba(156, 163, 175, 0.2)', // Gray background
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(156, 163, 175, 0.4)',
+    paddingVertical: 1,
+    opacity: 0.7,
+    textDecorationLine: 'line-through',
   },
   // Preview styles (not in prose config)
   previewContainer: {
