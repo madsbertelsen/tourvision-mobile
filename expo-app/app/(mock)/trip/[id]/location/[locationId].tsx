@@ -209,28 +209,6 @@ export default function LocationDetailScreen() {
         )}
 
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.locationName}>{shortName}</Text>
-          <View style={styles.subtitle}>
-            <Ionicons name="location-sharp" size={14} color="#6b7280" />
-            <Text style={styles.subtitleText}>Attraction</Text>
-          </View>
-          {!photoUrl && (
-            <TouchableOpacity
-              style={styles.headerBookmark}
-              onPress={handleToggleBookmark}
-              disabled={isToggling}
-            >
-              <Ionicons
-                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-                size={24}
-                color={bookmarked ? '#3B82F6' : '#6b7280'}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Map View */}
         <View style={styles.mapContainer}>
           <Mapbox.MapView
@@ -376,7 +354,7 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   navigationTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
     color: '#111827',
   },
@@ -416,33 +394,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  locationName: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  subtitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  subtitleText: {
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  headerBookmark: {
-    position: 'absolute',
-    top: 20,
-    right: 16,
   },
   mapContainer: {
     height: MAP_HEIGHT,
