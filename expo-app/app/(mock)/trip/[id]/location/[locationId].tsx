@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
 import Mapbox from '@rnmapbox/maps';
+import { getTrip } from '@/utils/trips-storage';
+import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -26,17 +28,33 @@ export default function LocationDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  const { id, name, lat, lng, description, photoName, colorIndex } = params as {
+  const {
+    id,
+    locationId,
+    name,
+    lat,
+    lng,
+    description,
+    photoName,
+    colorIndex,
+    contextDocument: contextDocParam,
+    tripId
+  } = params as {
     id: string;
+    locationId?: string;
     name: string;
     lat: string;
     lng: string;
     description?: string;
     photoName?: string;
     colorIndex?: string;
+    contextDocument?: string;
+    tripId?: string;
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'location'>('overview');
+  const [locationDocument, setLocationDocument] = useState<any>(null);
+  const [contextDocument, setContextDocument] = useState<any>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
   // Use bookmark hook
@@ -48,6 +66,42 @@ export default function LocationDetailScreen() {
     description,
     photoName,
   });
+
+  // Load trip data and extract documents
+  useEffect(() => {
+    const loadDocuments = async () => {
+      // Parse context document from params
+      if (contextDocParam) {
+        try {
+          const parsed = JSON.parse(contextDocParam);
+          setContextDocument(parsed);
+        } catch (e) {
+          console.error('Failed to parse contextDocument:', e);
+        }
+      }
+
+      // Load location document from trip storage
+      if (tripId) {
+        try {
+          const trip = await getTrip(tripId);
+          if (trip) {
+            // Find location by geoId or locationId
+            const geoId = locationId || id;
+            const location = trip.locations?.find(
+              (loc) => loc.geoId === geoId || loc.id === geoId
+            );
+            if (location?.document) {
+              setLocationDocument(location.document);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load location document:', e);
+        }
+      }
+    };
+
+    loadDocuments();
+  }, [contextDocParam, tripId, locationId, id]);
 
   // Center camera on location when Location tab is shown
   useEffect(() => {
@@ -189,6 +243,28 @@ export default function LocationDetailScreen() {
         {/* Overview Tab Content */}
         {activeTab === 'overview' && (
           <>
+            {/* Context-Specific Notes */}
+            {contextDocument && (
+              <View style={styles.documentSection}>
+                <View style={styles.documentHeader}>
+                  <Ionicons name="document-text" size={18} color="#3B82F6" />
+                  <Text style={styles.documentTitle}>Notes for this Visit</Text>
+                </View>
+                <ProseMirrorNativeRenderer content={contextDocument} />
+              </View>
+            )}
+
+            {/* General Location Notes */}
+            {locationDocument && (
+              <View style={styles.documentSection}>
+                <View style={styles.documentHeader}>
+                  <Ionicons name="information-circle" size={18} color="#10b981" />
+                  <Text style={styles.documentTitle}>General Information</Text>
+                </View>
+                <ProseMirrorNativeRenderer content={locationDocument} />
+              </View>
+            )}
+
             {/* Overview Section */}
             {description && (
               <View style={styles.section}>
@@ -543,5 +619,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  documentSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  documentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  documentTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
 });

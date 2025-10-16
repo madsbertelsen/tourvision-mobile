@@ -60,7 +60,8 @@ const nodes: { [key: string]: NodeSpec } = {
       description: { default: null },
       photoName: { default: null },
       colorIndex: { default: 0 },
-      waypoints: { default: null } // Array of {lat, lng} waypoints for route customization
+      waypoints: { default: null }, // Array of {lat, lng} waypoints for route customization
+      contextDocument: { default: null } // ProseMirror document JSON for context-specific notes
     },
     parseDOM: [{
       tag: "span.geo-mark",
@@ -75,6 +76,16 @@ const nodes: { [key: string]: NodeSpec } = {
           }
         }
 
+        const contextDocStr = dom.getAttribute("data-context-document");
+        let contextDocument = null;
+        if (contextDocStr) {
+          try {
+            contextDocument = JSON.parse(contextDocStr);
+          } catch (e) {
+            console.error('Failed to parse contextDocument:', e);
+          }
+        }
+
         return {
           lat: dom.getAttribute("data-lat"),
           lng: dom.getAttribute("data-lng"),
@@ -86,7 +97,8 @@ const nodes: { [key: string]: NodeSpec } = {
           description: dom.getAttribute("data-description"),
           photoName: dom.getAttribute("data-photo-name"),
           colorIndex: dom.getAttribute("data-color-index") ? parseInt(dom.getAttribute("data-color-index")) : 0,
-          waypoints
+          waypoints,
+          contextDocument
         };
       }
     }],
@@ -107,6 +119,7 @@ const nodes: { [key: string]: NodeSpec } = {
       if (node.attrs.photoName) attrs["data-photo-name"] = node.attrs.photoName;
       if (node.attrs.colorIndex !== undefined) attrs["data-color-index"] = node.attrs.colorIndex;
       if (node.attrs.waypoints) attrs["data-waypoints"] = JSON.stringify(node.attrs.waypoints);
+      if (node.attrs.contextDocument) attrs["data-context-document"] = JSON.stringify(node.attrs.contextDocument);
 
       return ["span", attrs, 0];
     }

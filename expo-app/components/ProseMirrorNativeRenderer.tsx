@@ -143,7 +143,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
   };
 
   const renderGeoMark = (text: string, attrs: any, index: number) => {
-    const { geoId, placeName, lat, lng, description, colorIndex } = attrs || {};
+    const { geoId, placeName, lat, lng, description, colorIndex, contextDocument } = attrs || {};
 
     const locationId = geoId || 'unknown';
 
@@ -161,7 +161,13 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
       lng: lng || '0',
       description: description || '',
       colorIndex: colorIndex?.toString() || '0',
+      tripId: tripId, // Pass tripId so location screen can load trip data
     };
+
+    // Pass contextDocument if it exists
+    if (contextDocument) {
+      params.contextDocument = JSON.stringify(contextDocument);
+    }
 
     return (
       <Link

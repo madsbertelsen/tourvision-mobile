@@ -7,6 +7,7 @@ export interface SavedTrip {
   title: string;
   description?: string;
   messages: any[]; // AI SDK message format
+  document?: any; // Main trip ProseMirror document
   locations: Array<{
     id: string;
     name: string;
@@ -18,6 +19,7 @@ export interface SavedTrip {
     geoId?: string; // Unique ID for this location
     transportFrom?: string; // ID of origin location
     transportProfile?: 'walking' | 'driving' | 'cycling' | 'transit'; // Transportation mode
+    document?: any; // General location notes (shared across all references)
   }>;
   modifications?: Array<{
     elementId: string;

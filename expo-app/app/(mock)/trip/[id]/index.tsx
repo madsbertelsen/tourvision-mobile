@@ -46,17 +46,25 @@ export default function TripDocumentView() {
     console.log('[TripDocumentView] Navigate to location:', attrs);
 
     // Navigate to location screen (Stack-nested for slide transition)
+    const params: any = {
+      locationId: attrs.geoId || 'unknown',
+      id: attrs.geoId || 'unknown',
+      name: attrs.placeName || 'Location',
+      lat: attrs.lat || '0',
+      lng: attrs.lng || '0',
+      description: attrs.description || '',
+      colorIndex: attrs.colorIndex?.toString() || '0',
+      tripId: tripId, // Pass tripId so location screen can load trip data
+    };
+
+    // Pass contextDocument if it exists
+    if (attrs.contextDocument) {
+      params.contextDocument = JSON.stringify(attrs.contextDocument);
+    }
+
     router.push({
       pathname: 'location/[locationId]',
-      params: {
-        locationId: attrs.geoId || 'unknown',
-        id: attrs.geoId || 'unknown',
-        name: attrs.placeName || 'Location',
-        lat: attrs.lat || '0',
-        lng: attrs.lng || '0',
-        description: attrs.description || '',
-        colorIndex: attrs.colorIndex?.toString() || '0',
-      },
+      params,
     });
   }, [tripId]);
 
