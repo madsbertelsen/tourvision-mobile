@@ -1,17 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  Dimensions,
 } from 'react-native';
-import { Stack, useRouter, useLocalSearchParams, useGlobalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Picker } from '@react-native-picker/picker';
+import Mapbox from '@rnmapbox/maps';
+
+// Set Mapbox access token
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAP_HEIGHT = 400;
 
 interface LocationSuggestion {
   place_id: number;
@@ -22,17 +31,8 @@ interface LocationSuggestion {
   importance?: number;
 }
 
-interface GeoMarkData {
-  placeName: string;
-  lat: string;
-  lng: string;
-  description: string;
-  colorIndex: number;
-}
-
 export default function CreateLocationScreen() {
   const router = useRouter();
-  const globalParams = useGlobalSearchParams();
   const params = useLocalSearchParams<{
     tripId?: string;
     placeName?: string;
@@ -40,13 +40,17 @@ export default function CreateLocationScreen() {
     lng?: string;
   }>();
   const insets = useSafeAreaInsets();
+  const cameraRef = useRef<Mapbox.Camera>(null);
 
   const [searchQuery, setSearchQuery] = useState(params.placeName || '');
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [description, setDescription] = useState('');
+
+  // Selected location from picker
+  const selectedLocation = suggestions[selectedIndex] || null;
 
   // Search Nominatim when query changes
   useEffect(() => {
@@ -63,10 +67,10 @@ export default function CreateLocationScreen() {
         const response = await fetch(
           `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
             searchQuery
-          )}&format=jsonv2&limit=10&addressdetails=1`,
+          )}&format=jsonv2&limit=20&addressdetails=1`,
           {
             headers: {
-              'User-Agent': 'TourVision-App', // Nominatim requires a user agent
+              'User-Agent': 'TourVision-App',
             },
           }
         );
@@ -77,6 +81,7 @@ export default function CreateLocationScreen() {
 
         const data = await response.json();
         setSuggestions(data || []);
+        setSelectedIndex(0); // Reset to first suggestion
       } catch (err) {
         console.error('Error fetching Nominatim suggestions:', err);
         setError('Unable to fetch location suggestions');
@@ -90,26 +95,31 @@ export default function CreateLocationScreen() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  const handleLocationSelect = (suggestion: LocationSuggestion) => {
-    setSelectedLocation(suggestion);
-    setSearchQuery(suggestion.display_name);
-    setSuggestions([]);
-  };
+  // Update map when selection changes
+  useEffect(() => {
+    if (selectedLocation && cameraRef.current) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [parseFloat(selectedLocation.lon), parseFloat(selectedLocation.lat)],
+        zoomLevel: 14,
+        animationDuration: 500,
+      });
+    }
+  }, [selectedIndex, selectedLocation]);
 
   const handleSave = () => {
     if (!selectedLocation) {
-      Alert.alert('Error', 'Please select a location from the suggestions');
+      Alert.alert('Error', 'Please search and select a location from the picker');
       return;
     }
 
-    // Create geo-mark data with unique ID and color
+    // Create geo-mark data
     const geoMarkData = {
       geoId: `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       placeName: selectedLocation.display_name,
       lat: parseFloat(selectedLocation.lat),
       lng: parseFloat(selectedLocation.lon),
       description: description.trim(),
-      colorIndex: 0, // Will be assigned by the document editor based on existing geo-marks
+      colorIndex: 0,
       transportFrom: null,
       transportProfile: 'walking',
       waypoints: null,
@@ -119,7 +129,6 @@ export default function CreateLocationScreen() {
 
     // Navigate back with the saved location data
     if (params.tripId) {
-      // Check if this is from prosemirror-test or a real trip
       if (params.tripId === 'prosemirror-test') {
         router.navigate({
           pathname: '/(mock)/prosemirror-test',
@@ -136,7 +145,6 @@ export default function CreateLocationScreen() {
         });
       }
     } else {
-      // Fallback to router.back() if tripId is not available
       console.warn('[CreateLocation] No tripId available, falling back to router.back()');
       router.back();
     }
@@ -161,8 +169,8 @@ export default function CreateLocationScreen() {
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Location</Text>
-        <TouchableOpacity 
-          onPress={handleSave} 
+        <TouchableOpacity
+          onPress={handleSave}
           style={[styles.headerButton, { opacity: selectedLocation ? 1 : 0.5 }]}
           disabled={!selectedLocation}
         >
@@ -170,88 +178,120 @@ export default function CreateLocationScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Search Input */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location Name</Text>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search for a location..."
-              autoFocus
-              returnKeyType="search"
+      {/* Search Input */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={20} color="#8E8E93" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search for a location..."
+            autoFocus
+            returnKeyType="search"
+          />
+          {isLoading && (
+            <ActivityIndicator
+              style={styles.searchLoader}
+              size="small"
+              color="#007AFF"
             />
-            {isLoading && (
-              <ActivityIndicator
-                style={styles.searchLoader}
-                size="small"
-                color="#007AFF"
-              />
-            )}
+          )}
+        </View>
+      </View>
+
+      {/* Error Display */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning-outline" size={16} color="#FF3B30" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {/* Map View */}
+      {selectedLocation && (
+        <View style={styles.mapContainer}>
+          <Mapbox.MapView
+            style={styles.map}
+            styleURL={Mapbox.StyleURL.Street}
+            zoomEnabled={true}
+            scrollEnabled={true}
+            pitchEnabled={false}
+            rotateEnabled={false}
+          >
+            <Mapbox.Camera
+              ref={cameraRef}
+              zoomLevel={14}
+              centerCoordinate={[
+                parseFloat(selectedLocation.lon),
+                parseFloat(selectedLocation.lat)
+              ]}
+              animationDuration={500}
+            />
+
+            {/* Marker for selected location */}
+            <Mapbox.PointAnnotation
+              id="selected-location"
+              coordinate={[
+                parseFloat(selectedLocation.lon),
+                parseFloat(selectedLocation.lat)
+              ]}
+            >
+              <View style={styles.marker}>
+                <Ionicons name="location" size={32} color="#007AFF" />
+              </View>
+            </Mapbox.PointAnnotation>
+          </Mapbox.MapView>
+
+          {/* Location info overlay */}
+          <View style={styles.locationInfoOverlay}>
+            <Text style={styles.locationName} numberOfLines={2}>
+              {selectedLocation.display_name}
+            </Text>
+            <Text style={styles.locationCoords}>
+              {parseFloat(selectedLocation.lat).toFixed(6)}, {parseFloat(selectedLocation.lon).toFixed(6)}
+            </Text>
           </View>
         </View>
+      )}
 
-        {/* Error Display */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="warning-outline" size={16} color="#FF3B30" />
-            <Text style={styles.errorText}>{error}</Text>
+      {/* Suggestions Picker */}
+      {suggestions.length > 0 ? (
+        <View style={styles.pickerSection}>
+          <Text style={styles.pickerLabel}>Select Location</Text>
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={selectedIndex}
+              onValueChange={(itemValue) => setSelectedIndex(itemValue as number)}
+              style={styles.picker}
+              itemStyle={styles.pickerItem}
+            >
+              {suggestions.map((suggestion, index) => (
+                <Picker.Item
+                  key={suggestion.place_id}
+                  label={suggestion.display_name}
+                  value={index}
+                />
+              ))}
+            </Picker>
           </View>
-        )}
-
-        {/* Suggestions List */}
-        {suggestions.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Suggestions</Text>
-            {suggestions.map((suggestion) => (
-              <TouchableOpacity
-                key={suggestion.place_id}
-                style={[
-                  styles.suggestionItem,
-                  selectedLocation?.place_id === suggestion.place_id && styles.selectedSuggestion
-                ]}
-                onPress={() => handleLocationSelect(suggestion)}
-              >
-                <View style={styles.suggestionContent}>
-                  <Text style={styles.suggestionName} numberOfLines={2}>
-                    {suggestion.display_name}
-                  </Text>
-                  <Text style={styles.suggestionCoords}>
-                    {parseFloat(suggestion.lat).toFixed(4)}, {parseFloat(suggestion.lon).toFixed(4)}
-                  </Text>
-                  {suggestion.type && (
-                    <Text style={styles.suggestionType}>{suggestion.type}</Text>
-                  )}
-                </View>
-                {selectedLocation?.place_id === suggestion.place_id && (
-                  <Ionicons name="checkmark-circle" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-            ))}
+        </View>
+      ) : (
+        !isLoading && searchQuery.trim().length >= 2 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="location-outline" size={48} color="#8E8E93" />
+            <Text style={styles.emptyStateTitle}>No locations found</Text>
+            <Text style={styles.emptyStateText}>
+              Try adjusting your search terms
+            </Text>
           </View>
-        )}
+        )
+      )}
 
-        {/* Selected Location */}
-        {selectedLocation && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Selected Location</Text>
-            <View style={styles.selectedLocationCard}>
-              <Text style={styles.selectedLocationName}>
-                {selectedLocation.display_name}
-              </Text>
-              <Text style={styles.selectedLocationCoords}>
-                Lat: {parseFloat(selectedLocation.lat).toFixed(6)}, 
-                Lng: {parseFloat(selectedLocation.lon).toFixed(6)}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Description */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Description (Optional)</Text>
+      {/* Description Input */}
+      {selectedLocation && (
+        <View style={styles.descriptionSection}>
+          <Text style={styles.descriptionLabel}>Notes (Optional)</Text>
           <TextInput
             style={styles.descriptionInput}
             value={description}
@@ -261,18 +301,7 @@ export default function CreateLocationScreen() {
             textAlignVertical="top"
           />
         </View>
-
-        {/* Empty state */}
-        {!isLoading && suggestions.length === 0 && searchQuery.trim().length >= 2 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="location-outline" size={48} color="#8E8E93" />
-            <Text style={styles.emptyStateTitle}>No locations found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search terms or enter coordinates manually.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      )}
     </View>
   );
 }
@@ -311,48 +340,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
   },
-  content: {
-    flex: 1,
-  },
-  section: {
+  searchSection: {
     backgroundColor: 'white',
-    marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E1E1E1',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E1E1E1',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#F9F9F9',
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     fontSize: 16,
     color: '#000',
   },
   searchLoader: {
-    marginRight: 12,
+    marginLeft: 8,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFEBEE',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
     padding: 12,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
   },
   errorText: {
     marginLeft: 8,
@@ -360,55 +383,79 @@ const styles = StyleSheet.create({
     color: '#C62828',
     flex: 1,
   },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginVertical: 2,
+  mapContainer: {
+    height: MAP_HEIGHT,
+    backgroundColor: '#E5E5EA',
+    position: 'relative',
   },
-  selectedSuggestion: {
-    backgroundColor: '#E3F2FD',
-  },
-  suggestionContent: {
+  map: {
     flex: 1,
   },
-  suggestionName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    lineHeight: 20,
+  marker: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  suggestionCoords: {
+  locationInfoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E1E1E1',
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  locationCoords: {
     fontSize: 14,
     color: '#666',
-    marginTop: 2,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
   },
-  suggestionType: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-    textTransform: 'capitalize',
+  pickerSection: {
+    backgroundColor: 'white',
+    marginTop: 8,
   },
-  selectedLocationCard: {
-    backgroundColor: '#F0F8FF',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#B3E5FC',
-  },
-  selectedLocationName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    lineHeight: 20,
-  },
-  selectedLocationCoords: {
+  pickerLabel: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-    fontFamily: 'System',
+    fontWeight: '600',
+    color: '#8E8E93',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pickerContainer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E1E1E1',
+  },
+  picker: {
+    height: 200,
+  },
+  pickerItem: {
+    fontSize: 16,
+    height: 200,
+  },
+  descriptionSection: {
+    backgroundColor: 'white',
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  descriptionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   descriptionInput: {
     borderWidth: 1,
@@ -424,6 +471,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 48,
     paddingHorizontal: 32,
+    flex: 1,
+    justifyContent: 'center',
   },
   emptyStateTitle: {
     fontSize: 18,
