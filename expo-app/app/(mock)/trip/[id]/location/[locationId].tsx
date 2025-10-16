@@ -244,24 +244,71 @@ export default function LocationDetailScreen() {
         {activeTab === 'overview' && (
           <>
             {/* Context-Specific Notes */}
-            {contextDocument && (
+            {(contextDocument || tripId) && (
               <View style={styles.documentSection}>
                 <View style={styles.documentHeader}>
-                  <Ionicons name="document-text" size={18} color="#3B82F6" />
-                  <Text style={styles.documentTitle}>Notes for this Visit</Text>
+                  <View style={styles.documentHeaderLeft}>
+                    <Ionicons name="document-text" size={18} color="#3B82F6" />
+                    <Text style={styles.documentTitle}>Notes for this Visit</Text>
+                  </View>
+                  {tripId && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.push({
+                          pathname: 'edit-visit' as any,
+                          params: {
+                            locationId: locationId || id,
+                            tripId,
+                            name,
+                            contextDocument: contextDocument ? JSON.stringify(contextDocument) : undefined,
+                          },
+                        })
+                      }
+                      style={styles.editButton}
+                    >
+                      <Ionicons name="pencil" size={16} color="#3B82F6" />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <ProseMirrorNativeRenderer content={contextDocument} />
+                {contextDocument ? (
+                  <ProseMirrorNativeRenderer content={contextDocument} />
+                ) : (
+                  <Text style={styles.emptyText}>No visit notes yet. Tap Edit to add some.</Text>
+                )}
               </View>
             )}
 
             {/* General Location Notes */}
-            {locationDocument && (
+            {tripId && (
               <View style={styles.documentSection}>
                 <View style={styles.documentHeader}>
-                  <Ionicons name="information-circle" size={18} color="#10b981" />
-                  <Text style={styles.documentTitle}>General Information</Text>
+                  <View style={styles.documentHeaderLeft}>
+                    <Ionicons name="information-circle" size={18} color="#10b981" />
+                    <Text style={styles.documentTitle}>General Information</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: 'edit-info' as any,
+                        params: {
+                          locationId: locationId || id,
+                          tripId,
+                          name,
+                        },
+                      })
+                    }
+                    style={styles.editButton}
+                  >
+                    <Ionicons name="pencil" size={16} color="#10b981" />
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
                 </View>
-                <ProseMirrorNativeRenderer content={locationDocument} />
+                {locationDocument ? (
+                  <ProseMirrorNativeRenderer content={locationDocument} />
+                ) : (
+                  <Text style={styles.emptyText}>No general information yet. Tap Edit to add some.</Text>
+                )}
               </View>
             )}
 
@@ -629,12 +676,34 @@ const styles = StyleSheet.create({
   documentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  documentHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   documentTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3B82F6',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontStyle: 'italic',
   },
 });
