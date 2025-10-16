@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,19 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
-  Image
+  Image,
+  Dimensions
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
+import Mapbox from '@rnmapbox/maps';
+
+// Set Mapbox access token
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAP_HEIGHT = 400;
 
 export default function LocationDetailScreen() {
   const router = useRouter();
@@ -25,6 +33,9 @@ export default function LocationDetailScreen() {
     photoName?: string;
   };
 
+  const [activeTab, setActiveTab] = useState<'overview' | 'location'>('overview');
+  const cameraRef = useRef<Mapbox.Camera>(null);
+
   // Use bookmark hook
   const { bookmarked, isToggling, toggle: handleToggleBookmark } = useBookmark({
     id,
@@ -34,6 +45,19 @@ export default function LocationDetailScreen() {
     description,
     photoName,
   });
+
+  // Center camera on location when Location tab is shown
+  useEffect(() => {
+    if (activeTab === 'location' && cameraRef.current && lat && lng) {
+      setTimeout(() => {
+        cameraRef.current?.setCamera({
+          centerCoordinate: [parseFloat(lng), parseFloat(lat)],
+          zoomLevel: 14,
+          animationDuration: 1000,
+        });
+      }, 100);
+    }
+  }, [activeTab, lat, lng]);
 
   // Format coordinates for display
   const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
@@ -137,54 +161,129 @@ export default function LocationDetailScreen() {
 
         {/* Tabs */}
         <View style={styles.tabs}>
-          <TouchableOpacity style={styles.tabActive}>
-            <Text style={styles.tabTextActive}>Overview</Text>
+          <TouchableOpacity
+            style={activeTab === 'overview' ? styles.tabActive : styles.tab}
+            onPress={() => setActiveTab('overview')}
+          >
+            <Text style={activeTab === 'overview' ? styles.tabTextActive : styles.tabText}>
+              Overview
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tab}>
-            <Text style={styles.tabText}>Location</Text>
+          <TouchableOpacity
+            style={activeTab === 'location' ? styles.tabActive : styles.tab}
+            onPress={() => setActiveTab('location')}
+          >
+            <Text style={activeTab === 'location' ? styles.tabTextActive : styles.tabText}>
+              Location
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Overview Section */}
-        {description && (
-          <View style={styles.section}>
-            <Text style={styles.descriptionText}>{description}</Text>
-            {description.length > 200 && (
-              <TouchableOpacity>
-                <Text style={styles.readMore}>Read more</Text>
-              </TouchableOpacity>
+        {/* Overview Tab Content */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Overview Section */}
+            {description && (
+              <View style={styles.section}>
+                <Text style={styles.descriptionText}>{description}</Text>
+                {description.length > 200 && (
+                  <TouchableOpacity>
+                    <Text style={styles.readMore}>Read more</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
-          </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity style={styles.actionButtonPrimary} onPress={openInMaps}>
+                <Ionicons name="navigate" size={20} color="#fff" />
+                <Text style={styles.actionButtonPrimaryText}>Directions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonSecondary}>
+                <Ionicons name="call-outline" size={20} color="#3B82F6" />
+                <Text style={styles.actionButtonSecondaryText}>Call</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonSecondary}>
+                <Ionicons name="globe-outline" size={20} color="#3B82F6" />
+                <Text style={styles.actionButtonSecondaryText}>Website</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Coordinates Info */}
+            <View style={styles.infoSection}>
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={20} color="#6b7280" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Coordinates</Text>
+                  <Text style={styles.infoValue}>
+                    {formatCoordinate(lat, 'lat')}, {formatCoordinate(lng, 'lng')}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </>
         )}
 
-        {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.actionButtonPrimary} onPress={openInMaps}>
-            <Ionicons name="navigate" size={20} color="#fff" />
-            <Text style={styles.actionButtonPrimaryText}>Directions</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButtonSecondary}>
-            <Ionicons name="call-outline" size={20} color="#3B82F6" />
-            <Text style={styles.actionButtonSecondaryText}>Call</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButtonSecondary}>
-            <Ionicons name="globe-outline" size={20} color="#3B82F6" />
-            <Text style={styles.actionButtonSecondaryText}>Website</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Location Tab Content */}
+        {activeTab === 'location' && (
+          <>
+            {/* Map View */}
+            <View style={styles.mapContainer}>
+              <Mapbox.MapView
+                style={styles.map}
+                styleURL={Mapbox.StyleURL.Street}
+                zoomEnabled={true}
+                scrollEnabled={true}
+                pitchEnabled={false}
+                rotateEnabled={true}
+              >
+                <Mapbox.Camera
+                  ref={cameraRef}
+                  zoomLevel={14}
+                  centerCoordinate={[parseFloat(lng), parseFloat(lat)]}
+                  animationDuration={1000}
+                />
 
-        {/* Coordinates Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={20} color="#6b7280" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Coordinates</Text>
-              <Text style={styles.infoValue}>
-                {formatCoordinate(lat, 'lat')}, {formatCoordinate(lng, 'lng')}
-              </Text>
+                {/* Location Marker */}
+                <Mapbox.PointAnnotation
+                  id={`location-${id}`}
+                  coordinate={[parseFloat(lng), parseFloat(lat)]}
+                >
+                  <View style={styles.markerContainer}>
+                    <Ionicons
+                      name="location"
+                      size={40}
+                      color="#007AFF"
+                    />
+                  </View>
+                </Mapbox.PointAnnotation>
+              </Mapbox.MapView>
             </View>
-          </View>
-        </View>
+
+            {/* Location Details */}
+            <View style={styles.locationDetails}>
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={20} color="#6b7280" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Coordinates</Text>
+                  <Text style={styles.infoValue}>
+                    {formatCoordinate(lat, 'lat')}, {formatCoordinate(lng, 'lng')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Get Directions Button */}
+              <TouchableOpacity
+                style={styles.directionsButton}
+                onPress={openInMaps}
+              >
+                <Ionicons name="navigate" size={20} color="#fff" />
+                <Text style={styles.directionsButtonText}>Get Directions</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {/* Mentioned in conversation */}
         <View style={styles.mentionedSection}>
@@ -390,5 +489,38 @@ const styles = StyleSheet.create({
   mentionedText: {
     fontSize: 13,
     color: '#6b7280',
+  },
+  mapContainer: {
+    height: MAP_HEIGHT,
+    backgroundColor: '#E5E5EA',
+    marginBottom: 16,
+  },
+  map: {
+    flex: 1,
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationDetails: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 16,
+  },
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  directionsButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
