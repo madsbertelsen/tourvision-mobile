@@ -5,8 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Linking,
-  Platform,
   Image,
   Dimensions
 } from 'react-native';
@@ -21,7 +19,6 @@ import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_HEIGHT = 400;
 
 export default function LocationDetailScreen() {
@@ -158,38 +155,6 @@ export default function LocationDetailScreen() {
       }, 100);
     }
   }, [lat, lng]);
-
-  // Format coordinates for display
-  const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
-    const value = parseFloat(coord);
-    if (isNaN(value)) return coord;
-
-    if (type === 'lat') {
-      return `${Math.abs(value).toFixed(6)}° ${value >= 0 ? 'N' : 'S'}`;
-    } else {
-      return `${Math.abs(value).toFixed(6)}° ${value >= 0 ? 'E' : 'W'}`;
-    }
-  };
-
-  // Open in maps app
-  const openInMaps = () => {
-    const scheme = Platform.select({
-      ios: 'maps:',
-      android: 'geo:',
-    });
-    const latLng = `${lat},${lng}`;
-    const label = encodeURIComponent(name);
-
-    const url = Platform.select({
-      ios: `${scheme}${latLng}?q=${label}`,
-      android: `${scheme}${latLng}?q=${label}`,
-      web: `https://www.google.com/maps/search/?api=1&query=${label}&query_place_id=${latLng}`
-    });
-
-    if (url) {
-      Linking.openURL(url);
-    }
-  };
 
   // Photo URL from Google Places
   const photoUrl = photoName
@@ -382,43 +347,6 @@ export default function LocationDetailScreen() {
                 )}
               </View>
             )}
-
-            {/* Action Buttons */}
-            <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity style={styles.actionButtonPrimary} onPress={openInMaps}>
-                <Ionicons name="navigate" size={20} color="#fff" />
-                <Text style={styles.actionButtonPrimaryText}>Directions</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSecondary}>
-                <Ionicons name="call-outline" size={20} color="#3B82F6" />
-                <Text style={styles.actionButtonSecondaryText}>Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonSecondary}>
-                <Ionicons name="globe-outline" size={20} color="#3B82F6" />
-                <Text style={styles.actionButtonSecondaryText}>Website</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Coordinates Info */}
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <Ionicons name="location-outline" size={20} color="#6b7280" />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Coordinates</Text>
-                  <Text style={styles.infoValue}>
-                    {formatCoordinate(lat, 'lat')}, {formatCoordinate(lng, 'lng')}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-        {/* Mentioned in trip */}
-        <View style={styles.mentionedSection}>
-          <Ionicons name="map-outline" size={16} color="#6b7280" />
-          <Text style={styles.mentionedText}>
-            Part of your trip itinerary
-          </Text>
-        </View>
       </View>
       </ScrollView>
     </View>
@@ -512,96 +440,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 20,
     right: 16,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  descriptionText: {
-    fontSize: 15,
-    color: '#111827',
-    lineHeight: 22,
-  },
-  readMore: {
-    fontSize: 15,
-    color: '#3B82F6',
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  actionButtonPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  actionButtonPrimaryText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  actionButtonSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  actionButtonSecondaryText: {
-    color: '#3B82F6',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  infoSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 15,
-    color: '#111827',
-  },
-  mentionedSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f9fafb',
-  },
-  mentionedText: {
-    fontSize: 13,
-    color: '#6b7280',
   },
   mapContainer: {
     height: MAP_HEIGHT,
