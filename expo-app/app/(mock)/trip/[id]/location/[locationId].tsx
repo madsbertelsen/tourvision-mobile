@@ -11,6 +11,7 @@ import {
   Dimensions
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
 import Mapbox from '@rnmapbox/maps';
@@ -24,6 +25,7 @@ const MAP_HEIGHT = 400;
 export default function LocationDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const { id, name, lat, lng, description, photoName, colorIndex } = params as {
     id: string;
     name: string;
@@ -98,38 +100,48 @@ export default function LocationDetailScreen() {
     : null;
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Photo Banner */}
-      {photoUrl && (
-        <View style={styles.photoBanner}>
-          <Image
-            source={{ uri: photoUrl }}
-            style={styles.photo}
-            resizeMode="cover"
-          />
-          <View style={styles.photoOverlay}>
-            <View style={styles.photoActions}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={handleToggleBookmark}
-                disabled={isToggling}
-              >
-                <Ionicons
-                  name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-                  size={24}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => console.log('Share location:', { name, lat, lng })}
-              >
-                <Ionicons name="share-outline" size={24} color="#fff" />
-              </TouchableOpacity>
+    <View style={styles.container}>
+      {/* Navigation Header */}
+      <View style={[styles.navigationHeader, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.navigationTitle}>Location</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        {/* Photo Banner */}
+        {photoUrl && (
+          <View style={styles.photoBanner}>
+            <Image
+              source={{ uri: photoUrl }}
+              style={styles.photo}
+              resizeMode="cover"
+            />
+            <View style={styles.photoOverlay}>
+              <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={handleToggleBookmark}
+                  disabled={isToggling}
+                >
+                  <Ionicons
+                    name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                    size={24}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => console.log('Share location:', { name, lat, lng })}
+                >
+                  <Ionicons name="share-outline" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      )}
+        )}
 
       <View style={styles.content}>
         {/* Header */}
@@ -288,7 +300,8 @@ export default function LocationDetailScreen() {
           </Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -296,6 +309,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  navigationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    padding: 4,
+    marginLeft: -4,
+  },
+  navigationTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  scrollView: {
+    flex: 1,
   },
   photoBanner: {
     width: '100%',
