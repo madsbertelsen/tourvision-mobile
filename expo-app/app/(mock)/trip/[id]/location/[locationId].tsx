@@ -54,8 +54,11 @@ export default function LocationDetailScreen() {
   const [contextDocument, setContextDocument] = useState<any>(null);
   const [transportProfile, setTransportProfile] = useState<string | null>(null);
   const [transportFrom, setTransportFrom] = useState<string | null>(null);
-  const [availableLocations, setAvailableLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const [availableLocations, setAvailableLocations] = useState<Array<{ id: string; name: string; lat: number; lng: number }>>([]);
   const [isSavingTransport, setIsSavingTransport] = useState(false);
+  const [routeGeometry, setRouteGeometry] = useState<any>(null);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
+  const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
   // Use bookmark hook
@@ -136,20 +139,22 @@ export default function LocationDetailScreen() {
               setTransportFrom(geoMarkAttrs?.transportFrom || null);
 
               // Extract all geo-marks from trip document to populate available locations
-              const extractAllGeoMarks = (node: any): Array<{ id: string; name: string }> => {
-                const locations: Array<{ id: string; name: string }> = [];
+              const extractAllGeoMarks = (node: any): Array<{ id: string; name: string; lat: number; lng: number }> => {
+                const locations: Array<{ id: string; name: string; lat: number; lng: number }> = [];
 
                 const traverse = (n: any) => {
                   if (!n) return;
 
                   if (n.type === 'text' && n.marks) {
                     n.marks.forEach((mark: any) => {
-                      if (mark.type === 'geoMark' && mark.attrs?.geoId && mark.attrs?.placeName) {
+                      if (mark.type === 'geoMark' && mark.attrs?.geoId && mark.attrs?.placeName && mark.attrs?.lat && mark.attrs?.lng) {
                         // Don't include current location
                         if (mark.attrs.geoId !== geoId) {
                           locations.push({
                             id: mark.attrs.geoId,
-                            name: mark.attrs.placeName
+                            name: mark.attrs.placeName,
+                            lat: parseFloat(mark.attrs.lat),
+                            lng: parseFloat(mark.attrs.lng)
                           });
                         }
                       }
@@ -198,6 +203,65 @@ export default function LocationDetailScreen() {
       }, 100);
     }
   }, [lat, lng]);
+
+  // Fetch route when transport settings change
+  useEffect(() => {
+    const fetchRoute = async () => {
+      if (!transportProfile || !transportFrom || !lat || !lng) {
+        setRouteGeometry(null);
+        setRouteDistance(null);
+        setRouteDuration(null);
+        return;
+      }
+
+      // Find the "from" location coordinates
+      const fromLocation = availableLocations.find(loc => loc.id === transportFrom);
+      if (!fromLocation) {
+        console.warn('From location not found:', transportFrom);
+        return;
+      }
+
+      try {
+        // Format waypoints as lon,lat;lon,lat
+        const waypoints = `${fromLocation.lng},${fromLocation.lat};${lng},${lat}`;
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+        const url = `${apiUrl}/api/route?waypoints=${waypoints}&profile=${transportProfile}`;
+
+        console.log('Fetching route:', url);
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Route API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Route data:', data);
+
+        setRouteGeometry(data.geometry);
+        setRouteDistance(data.distance);
+        setRouteDuration(data.duration);
+
+        // Adjust camera to show full route
+        if (cameraRef.current && data.geometry) {
+          setTimeout(() => {
+            cameraRef.current?.fitBounds(
+              [fromLocation.lng, fromLocation.lat],
+              [parseFloat(lng), parseFloat(lat)],
+              [50, 50, 50, 50], // padding
+              1000 // animation duration
+            );
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Failed to fetch route:', error);
+        setRouteGeometry(null);
+        setRouteDistance(null);
+        setRouteDuration(null);
+      }
+    };
+
+    fetchRoute();
+  }, [transportProfile, transportFrom, lat, lng, availableLocations]);
 
   // Photo URL from Google Places
   const photoUrl = photoName
@@ -339,7 +403,44 @@ export default function LocationDetailScreen() {
               animationDuration={1000}
             />
 
-            {/* Location Marker */}
+            {/* Route Line */}
+            {routeGeometry && (
+              <Mapbox.ShapeSource
+                id="routeSource"
+                shape={routeGeometry}
+              >
+                <Mapbox.LineLayer
+                  id="routeLine"
+                  style={{
+                    lineColor: '#f59e0b',
+                    lineWidth: 4,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                />
+              </Mapbox.ShapeSource>
+            )}
+
+            {/* From Location Marker */}
+            {transportFrom && availableLocations.find(loc => loc.id === transportFrom) && (
+              <Mapbox.PointAnnotation
+                id={`from-location-${transportFrom}`}
+                coordinate={[
+                  availableLocations.find(loc => loc.id === transportFrom)!.lng,
+                  availableLocations.find(loc => loc.id === transportFrom)!.lat
+                ]}
+              >
+                <View style={styles.markerContainer}>
+                  <Ionicons
+                    name="location"
+                    size={40}
+                    color="#10b981"
+                  />
+                </View>
+              </Mapbox.PointAnnotation>
+            )}
+
+            {/* Destination Location Marker */}
             <Mapbox.PointAnnotation
               id={`location-${id}`}
               coordinate={[parseFloat(lng), parseFloat(lat)]}
@@ -481,6 +582,24 @@ export default function LocationDetailScreen() {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+              </View>
+            )}
+
+            {/* Route Info */}
+            {routeDistance !== null && routeDuration !== null && (
+              <View style={styles.routeInfo}>
+                <View style={styles.routeInfoItem}>
+                  <Ionicons name="navigate" size={16} color="#6b7280" />
+                  <Text style={styles.routeInfoText}>
+                    {(routeDistance / 1000).toFixed(1)} km
+                  </Text>
+                </View>
+                <View style={styles.routeInfoItem}>
+                  <Ionicons name="time" size={16} color="#6b7280" />
+                  <Text style={styles.routeInfoText}>
+                    {Math.round(routeDuration / 60)} min
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -795,5 +914,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#fff',
+  },
+  routeInfo: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  routeInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  routeInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
   },
 });
