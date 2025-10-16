@@ -1,8 +1,10 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
+import CommentModal from '@/components/CommentModal';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 
@@ -31,6 +33,14 @@ export default function TripDocumentView() {
     bold: false,
     italic: false,
   });
+
+  // Comment modal state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentData, setCommentData] = useState<{
+    selectedText: string;
+    from: number;
+    to: number;
+  } | null>(null);
 
   const handleSelectionChange = useCallback((empty: boolean) => {
     console.log('[TripDocumentView] Selection empty:', empty);
@@ -84,6 +94,27 @@ export default function TripDocumentView() {
     console.log('[TripDocumentView] Sending createGeoMark command to WebView');
     (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('createGeoMark');
   };
+
+  const handleShowCommentEditor = useCallback((data: { selectedText: string; from: number; to: number }) => {
+    console.log('[TripDocumentView] Showing comment editor for:', data);
+    setCommentData(data);
+    setShowCommentModal(true);
+  }, []);
+
+  const handleSaveComment = useCallback((comment: any) => {
+    console.log('[TripDocumentView] Saving comment:', comment);
+
+    if (commentData && documentRef) {
+      // Send command to ProseMirror WebView to create the comment
+      (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('createComment', {
+        ...comment,
+        from: commentData.from,
+        to: commentData.to,
+      });
+    }
+
+    setCommentData(null);
+  }, [commentData, documentRef]);
 
   return (
     <View style={styles.container}>
@@ -147,6 +178,7 @@ export default function TripDocumentView() {
             onToolbarStateChange={handleToolbarStateChange}
             onGeoMarkNavigate={handleGeoMarkNavigate}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            onShowCommentEditor={handleShowCommentEditor}
             geoMarkDataToCreate={geoMarkDataToCreate}
           />
         </View>
@@ -204,9 +236,29 @@ export default function TripDocumentView() {
             >
               <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
             </TouchableOpacity>
+
+            <View style={styles.separator} />
+
+            <TouchableOpacity
+              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('addComment')}
+              style={styles.toolbarButton}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color="#374151" />
+            </TouchableOpacity>
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* Comment Modal */}
+      <CommentModal
+        visible={showCommentModal}
+        onClose={() => {
+          setShowCommentModal(false);
+          setCommentData(null);
+        }}
+        onSave={handleSaveComment}
+        selectedText={commentData?.selectedText}
+      />
 
       {/* Debug Info */}
       {currentDoc && (
