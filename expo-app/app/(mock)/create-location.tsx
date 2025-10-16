@@ -245,6 +245,8 @@ export default function CreateLocationScreen() {
             {/* Markers for all suggestions */}
             {suggestions.map((suggestion, index) => {
               const isSelected = index === selectedIndex;
+              const locationName = suggestion.display_name.split(',')[0];
+
               return (
                 <Mapbox.PointAnnotation
                   key={suggestion.place_id}
@@ -266,14 +268,14 @@ export default function CreateLocationScreen() {
                         color={isSelected ? "#007AFF" : "#8E8E93"}
                       />
                     </View>
-                    {/* Label for unselected markers */}
-                    {!isSelected && (
-                      <View style={styles.markerLabel}>
-                        <Text style={styles.markerLabelText} numberOfLines={1}>
-                          {suggestion.display_name.split(',')[0]}
-                        </Text>
-                      </View>
-                    )}
+                    <View style={[
+                      styles.markerLabel,
+                      isSelected && styles.markerLabelHidden
+                    ]}>
+                      <Text style={styles.markerLabelText} numberOfLines={1}>
+                        {locationName}
+                      </Text>
+                    </View>
                   </View>
                 </Mapbox.PointAnnotation>
               );
@@ -450,6 +452,12 @@ const styles = StyleSheet.create({
     maxWidth: 120,
     borderWidth: 1,
     borderColor: '#E1E1E1',
+  },
+  markerLabelHidden: {
+    opacity: 0,
+    height: 0,
+    marginTop: 0,
+    paddingVertical: 0,
   },
   markerLabelText: {
     fontSize: 11,
