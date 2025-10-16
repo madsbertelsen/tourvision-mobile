@@ -52,7 +52,6 @@ export default function LocationDetailScreen() {
     tripId?: string;
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'location'>('overview');
   const [locationDocument, setLocationDocument] = useState<any>(null);
   const [contextDocument, setContextDocument] = useState<any>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
@@ -147,9 +146,9 @@ export default function LocationDetailScreen() {
     }, [contextDocParam, tripId, locationId, id])
   );
 
-  // Center camera on location when Location tab is shown
+  // Center camera on location when component mounts
   useEffect(() => {
-    if (activeTab === 'location' && cameraRef.current && lat && lng) {
+    if (cameraRef.current && lat && lng) {
       setTimeout(() => {
         cameraRef.current?.setCamera({
           centerCoordinate: [parseFloat(lng), parseFloat(lat)],
@@ -158,7 +157,7 @@ export default function LocationDetailScreen() {
         });
       }, 100);
     }
-  }, [activeTab, lat, lng]);
+  }, [lat, lng]);
 
   // Format coordinates for display
   const formatCoordinate = (coord: string, type: 'lat' | 'lng') => {
@@ -264,29 +263,38 @@ export default function LocationDetailScreen() {
           )}
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={activeTab === 'overview' ? styles.tabActive : styles.tab}
-            onPress={() => setActiveTab('overview')}
+        {/* Map View */}
+        <View style={styles.mapContainer}>
+          <Mapbox.MapView
+            style={styles.map}
+            styleURL={Mapbox.StyleURL.Street}
+            zoomEnabled={true}
+            scrollEnabled={true}
+            pitchEnabled={false}
+            rotateEnabled={true}
           >
-            <Text style={activeTab === 'overview' ? styles.tabTextActive : styles.tabText}>
-              Overview
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={activeTab === 'location' ? styles.tabActive : styles.tab}
-            onPress={() => setActiveTab('location')}
-          >
-            <Text style={activeTab === 'location' ? styles.tabTextActive : styles.tabText}>
-              Location
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <Mapbox.Camera
+              ref={cameraRef}
+              zoomLevel={14}
+              centerCoordinate={[parseFloat(lng), parseFloat(lat)]}
+              animationDuration={1000}
+            />
 
-        {/* Overview Tab Content */}
-        {activeTab === 'overview' && (
-          <>
+            {/* Location Marker */}
+            <Mapbox.PointAnnotation
+              id={`location-${id}`}
+              coordinate={[parseFloat(lng), parseFloat(lat)]}
+            >
+              <View style={styles.markerContainer}>
+                <Ionicons
+                  name="location"
+                  size={40}
+                  color="#007AFF"
+                />
+              </View>
+            </Mapbox.PointAnnotation>
+          </Mapbox.MapView>
+        </View>
             {/* Context-Specific Notes */}
             {(contextDocument || tripId) && (
               <View style={styles.documentSection}>
@@ -403,68 +411,6 @@ export default function LocationDetailScreen() {
                 </View>
               </View>
             </View>
-          </>
-        )}
-
-        {/* Location Tab Content */}
-        {activeTab === 'location' && (
-          <>
-            {/* Map View */}
-            <View style={styles.mapContainer}>
-              <Mapbox.MapView
-                style={styles.map}
-                styleURL={Mapbox.StyleURL.Street}
-                zoomEnabled={true}
-                scrollEnabled={true}
-                pitchEnabled={false}
-                rotateEnabled={true}
-              >
-                <Mapbox.Camera
-                  ref={cameraRef}
-                  zoomLevel={14}
-                  centerCoordinate={[parseFloat(lng), parseFloat(lat)]}
-                  animationDuration={1000}
-                />
-
-                {/* Location Marker */}
-                <Mapbox.PointAnnotation
-                  id={`location-${id}`}
-                  coordinate={[parseFloat(lng), parseFloat(lat)]}
-                >
-                  <View style={styles.markerContainer}>
-                    <Ionicons
-                      name="location"
-                      size={40}
-                      color="#007AFF"
-                    />
-                  </View>
-                </Mapbox.PointAnnotation>
-              </Mapbox.MapView>
-            </View>
-
-            {/* Location Details */}
-            <View style={styles.locationDetails}>
-              <View style={styles.infoRow}>
-                <Ionicons name="location-outline" size={20} color="#6b7280" />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Coordinates</Text>
-                  <Text style={styles.infoValue}>
-                    {formatCoordinate(lat, 'lat')}, {formatCoordinate(lng, 'lng')}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Get Directions Button */}
-              <TouchableOpacity
-                style={styles.directionsButton}
-                onPress={openInMaps}
-              >
-                <Ionicons name="navigate" size={20} color="#fff" />
-                <Text style={styles.directionsButtonText}>Get Directions</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
 
         {/* Mentioned in trip */}
         <View style={styles.mentionedSection}>
@@ -567,34 +513,6 @@ const styles = StyleSheet.create({
     top: 20,
     right: 16,
   },
-  tabs: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  tab: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginRight: 24,
-  },
-  tabActive: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginRight: 24,
-    borderBottomWidth: 3,
-    borderBottomColor: '#3B82F6',
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#6b7280',
-  },
-  tabTextActive: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-  },
   section: {
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -696,27 +614,6 @@ const styles = StyleSheet.create({
   markerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  locationDetails: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    gap: 16,
-  },
-  directionsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  directionsButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
   documentSection: {
     paddingHorizontal: 16,
