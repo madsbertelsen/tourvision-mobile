@@ -45,9 +45,9 @@ export default function TripDocumentView() {
   const handleGeoMarkNavigate = useCallback((attrs: any) => {
     console.log('[TripDocumentView] Navigate to location:', attrs);
 
-    // Navigate to location preview screen
+    // Navigate to location screen
     router.push({
-      pathname: '/(mock)/location-preview/[id]',
+      pathname: '/(mock)/location/[id]',
       params: {
         id: attrs.geoId || 'unknown',
         name: attrs.placeName || 'Location',

@@ -161,9 +161,10 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
 
     return (
       <Link
+      push
         key={index}
         href={{
-          pathname: '/(mock)/location-preview/[id]',
+          pathname: '/(mock)/location/[id]',
           params,
         }}
       >

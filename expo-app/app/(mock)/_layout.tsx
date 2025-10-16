@@ -89,8 +89,10 @@ function MockLayoutContent() {
       <Drawer.Screen
         name="location/[id]"
         options={{
-          title: 'Location Detail',
+          title: 'Location',
           drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+          presentation: 'modal',
         }}
       />
       <Drawer.Screen
@@ -108,15 +110,6 @@ function MockLayoutContent() {
           title: 'ProseMirror Test',
           drawerLabel: () => null, // Hide from drawer menu
           headerShown: false, // Screen has its own header
-        }}
-      />
-      <Drawer.Screen
-        name="location-preview/[id]"
-        options={{
-          title: 'Location Preview',
-          drawerLabel: () => null, // Hide from drawer menu
-          headerShown: false, // Screen has its own header
-          presentation: 'modal',
         }}
       />
       <Drawer.Screen
