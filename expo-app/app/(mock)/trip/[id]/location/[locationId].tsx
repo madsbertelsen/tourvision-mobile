@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Image,
   Dimensions
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
@@ -67,41 +67,85 @@ export default function LocationDetailScreen() {
     photoName,
   });
 
-  // Load trip data and extract documents
-  useEffect(() => {
-    const loadDocuments = async () => {
-      // Parse context document from params
-      if (contextDocParam) {
-        try {
-          const parsed = JSON.parse(contextDocParam);
-          setContextDocument(parsed);
-        } catch (e) {
-          console.error('Failed to parse contextDocument:', e);
-        }
-      }
+  // Load trip data and extract documents - reload when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadDocuments = async () => {
+        // Load from trip storage if tripId is available
+        if (tripId) {
+          try {
+            const trip = await getTrip(tripId);
+            if (trip) {
+              const geoId = locationId || id;
 
-      // Load location document from trip storage
-      if (tripId) {
-        try {
-          const trip = await getTrip(tripId);
-          if (trip) {
-            // Find location by geoId or locationId
-            const geoId = locationId || id;
-            const location = trip.locations?.find(
-              (loc) => loc.geoId === geoId || loc.id === geoId
-            );
-            if (location?.document) {
-              setLocationDocument(location.document);
+              // Load location document from trip.locations
+              const location = trip.locations?.find(
+                (loc) => loc.geoId === geoId || loc.id === geoId
+              );
+              if (location?.document) {
+                setLocationDocument(location.document);
+              } else {
+                setLocationDocument(null);
+              }
+
+              // Load context document from geo-mark in trip.document
+              const findContextDocument = (node: any): any => {
+                if (!node) return null;
+
+                // Check text nodes for geo-mark marks
+                if (node.type === 'text' && node.marks) {
+                  const geoMarkMark = node.marks.find(
+                    (mark: any) => mark.type === 'geoMark' && mark.attrs?.geoId === geoId
+                  );
+                  if (geoMarkMark?.attrs?.contextDocument) {
+                    return geoMarkMark.attrs.contextDocument;
+                  }
+                }
+
+                // Recursively search children
+                if (node.content) {
+                  for (const child of node.content) {
+                    const found = findContextDocument(child);
+                    if (found) return found;
+                  }
+                }
+
+                return null;
+              };
+
+              const foundContext = trip.document ? findContextDocument(trip.document) : null;
+              if (foundContext) {
+                setContextDocument(foundContext);
+              } else if (contextDocParam) {
+                // Fallback to params if not found in trip document
+                try {
+                  const parsed = JSON.parse(contextDocParam);
+                  setContextDocument(parsed);
+                } catch (e) {
+                  console.error('Failed to parse contextDocument from params:', e);
+                  setContextDocument(null);
+                }
+              } else {
+                setContextDocument(null);
+              }
             }
+          } catch (e) {
+            console.error('Failed to load documents:', e);
           }
-        } catch (e) {
-          console.error('Failed to load location document:', e);
+        } else if (contextDocParam) {
+          // If no tripId, fallback to parsing from params
+          try {
+            const parsed = JSON.parse(contextDocParam);
+            setContextDocument(parsed);
+          } catch (e) {
+            console.error('Failed to parse contextDocument from params:', e);
+          }
         }
-      }
-    };
+      };
 
-    loadDocuments();
-  }, [contextDocParam, tripId, locationId, id]);
+      loadDocuments();
+    }, [contextDocParam, tripId, locationId, id])
+  );
 
   // Center camera on location when Location tab is shown
   useEffect(() => {
