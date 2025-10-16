@@ -124,8 +124,12 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
           const commentStyle = commentMark.attrs?.resolved
             ? styles.commentResolved
             : styles.comment;
+
+          // Don't override fontSize in headings
+          const baseStyle = inHeading ? [] : [styles.inlineText];
+
           return (
-            <Text key={index} style={[styles.inlineText, commentStyle]}>
+            <Text key={index} style={[...baseStyle, commentStyle]}>
               {node.text}
             </Text>
           );
