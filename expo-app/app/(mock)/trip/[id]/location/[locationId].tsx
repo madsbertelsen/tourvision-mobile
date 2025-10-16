@@ -297,6 +297,11 @@ export default function LocationDetailScreen() {
                           locationId: locationId || id,
                           tripId,
                           name,
+                          lat,
+                          lng,
+                          description,
+                          photoName,
+                          colorIndex,
                         },
                       });
                     }}

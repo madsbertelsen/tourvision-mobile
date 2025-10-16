@@ -12,10 +12,20 @@ export default function EditLocationInfoScreen() {
     locationId,
     tripId,
     name,
+    lat,
+    lng,
+    description,
+    photoName,
+    colorIndex,
   } = params as {
     locationId: string;
     tripId: string;
     name: string;
+    lat?: string;
+    lng?: string;
+    description?: string;
+    photoName?: string;
+    colorIndex?: string;
   };
 
   const [currentDoc, setCurrentDoc] = useState<any>(null);
@@ -82,22 +92,32 @@ export default function EditLocationInfoScreen() {
         return;
       }
 
-      // Find the location index
-      const locationIndex = trip.locations?.findIndex(
+      // Find or create the location
+      const updatedLocations = [...(trip.locations || [])];
+      const locationIndex = updatedLocations.findIndex(
         (loc) => loc.geoId === locationId || loc.id === locationId
       );
 
-      if (locationIndex === undefined || locationIndex === -1) {
-        Alert.alert('Error', 'Location not found in trip');
-        return;
+      if (locationIndex !== -1) {
+        // Update existing location
+        updatedLocations[locationIndex] = {
+          ...updatedLocations[locationIndex],
+          document: currentDoc,
+        };
+      } else {
+        // Create new location entry
+        updatedLocations.push({
+          id: locationId,
+          geoId: locationId,
+          name: name,
+          lat: lat ? parseFloat(lat) : 0,
+          lng: lng ? parseFloat(lng) : 0,
+          description: description,
+          photoName: photoName,
+          colorIndex: colorIndex ? parseInt(colorIndex) : 0,
+          document: currentDoc,
+        });
       }
-
-      // Update the location document
-      const updatedLocations = [...(trip.locations || [])];
-      updatedLocations[locationIndex] = {
-        ...updatedLocations[locationIndex],
-        document: currentDoc,
-      };
 
       // Save the updated trip
       await saveTrip({
