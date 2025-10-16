@@ -45,17 +45,17 @@ export default function TripDocumentView() {
   const handleGeoMarkNavigate = useCallback((attrs: any) => {
     console.log('[TripDocumentView] Navigate to location:', attrs);
 
-    // Navigate to location screen
+    // Navigate to location screen (Stack-nested for slide transition)
     router.push({
-      pathname: '/(mock)/location/[id]',
+      pathname: 'location/[locationId]',
       params: {
+        locationId: attrs.geoId || 'unknown',
         id: attrs.geoId || 'unknown',
         name: attrs.placeName || 'Location',
         lat: attrs.lat || '0',
         lng: attrs.lng || '0',
         description: attrs.description || '',
         colorIndex: attrs.colorIndex?.toString() || '0',
-        tripId: tripId, // Pass tripId so we can navigate back properly
       },
     });
   }, [tripId]);

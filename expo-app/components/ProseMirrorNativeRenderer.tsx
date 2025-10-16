@@ -145,8 +145,17 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
   const renderGeoMark = (text: string, attrs: any, index: number) => {
     const { geoId, placeName, lat, lng, description, colorIndex } = attrs || {};
 
+    const locationId = geoId || 'unknown';
+
+    // Construct full path for Stack-nested route (slide transition)
+    // If no tripId, fall back to Drawer-level route
+    const pathname = tripId
+      ? `/(mock)/trip/${tripId}/location/[locationId]` as any
+      : '/(mock)/location/[id]' as any;
+
     const params: any = {
-      id: geoId || 'unknown',
+      locationId,
+      id: locationId,
       name: placeName || text,
       lat: lat || '0',
       lng: lng || '0',
@@ -154,17 +163,12 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
       colorIndex: colorIndex?.toString() || '0',
     };
 
-    // Add tripId if available for proper back navigation
-    if (tripId) {
-      params.tripId = tripId;
-    }
-
     return (
       <Link
-      push
+        push
         key={index}
         href={{
-          pathname: '/(mock)/location/[id]',
+          pathname,
           params,
         }}
       >

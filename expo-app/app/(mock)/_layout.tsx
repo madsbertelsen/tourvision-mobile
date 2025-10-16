@@ -1,12 +1,12 @@
+import TripsSidebar from '@/components/TripsSidebar';
 import { MockProvider } from '@/contexts/MockContext';
-import { Drawer } from 'expo-router/drawer';
 import { useRouter } from 'expo-router';
+import { Drawer } from 'expo-router/drawer';
 import React from 'react';
 import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import TripsSidebar from '@/components/TripsSidebar';
 
 // Custom drawer content
 function CustomDrawerContent(props: any) {
@@ -15,7 +15,7 @@ function CustomDrawerContent(props: any) {
   const handleTripSelect = (tripId: string, initialMessage?: string) => {
     // Navigate to trip detail page
     router.push({
-      pathname: `/(mock)/trip/${tripId}`,
+      pathname: `/(mock)/trip/${tripId}` as any,
       params: initialMessage ? { initialMessage } : undefined
     });
     // Close drawer on mobile
@@ -25,7 +25,7 @@ function CustomDrawerContent(props: any) {
   const handleLocationSelect = (tripId: string, locationId: string, location: any) => {
     // Navigate to location detail page
     router.push({
-      pathname: `/(mock)/trip/${tripId}/location/${locationId}`,
+      pathname: `/(mock)/trip/${tripId}/location/${locationId}` as any,
       params: {
         id: locationId,
         name: location.name,
@@ -87,21 +87,11 @@ function MockLayoutContent() {
         }}
       />
       <Drawer.Screen
-        name="location/[id]"
-        options={{
-          title: 'Location',
-          drawerLabel: () => null, // Hide from drawer menu
-          headerShown: false, // Screen has its own header
-          presentation: 'modal',
-        }}
-      />
-      <Drawer.Screen
         name="create-location"
         options={{
           title: 'Create Location',
           drawerLabel: () => null, // Hide from drawer menu
           headerShown: false, // Screen has its own header
-          presentation: 'modal',
         }}
       />
       <Drawer.Screen
