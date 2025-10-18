@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -116,6 +116,16 @@ export default function TripDocumentView() {
     setCommentData(null);
   }, [commentData, documentRef]);
 
+  const handleCommentClick = useCallback((attrs: any) => {
+    console.log('[TripDocumentView] Comment clicked:', attrs);
+    // Show the comment in a modal (read-only for now)
+    Alert.alert(
+      attrs.userName || 'Comment',
+      attrs.content || 'No content',
+      [{ text: 'OK' }]
+    );
+  }, []);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -179,6 +189,7 @@ export default function TripDocumentView() {
             onGeoMarkNavigate={handleGeoMarkNavigate}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             onShowCommentEditor={handleShowCommentEditor}
+            onCommentClick={handleCommentClick}
             geoMarkDataToCreate={geoMarkDataToCreate}
           />
         </View>

@@ -1,7 +1,8 @@
 import { PROSE_STYLES, toReactNativeStyles } from '@/styles/prose-styles';
 import { Link } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import CommentModal from './CommentModal';
 
 interface ProseMirrorNativeRendererProps {
   content: any; // ProseMirror JSON document
@@ -13,6 +14,9 @@ interface ProseMirrorNativeRendererProps {
  * Used for read-only viewing with native Link Preview support.
  */
 export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirrorNativeRendererProps) {
+  const [selectedComment, setSelectedComment] = useState<any>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+
   if (!content) {
     return (
       <View style={styles.emptyContainer}>
@@ -23,6 +27,17 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
 
   // Debug: Log the document structure
   console.log('[ProseMirrorNativeRenderer] Rendering document:', JSON.stringify(content, null, 2));
+
+  const handleCommentClick = (commentAttrs: any) => {
+    console.log('[ProseMirrorNativeRenderer] Comment clicked:', commentAttrs);
+    setSelectedComment(commentAttrs);
+    setShowCommentModal(true);
+  };
+
+  const handleCloseComment = () => {
+    setShowCommentModal(false);
+    setSelectedComment(null);
+  };
 
   const renderNode = (node: any, index: number): React.ReactNode => {
     if (!node) return null;
@@ -120,7 +135,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
         const commentMark = node.marks?.find((mark: any) => mark.type === 'comment');
 
         if (commentMark) {
-          // Render with comment styling
+          // Render with comment styling as clickable text
           const commentStyle = commentMark.attrs?.resolved
             ? styles.commentResolved
             : styles.comment;
@@ -129,7 +144,11 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
           const baseStyle = inHeading ? [] : [styles.inlineText];
 
           return (
-            <Text key={index} style={[...baseStyle, commentStyle]}>
+            <Text
+              key={index}
+              style={[...baseStyle, commentStyle]}
+              onPress={() => handleCommentClick(commentMark.attrs)}
+            >
               {node.text}
             </Text>
           );
@@ -216,9 +235,32 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {renderNode(content, 0)}
-    </ScrollView>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        {renderNode(content, 0)}
+      </ScrollView>
+
+      {/* Comment Modal - Read-only view in Read Mode */}
+      {selectedComment && (
+        <CommentModal
+          visible={showCommentModal}
+          onClose={handleCloseComment}
+          onSave={() => {
+            // Read-only in native renderer, just close
+            handleCloseComment();
+          }}
+          existingComment={{
+            commentId: selectedComment.commentId,
+            userId: selectedComment.userId,
+            userName: selectedComment.userName,
+            content: selectedComment.content,
+            createdAt: selectedComment.createdAt,
+            resolved: selectedComment.resolved,
+            replies: selectedComment.replies,
+          }}
+        />
+      )}
+    </>
   );
 }
 
