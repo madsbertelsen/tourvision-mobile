@@ -96,14 +96,9 @@ export default function LocationDetailScreen() {
               const findGeoMark = (node: any): any => {
                 if (!node) return null;
 
-                // Check text nodes for geo-mark marks
-                if (node.type === 'text' && node.marks) {
-                  const geoMarkMark = node.marks.find(
-                    (mark: any) => mark.type === 'geoMark' && mark.attrs?.geoId === geoId
-                  );
-                  if (geoMarkMark) {
-                    return geoMarkMark.attrs;
-                  }
+                // Check if this node is a geo-mark node
+                if (node.type === 'geoMark' && node.attrs?.geoId === geoId) {
+                  return node.attrs;
                 }
 
                 // Recursively search children
@@ -118,7 +113,7 @@ export default function LocationDetailScreen() {
               };
 
               const geoMarkAttrs = trip.document ? findGeoMark(trip.document) : null;
-              const foundContext = geoMarkAttrs?.contextDocument || null;
+              const foundContext = geoMarkAttrs?.visitDocument || null;
               if (foundContext) {
                 setContextDocument(foundContext);
               } else if (contextDocParam) {
@@ -145,22 +140,20 @@ export default function LocationDetailScreen() {
                 const traverse = (n: any) => {
                   if (!n) return;
 
-                  if (n.type === 'text' && n.marks) {
-                    n.marks.forEach((mark: any) => {
-                      if (mark.type === 'geoMark' && mark.attrs?.geoId && mark.attrs?.placeName && mark.attrs?.lat && mark.attrs?.lng) {
-                        // Don't include current location
-                        if (mark.attrs.geoId !== geoId) {
-                          locations.push({
-                            id: mark.attrs.geoId,
-                            name: mark.attrs.placeName,
-                            lat: parseFloat(mark.attrs.lat),
-                            lng: parseFloat(mark.attrs.lng)
-                          });
-                        }
-                      }
-                    });
+                  // Check if this node is a geo-mark node
+                  if (n.type === 'geoMark' && n.attrs?.geoId && n.attrs?.placeName && n.attrs?.lat && n.attrs?.lng) {
+                    // Don't include current location
+                    if (n.attrs.geoId !== geoId) {
+                      locations.push({
+                        id: n.attrs.geoId,
+                        name: n.attrs.placeName,
+                        lat: parseFloat(n.attrs.lat),
+                        lng: parseFloat(n.attrs.lng)
+                      });
+                    }
                   }
 
+                  // Recursively traverse children
                   if (n.content) {
                     n.content.forEach((child: any) => traverse(child));
                   }
@@ -289,29 +282,16 @@ export default function LocationDetailScreen() {
       const updateGeoMarkTransport = (node: any): any => {
         if (!node) return node;
 
-        // If this is a text node with marks, check for geo-mark
-        if (node.type === 'text' && node.marks) {
-          const updatedMarks = node.marks.map((mark: any) => {
-            // If this is a geo-mark with matching geoId, update transport settings
-            if (mark.type === 'geoMark' && mark.attrs?.geoId === geoId) {
-              return {
-                ...mark,
-                attrs: {
-                  ...mark.attrs,
-                  transportProfile: transportProfile,
-                  transportFrom: transportFrom,
-                },
-              };
-            }
-            return mark;
-          });
-
-          if (JSON.stringify(updatedMarks) !== JSON.stringify(node.marks)) {
-            return {
-              ...node,
-              marks: updatedMarks,
-            };
-          }
+        // If this is a geo-mark node with matching geoId, update transport settings
+        if (node.type === 'geoMark' && node.attrs?.geoId === geoId) {
+          return {
+            ...node,
+            attrs: {
+              ...node.attrs,
+              transportProfile: transportProfile,
+              transportFrom: transportFrom,
+            },
+          };
         }
 
         // Recursively update children

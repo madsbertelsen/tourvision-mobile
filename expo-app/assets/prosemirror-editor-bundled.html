@@ -498,27 +498,40 @@
                 const { selection } = state;
                 const { from, to } = selection;
 
-                // Create a geoMark mark with the location data
-                const geoMarkType = schema.marks.geoMark;
+                // Create a geoMark NODE (not mark) with the location data
+                const geoMarkType = schema.nodes.geoMark;
                 if (!geoMarkType) {
-                  console.error('[WebView] geoMark mark type not found in schema');
+                  console.error('[WebView] geoMark node type not found in schema');
                   break;
                 }
 
-                const mark = geoMarkType.create({
-                  geoId: data.geoMarkData.geoId,
-                  placeName: data.geoMarkData.placeName,
-                  lat: data.geoMarkData.lat,
-                  lng: data.geoMarkData.lng,
-                  colorIndex: data.geoMarkData.colorIndex || 0,
-                  coordSource: data.geoMarkData.coordSource || 'manual'
-                });
+                // Get the selected text
+                const selectedText = state.doc.textBetween(from, to, ' ');
 
-                // Add the mark to the selected text
-                const tr = state.tr.addMark(from, to, mark);
+                // Create geoMark node with text content and all attributes
+                const geoMarkNode = geoMarkType.create(
+                  {
+                    geoId: data.geoMarkData.geoId,
+                    placeName: data.geoMarkData.placeName,
+                    lat: data.geoMarkData.lat,
+                    lng: data.geoMarkData.lng,
+                    colorIndex: data.geoMarkData.colorIndex || 0,
+                    coordSource: data.geoMarkData.coordSource || 'manual',
+                    description: data.geoMarkData.description || null,
+                    transportFrom: data.geoMarkData.transportFrom || null,
+                    transportProfile: data.geoMarkData.transportProfile || null,
+                    waypoints: data.geoMarkData.waypoints || null,
+                    visitDocument: data.geoMarkData.visitDocument || null,
+                    photoName: data.geoMarkData.photoName || null
+                  },
+                  schema.text(selectedText)
+                );
+
+                // Replace the selected text with the geo-mark node
+                const tr = state.tr.replaceSelectionWith(geoMarkNode);
                 dispatch(tr);
 
-                console.log('[WebView] Geo-mark created successfully');
+                console.log('[WebView] Geo-mark NODE created successfully');
                 sendMessageToNative({
                   type: 'info',
                   message: 'Location created: ' + data.geoMarkData.placeName

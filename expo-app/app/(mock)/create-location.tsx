@@ -147,17 +147,35 @@ export default function CreateLocationScreen() {
       return;
     }
 
+    // Create visitDocument from description text
+    const visitDocument = description.trim() ? {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: description.trim()
+            }
+          ]
+        }
+      ]
+    } : null;
+
     // Create geo-mark data
     const geoMarkData = {
       geoId: `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       placeName: selectedLocation.display_name,
       lat: parseFloat(selectedLocation.lat),
       lng: parseFloat(selectedLocation.lon),
-      description: description.trim(),
+      description: description.trim() || null,
       colorIndex: 0,
       transportFrom: null,
       transportProfile: 'walking',
       waypoints: null,
+      visitDocument: visitDocument,
+      photoName: null,
     };
 
     console.log('[CreateLocation] Saving location:', geoMarkData);

@@ -283,12 +283,13 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
     // Load HTML inline (works on all platforms)
     // Import HTML with inlined ProseMirror (no CDN dependencies)
+    // Rebuilt bundle includes geo-mark message handler - v2
     let htmlContent;
 
     // Try loading the esbuild-bundled ProseMirror editor
     try {
       htmlContent = require('../assets/prosemirror-editor-bundled-final.js').default;
-      console.log('[ProseMirrorWebView] HTML content loaded (esbuild bundle), length:', htmlContent?.length);
+      console.log('[ProseMirrorWebView] HTML content loaded (with visitDocument!), length:', htmlContent?.length);
     } catch (error) {
       console.error('[ProseMirrorWebView] Failed to load esbuild bundle:', error);
 

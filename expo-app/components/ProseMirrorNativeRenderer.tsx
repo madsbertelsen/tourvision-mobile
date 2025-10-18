@@ -61,9 +61,9 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
         );
 
       case 'paragraph':
-        // Check if paragraph contains geo-marks or comments (as marks on text nodes)
+        // Check if paragraph contains geo-mark nodes or comments (as marks on text nodes)
         const hasGeoMarks = node.content?.some((child: any) =>
-          child.marks?.some((mark: any) => mark.type === 'geoMark')
+          child.type === 'geoMark'
         );
         const hasComments = node.content?.some((child: any) =>
           child.marks?.some((mark: any) => mark.type === 'comment')
@@ -122,15 +122,13 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
     if (!content || content.length === 0) return null;
 
     return content.map((node: any, index: number) => {
+      // Handle geo-mark nodes (inline nodes, not marks)
+      if (node.type === 'geoMark') {
+        const text = node.content?.map((child: any) => child.text || '').join('') || node.attrs?.placeName || '';
+        return renderGeoMark(text, node.attrs, index);
+      }
+
       if (node.type === 'text') {
-        // Check if this text has a geoMark mark
-        const geoMarkMark = node.marks?.find((mark: any) => mark.type === 'geoMark');
-
-        if (geoMarkMark) {
-          // Render as a Link with geo-mark styling
-          return renderGeoMark(node.text, geoMarkMark.attrs, index);
-        }
-
         // Check if this text has a comment mark
         const commentMark = node.marks?.find((mark: any) => mark.type === 'comment');
 
@@ -184,7 +182,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
   };
 
   const renderGeoMark = (text: string, attrs: any, index: number) => {
-    const { geoId, placeName, lat, lng, description, colorIndex, contextDocument } = attrs || {};
+    const { geoId, placeName, lat, lng, description, colorIndex, visitDocument } = attrs || {};
 
     const locationId = geoId || 'unknown';
 
@@ -205,9 +203,9 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
       tripId: tripId, // Pass tripId so location screen can load trip data
     };
 
-    // Pass contextDocument if it exists
-    if (contextDocument) {
-      params.contextDocument = JSON.stringify(contextDocument);
+    // Pass visitDocument if it exists (contextDocument is legacy name kept for backward compatibility)
+    if (visitDocument) {
+      params.contextDocument = JSON.stringify(visitDocument);
     }
 
     return (

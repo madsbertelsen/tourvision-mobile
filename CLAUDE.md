@@ -841,3 +841,269 @@ useEffect(() => {
 - Route visualization between locations
 - Distance/duration calculations
 - Integration with TipTap document editor
+
+## ProseMirror Editor Architecture
+
+### IMPORTANT: HTML-Based ProseMirror (Not React DOM Components!)
+
+The trip document editor uses an **HTML-based ProseMirror implementation** loaded via WebView, **NOT** the React DOM component pattern used elsewhere in the app.
+
+#### Key Files
+
+**Schema Definition**: `/expo-app/assets/prosemirror-bundle-src.js`
+- Defines the ProseMirror schema with nodes and marks
+- This is the **actual schema** used by the editor
+- **NOT** `/expo-app/utils/prosemirror-schema.ts` (that file is for a different editor)
+
+**HTML Template**: `/expo-app/assets/prosemirror-editor-bundled.html`
+- Contains the editor UI and message handlers
+- Handles commands like `createGeoMark`, `setContent`, `toggleBold`, etc.
+- Processes messages from React Native via `window.addEventListener('message')`
+
+**Build Script**: `/expo-app/build-prosemirror.js`
+- Bundles `prosemirror-bundle-src.js` with esbuild
+- Inserts bundled JavaScript into HTML template
+- Outputs to `/expo-app/assets/prosemirror-editor-bundled-final.js`
+
+**WebView Wrapper**: `/expo-app/components/ProseMirrorWebView.tsx`
+- Loads the bundled HTML file
+- Sends messages to WebView via `postMessage`
+- Receives document updates from WebView
+
+#### Building the Bundle
+
+After making changes to the schema or HTML template:
+
+```bash
+cd expo-app
+npm run build:prosemirror
+```
+
+This command:
+1. Bundles `prosemirror-bundle-src.js` into a single file
+2. Inserts the bundle into `prosemirror-editor-bundled.html`
+3. Exports as a JavaScript module: `prosemirror-editor-bundled-final.js`
+
+**Metro Bundler Caching**: If changes don't appear after rebuilding:
+- Touch the ProseMirrorWebView.tsx file to trigger Metro reload
+- Clear Metro cache: `rm -rf .expo && rm -rf node_modules/.cache`
+- Change the log message in ProseMirrorWebView.tsx to force a new bundle
+
+### Geo-Mark Implementation
+
+#### Structure: Inline Nodes (Not Marks!)
+
+Geo-marks are **inline nodes** (like inline code or links), not text marks (like bold/italic). This is critical for proper rendering with background colors.
+
+**Correct Structure** (inline node):
+```json
+{
+  "type": "geoMark",
+  "attrs": {
+    "geoId": "loc-123",
+    "placeName": "Copenhagen, Denmark",
+    "lat": 55.6867,
+    "lng": 12.5700,
+    "colorIndex": 0,
+    "coordSource": "manual",
+    "description": "Optional short text",
+    "visitDocument": {
+      "type": "doc",
+      "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "Rich text notes"}]}
+      ]
+    },
+    "transportFrom": null,
+    "transportProfile": "walking",
+    "waypoints": null,
+    "photoName": null
+  },
+  "content": [
+    {"type": "text", "text": "Copenhagen"}
+  ]
+}
+```
+
+**Old Structure** (mark - WRONG!):
+```json
+{
+  "type": "text",
+  "marks": [
+    {"type": "geoMark", "attrs": {...}}
+  ],
+  "text": "Copenhagen"
+}
+```
+
+#### Why Inline Nodes?
+
+1. **Background Colors**: NodeViews can apply background colors properly
+2. **Click Handling**: Nodes can be clicked independently
+3. **Attributes**: Nodes can store complex data like `visitDocument`
+4. **Rendering**: Read mode can render with proper styling
+
+#### Visit Document Structure
+
+The `visitDocument` attribute stores **rich text notes** about a location as a complete ProseMirror document:
+
+```typescript
+visitDocument: {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        {type: 'text', text: 'Wonderful place to visit!'}
+      ]
+    },
+    {
+      type: 'heading',
+      attrs: {level: 2},
+      content: [
+        {type: 'text', text: 'What to do'}
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        {type: 'text', text: 'Visit the harbor, see Nyhavn, etc.'}
+      ]
+    }
+  ]
+}
+```
+
+This allows users to:
+- Add formatted notes (headings, lists, bold, italic)
+- Write detailed visit descriptions
+- Keep notes separate from the main trip document
+
+#### Creating Geo-Marks
+
+When a location is saved from the create-location screen:
+
+1. **Plain text description** is converted to a `visitDocument`:
+   ```typescript
+   const visitDocument = description.trim() ? {
+     type: 'doc',
+     content: [{
+       type: 'paragraph',
+       content: [{type: 'text', text: description.trim()}]
+     }]
+   } : null;
+   ```
+
+2. **Geo-mark data** is passed to the editor:
+   ```typescript
+   const geoMarkData = {
+     geoId: 'loc-...',
+     placeName: 'Copenhagen, Denmark',
+     lat: 55.6867,
+     lng: 12.5700,
+     visitDocument: visitDocument,
+     // ... other fields
+   };
+   ```
+
+3. **WebView receives** the data via `createGeoMark` message
+
+4. **HTML template creates** the inline node:
+   ```javascript
+   const geoMarkNode = schema.nodes.geoMark.create(
+     {
+       geoId: data.geoMarkData.geoId,
+       visitDocument: data.geoMarkData.visitDocument,
+       // ... other attrs
+     },
+     schema.text(selectedText)  // Text content
+   );
+   ```
+
+#### Editing Visit Notes
+
+The edit-visit screen (`/expo-app/app/(mock)/trip/[id]/location/[locationId]/edit-visit.tsx`) allows editing the `visitDocument`:
+
+1. **Find the geo-mark node** by geoId:
+   ```typescript
+   if (node.type === 'geoMark' && node.attrs?.geoId === locationId) {
+     return {
+       ...node,
+       attrs: {
+         ...node.attrs,
+         visitDocument: currentDoc  // Updated document
+       }
+     };
+   }
+   ```
+
+2. **Update is recursive** - traverses the entire document tree
+
+3. **Saves back** to the trip document in local storage
+
+#### Read Mode Rendering
+
+In read mode, geo-marks are rendered by `ProseMirrorNativeRenderer.tsx`:
+- Parses the document JSON
+- Renders geo-mark nodes with background colors
+- Makes them clickable to navigate to location details
+
+**Background color formula**:
+```typescript
+const colors = [
+  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+];
+const bgColor = `${colors[colorIndex % colors.length]}33`; // 33 = 20% opacity
+```
+
+### Common Issues
+
+#### Geo-Marks Not Rendering with Background Colors
+
+**Symptom**: Geo-marks appear as plain text without highlighting in read mode
+
+**Cause**: Geo-marks are stored as marks instead of nodes
+
+**Solution**: Check the document structure - geo-marks must be nodes:
+```bash
+# Query to check structure
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
+  "SELECT jsonb_pretty(document) FROM trips WHERE id = 'YOUR_TRIP_ID' LIMIT 1;"
+```
+
+#### Bundle Changes Not Appearing
+
+**Symptom**: After running `npm run build:prosemirror`, changes don't appear in the app
+
+**Cause**: Metro bundler has cached the old bundle
+
+**Solution**:
+1. Make a small change to `ProseMirrorWebView.tsx` (e.g., update a log message)
+2. Or clear Metro cache: `rm -rf .expo && watchman watch-del-all`
+3. Or restart Expo with `--clear` flag
+
+#### Visit Notes Not Saving
+
+**Symptom**: After editing visit notes, they disappear or don't persist
+
+**Causes**:
+1. Edit-visit screen is looking for geo-mark as a mark instead of node
+2. Saving to wrong attribute (`contextDocument` instead of `visitDocument`)
+
+**Solution**: Ensure `edit-visit.tsx` searches for `node.type === 'geoMark'` and updates `visitDocument`
+
+#### Schema Mismatch Errors
+
+**Symptom**: `geoMark node type not found in schema` error in WebView
+
+**Cause**: The HTML template's message handler is trying to access the wrong schema type (e.g., `schema.marks.geoMark` instead of `schema.nodes.geoMark`)
+
+**Solution**: Check `prosemirror-editor-bundled.html` in the `createGeoMark` handler - it should use `schema.nodes.geoMark`
+
+### Development Workflow
+
+1. **Make schema changes** in `assets/prosemirror-bundle-src.js`
+2. **Update HTML handlers** in `assets/prosemirror-editor-bundled.html` if needed
+3. **Rebuild bundle**: `npm run build:prosemirror`
+4. **Trigger Metro reload**: Touch `ProseMirrorWebView.tsx` or change a log message
+5. **Test in app**: Create/edit locations and verify structure in logs or database
