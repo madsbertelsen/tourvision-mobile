@@ -259,12 +259,37 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           if (webViewRef.current) {
             webViewRef.current.injectJavaScript(`
               (function() {
-                const editorContainer = document.querySelector('.ProseMirror');
-                if (editorContainer) {
-                  editorContainer.scrollTop = editorContainer.scrollHeight;
-                } else {
-                  window.scrollTo(0, document.body.scrollHeight);
+                console.log('[WebView] Attempting to scroll to bottom...');
+
+                // Try multiple scroll targets to ensure we scroll the right element
+                const prosemirror = document.querySelector('.ProseMirror');
+                const editorContainer = document.getElementById('editor-container');
+
+                // Log what we found
+                console.log('[WebView] ProseMirror element:', prosemirror);
+                console.log('[WebView] Editor container:', editorContainer);
+                console.log('[WebView] Body scrollHeight:', document.body.scrollHeight);
+                console.log('[WebView] Window innerHeight:', window.innerHeight);
+
+                // Scroll window (main scroll container for WebView)
+                window.scrollTo({
+                  top: document.body.scrollHeight,
+                  behavior: 'smooth'
+                });
+
+                // Also scroll ProseMirror if it's a scrollable container
+                if (prosemirror && prosemirror.scrollHeight > prosemirror.clientHeight) {
+                  prosemirror.scrollTop = prosemirror.scrollHeight;
+                  console.log('[WebView] Scrolled ProseMirror to:', prosemirror.scrollTop);
                 }
+
+                // Also scroll editor container if it exists
+                if (editorContainer && editorContainer.scrollHeight > editorContainer.clientHeight) {
+                  editorContainer.scrollTop = editorContainer.scrollHeight;
+                  console.log('[WebView] Scrolled editor-container to:', editorContainer.scrollTop);
+                }
+
+                console.log('[WebView] Scroll complete');
               })();
               true;
             `);
