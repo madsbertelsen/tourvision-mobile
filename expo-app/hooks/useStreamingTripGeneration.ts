@@ -145,57 +145,76 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     }
   }, []);
 
-  // Mock streaming simulation
+  // Mock streaming simulation - chunks by semantic units for realistic typing feel
   const simulateMockStreaming = async (signal: AbortSignal) => {
-    console.log('[StreamingHook] Starting mock streaming...');
+    console.log('[StreamingHook] Starting mock streaming (slow, realistic mode)...');
 
-    // Split mock HTML into chunks (simulate realistic streaming)
-    const chunkSize = 50; // characters per chunk
-    const chunks: string[] = [];
-    for (let i = 0; i < MOCK_TRIP_HTML.length; i += chunkSize) {
-      chunks.push(MOCK_TRIP_HTML.substring(i, i + chunkSize));
-    }
+    // Split by semantic units (headings, paragraphs, etc.) for natural agent typing feel
+    const semanticChunks = MOCK_TRIP_HTML
+      // Split by major elements but keep the tags
+      .split(/(?=<h[1-6]|<p[>\s]|<blockquote)/)
+      .filter(chunk => chunk.trim().length > 0);
 
-    console.log(`[StreamingHook] Will stream ${chunks.length} chunks`);
+    console.log(`[StreamingHook] Will stream ${semanticChunks.length} semantic chunks`);
 
-    for (let i = 0; i < chunks.length; i++) {
+    // Add opening tag first
+    htmlBufferRef.current = '<itinerary>';
+
+    for (let i = 0; i < semanticChunks.length; i++) {
       // Check if cancelled
       if (signal.aborted) {
         throw new Error('AbortError');
       }
 
-      const chunk = chunks[i];
-      console.log(`[StreamingHook] Mock chunk ${i + 1}/${chunks.length}:`, chunk.substring(0, 30));
+      const chunk = semanticChunks[i];
+      const chunkPreview = chunk.replace(/\n/g, ' ').substring(0, 50);
+      console.log(`[StreamingHook] Chunk ${i + 1}/${semanticChunks.length}:`, chunkPreview);
 
-      // Add chunk to buffer
-      htmlBufferRef.current += chunk;
+      // Stream the chunk character by character for extra smooth effect
+      const charsPerUpdate = 15; // characters to add at once
+      for (let j = 0; j < chunk.length; j += charsPerUpdate) {
+        if (signal.aborted) throw new Error('AbortError');
 
-      // Try to extract itinerary content
-      const itineraryMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)(?:<\/itinerary>|$)/is);
+        const miniChunk = chunk.substring(j, j + charsPerUpdate);
+        htmlBufferRef.current += miniChunk;
 
-      if (itineraryMatch) {
-        const itineraryHTML = itineraryMatch[1];
+        // Try to extract and parse itinerary content
+        const itineraryMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)$/is);
 
-        // Convert HTML to ProseMirror JSON
-        try {
-          const pmDoc = htmlToProsemirror(itineraryHTML);
+        if (itineraryMatch) {
+          const itineraryHTML = itineraryMatch[1];
 
-          // Update document state
-          setState(prev => ({
-            ...prev,
-            document: pmDoc,
-          }));
-        } catch (parseError) {
-          console.warn('[StreamingHook] Parse error (continuing):', parseError);
-          // Continue streaming even if parse fails
+          // Convert HTML to ProseMirror JSON
+          try {
+            const pmDoc = htmlToProsemirror(itineraryHTML);
+
+            // Update document state
+            setState(prev => ({
+              ...prev,
+              document: pmDoc,
+            }));
+          } catch (parseError) {
+            // Silent - partial HTML may not parse yet
+          }
         }
+
+        // Faster delay for character streaming within a chunk
+        await new Promise(resolve => setTimeout(resolve, 8));
       }
 
-      // Simulate network delay (20ms per chunk for smooth streaming)
-      await new Promise(resolve => setTimeout(resolve, 20));
+      // Longer pause between semantic units (headings, paragraphs)
+      // Vary the delay to feel more natural:
+      // - Longer after headings (agent "thinking" about what to write)
+      // - Medium after paragraphs
+      const isHeading = chunk.trim().startsWith('<h');
+      const delay = isHeading ? 400 : 250; // ms
+
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    // Final parse of complete content
+    // Add closing tag and final parse
+    htmlBufferRef.current += '</itinerary>';
+
     const finalMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
     if (finalMatch) {
       const pmDoc = htmlToProsemirror(finalMatch[1]);
