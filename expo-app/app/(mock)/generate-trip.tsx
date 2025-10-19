@@ -37,9 +37,16 @@ export default function GenerateTripScreen() {
   const isGenerating = streamState.isStreaming;
 
   // Auto-scroll to bottom when document updates during generation
+  // Throttle scrolling to avoid jerky behavior
+  const lastScrollTimeRef = useRef(0);
   useEffect(() => {
     if (isGenerating && documentRef.current) {
-      documentRef.current.scrollToBottom();
+      const now = Date.now();
+      // Only scroll every 200ms to keep it smooth
+      if (now - lastScrollTimeRef.current > 200) {
+        documentRef.current.scrollToBottom();
+        lastScrollTimeRef.current = now;
+      }
     }
   }, [currentDoc, isGenerating]);
 

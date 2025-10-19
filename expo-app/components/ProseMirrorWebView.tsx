@@ -272,10 +272,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                 console.log('[WebView] Window innerHeight:', window.innerHeight);
 
                 // Scroll window (main scroll container for WebView)
-                window.scrollTo({
-                  top: document.body.scrollHeight,
-                  behavior: 'smooth'
-                });
+                // Use instant scroll since we're already throttling on React side
+                window.scrollTo(0, document.body.scrollHeight);
 
                 // Also scroll ProseMirror if it's a scrollable container
                 if (prosemirror && prosemirror.scrollHeight > prosemirror.clientHeight) {
