@@ -36,6 +36,13 @@ export default function GenerateTripScreen() {
   const currentDoc = streamState.document;
   const isGenerating = streamState.isStreaming;
 
+  // Auto-scroll to bottom when document updates during generation
+  useEffect(() => {
+    if (isGenerating && documentRef.current) {
+      documentRef.current.scrollToBottom();
+    }
+  }, [currentDoc, isGenerating]);
+
   const handleDocumentChange = useCallback((doc: any) => {
     // During streaming, prevent manual edits
     if (isGenerating) {

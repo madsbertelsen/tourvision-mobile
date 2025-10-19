@@ -171,7 +171,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
       console.log(`[StreamingHook] Chunk ${i + 1}/${semanticChunks.length}:`, chunkPreview);
 
       // Stream the chunk character by character for extra smooth effect
-      const charsPerUpdate = 15; // characters to add at once
+      const charsPerUpdate = 10; // characters to add at once (reduced for slower feel)
       for (let j = 0; j < chunk.length; j += charsPerUpdate) {
         if (signal.aborted) throw new Error('AbortError');
 
@@ -198,16 +198,16 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
           }
         }
 
-        // Faster delay for character streaming within a chunk
-        await new Promise(resolve => setTimeout(resolve, 8));
+        // Slower delay for realistic typing feel
+        await new Promise(resolve => setTimeout(resolve, 25));
       }
 
-      // Longer pause between semantic units (headings, paragraphs)
+      // Much longer pause between semantic units (headings, paragraphs)
       // Vary the delay to feel more natural:
       // - Longer after headings (agent "thinking" about what to write)
       // - Medium after paragraphs
       const isHeading = chunk.trim().startsWith('<h');
-      const delay = isHeading ? 400 : 250; // ms
+      const delay = isHeading ? 800 : 500; // ms (doubled for slower feel)
 
       await new Promise(resolve => setTimeout(resolve, delay));
     }

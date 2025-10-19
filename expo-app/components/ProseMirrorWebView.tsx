@@ -6,6 +6,7 @@ import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 export interface ProseMirrorWebViewRef {
   sendCommand: (command: string, params?: any) => void;
   scrollToNode: (nodeId: string) => void;
+  scrollToBottom: () => void;
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
   triggerCreateLocation: () => void;
@@ -253,6 +254,21 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
         scrollToNode: (nodeId: string) => {
           console.log('[ProseMirrorWebView] Scrolling to node:', nodeId);
           sendMessage({ type: 'scrollToNode', nodeId });
+        },
+        scrollToBottom: () => {
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                const editorContainer = document.querySelector('.ProseMirror');
+                if (editorContainer) {
+                  editorContainer.scrollTop = editorContainer.scrollHeight;
+                } else {
+                  window.scrollTo(0, document.body.scrollHeight);
+                }
+              })();
+              true;
+            `);
+          }
         },
         getState: () => {
           console.log('[ProseMirrorWebView] Requesting state');
