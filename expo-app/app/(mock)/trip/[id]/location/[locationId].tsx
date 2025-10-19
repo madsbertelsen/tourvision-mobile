@@ -50,7 +50,6 @@ export default function LocationDetailScreen() {
     tripId?: string;
   };
 
-  const [locationDocument, setLocationDocument] = useState<any>(null);
   const [contextDocument, setContextDocument] = useState<any>(null);
   const [transportProfile, setTransportProfile] = useState<string | null>(null);
   const [transportFrom, setTransportFrom] = useState<string | null>(null);
@@ -81,16 +80,6 @@ export default function LocationDetailScreen() {
             const trip = await getTrip(tripId);
             if (trip) {
               const geoId = locationId || id;
-
-              // Load location document from trip.locations
-              const location = trip.locations?.find(
-                (loc) => loc.geoId === geoId || loc.id === geoId
-              );
-              if (location?.document) {
-                setLocationDocument(location.document);
-              } else {
-                setLocationDocument(null);
-              }
 
               // Load context document and transport settings from geo-mark in trip.document
               const findGeoMark = (node: any): any => {
@@ -631,45 +620,6 @@ export default function LocationDetailScreen() {
                   <ProseMirrorNativeRenderer content={contextDocument} />
                 ) : (
                   <Text style={styles.emptyText}>No visit notes yet. Tap Edit to add some.</Text>
-                )}
-              </View>
-            )}
-
-            {/* General Location Notes */}
-            {tripId && (
-              <View style={styles.documentSection}>
-                <View style={styles.documentHeader}>
-                  <View style={styles.documentHeaderLeft}>
-                    <Ionicons name="information-circle" size={18} color="#10b981" />
-                    <Text style={styles.documentTitle}>General Information</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      const path = `/(mock)/trip/${tripId}/location/${locationId || id}/edit-info` as any;
-                      router.push({
-                        pathname: path,
-                        params: {
-                          locationId: locationId || id,
-                          tripId,
-                          name,
-                          lat,
-                          lng,
-                          description,
-                          photoName,
-                          colorIndex,
-                        },
-                      });
-                    }}
-                    style={styles.editButton}
-                  >
-                    <Ionicons name="pencil" size={16} color="#10b981" />
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-                {locationDocument ? (
-                  <ProseMirrorNativeRenderer content={locationDocument} />
-                ) : (
-                  <Text style={styles.emptyText}>No general information yet. Tap Edit to add some.</Text>
                 )}
               </View>
             )}
