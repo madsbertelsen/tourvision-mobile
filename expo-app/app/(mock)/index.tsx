@@ -181,6 +181,19 @@ export default function TripListScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Generate with AI Button */}
+      <View style={styles.aiButtonSection}>
+        <TouchableOpacity
+          style={styles.aiButton}
+          onPress={() => router.push('/(mock)/generate-trip')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="sparkles" size={24} color="#fff" />
+          <Text style={styles.aiButtonText}>Generate Trip with AI</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
       {/* Trip List */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {trips.length === 0 ? (
@@ -305,6 +318,32 @@ const styles = StyleSheet.create({
   submitButtonDisabled: {
     backgroundColor: '#9CA3AF',
     opacity: 0.5,
+  },
+  aiButtonSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  aiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
   scrollView: {
     flex: 1,
