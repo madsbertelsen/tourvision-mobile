@@ -37,7 +37,7 @@ export default function TripLayout() {
 
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(true);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
   const documentRef = useRef<any>(null);
