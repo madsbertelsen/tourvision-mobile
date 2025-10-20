@@ -181,7 +181,7 @@ function MapViewNative({
         ref={mapRef}
         style={[styles.map, { backgroundColor: '#ffffff' }]}
         onDidFinishLoadingMap={() => setMapLoaded(true)}
-        styleURL="mapbox://styles/madsbertelsen/cmgz1s4y7005r01sbdkexgi5j"
+        styleURL="mapbox://styles/mapbox/light-v11"
         logoEnabled={true}
         compassEnabled={true}
         rotateEnabled={true}

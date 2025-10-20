@@ -1830,7 +1830,7 @@ export default function MapViewSimple({
     >
       <MapLibreMap
         ref={deckRef}
-        mapStyle="mapbox://styles/madsbertelsen/cmgz1s4y7005r01sbdkexgi5j"
+        mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken={mapboxToken}
         projection={{ type: 'globe' }}
         {...viewState}
