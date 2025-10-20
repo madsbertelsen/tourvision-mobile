@@ -191,13 +191,34 @@ export default function VideoPlaybackScreen() {
       const fullText = extractTextContent(block.content);
       setShowCursor(true);
 
-      for (let charIndex = 0; charIndex <= fullText.length; charIndex++) {
-        setTypedText(fullText.substring(0, charIndex));
-        await new Promise(resolve => setTimeout(resolve, 30)); // 30ms per character
-      }
+      const typeStartTime = performance.now();
+      const charDelay = 30; // 30ms per character
+      const updateInterval = 50; // Update every 50ms instead of every frame
+      let lastUpdateTime = 0;
 
-      // Hide cursor after typing complete
-      setShowCursor(false);
+      const typeCharacter = () => {
+        const now = performance.now();
+        const elapsed = now - typeStartTime;
+        const charIndex = Math.min(Math.floor(elapsed / charDelay), fullText.length);
+
+        // Only update state every 50ms to reduce overhead
+        if (now - lastUpdateTime >= updateInterval || charIndex >= fullText.length) {
+          setTypedText(fullText.substring(0, charIndex));
+          lastUpdateTime = now;
+        }
+
+        if (charIndex < fullText.length) {
+          requestAnimationFrame(typeCharacter);
+        } else {
+          setShowCursor(false);
+        }
+      };
+
+      requestAnimationFrame(typeCharacter);
+
+      // Wait for typing to complete
+      const typingDuration = fullText.length * charDelay;
+      await new Promise(resolve => setTimeout(resolve, typingDuration));
 
       // Wait to show the block (faster for non-geo-mark blocks)
       const delay = geoMarkInBlock ? 2000 : 1000;

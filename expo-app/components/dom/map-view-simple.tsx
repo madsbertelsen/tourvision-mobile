@@ -1076,11 +1076,6 @@ export default function MapViewSimple({
         bearing: 0,
       }));
 
-      // Debug log every 10 frames
-      if (Math.floor(progress * 100) % 10 === 0) {
-        console.log(`[Animation] Progress: ${(progress * 100).toFixed(0)}%, pos: ${newLatitude.toFixed(4)}, ${newLongitude.toFixed(4)}, zoom: ${newZoom.toFixed(2)}`);
-      }
-
       // Continue animation if not complete
       if (progress < 1) {
         animationRef.current.frameId = requestAnimationFrame(animate);
@@ -1093,12 +1088,6 @@ export default function MapViewSimple({
         // Clear animating flag to show edge labels again
         setIsAnimating(false);
         isAnimatingRef.current = false; // Mark animation complete
-
-        console.log('Animation complete. New location:', {
-          lng: newLongitude.toFixed(2),
-          lat: newLatitude.toFixed(2),
-          zoom: newZoom.toFixed(1)
-        });
       }
     };
 

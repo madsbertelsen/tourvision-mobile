@@ -101,10 +101,6 @@ export function MapViewSimpleWrapper({
     ? { width: '100%', height: '100%' }
     : { width: '100%', height: typeof height === 'number' ? `${height}px` : '400px' };
 
-  console.log('[MapViewSimpleWrapper] Height prop:', height);
-  console.log('[MapViewSimpleWrapper] DOM style:', domStyle);
-  console.log('[MapViewSimpleWrapper] Platform:', Platform.OS);
-
   // Use native map on iOS/Android, DOM component on web
   const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
 
