@@ -301,16 +301,24 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             webViewRef.current.injectJavaScript(`
               (function() {
                 console.log('[WebView] Focusing editor...');
+                console.log('[WebView] window.editorView exists?', !!window.editorView);
+                console.log('[WebView] window.PM exists?', !!window.PM);
+
                 if (window.editorView) {
                   window.editorView.focus();
+
                   // Move cursor to end of document
-                  const tr = window.editorView.state.tr.setSelection(
-                    window.PM.state.TextSelection.atEnd(window.editorView.state.doc)
+                  const { state } = window.editorView;
+                  const endPos = state.doc.content.size;
+                  const tr = state.tr.setSelection(
+                    window.PM.state.Selection.atEnd(state.doc)
                   );
                   window.editorView.dispatch(tr);
-                  console.log('[WebView] Editor focused and cursor at end');
+
+                  console.log('[WebView] Editor focused, cursor at position:', endPos);
                 } else {
-                  console.warn('[WebView] editorView not found');
+                  console.error('[WebView] editorView not found on window');
+                  console.log('[WebView] Available on window:', Object.keys(window).filter(k => k.includes('edit') || k.includes('PM')));
                 }
               })();
               true;
@@ -319,20 +327,32 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
         },
         typeCharacter: (char: string) => {
           if (webViewRef.current) {
-            const escapedChar = char.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+            const escapedChar = char.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/"/g, '\\"');
             webViewRef.current.injectJavaScript(`
               (function() {
-                if (window.editorView) {
-                  const { state } = window.editorView;
-                  const { $from } = state.selection;
+                console.log('[WebView] typeCharacter called for: "${escapedChar}"');
+
+                if (!window.editorView) {
+                  console.error('[WebView] editorView not found for typing');
+                  return;
+                }
+
+                try {
+                  const { state, dispatch } = window.editorView;
+                  const { selection } = state;
+                  const pos = selection.$from.pos;
+
+                  console.log('[WebView] Current cursor position:', pos);
+                  console.log('[WebView] Document size:', state.doc.content.size);
 
                   // Insert character at cursor position
-                  const tr = state.tr.insertText('${escapedChar}', $from.pos);
-                  window.editorView.dispatch(tr);
+                  const tr = state.tr.insertText('${escapedChar}', pos);
+                  dispatch(tr);
 
-                  console.log('[WebView] Typed character: "${escapedChar}"');
-                } else {
-                  console.warn('[WebView] editorView not found for typing');
+                  console.log('[WebView] Successfully typed: "${escapedChar}"');
+                } catch (error) {
+                  console.error('[WebView] Error typing character:', error);
+                  console.error('[WebView] Error stack:', error.stack);
                 }
               })();
               true;
@@ -343,24 +363,35 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           if (webViewRef.current) {
             webViewRef.current.injectJavaScript(`
               (function() {
-                if (window.editorView) {
+                console.log('[WebView] insertParagraph called');
+
+                if (!window.editorView) {
+                  console.error('[WebView] editorView not found for insertParagraph');
+                  return;
+                }
+
+                try {
                   const { state, dispatch } = window.editorView;
                   const { schema, tr, selection } = state;
+                  const pos = selection.to;
+
+                  console.log('[WebView] Inserting paragraph at position:', pos);
 
                   // Insert a new paragraph node
                   const paragraph = schema.nodes.paragraph.create();
-                  const transaction = tr.insert(selection.to, paragraph);
+                  const transaction = tr.insert(pos, paragraph);
 
                   // Move cursor into new paragraph
-                  const newPos = selection.to + 1;
+                  const newPos = pos + 1;
                   transaction.setSelection(
-                    window.PM.state.TextSelection.create(transaction.doc, newPos)
+                    window.PM.state.Selection.near(transaction.doc.resolve(newPos))
                   );
 
                   dispatch(transaction);
-                  console.log('[WebView] Inserted new paragraph');
-                } else {
-                  console.warn('[WebView] editorView not found');
+                  console.log('[WebView] Successfully inserted paragraph, cursor at:', newPos);
+                } catch (error) {
+                  console.error('[WebView] Error inserting paragraph:', error);
+                  console.error('[WebView] Error stack:', error.stack);
                 }
               })();
               true;
