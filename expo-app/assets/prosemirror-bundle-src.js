@@ -17,7 +17,6 @@ const mySchema = new Schema({
       inline: true,
       group: 'inline',
       content: 'text*',
-      atom: true,
       attrs: {
         geoId: { default: null },
         placeName: { default: '' },
@@ -53,8 +52,7 @@ const mySchema = new Schema({
           'data-lat': node.attrs.lat,
           'data-lng': node.attrs.lng,
           'data-color-index': node.attrs.colorIndex,
-          'data-coord-source': node.attrs.coordSource,
-          style: 'background-color: rgba(59, 130, 246, 0.2); padding: 2px 4px; border-radius: 3px; cursor: pointer;'
+          'data-coord-source': node.attrs.coordSource
         }, 0];
       }
     }),
