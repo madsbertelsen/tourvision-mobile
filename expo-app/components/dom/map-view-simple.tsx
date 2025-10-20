@@ -1830,7 +1830,8 @@ export default function MapViewSimple({
     >
       <MapLibreMap
         ref={deckRef}
-        mapStyle="https://demotiles.maplibre.org/style.json"
+        mapStyle="mapbox://styles/madsbertelsen/cmgz1s4y7005r01sbdkexgi5j"
+        mapboxAccessToken={mapboxToken}
         projection={{ type: 'globe' }}
         {...viewState}
         onLoad={() => {

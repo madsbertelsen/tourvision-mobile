@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
 import type { RouteWithMetadata } from '@/contexts/MockContext';
+import Mapbox from '@rnmapbox/maps';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 // Set Mapbox access token
+  Mapbox.setAccessToken('pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw');
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 if (MAPBOX_TOKEN) {
-  Mapbox.setAccessToken(MAPBOX_TOKEN);
+  Mapbox.setAccessToken('pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw');
+ // Mapbox.setAccessToken(MAPBOX_TOKEN);
 }
 
 interface MapViewNativeProps {
@@ -179,13 +181,12 @@ function MapViewNative({
         ref={mapRef}
         style={[styles.map, { backgroundColor: '#ffffff' }]}
         onDidFinishLoadingMap={() => setMapLoaded(true)}
-        styleURL="https://demotiles.maplibre.org/style.json"
-        logoEnabled={false}
+        styleURL="mapbox://styles/madsbertelsen/cmgz1s4y7005r01sbdkexgi5j"
+        logoEnabled={true}
         compassEnabled={true}
         rotateEnabled={true}
         pitchEnabled={true}
-        attributionEnabled={false}
-        projection="globe"
+        attributionEnabled={true}
       >
         <Mapbox.Camera
           ref={cameraRef}
