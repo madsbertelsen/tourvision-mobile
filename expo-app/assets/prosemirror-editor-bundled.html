@@ -701,10 +701,16 @@
 
                 case 'insertParagraph':
                   console.log('[WebView] Inserting paragraph');
-                  // Split the current block to create a new paragraph
-                  const splitTr = state.tr.split(state.selection.to);
-                  dispatch(splitTr);
-                  console.log('[WebView] Paragraph split/inserted');
+                  // Split the current block and reset to paragraph
+                  let paraTr = state.tr.split(state.selection.to);
+                  // After split, set the new block to paragraph (not heading)
+                  const newPos = paraTr.selection.$from.pos;
+                  const $newPos = paraTr.doc.resolve(newPos);
+                  const newBlockStart = $newPos.before($newPos.depth);
+                  const newBlockEnd = $newPos.after($newPos.depth);
+                  paraTr = paraTr.setBlockType(newBlockStart, newBlockEnd, schema.nodes.paragraph);
+                  dispatch(paraTr);
+                  console.log('[WebView] Paragraph split/inserted and reset to paragraph type');
                   break;
 
                 default:
