@@ -71,14 +71,35 @@ function MapViewNative({
   const cameraRef = useRef<Mapbox.Camera>(null);
   const mapRef = useRef<Mapbox.MapView>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const lastFocusedIdRef = useRef<string | null>(null); // Track last focused location ID
 
   // Convert lat/lng to [lng, lat] for Mapbox
   const centerCoordinate = [center.lng, center.lat];
 
   // Handle focused location changes with animation
   useEffect(() => {
+    const focusedId = focusedLocation?.id || null;
+
+    // Only trigger if the ID actually changed (prevents spam from object reference changes)
+    if (focusedId === lastFocusedIdRef.current) {
+      return;
+    }
+
+    console.log('[MapViewNative] Focus effect triggered:', {
+      focusedLocation: focusedLocation?.name,
+      focusedId,
+      lastFocusedId: lastFocusedIdRef.current,
+      mapLoaded,
+      hasCameraRef: !!cameraRef.current,
+    });
+
+    lastFocusedIdRef.current = focusedId;
+
     if (focusedLocation && mapLoaded && cameraRef.current) {
       const targetCoordinate = [focusedLocation.lng, focusedLocation.lat];
+      const animationStartTime = performance.now();
+
+      console.log(`[MapViewNative] Starting camera animation to ${focusedLocation.name} at ${targetCoordinate}`);
 
       // Animate to the focused location
       cameraRef.current.setCamera({
@@ -87,6 +108,12 @@ function MapViewNative({
         animationDuration: 2000,
         animationMode: 'easeTo',
       });
+
+      // Log when animation should complete
+      setTimeout(() => {
+        const elapsed = performance.now() - animationStartTime;
+        console.log(`[MapViewNative] Camera animation should be complete. Actual time: ${elapsed.toFixed(0)}ms (expected: 2000ms)`);
+      }, 2100);
     }
   }, [focusedLocation, mapLoaded]);
 

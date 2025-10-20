@@ -37,6 +37,7 @@ export default function VideoPlaybackScreen() {
   const [parsedDoc, setParsedDoc] = useState<any>(null);
   const [typedText, setTypedText] = useState<string>('');
   const [showCursor, setShowCursor] = useState<boolean>(true);
+  const currentFocusedLocationRef = useRef<string | null>(null); // Track current focused location ID
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current; // Start off-screen left
@@ -140,8 +141,19 @@ export default function VideoPlaybackScreen() {
       if (geoMarkInBlock) {
         const location = locations.find(loc => loc.geoId === geoMarkInBlock.geoId);
         if (location) {
-          setFocusedLocation(location);
+          // Only update if location ID has changed (prevents camera animation spam)
+          if (location.geoId !== currentFocusedLocationRef.current) {
+            console.log(`[VideoPlayback] Focusing on location: ${location.placeName} (${location.lat}, ${location.lng})`);
+            currentFocusedLocationRef.current = location.geoId;
+            setFocusedLocation(location);
+          } else {
+            console.log(`[VideoPlayback] Already focused on ${location.placeName}, skipping setFocusedLocation`);
+          }
+        } else {
+          console.log(`[VideoPlayback] Geo-mark found but location not in list: ${geoMarkInBlock.geoId}`);
         }
+      } else {
+        console.log(`[VideoPlayback] Block ${i} has no geo-mark`);
       }
 
       // Check if current block is a heading
@@ -187,38 +199,35 @@ export default function VideoPlaybackScreen() {
         });
       });
 
-      // Typewriter effect - type out the text character by character
+      // Typewriter effect - use simple interval-based updates to minimize overhead
       const fullText = extractTextContent(block.content);
       setShowCursor(true);
+      setTypedText(''); // Start empty
 
+      console.log(`[Typewriter] Starting for block ${i}, text length: ${fullText.length}`);
+
+      // Instead of requestAnimationFrame, use setInterval for less frequent updates
+      const updateInterval = 100; // Update every 100ms (10 updates/sec)
+      const charsPerUpdate = 3; // Type 3 characters at once
+      let currentIndex = 0;
+      let updateCount = 0;
       const typeStartTime = performance.now();
-      const charDelay = 30; // 30ms per character
-      const updateInterval = 50; // Update every 50ms instead of every frame
-      let lastUpdateTime = 0;
 
-      const typeCharacter = () => {
-        const now = performance.now();
-        const elapsed = now - typeStartTime;
-        const charIndex = Math.min(Math.floor(elapsed / charDelay), fullText.length);
+      await new Promise<void>((resolve) => {
+        const intervalId = setInterval(() => {
+          currentIndex = Math.min(currentIndex + charsPerUpdate, fullText.length);
+          setTypedText(fullText.substring(0, currentIndex));
+          updateCount++;
 
-        // Only update state every 50ms to reduce overhead
-        if (now - lastUpdateTime >= updateInterval || charIndex >= fullText.length) {
-          setTypedText(fullText.substring(0, charIndex));
-          lastUpdateTime = now;
-        }
-
-        if (charIndex < fullText.length) {
-          requestAnimationFrame(typeCharacter);
-        } else {
-          setShowCursor(false);
-        }
-      };
-
-      requestAnimationFrame(typeCharacter);
-
-      // Wait for typing to complete
-      const typingDuration = fullText.length * charDelay;
-      await new Promise(resolve => setTimeout(resolve, typingDuration));
+          if (currentIndex >= fullText.length) {
+            const elapsed = performance.now() - typeStartTime;
+            console.log(`[Typewriter] Complete - ${updateCount} updates in ${elapsed.toFixed(0)}ms (avg ${(elapsed / updateCount).toFixed(1)}ms per update)`);
+            clearInterval(intervalId);
+            setShowCursor(false);
+            resolve();
+          }
+        }, updateInterval);
+      });
 
       // Wait to show the block (faster for non-geo-mark blocks)
       const delay = geoMarkInBlock ? 2000 : 1000;
@@ -228,6 +237,7 @@ export default function VideoPlaybackScreen() {
     // Animation complete
     setAnimationProgress(100);
     setFocusedLocation(null);
+    currentFocusedLocationRef.current = null; // Clear the ref
   };
 
   // Helper to find geo-mark in a block node
@@ -251,91 +261,118 @@ export default function VideoPlaybackScreen() {
     router.back();
   };
 
+  // Color palette for geo-marks (same as markers)
+  const GEO_MARK_COLORS = [
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899',
+    '#06B6D4', '#84CC16', '#F97316', '#6366F1', '#14B8A6', '#A855F7',
+    '#FDE047', '#E879F9', '#FB923C', '#C084FC',
+  ];
+
+  // Render inline content (text + geo-marks) with proper styling
+  const renderInlineContent = (content: any[], baseStyle: any, charsToShow: number): React.ReactNode[] => {
+    const elements: React.ReactNode[] = [];
+    let charsSoFar = 0;
+
+    for (let i = 0; i < content.length; i++) {
+      const node = content[i];
+
+      if (charsSoFar >= charsToShow) break;
+
+      if (node.type === 'text') {
+        const text = node.text || '';
+        const availableChars = charsToShow - charsSoFar;
+        const displayText = text.substring(0, availableChars);
+
+        elements.push(
+          <Text key={i} style={baseStyle}>
+            {displayText}
+          </Text>
+        );
+
+        charsSoFar += displayText.length;
+      } else if (node.type === 'geoMark') {
+        const geoText = node.content?.map((child: any) => child.text || '').join('') || node.attrs?.placeName || '';
+        const availableChars = charsToShow - charsSoFar;
+        const displayText = geoText.substring(0, availableChars);
+
+        if (displayText.length > 0) {
+          const colorIndex = node.attrs?.colorIndex || 0;
+          const circleColor = GEO_MARK_COLORS[colorIndex % GEO_MARK_COLORS.length];
+
+          elements.push(
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+              <View
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                  paddingHorizontal: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: circleColor,
+                  }}
+                />
+              </View>
+              <Text style={baseStyle}>
+                {displayText}
+              </Text>
+            </View>
+          );
+        }
+
+        charsSoFar += displayText.length;
+      }
+    }
+
+    return elements;
+  };
+
   // Simple renderer for video overlay - stacked lines with individual backgrounds and typewriter effect
   const renderBlock = (block: BlockNode) => {
     if (!block) return null;
 
-    const displayText = typedText; // Use the typed text state
+    const displayLength = typedText.length; // How many characters to show
 
     switch (block.type) {
       case 'heading': {
         const level = block.attrs?.level || 1;
         const headingStyle = level === 1 ? styles.videoH1 : level === 2 ? styles.videoH2 : styles.videoH3;
 
-        // Split into words and group into lines
-        const lines = splitIntoLines(displayText, level === 1 ? 30 : level === 2 ? 35 : 40);
-
         return (
           <View style={styles.textLinesContainer}>
-            {lines.map((line, i) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={headingStyle}>
-                  {line}
-                </Text>
-                {i === lines.length - 1 && showCursor && (
-                  <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
-                    |
-                  </Animated.Text>
-                )}
-              </View>
-            ))}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              {renderInlineContent(block.content || [], headingStyle, displayLength)}
+              {showCursor && (
+                <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
+                  |
+                </Animated.Text>
+              )}
+            </View>
           </View>
         );
       }
       case 'paragraph': {
-        // Split into lines (approximately 40-50 characters per line)
-        const lines = splitIntoLines(displayText, 45);
-
         return (
           <View style={styles.textLinesContainer}>
-            {lines.map((line, i) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.videoParagraph}>
-                  {line}
-                </Text>
-                {i === lines.length - 1 && showCursor && (
-                  <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
-                    |
-                  </Animated.Text>
-                )}
-              </View>
-            ))}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              {renderInlineContent(block.content || [], styles.videoParagraph, displayLength)}
+              {showCursor && (
+                <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
+                  |
+                </Animated.Text>
+              )}
+            </View>
           </View>
         );
       }
       default:
         return null;
     }
-  };
-
-  // Split text into lines based on character count with better balance
-  const splitIntoLines = (text: string, maxChars: number): string[] => {
-    const words = text.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-
-    words.forEach((word, index) => {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const nextWord = words[index + 1];
-      const wouldBeShortLine = nextWord && nextWord.length < 10; // Avoid orphan words
-
-      if (testLine.length > maxChars && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else if (testLine.length > maxChars * 0.8 && wouldBeShortLine && currentLine) {
-        // If we're near the limit and next word would be orphaned, break here
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    });
-
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    return lines;
   };
 
   // Extract plain text from block content
@@ -501,39 +538,51 @@ const styles = StyleSheet.create({
     fontSize: PROSE_STYLES.h1.fontSize,
     fontWeight: PROSE_STYLES.h1.fontWeight as any,
     color: '#ffffff',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 4,
     overflow: 'hidden',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   videoH2: {
     fontSize: PROSE_STYLES.h2.fontSize,
     fontWeight: PROSE_STYLES.h2.fontWeight as any,
     color: '#ffffff',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginBottom: 4,
     overflow: 'hidden',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   videoH3: {
     fontSize: PROSE_STYLES.h3.fontSize,
     fontWeight: PROSE_STYLES.h3.fontWeight as any,
     color: '#ffffff',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginBottom: 4,
     overflow: 'hidden',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   videoParagraph: {
     fontSize: PROSE_STYLES.paragraph.fontSize,
     lineHeight: PROSE_STYLES.paragraph.lineHeight,
     color: '#ffffff',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     overflow: 'hidden',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
 });
