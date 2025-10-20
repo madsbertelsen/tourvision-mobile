@@ -34,9 +34,10 @@ export default function GenerateTripScreen() {
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const typingAbortRef = useRef<AbortController | null>(null);
+  const [localDoc, setLocalDoc] = useState<any>(null); // Track document during typing
 
   // Sync streaming document to local state
-  const currentDoc = streamState.document;
+  const currentDoc = localDoc || streamState.document;
   const isGenerating = streamState.isStreaming;
 
   // Auto-scroll to bottom when document updates during generation
@@ -142,11 +143,11 @@ export default function GenerateTripScreen() {
         await sleep(200);
 
         // Manually trigger save by extracting title and saving
-        if (currentDoc) {
+        if (localDoc) {
           try {
             // Extract title from first heading or use prompt
             let title = 'AI Generated Trip';
-            const firstHeading = currentDoc.content?.find(
+            const firstHeading = localDoc.content?.find(
               (node: any) => node.type === 'heading' && node.attrs?.level === 1
             );
             if (firstHeading?.content?.[0]?.text) {
@@ -157,7 +158,7 @@ export default function GenerateTripScreen() {
             const newTrip = await createTrip(title);
             await saveTrip({
               ...newTrip,
-              document: currentDoc,
+              document: localDoc,
             });
             console.log('[GenerateTrip] Trip saved:', newTrip.id);
 
@@ -192,15 +193,15 @@ export default function GenerateTripScreen() {
     };
 
     processTypingInstructions();
-  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping, currentDoc, router]);
+  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping, localDoc, router]);
 
   // Helper function for delays
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const handleDocumentChange = useCallback((doc: any) => {
-    // Allow document changes during typing (needed to capture the built-up document)
-    // Just prevent manual user edits during generation
-    console.log('[GenerateTrip] Document changed');
+    // Update local document as it builds up during typing
+    console.log('[GenerateTrip] Document changed, updating local state');
+    setLocalDoc(doc);
   }, []);
 
   const handleToolbarStateChange = useCallback((state: any) => {
@@ -211,6 +212,9 @@ export default function GenerateTripScreen() {
     if (!prompt.trim()) {
       return;
     }
+
+    // Reset local document state
+    setLocalDoc(null);
 
     console.log('[GenerateTrip] Starting generation with prompt:', prompt);
     await startGeneration(prompt);
