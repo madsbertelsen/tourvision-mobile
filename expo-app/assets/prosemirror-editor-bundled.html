@@ -561,8 +561,16 @@
                 case 'setHeading':
                   const level = data.params?.level || 1;
                   console.log('[WebView] Setting heading level:', level);
-                  const headingTr = state.tr.setBlockType(from, to, schema.nodes.heading, { level });
+                  // Get the current cursor position
+                  const cursorPos = state.selection.$from.pos;
+                  // Find the bounds of the current block (paragraph)
+                  const $pos = state.doc.resolve(cursorPos);
+                  const blockStart = $pos.before($pos.depth);
+                  const blockEnd = $pos.after($pos.depth);
+                  // Only set heading for the current block
+                  const headingTr = state.tr.setBlockType(blockStart, blockEnd, schema.nodes.heading, { level });
                   dispatch(headingTr);
+                  console.log('[WebView] Set heading from', blockStart, 'to', blockEnd);
                   editorView.focus();
                   break;
 
@@ -686,22 +694,17 @@
                   console.log('[WebView] Inserting text:', data.params?.text);
                   // Insert text at current cursor position
                   const text = data.params?.text || '';
-                  const cursorPos = selection.$from.pos;
-                  const insertTextTr = state.tr.insertText(text, cursorPos);
+                  const insertTextTr = state.tr.insertText(text);
                   dispatch(insertTextTr);
-                  console.log('[WebView] Text inserted');
+                  console.log('[WebView] Text inserted at pos:', state.selection.$from.pos);
                   break;
 
                 case 'insertParagraph':
                   console.log('[WebView] Inserting paragraph');
-                  // Insert a new paragraph at cursor position
-                  const paragraph = schema.nodes.paragraph.create();
-                  const insertParaTr = state.tr.insert(selection.to, paragraph);
-                  // Move cursor into new paragraph
-                  const newParaPos = selection.to + 1;
-                  insertParaTr.setSelection(window.PM.state.Selection.near(insertParaTr.doc.resolve(newParaPos)));
-                  dispatch(insertParaTr);
-                  console.log('[WebView] Paragraph inserted');
+                  // Split the current block to create a new paragraph
+                  const splitTr = state.tr.split(state.selection.to);
+                  dispatch(splitTr);
+                  console.log('[WebView] Paragraph split/inserted');
                   break;
 
                 default:
