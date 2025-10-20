@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { MapViewSimpleWrapper } from '@/components/MapViewSimpleWrapper';
-import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
+import { PROSE_STYLES } from '@/styles/prose-styles';
 
 interface Location {
   geoId: string;
@@ -194,6 +194,48 @@ export default function VideoPlaybackScreen() {
     router.back();
   };
 
+  // Simple renderer for video overlay - no containers, just styled text
+  const renderBlock = (block: BlockNode) => {
+    if (!block) return null;
+
+    switch (block.type) {
+      case 'heading': {
+        const level = block.attrs?.level || 1;
+        const textContent = extractTextContent(block.content);
+        const headingStyle = level === 1 ? styles.videoH1 : level === 2 ? styles.videoH2 : styles.videoH3;
+        return (
+          <Text style={headingStyle}>
+            {textContent}
+          </Text>
+        );
+      }
+      case 'paragraph': {
+        const textContent = extractTextContent(block.content);
+        return (
+          <Text style={styles.videoParagraph}>
+            {textContent}
+          </Text>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
+  // Extract plain text from block content
+  const extractTextContent = (content?: any[]): string => {
+    if (!content) return '';
+    return content
+      .map((node: any) => {
+        if (node.type === 'text') return node.text || '';
+        if (node.type === 'geoMark') {
+          return node.content?.map((child: any) => child.text || '').join('') || node.attrs?.placeName || '';
+        }
+        return '';
+      })
+      .join('');
+  };
+
   // Calculate center point of all locations
   const getMapCenter = () => {
     if (locations.length === 0) return null;
@@ -253,13 +295,7 @@ export default function VideoPlaybackScreen() {
             transform: [{ translateX: slideAnim }]
           }
         ]}>
-          <ProseMirrorNativeRenderer
-            content={{
-              type: 'doc',
-              content: [allBlocks[currentBlockIndex]]
-            }}
-            tripId={tripId as string}
-          />
+          {renderBlock(allBlocks[currentBlockIndex])}
         </Animated.View>
       )}
     </View>
@@ -332,6 +368,41 @@ const styles = StyleSheet.create({
     bottom: 120,
     left: 24,
     right: 24,
-    padding: 20,
+  },
+  // Video-specific text styles - no backgrounds, just shadows for readability
+  videoH1: {
+    fontSize: PROSE_STYLES.h1.fontSize,
+    fontWeight: PROSE_STYLES.h1.fontWeight as any,
+    color: '#ffffff',
+    marginBottom: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  videoH2: {
+    fontSize: PROSE_STYLES.h2.fontSize,
+    fontWeight: PROSE_STYLES.h2.fontWeight as any,
+    color: '#ffffff',
+    marginBottom: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  videoH3: {
+    fontSize: PROSE_STYLES.h3.fontSize,
+    fontWeight: PROSE_STYLES.h3.fontWeight as any,
+    color: '#ffffff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  videoParagraph: {
+    fontSize: PROSE_STYLES.paragraph.fontSize,
+    lineHeight: PROSE_STYLES.paragraph.lineHeight,
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });
