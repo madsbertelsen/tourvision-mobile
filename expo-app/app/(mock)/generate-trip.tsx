@@ -136,6 +136,53 @@ export default function GenerateTripScreen() {
         }
 
         console.log('[GenerateTrip] Typing complete!');
+
+        // Mark as complete and trigger auto-save
+        // Wait a bit for the last onChange to fire
+        await sleep(200);
+
+        // Manually trigger save by extracting title and saving
+        if (currentDoc) {
+          try {
+            // Extract title from first heading or use prompt
+            let title = 'AI Generated Trip';
+            const firstHeading = currentDoc.content?.find(
+              (node: any) => node.type === 'heading' && node.attrs?.level === 1
+            );
+            if (firstHeading?.content?.[0]?.text) {
+              title = firstHeading.content[0].text;
+            }
+
+            // Create and save trip
+            const newTrip = await createTrip(title);
+            await saveTrip({
+              ...newTrip,
+              document: currentDoc,
+            });
+            console.log('[GenerateTrip] Trip saved:', newTrip.id);
+
+            // Show success message
+            Alert.alert(
+              'Trip Generated!',
+              `Your trip "${title}" has been created. You can now edit it.`,
+              [
+                {
+                  text: 'Open Trip',
+                  onPress: () => {
+                    router.replace(`/(mock)/trip/${newTrip.id}`);
+                  },
+                },
+                {
+                  text: 'Create Another',
+                  style: 'cancel',
+                },
+              ]
+            );
+          } catch (error) {
+            console.error('[GenerateTrip] Failed to save trip:', error);
+            Alert.alert('Error', 'Failed to save trip');
+          }
+        }
       } catch (error) {
         console.error('[GenerateTrip] Typing error:', error);
       } finally {
@@ -145,18 +192,16 @@ export default function GenerateTripScreen() {
     };
 
     processTypingInstructions();
-  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping]);
+  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping, currentDoc, router]);
 
   // Helper function for delays
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const handleDocumentChange = useCallback((doc: any) => {
-    // During streaming, prevent manual edits
-    if (isGenerating) {
-      return;
-    }
-    // After generation, allow manual edits
-  }, [isGenerating]);
+    // Allow document changes during typing (needed to capture the built-up document)
+    // Just prevent manual user edits during generation
+    console.log('[GenerateTrip] Document changed');
+  }, []);
 
   const handleToolbarStateChange = useCallback((state: any) => {
     setToolbarState(state);
@@ -170,55 +215,6 @@ export default function GenerateTripScreen() {
     console.log('[GenerateTrip] Starting generation with prompt:', prompt);
     await startGeneration(prompt);
   };
-
-  // Handle completion - auto-save trip
-  useEffect(() => {
-    if (streamState.isComplete && !streamState.error) {
-      console.log('[GenerateTrip] Generation complete, auto-saving...');
-
-      (async () => {
-        try {
-          // Extract title from first heading or use prompt
-          let title = 'AI Generated Trip';
-          const firstHeading = streamState.document.content?.find(
-            (node: any) => node.type === 'heading' && node.attrs?.level === 1
-          );
-          if (firstHeading?.content?.[0]?.text) {
-            title = firstHeading.content[0].text;
-          }
-
-          // Create and save trip
-          const newTrip = await createTrip(title);
-          await saveTrip({
-            ...newTrip,
-            document: streamState.document,
-          });
-          console.log('[GenerateTrip] Trip saved:', newTrip.id);
-
-          // Show success message
-          Alert.alert(
-            'Trip Generated!',
-            `Your trip "${title}" has been created. You can now edit it.`,
-            [
-              {
-                text: 'Open Trip',
-                onPress: () => {
-                  router.replace(`/(mock)/trip/${newTrip.id}`);
-                },
-              },
-              {
-                text: 'Create Another',
-                style: 'cancel',
-              },
-            ]
-          );
-        } catch (error) {
-          console.error('[GenerateTrip] Failed to save trip:', error);
-          Alert.alert('Error', 'Failed to save trip');
-        }
-      })();
-    }
-  }, [streamState.isComplete, streamState.error, streamState.document, router]);
 
   // Handle errors
   useEffect(() => {

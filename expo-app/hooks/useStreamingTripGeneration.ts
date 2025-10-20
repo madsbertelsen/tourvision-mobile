@@ -258,15 +258,11 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
 
     console.log(`[StreamingHook] Generated ${instructions.length} typing instructions`);
 
-    // Also parse to document for final state
-    const pmDoc = htmlToProsemirror(MOCK_TRIP_HTML);
-
-    // Set the instructions and complete state
+    // Set the instructions but keep document empty - it will be built by typing
     setState(prev => ({
       ...prev,
       isStreaming: false,
-      isComplete: true,
-      document: pmDoc,
+      isComplete: false, // Not complete until typing finishes
       typingInstructions: instructions,
     }));
 
