@@ -206,9 +206,48 @@
 
       console.log('[WebView] Creating editor view...');
 
+      // Color palette for geo-marks
+      const COLORS = [
+        '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+        '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+      ];
+
+      // NodeView for geo-marks
+      function createGeoMarkNodeView(node) {
+        const span = document.createElement('span');
+        span.className = 'geo-mark';
+
+        // Apply background color based on colorIndex
+        const colorIndex = node.attrs.colorIndex || 0;
+        const color = COLORS[colorIndex % COLORS.length];
+        span.style.backgroundColor = color + '33'; // 33 = 20% opacity
+        span.style.padding = '2px 4px';
+        span.style.borderRadius = '3px';
+        span.style.cursor = 'pointer';
+        span.style.transition = 'all 0.2s ease';
+
+        // Store attributes as data attributes for click handling
+        if (node.attrs.geoId) span.setAttribute('data-geo-id', node.attrs.geoId);
+        if (node.attrs.placeName) span.setAttribute('data-place-name', node.attrs.placeName);
+        if (node.attrs.lat) span.setAttribute('data-lat', node.attrs.lat);
+        if (node.attrs.lng) span.setAttribute('data-lng', node.attrs.lng);
+        if (node.attrs.colorIndex !== undefined) span.setAttribute('data-color-index', node.attrs.colorIndex);
+        if (node.attrs.coordSource) span.setAttribute('data-coord-source', node.attrs.coordSource);
+
+        console.log('[WebView] Created geo-mark NodeView with color:', color, 'for:', node.attrs.placeName);
+
+        return {
+          dom: span,
+          contentDOM: span
+        };
+      }
+
       // Create editor view
       editorView = new EditorView(document.querySelector('#editor-container'), {
         state: state,
+        nodeViews: {
+          geoMark: createGeoMarkNodeView
+        },
         dispatchTransaction(transaction) {
           const oldState = editorView.state;
           const newState = oldState.apply(transaction);
