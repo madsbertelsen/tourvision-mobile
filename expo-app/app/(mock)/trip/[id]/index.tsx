@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingView, Alert, ScrollView, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -48,6 +48,23 @@ export default function TripDocumentView() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const typingAbortRef = useRef<AbortController | null>(null);
+
+  // Track keyboard visibility
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const keyboardDidShow = Keyboard.addListener('keyboardWillShow', () => {
+      setKeyboardVisible(true);
+    });
+    const keyboardDidHide = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
+  }, []);
   const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
@@ -401,13 +418,6 @@ Please generate replacement content that addresses the user's request. Only retu
         )}
       </View>
 
-      {/* Info Banner */}
-      <View style={styles.infoBanner}>
-        <Text style={styles.infoText}>
-          Platform: {Platform.OS} | Edit: {isEditMode ? 'ON' : 'OFF'} |
-          Selection: {selectionEmpty ? 'Empty' : 'Has text'}
-        </Text>
-      </View>
 
       {/* Editor - Keep WebView mounted but hidden in read mode */}
       <View style={styles.editorWrapper}>
@@ -443,7 +453,7 @@ Please generate replacement content that addresses the user's request. Only retu
         >
           <ScrollView
             horizontal
-            style={styles.toolbar}
+            style={[styles.toolbar, !keyboardVisible && { paddingBottom: insets.bottom }]}
             contentContainerStyle={styles.toolbarContent}
             showsHorizontalScrollIndicator={false}
             showsVerticalScrollIndicator={false}
@@ -519,6 +529,22 @@ Please generate replacement content that addresses the user's request. Only retu
             >
               <Ionicons name="sparkles" size={18} color="#8B5CF6" />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                // Navigate to video playback route
+                router.push({
+                  pathname: `/(mock)/trip/${tripId}/video`,
+                  params: {
+                    tripId: tripId,
+                    documentContent: JSON.stringify(currentDoc),
+                  }
+                });
+              }}
+              style={styles.toolbarButton}
+            >
+              <Ionicons name="play-circle" size={18} color="#10B981" />
+            </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
@@ -546,17 +572,6 @@ Please generate replacement content that addresses the user's request. Only retu
         selectedText={commentData?.selectedText}
       />
 
-      {/* Debug Info */}
-      {currentDoc && (
-        <View style={styles.debugInfo}>
-          <Text style={styles.debugText}>
-            Last saved: {new Date().toLocaleTimeString()}
-          </Text>
-          <Text style={styles.debugText} numberOfLines={2}>
-            Doc nodes: {currentDoc.content?.length || 0} | Trip: {currentTrip?.title || 'N/A'}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -625,18 +640,6 @@ const styles = StyleSheet.create({
   buttonTextDisabled: {
     color: '#9ca3af',
   },
-  infoBanner: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fef3c7',
-    borderBottomWidth: 1,
-    borderBottomColor: '#fbbf24',
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#92400e',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
   editorWrapper: {
     flex: 1,
   },
@@ -665,7 +668,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    height: 56, // Fixed height
     overflow: 'hidden', // Prevent content from expanding vertically
   },
   toolbarContent: {
@@ -706,16 +708,5 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#e5e7eb',
     marginHorizontal: 4,
-  },
-  debugInfo: {
-    padding: 12,
-    backgroundColor: '#f9fafb',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  debugText: {
-    fontSize: 11,
-    color: '#6b7280',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
