@@ -669,6 +669,41 @@
                   }
                   break;
 
+                case 'focusEditor':
+                  console.log('[WebView] Focusing editor');
+                  // Focus the editor
+                  editorView.focus();
+                  // Move cursor to end of document
+                  const endPos = state.doc.content.size;
+                  const focusTr = state.tr.setSelection(
+                    window.PM.state.Selection.near(state.doc.resolve(endPos))
+                  );
+                  dispatch(focusTr);
+                  console.log('[WebView] Editor focused, cursor at end');
+                  break;
+
+                case 'insertText':
+                  console.log('[WebView] Inserting text:', data.params?.text);
+                  // Insert text at current cursor position
+                  const text = data.params?.text || '';
+                  const cursorPos = selection.$from.pos;
+                  const insertTextTr = state.tr.insertText(text, cursorPos);
+                  dispatch(insertTextTr);
+                  console.log('[WebView] Text inserted');
+                  break;
+
+                case 'insertParagraph':
+                  console.log('[WebView] Inserting paragraph');
+                  // Insert a new paragraph at cursor position
+                  const paragraph = schema.nodes.paragraph.create();
+                  const insertParaTr = state.tr.insert(selection.to, paragraph);
+                  // Move cursor into new paragraph
+                  const newParaPos = selection.to + 1;
+                  insertParaTr.setSelection(window.PM.state.Selection.near(insertParaTr.doc.resolve(newParaPos)));
+                  dispatch(insertParaTr);
+                  console.log('[WebView] Paragraph inserted');
+                  break;
+
                 default:
                   console.warn('[WebView] Unknown command:', data.command);
               }
