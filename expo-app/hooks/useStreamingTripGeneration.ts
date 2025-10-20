@@ -5,6 +5,101 @@ import { htmlToProsemirror } from '@/utils/prosemirror-html';
 // Toggle to use mock streaming instead of real API
 const USE_MOCK_STREAMING = true;
 
+// Typing instruction types
+export type TypingInstruction =
+  | { type: 'setHeading'; level: 1 | 2 | 3 }
+  | { type: 'typeText'; text: string }
+  | { type: 'insertParagraph' }
+  | { type: 'insertGeoMark'; attrs: any; text: string };
+
+// Parse HTML into typing instructions
+function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
+  const instructions: TypingInstruction[] = [];
+
+  // Remove itinerary wrapper tags if present
+  const cleanHtml = html.replace(/<\/?itinerary[^>]*>/g, '').trim();
+
+  // Split by HTML tags but keep them
+  const tokens = cleanHtml.split(/(<[^>]+>)/g).filter(Boolean);
+
+  let currentElement: string | null = null;
+  let currentLevel: number | null = null;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i].trim();
+    if (!token) continue;
+
+    // Check if it's an opening tag
+    const headingMatch = token.match(/^<h([1-3])(?:\s[^>]*)?>$/i);
+    const paragraphMatch = token.match(/^<p(?:\s[^>]*)?>$/i);
+    const geoMarkMatch = token.match(/^<span\s+class="geo-mark"([^>]*)>$/i);
+    const blockquoteOpen = token.match(/^<blockquote(?:\s[^>]*)?>$/i);
+
+    // Check if it's a closing tag
+    const closingHeading = token.match(/^<\/h[1-3]>$/i);
+    const closingParagraph = token.match(/^<\/p>$/i);
+    const closingGeoMark = token.match(/^<\/span>$/i);
+    const closingBlockquote = token.match(/^<\/blockquote>$/i);
+
+    if (headingMatch) {
+      const level = parseInt(headingMatch[1]) as 1 | 2 | 3;
+      instructions.push({ type: 'setHeading', level });
+      currentElement = 'heading';
+      currentLevel = level;
+    } else if (paragraphMatch || blockquoteOpen) {
+      // Paragraphs are default, no need to set
+      currentElement = 'paragraph';
+    } else if (geoMarkMatch) {
+      // Parse geo-mark attributes
+      const attrsString = geoMarkMatch[1];
+      const attrs: any = {};
+
+      const attrRegex = /(\w+(?:-\w+)*)="([^"]*)"/g;
+      let match;
+      while ((match = attrRegex.exec(attrsString)) !== null) {
+        const key = match[1];
+        const value = match[2];
+
+        // Convert kebab-case to camelCase for attributes
+        const camelKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        attrs[camelKey] = value;
+      }
+
+      // Get the text content (next token)
+      const textContent = tokens[i + 1] || '';
+      instructions.push({ type: 'insertGeoMark', attrs, text: textContent });
+
+      // Skip the text token since we already processed it
+      i++;
+      currentElement = 'geo-mark';
+    } else if (closingHeading || closingParagraph || closingBlockquote) {
+      // After closing a block element, insert paragraph for next content
+      if (closingHeading || closingParagraph || closingBlockquote) {
+        instructions.push({ type: 'insertParagraph' });
+      }
+      currentElement = null;
+      currentLevel = null;
+    } else if (closingGeoMark) {
+      // After geo-mark, continue in current element
+      currentElement = currentElement === 'geo-mark' ? 'paragraph' : currentElement;
+    } else if (!token.startsWith('<')) {
+      // It's text content
+      const text = token
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .trim();
+
+      if (text) {
+        instructions.push({ type: 'typeText', text });
+      }
+    }
+  }
+
+  return instructions;
+}
+
 // Mock HTML response that aligns with ProseMirror schema
 const MOCK_TRIP_HTML = `<itinerary>
 <h1>5-Day Tokyo Food Lover's Adventure</h1>
@@ -65,6 +160,8 @@ export interface StreamingState {
   isComplete: boolean;
   error: string | null;
   document: any;
+  typingInstructions: TypingInstruction[];
+  useTypingMode: boolean; // If true, use typing instructions instead of document updates
 }
 
 export interface UseStreamingTripGenerationReturn {
@@ -84,6 +181,8 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
         { type: 'paragraph', attrs: { id: `node-${Date.now()}` }, content: [] }
       ]
     },
+    typingInstructions: [],
+    useTypingMode: true, // Enable typing mode by default
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -114,6 +213,8 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
           { type: 'paragraph', attrs: { id: `node-${Date.now()}` }, content: [] }
         ]
       },
+      typingInstructions: [],
+      useTypingMode: true,
     });
 
     // Create abort controller for cancellation
@@ -145,89 +246,31 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     }
   }, []);
 
-  // Mock streaming simulation - chunks by semantic units for realistic typing feel
+  // Mock streaming simulation - generates typing instructions for realistic typing
   const simulateMockStreaming = async (signal: AbortSignal) => {
-    console.log('[StreamingHook] Starting mock streaming (slow, realistic mode)...');
+    console.log('[StreamingHook] Starting mock streaming (typing mode)...');
 
-    // Split by semantic units (headings, paragraphs, etc.) for natural agent typing feel
-    const semanticChunks = MOCK_TRIP_HTML
-      // Split by major elements but keep the tags
-      .split(/(?=<h[1-6]|<p[>\s]|<blockquote)/)
-      .filter(chunk => chunk.trim().length > 0);
+    // Simulate a brief "thinking" delay before starting
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    console.log(`[StreamingHook] Will stream ${semanticChunks.length} semantic chunks`);
+    // Parse the mock HTML into typing instructions
+    const instructions = parseHTMLToTypingInstructions(MOCK_TRIP_HTML);
 
-    // Add opening tag first
-    htmlBufferRef.current = '<itinerary>';
+    console.log(`[StreamingHook] Generated ${instructions.length} typing instructions`);
 
-    for (let i = 0; i < semanticChunks.length; i++) {
-      // Check if cancelled
-      if (signal.aborted) {
-        throw new Error('AbortError');
-      }
+    // Also parse to document for final state
+    const pmDoc = htmlToProsemirror(MOCK_TRIP_HTML);
 
-      const chunk = semanticChunks[i];
-      const chunkPreview = chunk.replace(/\n/g, ' ').substring(0, 50);
-      console.log(`[StreamingHook] Chunk ${i + 1}/${semanticChunks.length}:`, chunkPreview);
+    // Set the instructions and complete state
+    setState(prev => ({
+      ...prev,
+      isStreaming: false,
+      isComplete: true,
+      document: pmDoc,
+      typingInstructions: instructions,
+    }));
 
-      // Stream the chunk character by character for extra smooth effect
-      const charsPerUpdate = 10; // characters to add at once (reduced for slower feel)
-      for (let j = 0; j < chunk.length; j += charsPerUpdate) {
-        if (signal.aborted) throw new Error('AbortError');
-
-        const miniChunk = chunk.substring(j, j + charsPerUpdate);
-        htmlBufferRef.current += miniChunk;
-
-        // Try to extract and parse itinerary content
-        const itineraryMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)$/is);
-
-        if (itineraryMatch) {
-          const itineraryHTML = itineraryMatch[1];
-
-          // Convert HTML to ProseMirror JSON
-          try {
-            const pmDoc = htmlToProsemirror(itineraryHTML);
-
-            // Update document state
-            setState(prev => ({
-              ...prev,
-              document: pmDoc,
-            }));
-          } catch (parseError) {
-            // Silent - partial HTML may not parse yet
-          }
-        }
-
-        // Slower delay for realistic typing feel
-        await new Promise(resolve => setTimeout(resolve, 25));
-      }
-
-      // Much longer pause between semantic units (headings, paragraphs)
-      // Vary the delay to feel more natural:
-      // - Longer after headings (agent "thinking" about what to write)
-      // - Medium after paragraphs
-      const isHeading = chunk.trim().startsWith('<h');
-      const delay = isHeading ? 800 : 500; // ms (doubled for slower feel)
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    // Add closing tag and final parse
-    htmlBufferRef.current += '</itinerary>';
-
-    const finalMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
-    if (finalMatch) {
-      const pmDoc = htmlToProsemirror(finalMatch[1]);
-      setState(prev => ({
-        ...prev,
-        isStreaming: false,
-        isComplete: true,
-        document: pmDoc,
-      }));
-      console.log('[StreamingHook] Mock streaming complete!');
-    } else {
-      throw new Error('Failed to parse mock HTML');
-    }
+    console.log('[StreamingHook] Mock streaming complete! Ready to type.');
   };
 
   // Real API streaming

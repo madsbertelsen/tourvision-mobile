@@ -7,6 +7,9 @@ export interface ProseMirrorWebViewRef {
   sendCommand: (command: string, params?: any) => void;
   scrollToNode: (nodeId: string) => void;
   scrollToBottom: () => void;
+  focusEditor: () => void;
+  typeCharacter: (char: string) => void;
+  insertParagraph: () => void;
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
   triggerCreateLocation: () => void;
@@ -288,6 +291,77 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                 }
 
                 console.log('[WebView] Scroll complete');
+              })();
+              true;
+            `);
+          }
+        },
+        focusEditor: () => {
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                console.log('[WebView] Focusing editor...');
+                if (window.editorView) {
+                  window.editorView.focus();
+                  // Move cursor to end of document
+                  const tr = window.editorView.state.tr.setSelection(
+                    window.PM.state.TextSelection.atEnd(window.editorView.state.doc)
+                  );
+                  window.editorView.dispatch(tr);
+                  console.log('[WebView] Editor focused and cursor at end');
+                } else {
+                  console.warn('[WebView] editorView not found');
+                }
+              })();
+              true;
+            `);
+          }
+        },
+        typeCharacter: (char: string) => {
+          if (webViewRef.current) {
+            const escapedChar = char.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                if (window.editorView) {
+                  const { state } = window.editorView;
+                  const { $from } = state.selection;
+
+                  // Insert character at cursor position
+                  const tr = state.tr.insertText('${escapedChar}', $from.pos);
+                  window.editorView.dispatch(tr);
+
+                  console.log('[WebView] Typed character: "${escapedChar}"');
+                } else {
+                  console.warn('[WebView] editorView not found for typing');
+                }
+              })();
+              true;
+            `);
+          }
+        },
+        insertParagraph: () => {
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                if (window.editorView) {
+                  const { state, dispatch } = window.editorView;
+                  const { schema, tr, selection } = state;
+
+                  // Insert a new paragraph node
+                  const paragraph = schema.nodes.paragraph.create();
+                  const transaction = tr.insert(selection.to, paragraph);
+
+                  // Move cursor into new paragraph
+                  const newPos = selection.to + 1;
+                  transaction.setSelection(
+                    window.PM.state.TextSelection.create(transaction.doc, newPos)
+                  );
+
+                  dispatch(transaction);
+                  console.log('[WebView] Inserted new paragraph');
+                } else {
+                  console.warn('[WebView] editorView not found');
+                }
               })();
               true;
             `);
