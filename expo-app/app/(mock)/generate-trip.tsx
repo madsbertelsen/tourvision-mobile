@@ -120,8 +120,7 @@ export default function GenerateTripScreen() {
             }
             await sleep(500); // Pause after paragraph
           } else if (instruction.type === 'insertGeoMark') {
-            // For now, just type the text (geo-mark creation is complex)
-            // TODO: Implement geo-mark insertion with proper attributes
+            // First type the text character by character
             const text = instruction.text;
             for (let j = 0; j < text.length; j++) {
               if (typingAbortRef.current.signal.aborted) break;
@@ -132,6 +131,29 @@ export default function GenerateTripScreen() {
               }
 
               await sleep(50);
+            }
+
+            // Then select the typed text and convert to geo-mark
+            if (documentRef.current) {
+              // Select the text we just typed (length of text backwards from cursor)
+              const textLength = text.length;
+
+              // Send command to select text backwards and create geo-mark
+              documentRef.current.sendCommand('selectBackward', { length: textLength });
+              await sleep(100); // Wait for selection
+
+              // Create geo-mark with attributes
+              const geoMarkData = {
+                geoId: instruction.attrs.geoId || `loc-${Date.now()}`,
+                placeName: instruction.attrs.placeName || text,
+                lat: instruction.attrs.lat,
+                lng: instruction.attrs.lng,
+                colorIndex: parseInt(instruction.attrs.colorIndex || '0'),
+                coordSource: instruction.attrs.coordSource || 'llm-fallback',
+              };
+
+              documentRef.current.createGeoMarkWithData(geoMarkData);
+              await sleep(100); // Wait for geo-mark creation
             }
           }
         }

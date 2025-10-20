@@ -713,6 +713,19 @@
                   console.log('[WebView] Paragraph split/inserted and reset to paragraph type');
                   break;
 
+                case 'selectBackward':
+                  console.log('[WebView] Selecting backward:', data.params?.length);
+                  // Select text backwards from cursor by the specified length
+                  const length = data.params?.length || 0;
+                  const currentPos = state.selection.to;
+                  const startPos = Math.max(0, currentPos - length);
+                  const selectTr = state.tr.setSelection(
+                    window.PM.state.TextSelection.create(state.doc, startPos, currentPos)
+                  );
+                  dispatch(selectTr);
+                  console.log('[WebView] Selected from', startPos, 'to', currentPos);
+                  break;
+
                 default:
                   console.warn('[WebView] Unknown command:', data.command);
               }
