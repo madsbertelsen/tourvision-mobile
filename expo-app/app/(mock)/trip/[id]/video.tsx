@@ -35,9 +35,12 @@ export default function VideoPlaybackScreen() {
   const [currentBlockIndex, setCurrentBlockIndex] = useState<number>(-1);
   const [allBlocks, setAllBlocks] = useState<BlockNode[]>([]);
   const [parsedDoc, setParsedDoc] = useState<any>(null);
+  const [typedText, setTypedText] = useState<string>('');
+  const [showCursor, setShowCursor] = useState<boolean>(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current; // Start off-screen left
+  const cursorBlinkAnim = useRef(new Animated.Value(1)).current;
 
   // Parse document content and extract locations and blocks
   useEffect(() => {
@@ -69,6 +72,26 @@ export default function VideoPlaybackScreen() {
       setTimeout(() => startAnimation(), 500);
     }
   }, [locations]);
+
+  // Cursor blink animation
+  useEffect(() => {
+    const blinkAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorBlinkAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cursorBlinkAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    blinkAnimation.start();
+    return () => blinkAnimation.stop();
+  }, []);
 
   // Extract geo-mark locations from document
   const extractLocations = (doc: any): Location[] => {
@@ -141,6 +164,7 @@ export default function VideoPlaybackScreen() {
         ]).start(() => {
           // Update to new block
           setCurrentBlockIndex(i);
+          setTypedText(''); // Reset typed text
 
           // Reset slide position for entry
           slideAnim.setValue(isHeading ? -100 : 0); // Headings slide from left
@@ -163,8 +187,20 @@ export default function VideoPlaybackScreen() {
         });
       });
 
+      // Typewriter effect - type out the text character by character
+      const fullText = extractTextContent(block.content);
+      setShowCursor(true);
+
+      for (let charIndex = 0; charIndex <= fullText.length; charIndex++) {
+        setTypedText(fullText.substring(0, charIndex));
+        await new Promise(resolve => setTimeout(resolve, 30)); // 30ms per character
+      }
+
+      // Hide cursor after typing complete
+      setShowCursor(false);
+
       // Wait to show the block (faster for non-geo-mark blocks)
-      const delay = geoMarkInBlock ? 3000 : 1500;
+      const delay = geoMarkInBlock ? 2000 : 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
@@ -194,32 +230,91 @@ export default function VideoPlaybackScreen() {
     router.back();
   };
 
-  // Simple renderer for video overlay - no containers, just styled text
+  // Simple renderer for video overlay - stacked lines with individual backgrounds and typewriter effect
   const renderBlock = (block: BlockNode) => {
     if (!block) return null;
+
+    const displayText = typedText; // Use the typed text state
 
     switch (block.type) {
       case 'heading': {
         const level = block.attrs?.level || 1;
-        const textContent = extractTextContent(block.content);
         const headingStyle = level === 1 ? styles.videoH1 : level === 2 ? styles.videoH2 : styles.videoH3;
+
+        // Split into words and group into lines
+        const lines = splitIntoLines(displayText, level === 1 ? 30 : level === 2 ? 35 : 40);
+
         return (
-          <Text style={headingStyle}>
-            {textContent}
-          </Text>
+          <View style={styles.textLinesContainer}>
+            {lines.map((line, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={headingStyle}>
+                  {line}
+                </Text>
+                {i === lines.length - 1 && showCursor && (
+                  <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
+                    |
+                  </Animated.Text>
+                )}
+              </View>
+            ))}
+          </View>
         );
       }
       case 'paragraph': {
-        const textContent = extractTextContent(block.content);
+        // Split into lines (approximately 40-50 characters per line)
+        const lines = splitIntoLines(displayText, 45);
+
         return (
-          <Text style={styles.videoParagraph}>
-            {textContent}
-          </Text>
+          <View style={styles.textLinesContainer}>
+            {lines.map((line, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.videoParagraph}>
+                  {line}
+                </Text>
+                {i === lines.length - 1 && showCursor && (
+                  <Animated.Text style={[styles.cursor, { opacity: cursorBlinkAnim }]}>
+                    |
+                  </Animated.Text>
+                )}
+              </View>
+            ))}
+          </View>
         );
       }
       default:
         return null;
     }
+  };
+
+  // Split text into lines based on character count with better balance
+  const splitIntoLines = (text: string, maxChars: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    words.forEach((word, index) => {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const nextWord = words[index + 1];
+      const wouldBeShortLine = nextWord && nextWord.length < 10; // Avoid orphan words
+
+      if (testLine.length > maxChars && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else if (testLine.length > maxChars * 0.8 && wouldBeShortLine && currentLine) {
+        // If we're near the limit and next word would be orphaned, break here
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
   };
 
   // Extract plain text from block content
@@ -365,44 +460,59 @@ const styles = StyleSheet.create({
   },
   contentOverlay: {
     position: 'absolute',
-    bottom: 120,
+    top: 200, // Position from top instead of bottom
     left: 24,
     right: 24,
   },
-  // Video-specific text styles - no backgrounds, just shadows for readability
+  textLinesContainer: {
+    alignItems: 'flex-start', // Left-align the text lines
+    gap: 4, // Space between lines
+  },
+  cursor: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '300',
+    marginLeft: 2,
+    backgroundColor: 'transparent',
+  },
+  // Video-specific text styles - white text with black backgrounds
   videoH1: {
     fontSize: PROSE_STYLES.h1.fontSize,
     fontWeight: PROSE_STYLES.h1.fontWeight as any,
     color: '#ffffff',
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+    overflow: 'hidden',
   },
   videoH2: {
     fontSize: PROSE_STYLES.h2.fontSize,
     fontWeight: PROSE_STYLES.h2.fontWeight as any,
     color: '#ffffff',
-    marginBottom: 10,
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 4,
+    overflow: 'hidden',
   },
   videoH3: {
     fontSize: PROSE_STYLES.h3.fontSize,
     fontWeight: PROSE_STYLES.h3.fontWeight as any,
     color: '#ffffff',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 4,
+    overflow: 'hidden',
   },
   videoParagraph: {
     fontSize: PROSE_STYLES.paragraph.fontSize,
     lineHeight: PROSE_STYLES.paragraph.lineHeight,
     color: '#ffffff',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    overflow: 'hidden',
   },
 });
