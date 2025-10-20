@@ -65,6 +65,11 @@ export default function TripDocumentView() {
     console.log('[TripDocumentView] Navigate to location:', attrs);
 
     // Navigate to location screen (Stack-nested for slide transition)
+    // Use absolute path to match read mode behavior
+    const pathname = tripId
+      ? `/(mock)/trip/${tripId}/location/[locationId]` as any
+      : '/(mock)/location/[id]' as any;
+
     const params: any = {
       locationId: attrs.geoId || 'unknown',
       id: attrs.geoId || 'unknown',
@@ -76,13 +81,15 @@ export default function TripDocumentView() {
       tripId: tripId, // Pass tripId so location screen can load trip data
     };
 
-    // Pass contextDocument if it exists
+    // Pass contextDocument/visitDocument if it exists
     if (attrs.contextDocument) {
       params.contextDocument = JSON.stringify(attrs.contextDocument);
+    } else if (attrs.visitDocument) {
+      params.contextDocument = JSON.stringify(attrs.visitDocument);
     }
 
     router.push({
-      pathname: 'location/[locationId]',
+      pathname,
       params,
     });
   }, [tripId]);
