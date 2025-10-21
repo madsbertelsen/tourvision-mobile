@@ -54,7 +54,7 @@ app.get('/health', (_req, res) => {
     documents: collabManager.getDocumentCount(),
     connections: io.engine.clientsCount,
     activeAIGenerations: aiService.getActiveGenerations().length,
-    aiModel: process.env.DEFAULT_AI_MODEL || 'claude-3-sonnet'
+    aiModel: process.env.DEFAULT_AI_MODEL || 'mistral-small-latest'
   });
 });
 

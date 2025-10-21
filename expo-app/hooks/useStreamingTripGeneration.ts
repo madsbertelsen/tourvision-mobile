@@ -289,7 +289,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
 
       // Request AI generation with options
       const options: any = {
-        model: process.env.EXPO_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+        model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
         temperature: 0.7,
       };
 

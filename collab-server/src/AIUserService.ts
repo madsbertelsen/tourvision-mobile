@@ -1,3 +1,4 @@
+import { mistral } from '@ai-sdk/mistral';
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
 import { streamText, LanguageModel } from 'ai';
@@ -233,16 +234,39 @@ export class AIUserService {
    */
   private selectModel(modelName?: string): LanguageModel {
     switch (modelName) {
+      // Mistral models (default)
+      case 'mistral-large':
+      case 'mistral-large-latest':
+        return mistral('mistral-large-latest');
+      case 'mistral-medium':
+      case 'mistral-medium-latest':
+        return mistral('mistral-medium-latest');
+      case 'mistral-small':
+      case 'mistral-small-latest':
+        return mistral('mistral-small-latest');
+      case 'open-mistral-7b':
+        return mistral('open-mistral-7b');
+      case 'open-mixtral-8x7b':
+        return mistral('open-mixtral-8x7b');
+      case 'open-mixtral-8x22b':
+        return mistral('open-mixtral-8x22b');
+
+      // OpenAI models
       case 'gpt-4':
       case 'gpt-4-turbo':
         return openai('gpt-4-turbo-preview');
       case 'gpt-3.5':
         return openai('gpt-3.5-turbo');
+
+      // Anthropic models
       case 'claude-3-opus':
         return anthropic('claude-3-opus-20240229');
       case 'claude-3-sonnet':
-      default:
         return anthropic('claude-3-sonnet-20240229');
+
+      // Default to Mistral Small (fast and efficient)
+      default:
+        return mistral('mistral-small-latest');
     }
   }
 

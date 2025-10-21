@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.35",
+    "@ai-sdk/mistral": "^2.0.19",
     "@ai-sdk/openai": "^2.0.53",
     "ai": "^5.0.76",
     "cors": "^2.8.5",
