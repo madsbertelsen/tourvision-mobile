@@ -69,8 +69,12 @@ export class CollaborationManager {
     // Update activity timestamp
     docState.lastActivity = Date.now();
 
+    // Special handling for AI client - always accept steps
+    const isAIClient = clientID === 'ai-assistant';
+
     // Check if the client's version matches our current version
-    if (clientVersion !== docState.version) {
+    // Skip version check for AI client
+    if (!isAIClient && clientVersion !== docState.version) {
       console.log(`Version mismatch: client ${clientVersion}, server ${docState.version}`);
 
       // Client needs to rebase their steps

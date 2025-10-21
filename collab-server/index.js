@@ -2,7 +2,13 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { CollaborationManager } from './src/CollaborationManager.js';
+import { AIUserService } from './src/AIUserService.js';
+import { AIStepGenerator } from './src/AIStepGenerator.js';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
@@ -27,12 +33,18 @@ app.use(express.json());
 // Collaboration manager instance
 const collabManager = new CollaborationManager();
 
+// AI service instances
+const stepGenerator = new AIStepGenerator(collabManager);
+const aiService = new AIUserService(collabManager, stepGenerator, io);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     documents: collabManager.getDocumentCount(),
-    connections: io.engine.clientsCount
+    connections: io.engine.clientsCount,
+    activeAIGenerations: aiService.getActiveGenerations().length,
+    aiModel: process.env.DEFAULT_AI_MODEL || 'claude-3-sonnet'
   });
 });
 
@@ -163,6 +175,115 @@ io.on('connection', (socket) => {
   // Error handling
   socket.on('error', (error) => {
     console.error(`Socket error for ${socket.id}:`, error);
+  });
+
+  // ====== AI GENERATION HANDLERS ======
+
+  // Handle AI generation request
+  socket.on('request-ai-generation', async ({ documentId, prompt, options = {} }) => {
+    console.log(`AI generation requested for document ${documentId} by ${socket.id}`);
+
+    if (!documentId || !currentDocumentId || documentId !== currentDocumentId) {
+      socket.emit('ai-error', {
+        message: 'Must be connected to the document to request AI generation'
+      });
+      return;
+    }
+
+    try {
+      // Start the AI generation
+      const generationId = await aiService.startGeneration(documentId, prompt, {
+        ...options,
+        requesterId: socket.id,
+        requesterName: clientInfo.name
+      });
+
+      // Notify all clients that AI is generating
+      io.to(documentId).emit('ai-generation-started', {
+        generationId,
+        requesterId: socket.id,
+        requesterName: clientInfo.name,
+        prompt: prompt.substring(0, 100) + '...' // Preview of prompt
+      });
+
+      // The AI service will handle sending steps through the collaboration manager
+      // When steps are sent, they'll be broadcast via the normal 'steps' event
+
+      // Set up completion tracking
+      const checkCompletion = setInterval(() => {
+        const status = aiService.getGenerationStatus(generationId);
+        if (status.status === 'completed') {
+          clearInterval(checkCompletion);
+          io.to(documentId).emit('ai-generation-complete', { generationId });
+        }
+      }, 500);
+
+      // Timeout after 60 seconds
+      setTimeout(() => {
+        clearInterval(checkCompletion);
+        aiService.cancelGeneration(generationId);
+      }, 60000);
+
+    } catch (error) {
+      console.error('AI generation error:', error);
+      socket.emit('ai-error', {
+        message: 'Failed to start AI generation',
+        error: error.message
+      });
+    }
+  });
+
+  // Cancel AI generation
+  socket.on('cancel-ai-generation', ({ generationId }) => {
+    console.log(`Cancelling AI generation ${generationId}`);
+    aiService.cancelGeneration(generationId);
+
+    if (currentDocumentId) {
+      io.to(currentDocumentId).emit('ai-generation-cancelled', { generationId });
+    }
+  });
+
+  // Request inline AI edit (for @ai comments)
+  socket.on('request-ai-inline-edit', async ({ documentId, from, to, selectedText, instruction, options = {} }) => {
+    console.log(`AI inline edit requested for document ${documentId}`);
+
+    if (!documentId || !currentDocumentId || documentId !== currentDocumentId) {
+      socket.emit('ai-error', {
+        message: 'Must be connected to the document to request AI edit'
+      });
+      return;
+    }
+
+    try {
+      // Build context-aware prompt
+      const prompt = `The user selected this text: "${selectedText}"
+
+User instruction: ${instruction}
+
+Please provide a replacement for the selected text that addresses the user's request.`;
+
+      // Start generation with replace range
+      const generationId = await aiService.startGeneration(documentId, prompt, {
+        replaceRange: { from, to },
+        requesterId: socket.id,
+        requesterName: clientInfo.name,
+        model: options.model || process.env.DEFAULT_AI_MODEL
+      });
+
+      // Notify clients
+      io.to(documentId).emit('ai-inline-edit-started', {
+        generationId,
+        from,
+        to
+      });
+
+    } catch (error) {
+      console.error('AI inline edit error:', error);
+      socket.emit('ai-error', {
+        message: 'Failed to start AI inline edit',
+        error: error.message
+      });
+    }
   });
 });
 

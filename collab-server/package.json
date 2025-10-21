@@ -9,11 +9,18 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.6.1",
+    "@ai-sdk/anthropic": "^2.0.35",
+    "@ai-sdk/openai": "^2.0.53",
+    "ai": "^5.0.76",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "jsdom": "^27.0.1",
     "prosemirror-model": "^1.19.3",
+    "prosemirror-schema-basic": "^1.2.2",
+    "prosemirror-schema-list": "^1.3.0",
     "prosemirror-transform": "^1.8.0",
+    "socket.io": "^4.6.1",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
