@@ -30,6 +30,71 @@
       background: white;
       border: 1px solid #e0e0e0;
       border-radius: 8px;
+      caret-color: #3b82f6; /* Bright blue cursor */
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Disable spell checking underlines */
+    .ProseMirror * {
+      -webkit-text-decoration-skip: none;
+      text-decoration-skip-ink: none;
+    }
+
+    /* Make cursor/caret more visible with animation */
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    /* Enhanced selection highlighting */
+    .ProseMirror ::selection {
+      background-color: #3b82f6; /* Bright blue */
+      color: white;
+    }
+
+    .ProseMirror ::-moz-selection {
+      background-color: #3b82f6;
+      color: white;
+    }
+
+    /* ProseMirror's own selection styling */
+    .ProseMirror-selectednode {
+      outline: 3px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    /* Make the gapcursor more visible */
+    .ProseMirror-gapcursor {
+      display: block;
+      pointer-events: none;
+      position: absolute;
+    }
+
+    .ProseMirror-gapcursor:after {
+      content: "";
+      display: block;
+      position: absolute;
+      top: -2px;
+      width: 20px;
+      border-top: 2px solid #3b82f6;
+      animation: blink 1.2s step-end infinite;
+    }
+
+    /* Custom typing cursor indicator */
+    #typing-cursor {
+      position: absolute;
+      width: 3px;
+      background-color: #EF4444; /* Bright red for visibility */
+      pointer-events: none;
+      z-index: 1000;
+      animation: blink 0.8s ease-in-out infinite;
+      display: none; /* Hidden by default, shown during typing */
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+    }
+
+    #typing-cursor.visible {
+      display: block;
     }
 
     .ProseMirror h1 {
@@ -65,13 +130,15 @@
       padding: 2px 4px;
       border-radius: 3px;
       cursor: pointer;
-      border-bottom: 2px solid rgba(59, 130, 246, 0.5);
       transition: all 0.2s ease;
+      text-decoration: none !important;
+      border: none !important;
+      border-bottom: none !important;
+      -webkit-text-decoration: none !important;
     }
 
     .ProseMirror .geo-mark:hover {
       background-color: rgba(59, 130, 246, 0.3);
-      border-bottom-color: rgba(59, 130, 246, 0.8);
     }
 
     .ProseMirror .comment-mark {
@@ -107,6 +174,7 @@
 <body>
   <div class="status-bar" id="status">Loading ProseMirror...</div>
   <div id="editor-container"></div>
+  <div id="typing-cursor"></div>
 
   <script>
     console.log('[WebView] Script starting...');
@@ -225,6 +293,9 @@
         span.style.borderRadius = '3px';
         span.style.cursor = 'pointer';
         span.style.transition = 'all 0.2s ease';
+        span.style.textDecoration = 'none';
+        span.style.border = 'none';
+        span.style.borderBottom = 'none';
 
         // Store attributes as data attributes for click handling
         if (node.attrs.geoId) span.setAttribute('data-geo-id', node.attrs.geoId);
@@ -242,16 +313,78 @@
         };
       }
 
+      // Typing cursor management
+      const typingCursor = document.getElementById('typing-cursor');
+      let isTypingActive = false;
+
+      function updateTypingCursor() {
+        if (!isTypingActive || !editorView) {
+          typingCursor.classList.remove('visible');
+          return;
+        }
+
+        const { state } = editorView;
+        const { selection } = state;
+        const { from } = selection;
+
+        // Get the coordinates of the cursor position
+        try {
+          const coords = editorView.coordsAtPos(from);
+          const editorContainer = document.querySelector('#editor-container');
+          const editorRect = editorContainer.getBoundingClientRect();
+
+          // Calculate cursor height based on line height
+          const cursorHeight = coords.bottom - coords.top;
+
+          // Position and size the cursor indicator
+          typingCursor.style.left = (coords.left - editorRect.left) + 'px';
+          typingCursor.style.top = (coords.top - editorRect.top) + 'px';
+          typingCursor.style.height = cursorHeight + 'px';
+          typingCursor.classList.add('visible');
+
+          console.log('[WebView] Cursor updated: height =', cursorHeight);
+        } catch (e) {
+          console.warn('[WebView] Could not get cursor coordinates:', e);
+          typingCursor.classList.remove('visible');
+        }
+      }
+
+      function showTypingCursor() {
+        isTypingActive = true;
+        updateTypingCursor();
+        console.log('[WebView] Typing cursor shown');
+      }
+
+      function hideTypingCursor() {
+        isTypingActive = false;
+        typingCursor.classList.remove('visible');
+        console.log('[WebView] Typing cursor hidden');
+      }
+
+      // Expose for native to control
+      window.showTypingCursor = showTypingCursor;
+      window.hideTypingCursor = hideTypingCursor;
+
       // Create editor view
       editorView = new EditorView(document.querySelector('#editor-container'), {
         state: state,
         nodeViews: {
           geoMark: createGeoMarkNodeView
         },
+        attributes: {
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off'
+        },
         dispatchTransaction(transaction) {
           const oldState = editorView.state;
           const newState = oldState.apply(transaction);
           editorView.updateState(newState);
+
+          // Update typing cursor position on any change
+          if (isTypingActive) {
+            updateTypingCursor();
+          }
 
           // Send document changes to native
           if (transaction.docChanged) {
@@ -532,10 +665,20 @@
 
             case 'createGeoMark':
               console.log('[WebView] Creating geo-mark with data:', data.geoMarkData);
+              sendMessageToNative({
+                type: 'debug',
+                message: '[WebView DEBUG] Received createGeoMark message'
+              });
+
               if (editorView && data.geoMarkData) {
                 const { state, dispatch } = editorView;
                 const { selection } = state;
                 const { from, to } = selection;
+
+                sendMessageToNative({
+                  type: 'debug',
+                  message: `[WebView DEBUG] Selection from ${from} to ${to}, selected text: "${state.doc.textBetween(from, to, ' ')}"`
+                });
 
                 // Create a geoMark NODE (not mark) with the location data
                 const geoMarkType = schema.nodes.geoMark;
@@ -754,15 +897,82 @@
 
                 case 'selectBackward':
                   console.log('[WebView] Selecting backward:', data.params?.length);
-                  // Select text backwards from cursor by the specified length
-                  const length = data.params?.length || 0;
-                  const currentPos = state.selection.to;
-                  const startPos = Math.max(0, currentPos - length);
-                  const selectTr = state.tr.setSelection(
-                    window.PM.state.TextSelection.create(state.doc, startPos, currentPos)
-                  );
-                  dispatch(selectTr);
-                  console.log('[WebView] Selected from', startPos, 'to', currentPos);
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: `[WebView DEBUG] selectBackward command received, length: ${data.params?.length}`
+                  });
+
+                  try {
+                    // Select text backwards from cursor by the specified length
+                    const length = data.params?.length || 0;
+                    const currentPos = state.selection.to;
+                    const startPos = Math.max(0, currentPos - length);
+
+                    sendMessageToNative({
+                      type: 'debug',
+                      message: `[WebView DEBUG] Before selection: currentPos=${currentPos}, will select from ${startPos} to ${currentPos}`
+                    });
+
+                    const selectTr = state.tr.setSelection(
+                      window.PM.state.TextSelection.create(state.doc, startPos, currentPos)
+                    );
+
+                    sendMessageToNative({
+                      type: 'debug',
+                      message: `[WebView DEBUG] Created selection transaction, about to dispatch`
+                    });
+
+                    dispatch(selectTr);
+
+                    sendMessageToNative({
+                      type: 'debug',
+                      message: `[WebView DEBUG] After selection dispatch: from ${startPos} to ${currentPos}`
+                    });
+                  } catch (error) {
+                    sendMessageToNative({
+                      type: 'error',
+                      message: `[WebView ERROR] selectBackward failed: ${error.message}`
+                    });
+                  }
+                  break;
+
+                case 'selectRange':
+                  console.log('[WebView] Selecting range:', data.params?.from, 'to', data.params?.to);
+                  try {
+                    const rangeFrom = data.params?.from || 0;
+                    const rangeTo = data.params?.to || 0;
+
+                    // Create selection for the specified range
+                    const rangeTr = state.tr.setSelection(
+                      window.PM.state.TextSelection.create(state.doc, rangeFrom, rangeTo)
+                    );
+                    dispatch(rangeTr);
+                    console.log('[WebView] Range selected from', rangeFrom, 'to', rangeTo);
+                  } catch (error) {
+                    console.error('[WebView] selectRange failed:', error);
+                  }
+                  break;
+
+                case 'deleteSelection':
+                  console.log('[WebView] Deleting selection');
+                  try {
+                    // Delete the current selection
+                    const deleteTr = state.tr.deleteSelection();
+                    dispatch(deleteTr);
+                    console.log('[WebView] Selection deleted');
+                  } catch (error) {
+                    console.error('[WebView] deleteSelection failed:', error);
+                  }
+                  break;
+
+                case 'showTypingCursor':
+                  console.log('[WebView] Showing typing cursor');
+                  showTypingCursor();
+                  break;
+
+                case 'hideTypingCursor':
+                  console.log('[WebView] Hiding typing cursor');
+                  hideTypingCursor();
                   break;
 
                 default:

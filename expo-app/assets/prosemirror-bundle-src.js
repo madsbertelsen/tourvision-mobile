@@ -1,7 +1,7 @@
 // Entry file for bundling ProseMirror with esbuild
 // This will be bundled into a single UMD module for WebView
 
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { Schema, DOMParser, DOMSerializer } from 'prosemirror-model';
 import { schema } from 'prosemirror-schema-basic';
@@ -119,7 +119,7 @@ const mySchema = new Schema({
 
 // Export everything to window.PM for the HTML to use
 window.PM = {
-  state: { EditorState },
+  state: { EditorState, TextSelection },
   view: { EditorView },
   model: { Schema, DOMParser, DOMSerializer },
   schema: mySchema,

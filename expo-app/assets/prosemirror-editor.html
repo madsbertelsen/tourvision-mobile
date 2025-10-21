@@ -783,6 +783,47 @@
                     });
                   }
                   break;
+                case 'focusEditor':
+                  // Focus the editor
+                  editorView.focus();
+                  // Move cursor to end of document
+                  const endPos = state.doc.content.size;
+                  const tr = state.tr.setSelection(
+                    window.PM.state.Selection.near(state.doc.resolve(endPos))
+                  );
+                  dispatch(tr);
+                  console.log('[ProseMirror WebView] Editor focused, cursor at end');
+                  break;
+                case 'insertText':
+                  // Insert text at current cursor position
+                  const text = data.params?.text || '';
+                  const cursorPos = state.selection.$from.pos;
+                  const insertTr = state.tr.insertText(text, cursorPos);
+                  dispatch(insertTr);
+                  console.log('[ProseMirror WebView] Inserted text:', text);
+                  break;
+                case 'insertParagraph':
+                  // Insert a new paragraph at cursor position
+                  const paragraph = state.schema.nodes.paragraph.create({ id: 'node-' + Date.now() });
+                  const paraTr = state.tr.insert(state.selection.to, paragraph);
+                  // Move cursor into new paragraph
+                  const newPos = state.selection.to + 1;
+                  paraTr.setSelection(window.PM.state.Selection.near(paraTr.doc.resolve(newPos)));
+                  dispatch(paraTr);
+                  console.log('[ProseMirror WebView] Inserted paragraph');
+                  break;
+                case 'setHeading':
+                  // Set current paragraph to heading
+                  const level = data.params?.level || 1;
+                  const headingTr = state.tr.setBlockType(
+                    state.selection.from,
+                    state.selection.to,
+                    state.schema.nodes.heading,
+                    { level: level, id: 'node-' + Date.now() }
+                  );
+                  dispatch(headingTr);
+                  console.log('[ProseMirror WebView] Set heading level:', level);
+                  break;
                 default:
                   console.warn('[ProseMirror WebView] Unknown command:', command);
               }

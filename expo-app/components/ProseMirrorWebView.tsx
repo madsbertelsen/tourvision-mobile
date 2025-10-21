@@ -132,6 +132,14 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               console.error('[ProseMirrorWebView] Error location:', data.filename, 'line', data.lineno);
               break;
 
+            case 'debug':
+              console.log('[ProseMirrorWebView]', data.message);
+              break;
+
+            case 'info':
+              console.log('[ProseMirrorWebView]', data.message);
+              break;
+
             case 'documentChange':
               if (onChange) {
                 // Mark this as an internal change to prevent circular updates
