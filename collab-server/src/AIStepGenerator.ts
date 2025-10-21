@@ -75,9 +75,9 @@ export class AIStepGenerator {
   /**
    * Generate ProseMirror steps for AI-generated content
    * @param documentId - The document to generate steps for
-   * @param content - The AI-generated content (text or HTML)
+   * @param content - The AI-generated content (HTML)
    * @param options - Options for step generation
-   * @returns Array of ProseMirror steps
+   * @returns Array of ProseMirror steps (validated on server)
    */
   async generateStepsForContent(
     documentId: string,
@@ -93,17 +93,66 @@ export class AIStepGenerator {
         throw new Error('Document not found');
       }
 
-      // For now, create a simple text insertion step
-      // This is a simplified version - in production you'd want full ProseMirror integration
-      const step = this.createSimpleTextStep(content, options);
-      if (step) {
-        steps.push(step);
+      console.log(`[AIStepGenerator] Generating steps for content (${content.length} chars)`);
+
+      // Create step from HTML content
+      const step = this.createStepFromHTML(content, options);
+      if (!step) {
+        console.error('[AIStepGenerator] Failed to create step');
+        return [];
       }
+
+      // Validate the step by applying it to an empty document on the server
+      const isValid = this.validateStep(step);
+      if (!isValid) {
+        console.error('[AIStepGenerator] Step validation failed');
+        return [];
+      }
+
+      console.log('[AIStepGenerator] Step validated successfully');
+      steps.push(step);
 
       return steps;
     } catch (error) {
-      console.error('Error generating steps:', error);
+      console.error('[AIStepGenerator] Error generating steps:', error);
       return [];
+    }
+  }
+
+  /**
+   * Validate a step by applying it to an empty ProseMirror document
+   * @param stepJSON - The step in JSON format
+   * @returns true if the step is valid and can be applied
+   */
+  private validateStep(stepJSON: any): boolean {
+    try {
+      // Create an empty document with one paragraph
+      const emptyDoc = this.schema.nodes.doc.create(null, [
+        this.schema.nodes.paragraph.create()
+      ]);
+
+      console.log('[AIStepGenerator] Validating step against empty document');
+      console.log('[AIStepGenerator] Empty doc:', JSON.stringify(emptyDoc.toJSON()));
+
+      // Recreate the step from JSON using the imported ReplaceStep
+      const step = ReplaceStep.fromJSON(this.schema, stepJSON);
+
+      console.log('[AIStepGenerator] Step recreated from JSON');
+
+      // Try to apply the step to the empty document
+      const result = step.apply(emptyDoc);
+
+      if (result.failed) {
+        console.error('[AIStepGenerator] Validation failed:', result.failed);
+        return false;
+      }
+
+      console.log('[AIStepGenerator] Validation successful!');
+      console.log('[AIStepGenerator] Result doc:', JSON.stringify(result.doc.toJSON(), null, 2));
+      return true;
+    } catch (error) {
+      console.error('[AIStepGenerator] Validation error:', error);
+      return false;
     }
   }
 
@@ -111,17 +160,12 @@ export class AIStepGenerator {
    * Create a proper ProseMirror step by parsing HTML content
    * This uses ProseMirror's DOMParser to convert HTML to document structure
    */
-  private createSimpleTextStep(content: string, options: StepGenerationOptions): any {
+  private createStepFromHTML(content: string, options: StepGenerationOptions): any {
     try {
-      console.log('[AIStepGenerator] Creating step from content:', content.substring(0, 100));
-
-      // For now, wrap plain text in a simple HTML structure
-      const htmlContent = `<p>${content}</p>`;
-
-      console.log('[AIStepGenerator] HTML content:', htmlContent);
+      console.log('[AIStepGenerator] Creating step from HTML content:', content.substring(0, 200));
 
       // Parse HTML using JSDOM and ProseMirror's DOMParser
-      const dom = new JSDOM(htmlContent);
+      const dom = new JSDOM(content);
       const parser = DOMParser.fromSchema(this.schema);
       const parsedDoc = parser.parse(dom.window.document.body);
 
@@ -141,7 +185,12 @@ export class AIStepGenerator {
       const step = new ReplaceStep(from, to, slice);
       const stepJSON = step.toJSON();
 
-      console.log('[AIStepGenerator] Step JSON:', JSON.stringify(stepJSON, null, 2));
+      console.log('[AIStepGenerator] Step JSON preview:', JSON.stringify({
+        stepType: stepJSON.stepType,
+        from: stepJSON.from,
+        to: stepJSON.to,
+        contentBlockCount: stepJSON.slice?.content?.length || 0
+      }));
 
       return stepJSON;
     } catch (error) {
