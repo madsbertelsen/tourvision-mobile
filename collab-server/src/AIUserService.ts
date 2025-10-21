@@ -6,6 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { Server } from 'socket.io';
 import { CollaborationManager, DocumentState, ReceiveStepsResult } from './CollaborationManager.js';
 import { AIStepGenerator } from './AIStepGenerator.js';
+import { EditorState } from 'prosemirror-state';
+import { Schema } from 'prosemirror-model';
+import { ReplaceStep } from 'prosemirror-transform';
 
 // Generation tracking interface
 interface ActiveGeneration {
@@ -96,22 +99,7 @@ export class AIUserService {
       console.log(`[AIUserService] System prompt length: ${systemPrompt.length}`);
       console.log(`[AIUserService] User prompt: ${prompt.substring(0, 100)}...`);
 
-      // TESTING: Replace with static content instead of AI
-      console.log(`[AIUserService] Using STATIC TEST CONTENT instead of AI...`);
-
-      // Create a simple async iterable that yields our test content
-      const testContent = "This is a simple test paragraph without any special formatting.";
-      const textStream = (async function* () {
-        // Simulate streaming by yielding the content in chunks
-        const chunkSize = 10;
-        for (let i = 0; i < testContent.length; i += chunkSize) {
-          yield testContent.slice(i, i + chunkSize);
-          // Small delay to simulate streaming
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      })();
-
-      /* DISABLED FOR TESTING
+      // Stream AI-generated content
       const { textStream } = await streamText({
         model,
         system: systemPrompt,
@@ -120,7 +108,6 @@ export class AIUserService {
         maxRetries: 3,
         abortSignal: this.activeGenerations.get(generationId)!.abortController.signal
       });
-      */
 
       // Process the stream and generate steps
       console.log(`[AIUserService] Processing stream...`);
@@ -136,7 +123,7 @@ export class AIUserService {
   }
 
   /**
-   * Process the AI text stream and generate ProseMirror steps
+   * Process the AI text stream and generate ProseMirror steps incrementally
    */
   private async processStream(
     generationId: string,
@@ -148,14 +135,28 @@ export class AIUserService {
     const generation = this.activeGenerations.get(generationId);
     if (!generation) return;
 
-    console.log(`[AIUserService] Processing stream for generation ${generationId}`);
+    console.log(`[AIUserService] Processing stream for generation ${generationId} (INCREMENTAL MODE)`);
 
     try {
-      // Collect the entire AI response first
-      let completeText = '';
+      let htmlBuffer = '';
       let chunkCount = 0;
+      let stepsSent = 0;
+      let blocksSent = 0;
 
-      console.log(`[AIUserService] Collecting AI response...`);
+      // Track current document version
+      let currentVersion = startVersion;
+
+      // Create server-side ProseMirror state for position tracking
+      const schema = this.stepGenerator.getSchema();
+      let editorState = EditorState.create({
+        schema,
+        doc: schema.nodes.doc.create(null, [
+          schema.nodes.paragraph.create()
+        ])
+      });
+
+      console.log(`[AIUserService] Starting incremental streaming with EditorState (docSize: ${editorState.doc.content.size})...`);
+
       for await (const chunk of textStream) {
         // Check if generation was cancelled
         if (!this.activeGenerations.has(generationId)) {
@@ -163,25 +164,78 @@ export class AIUserService {
           break;
         }
 
-        completeText += chunk;
+        htmlBuffer += chunk;
         chunkCount++;
+
+        // Try to extract and process complete HTML blocks
+        const { completeBlocks, remaining } = this.extractCompleteBlocks(htmlBuffer);
+
+        if (completeBlocks.length > 0) {
+          console.log(`[AIUserService] Found ${completeBlocks.length} complete blocks in buffer`);
+
+          // Generate steps for each complete block
+          for (const blockHTML of completeBlocks) {
+            const isFirstBlock = blocksSent === 0;
+
+            // Generate a single step for this block at the current document position
+            const currentDocSize = editorState.doc.content.size;
+            const steps = await this.stepGenerator.generateStepForBlock(
+              documentId,
+              blockHTML,
+              currentDocSize,
+              isFirstBlock
+            );
+
+            if (steps.length > 0) {
+              // Get current document state
+              const docState = this.collabManager.getDocument(documentId);
+              currentVersion = docState?.version || currentVersion;
+
+              // Send steps immediately
+              const result = this.sendSteps(documentId, steps, currentVersion);
+
+              if (result.status === 'accepted') {
+                stepsSent += steps.length;
+                blocksSent++;
+                currentVersion = result.version ?? currentVersion;
+
+                // Apply the step to our server-side EditorState to track positions
+                try {
+                  const step = ReplaceStep.fromJSON(schema, steps[0]);
+                  const tr = editorState.tr;
+                  tr.step(step);
+                  editorState = editorState.apply(tr);
+
+                  console.log(`[AIUserService] Sent block ${blocksSent} (${steps.length} steps, total: ${stepsSent}), version: ${currentVersion}, docSize: ${editorState.doc.content.size}`);
+                } catch (error: any) {
+                  console.error(`[AIUserService] Error applying step to EditorState:`, error);
+                  console.log(`[AIUserService] Sent ${steps.length} steps (total: ${stepsSent}), new version: ${currentVersion}`);
+                }
+              } else {
+                console.warn(`[AIUserService] Steps rejected:`, result);
+              }
+            }
+          }
+
+          // Keep only the remaining incomplete HTML
+          htmlBuffer = remaining;
+        }
 
         // Log progress every 10 chunks
         if (chunkCount % 10 === 0) {
-          console.log(`[AIUserService] Received ${chunkCount} chunks, total length: ${completeText.length}`);
+          console.log(`[AIUserService] Received ${chunkCount} chunks, sent ${blocksSent} blocks (${stepsSent} steps), buffer: ${htmlBuffer.length} chars`);
         }
       }
 
-      console.log(`[AIUserService] Complete response received: ${completeText.length} characters`);
-      console.log(`[AIUserService] Response preview: ${completeText.substring(0, 200)}...`);
+      console.log(`[AIUserService] Stream complete. Processing remaining buffer...`);
 
-      // Now generate ProseMirror steps from the complete content
-      if (completeText.length > 0) {
-        console.log(`[AIUserService] Generating ProseMirror steps for complete content...`);
+      // Process any remaining content in buffer
+      if (htmlBuffer.trim().length > 0) {
+        console.log(`[AIUserService] Generating steps for remaining content (${htmlBuffer.length} chars)`);
 
         const steps = await this.stepGenerator.generateStepsForContent(
           documentId,
-          completeText,
+          htmlBuffer,
           {
             position: options.position,
             replaceRange: options.replaceRange,
@@ -191,23 +245,19 @@ export class AIUserService {
         );
 
         if (steps.length > 0) {
-          console.log(`[AIUserService] Generated ${steps.length} steps`);
-          console.log(`[AIUserService] Step details:`, JSON.stringify(steps[0], null, 2));
-
-          // Get current document version
           const docState = this.collabManager.getDocument(documentId);
-          const currentVersion = docState?.version || startVersion;
+          currentVersion = docState?.version || currentVersion;
 
-          // Send all steps at once
           const result = this.sendSteps(documentId, steps, currentVersion);
-          console.log(`[AIUserService] Steps sent with result:`, result);
-        } else {
-          console.log(`[AIUserService] No steps generated from content`);
+
+          if (result.status === 'accepted') {
+            stepsSent += steps.length;
+            console.log(`[AIUserService] Sent final ${steps.length} steps (total: ${stepsSent})`);
+          }
         }
       }
 
-      // Mark generation as complete
-      console.log(`[AIUserService] Generation ${generationId} complete`);
+      console.log(`[AIUserService] Generation ${generationId} complete. Total steps sent: ${stepsSent}`);
       this.completeGeneration(generationId);
     } catch (error: any) {
       console.error(`[AIUserService] Stream processing error for ${generationId}:`, error);
@@ -215,6 +265,43 @@ export class AIUserService {
       this.cancelGeneration(generationId);
       throw error;
     }
+  }
+
+  /**
+   * Extract complete HTML blocks from buffer
+   * Returns complete blocks and remaining incomplete HTML
+   */
+  private extractCompleteBlocks(html: string): { completeBlocks: string[]; remaining: string } {
+    const blocks: string[] = [];
+    let remaining = html;
+
+    // Block-level tags we want to extract incrementally
+    const blockTags = ['h1', 'h2', 'h3', 'p', 'ul', 'ol'];
+
+    for (const tag of blockTags) {
+      const openTag = `<${tag}>`;
+      const closeTag = `</${tag}>`;
+
+      let startIdx = 0;
+      while (true) {
+        const openIdx = remaining.indexOf(openTag, startIdx);
+        if (openIdx === -1) break;
+
+        const closeIdx = remaining.indexOf(closeTag, openIdx);
+        if (closeIdx === -1) break; // Incomplete block
+
+        // Extract complete block including tags
+        const block = remaining.substring(openIdx, closeIdx + closeTag.length);
+        blocks.push(block);
+
+        // Remove from remaining
+        remaining = remaining.substring(0, openIdx) + remaining.substring(closeIdx + closeTag.length);
+
+        // Don't increment startIdx since we removed content
+      }
+    }
+
+    return { completeBlocks: blocks, remaining };
   }
 
   /**
@@ -307,11 +394,31 @@ export class AIUserService {
   private buildSystemPrompt(docState: DocumentState, options: GenerationOptions): string {
     const basePrompt = `You are an AI assistant helping to write a travel itinerary document.
 
-You should generate content that fits naturally into the document structure.
-Use clear, engaging language suitable for travel planning.
+IMPORTANT: You must respond with valid HTML using only these tags:
+- <h1>, <h2>, <h3> for headings
+- <p> for paragraphs
+- <ul> and <li> for bullet lists
+- <strong> for bold text
+- <em> for italic text
 
-When mentioning locations, format them as specific places that can be mapped.
+Do NOT use:
+- Markdown syntax (no ** or * or #)
+- Any other HTML tags
+- Code blocks or formatting
+
+Generate content that fits naturally into a travel itinerary.
+Use clear, engaging language suitable for travel planning.
 Include practical details like timing, transportation, and tips when relevant.
+
+Example format:
+<h1>Weekend in Paris</h1>
+<p>A romantic getaway to the City of Light.</p>
+<h2>Day 1</h2>
+<p>Start your morning at the <strong>Eiffel Tower</strong>. Arrive early to avoid crowds.</p>
+<ul>
+<li>Visit the observation deck</li>
+<li>Take photos at Trocadéro Gardens</li>
+</ul>
 
 Current document context:
 - Document has ${docState.version} revisions

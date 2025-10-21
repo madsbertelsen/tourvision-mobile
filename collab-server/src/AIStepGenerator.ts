@@ -73,6 +73,14 @@ export class AIStepGenerator {
   }
 
   /**
+   * Get the schema instance
+   * Used by AIUserService to create EditorState for position tracking
+   */
+  getSchema(): Schema {
+    return this.schema;
+  }
+
+  /**
    * Generate ProseMirror steps for AI-generated content
    * @param documentId - The document to generate steps for
    * @param content - The AI-generated content (HTML)
@@ -114,6 +122,61 @@ export class AIStepGenerator {
       return steps;
     } catch (error) {
       console.error('[AIStepGenerator] Error generating steps:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate a single step to append a block to the current document
+   * Used for incremental streaming where blocks arrive one at a time
+   * @param documentId - The document ID
+   * @param blockHTML - HTML for a single block
+   * @param currentDocSize - Current document size (to calculate append position)
+   * @param isFirstBlock - Whether this is the first block (replaces empty paragraph)
+   * @returns Array with single step (for consistency with generateStepsForContent)
+   */
+  async generateStepForBlock(
+    documentId: string,
+    blockHTML: string,
+    currentDocSize: number,
+    isFirstBlock: boolean
+  ): Promise<any[]> {
+    try {
+      console.log(`[AIStepGenerator] Generating step for block (${blockHTML.length} chars, docSize: ${currentDocSize}, isFirst: ${isFirstBlock})`);
+
+      // Parse the single HTML block
+      const dom = new JSDOM(blockHTML);
+      const parser = DOMParser.fromSchema(this.schema);
+      const parsedDoc = parser.parse(dom.window.document.body);
+
+      if (parsedDoc.content.childCount === 0) {
+        console.error('[AIStepGenerator] No content in parsed block');
+        return [];
+      }
+
+      // Get the first (and should be only) block from parsed content
+      const block = parsedDoc.content.child(0);
+      console.log(`[AIStepGenerator] Parsed block type: ${block.type.name}, size: ${block.nodeSize}`);
+
+      let step: ReplaceStep;
+
+      if (isFirstBlock) {
+        // First block: replace the empty paragraph (0, 2)
+        const fragment = Fragment.from(block);
+        const slice = new Slice(fragment, 0, 0);
+        step = new ReplaceStep(0, 2, slice);
+        console.log(`[AIStepGenerator] First block: Replace (0, 2) with ${block.type.name}`);
+      } else {
+        // Subsequent blocks: append at current document end
+        const fragment = Fragment.from(block);
+        const slice = new Slice(fragment, 0, 0);
+        step = new ReplaceStep(currentDocSize, currentDocSize, slice);
+        console.log(`[AIStepGenerator] Append ${block.type.name} at position ${currentDocSize}`);
+      }
+
+      return [step.toJSON()];
+    } catch (error) {
+      console.error('[AIStepGenerator] Error generating step for block:', error);
       return [];
     }
   }
