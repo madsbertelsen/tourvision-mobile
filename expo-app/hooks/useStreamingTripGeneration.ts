@@ -10,7 +10,9 @@ export type TypingInstruction =
   | { type: 'setHeading'; level: 1 | 2 | 3 }
   | { type: 'typeText'; text: string }
   | { type: 'insertParagraph' }
-  | { type: 'insertGeoMark'; attrs: any; text: string };
+  | { type: 'insertGeoMark'; attrs: any; text: string }
+  | { type: 'selectRange'; from: number; to: number }
+  | { type: 'deleteSelection' };
 
 // Parse HTML into typing instructions
 function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
@@ -26,20 +28,21 @@ function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
   let currentLevel: number | null = null;
 
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i].trim();
+    const token = tokens[i];
     if (!token) continue;
 
-    // Check if it's an opening tag
-    const headingMatch = token.match(/^<h([1-3])(?:\s[^>]*)?>$/i);
-    const paragraphMatch = token.match(/^<p(?:\s[^>]*)?>$/i);
-    const geoMarkMatch = token.match(/^<span\s+class="geo-mark"([^>]*)>$/i);
-    const blockquoteOpen = token.match(/^<blockquote(?:\s[^>]*)?>$/i);
+    // Check if it's an opening tag (trim for tag matching)
+    const trimmedToken = token.trim();
+    const headingMatch = trimmedToken.match(/^<h([1-3])(?:\s[^>]*)?>$/i);
+    const paragraphMatch = trimmedToken.match(/^<p(?:\s[^>]*)?>$/i);
+    const geoMarkMatch = trimmedToken.match(/^<span\s+class="geo-mark"([^>]*)>$/i);
+    const blockquoteOpen = trimmedToken.match(/^<blockquote(?:\s[^>]*)?>$/i);
 
-    // Check if it's a closing tag
-    const closingHeading = token.match(/^<\/h[1-3]>$/i);
-    const closingParagraph = token.match(/^<\/p>$/i);
-    const closingGeoMark = token.match(/^<\/span>$/i);
-    const closingBlockquote = token.match(/^<\/blockquote>$/i);
+    // Check if it's a closing tag (trim for tag matching)
+    const closingHeading = trimmedToken.match(/^<\/h[1-3]>$/i);
+    const closingParagraph = trimmedToken.match(/^<\/p>$/i);
+    const closingGeoMark = trimmedToken.match(/^<\/span>$/i);
+    const closingBlockquote = trimmedToken.match(/^<\/blockquote>$/i);
 
     if (headingMatch) {
       const level = parseInt(headingMatch[1]) as 1 | 2 | 3;
@@ -61,7 +64,13 @@ function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
         const value = match[2];
 
         // Convert kebab-case to camelCase for attributes
-        const camelKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        let camelKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+
+        // Remove "data" prefix if present (e.g., "dataGeoId" -> "geoId")
+        if (camelKey.startsWith('data')) {
+          camelKey = camelKey.charAt(4).toLowerCase() + camelKey.slice(5);
+        }
+
         attrs[camelKey] = value;
       }
 
@@ -82,16 +91,16 @@ function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
     } else if (closingGeoMark) {
       // After geo-mark, continue in current element
       currentElement = currentElement === 'geo-mark' ? 'paragraph' : currentElement;
-    } else if (!token.startsWith('<')) {
-      // It's text content
+    } else if (!trimmedToken.startsWith('<')) {
+      // It's text content - decode HTML entities but preserve spaces
       const text = token
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .trim();
+        .replace(/&quot;/g, '"');
 
-      if (text) {
+      // Only push non-empty text (but preserve spaces)
+      if (text.trim()) {
         instructions.push({ type: 'typeText', text });
       }
     }
@@ -100,60 +109,30 @@ function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
   return instructions;
 }
 
-// Mock HTML response that aligns with ProseMirror schema
+// Mock HTML response that aligns with ProseMirror schema (full trip)
 const MOCK_TRIP_HTML = `<itinerary>
-<h1>5-Day Tokyo Food Lover's Adventure</h1>
+<h1>Tokyo Food Tour</h1>
 
 <h2>Day 1: Traditional Tokyo</h2>
 
 <h3>Morning: Temple & Markets</h3>
-<p>Start your journey at <span class="geo-mark" data-geo-id="loc-001" data-place-name="Senso-ji Temple, Tokyo, Japan" data-lat="35.7148" data-lng="139.7967" data-color-index="0" data-coord-source="google">Senso-ji Temple</span>, Tokyo's oldest Buddhist temple. Explore the vibrant <span class="geo-mark" data-geo-id="loc-002" data-place-name="Nakamise Shopping Street, Tokyo, Japan" data-lat="35.7119" data-lng="139.7965" data-color-index="1" data-coord-source="google">Nakamise Shopping Street</span> leading to the temple, sampling traditional snacks like ningyo-yaki (small cakes) and senbei (rice crackers).</p>
+<p>Start your journey at <span class="geo-mark" data-geo-id="loc-001" data-place-name="Senso-ji Temple, Tokyo, Japan" data-lat="35.7148" data-lng="139.7967" data-color-index="0" data-coord-source="google">Senso-ji Temple</span>, Tokyo's oldest Buddhist temple. Explore the vibrant <span class="geo-mark" data-geo-id="loc-002" data-place-name="Nakamise Shopping Street, Tokyo, Japan" data-lat="35.7119" data-lng="139.7965" data-color-index="1" data-coord-source="google">Nakamise Shopping Street</span> for traditional snacks.</p>
 
 <h3>Lunch: Authentic Ramen</h3>
-<p>Head to <span class="geo-mark" data-geo-id="loc-003" data-place-name="Ichiran Ramen Shibuya, Tokyo, Japan" data-lat="35.6595" data-lng="139.7004" data-color-index="2" data-coord-source="google">Ichiran Ramen in Shibuya</span> for an authentic tonkotsu ramen experience in their unique solo dining booths.</p>
-
-<h3>Afternoon: Tsukiji Outer Market</h3>
-<p>Visit <span class="geo-mark" data-geo-id="loc-004" data-place-name="Tsukiji Outer Market, Tokyo, Japan" data-lat="35.6654" data-lng="139.7707" data-color-index="3" data-coord-source="google">Tsukiji Outer Market</span> for the freshest sushi and seafood. Try tamago-yaki, grilled scallops, and uni (sea urchin) from the various stalls.</p>
-
-<h2>Day 2: Modern Tokyo Cuisine</h2>
-
-<h3>Morning: Trendy Breakfast</h3>
-<p>Experience modern Japanese breakfast at <span class="geo-mark" data-geo-id="loc-005" data-place-name="Bills Omotesando, Tokyo, Japan" data-lat="35.6652" data-lng="139.7125" data-color-index="4" data-coord-source="google">Bills in Omotesando</span>, famous for their fluffy ricotta pancakes.</p>
-
-<h3>Afternoon: Harajuku Street Food</h3>
-<p>Explore <span class="geo-mark" data-geo-id="loc-006" data-place-name="Takeshita Street, Tokyo, Japan" data-lat="35.6702" data-lng="139.7033" data-color-index="5" data-coord-source="google">Takeshita Street in Harajuku</span> and try colorful crepes, giant rainbow cotton candy, and Instagram-worthy desserts.</p>
-
-<h3>Evening: Yakitori Alley</h3>
-<p>Dine at <span class="geo-mark" data-geo-id="loc-007" data-place-name="Omoide Yokocho, Tokyo, Japan" data-lat="35.6938" data-lng="139.7004" data-color-index="6" data-coord-source="google">Omoide Yokocho (Memory Lane)</span> in Shinjuku, a narrow alley packed with tiny yakitori joints serving grilled chicken skewers and cold beer.</p>
-
-<h2>Day 3: Culinary Classes & Markets</h2>
-
-<h3>Morning: Sushi Making Class</h3>
-<p>Join a hands-on sushi-making workshop near <span class="geo-mark" data-geo-id="loc-008" data-place-name="Tokyo Tower, Tokyo, Japan" data-lat="35.6586" data-lng="139.7454" data-color-index="7" data-coord-source="google">Tokyo Tower</span>. Learn to make nigiri, maki rolls, and taste your creations.</p>
-
-<h3>Afternoon: Depachika Food Halls</h3>
-<p>Visit the basement food halls (depachika) at <span class="geo-mark" data-geo-id="loc-009" data-place-name="Mitsukoshi Ginza, Tokyo, Japan" data-lat="35.6719" data-lng="139.7659" data-color-index="8" data-coord-source="google">Mitsukoshi in Ginza</span>. Sample premium wagyu beef, artisanal Japanese sweets, and beautifully packaged bento boxes.</p>
-
-<h2>Day 4: Hidden Gems & Local Favorites</h2>
-
-<h3>Morning: Breakfast at Toyosu</h3>
-<p>Early visit to <span class="geo-mark" data-geo-id="loc-010" data-place-name="Toyosu Fish Market, Tokyo, Japan" data-lat="35.6425" data-lng="139.7848" data-color-index="9" data-coord-source="google">Toyosu Fish Market</span> (the new Tsukiji) to witness the tuna auctions and enjoy the freshest sushi breakfast at the market restaurants.</p>
-
-<h3>Afternoon: Tempura Experience</h3>
-<p>Savor crispy tempura at a traditional restaurant in <span class="geo-mark" data-geo-id="loc-011" data-place-name="Ningyocho, Tokyo, Japan" data-lat="35.6858" data-lng="139.7831" data-color-index="10" data-coord-source="google">Ningyocho</span>, where chefs fry seasonal vegetables and seafood to perfection.</p>
-
-<h2>Day 5: Sweet Endings</h2>
-
-<h3>Morning: Matcha Everything</h3>
-<p>Visit <span class="geo-mark" data-geo-id="loc-012" data-place-name="Uji Tea House Asakusa, Tokyo, Japan" data-lat="35.7101" data-lng="139.7989" data-color-index="11" data-coord-source="google">a traditional tea house in Asakusa</span> for matcha ceremonies, matcha ice cream, and matcha parfaits.</p>
-
-<h3>Afternoon: Souvenir Shopping</h3>
-<p>Pick up food souvenirs at <span class="geo-mark" data-geo-id="loc-013" data-place-name="Tokyo Station, Tokyo, Japan" data-lat="35.6812" data-lng="139.7671" data-color-index="12" data-coord-source="google">Tokyo Station</span>'s character street and enjoy the famous Tokyo Banana and other local treats.</p>
+<p>Head to <span class="geo-mark" data-geo-id="loc-003" data-place-name="Ichiran Ramen Shibuya, Tokyo, Japan" data-lat="35.6595" data-lng="139.7004" data-color-index="2" data-coord-source="google">Ichiran Ramen</span> for tonkotsu ramen in solo dining booths.</p>
 
 <blockquote>
-<p><strong>Pro Tip:</strong> Get a Suica card for easy transportation between all these locations. Most restaurants accept cash only, so keep yen handy!</p>
+<p><strong>Pro Tip:</strong> Get a Suica card for easy transportation. Most restaurants accept cash only!</p>
 </blockquote>
 </itinerary>`;
+
+// Mock HTML for inline edit (replacing ramen section with sushi alternatives)
+const MOCK_INLINE_EDIT_HTML = `<h3>Lunch: Sushi Experience</h3>
+<p>Visit <span class="geo-mark" data-geo-id="loc-new-001" data-place-name="Sushi Dai, Tsukiji, Tokyo, Japan" data-lat="35.6654" data-lng="139.7707" data-color-index="3" data-coord-source="google">Sushi Dai</span> at the outer Tsukiji Market for incredibly fresh sushi. Alternatively, try <span class="geo-mark" data-geo-id="loc-new-002" data-place-name="Sushizanmai Tsukiji, Tokyo, Japan" data-lat="35.6657" data-lng="139.7703" data-color-index="4" data-coord-source="google">Sushizanmai</span> for a more accessible option with excellent quality.</p>
+
+<blockquote>
+<p><strong>Sushi Tip:</strong> Arrive early at Sushi Dai as lines can be 2+ hours. Sushizanmai is open 24/7 and has shorter waits!</p>
+</blockquote>`;
 
 export interface StreamingState {
   isStreaming: boolean;
@@ -223,7 +202,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     try {
       if (USE_MOCK_STREAMING) {
         console.log('[StreamingHook] Using MOCK streaming');
-        await simulateMockStreaming(abortControllerRef.current.signal);
+        await simulateMockStreaming(prompt, abortControllerRef.current.signal);
       } else {
         console.log('[StreamingHook] Using REAL API streaming');
         await streamFromAPI(prompt, abortControllerRef.current.signal);
@@ -247,16 +226,36 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
   }, []);
 
   // Mock streaming simulation - generates typing instructions for realistic typing
-  const simulateMockStreaming = async (signal: AbortSignal) => {
+  const simulateMockStreaming = async (prompt: string, signal: AbortSignal) => {
     console.log('[StreamingHook] Starting mock streaming (typing mode)...');
+    console.log('[StreamingHook] Prompt:', prompt);
+
+    // Detect if this is an inline edit (replacement) or full trip generation
+    const isInlineEdit = prompt.includes('selected this text');
+    console.log('[StreamingHook] Is inline edit:', isInlineEdit);
 
     // Simulate a brief "thinking" delay before starting
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Choose appropriate mock HTML based on prompt type
+    const mockHtml = isInlineEdit ? MOCK_INLINE_EDIT_HTML : MOCK_TRIP_HTML;
+    console.log('[StreamingHook] Using mock HTML length:', mockHtml.length);
+
     // Parse the mock HTML into typing instructions
-    const instructions = parseHTMLToTypingInstructions(MOCK_TRIP_HTML);
+    const instructions = parseHTMLToTypingInstructions(mockHtml);
 
     console.log(`[StreamingHook] Generated ${instructions.length} typing instructions`);
+
+    // Debug: Count instruction types
+    const typeCounts = instructions.reduce((acc, inst) => {
+      acc[inst.type] = (acc[inst.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log('[StreamingHook] Instruction types:', typeCounts);
+
+    // Debug: Show first few geo-mark instructions
+    const geoMarkInstructions = instructions.filter(inst => inst.type === 'insertGeoMark');
+    console.log('[StreamingHook] First 3 geo-mark instructions:', geoMarkInstructions.slice(0, 3));
 
     // Set the instructions but keep document empty - it will be built by typing
     setState(prev => ({

@@ -110,6 +110,22 @@ function MockLayoutContent() {
           headerShown: false, // Screen has its own header
         }}
       />
+      <Drawer.Screen
+        name="prompt-trip"
+        options={{
+          title: 'Generate Trip',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+        }}
+      />
+      <Drawer.Screen
+        name="generate-trip"
+        options={{
+          title: 'New Trip',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false, // Screen has its own header
+        }}
+      />
     </Drawer>
   );
 }

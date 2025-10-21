@@ -2,16 +2,16 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
@@ -19,10 +19,10 @@ import { createTrip, saveTrip } from '@/utils/trips-storage';
 
 export default function GenerateTripScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ prompt: string }>();
   const documentRef = useRef<ProseMirrorWebViewRef>(null);
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
-  const [prompt, setPrompt] = useState('');
   const [toolbarState, setToolbarState] = useState({
     paragraph: false,
     h1: false,
@@ -35,10 +35,14 @@ export default function GenerateTripScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const typingAbortRef = useRef<AbortController | null>(null);
   const [localDoc, setLocalDoc] = useState<any>(null); // Track document during typing
+  const processedInstructionsRef = useRef<TypingInstruction[] | null>(null); // Track which instructions we've processed
+  const bottomBarAnim = useRef(new Animated.Value(100)).current; // Start off-screen
+  const [savedTripId, setSavedTripId] = useState<string | null>(null);
 
   // Sync streaming document to local state
   const currentDoc = localDoc || streamState.document;
   const isGenerating = streamState.isStreaming;
+  const isComplete = !isGenerating && !isTyping && savedTripId !== null;
 
   // Auto-scroll to bottom when document updates during generation
   // Throttle scrolling to avoid jerky behavior
@@ -57,12 +61,19 @@ export default function GenerateTripScreen() {
   // Process typing instructions when they become available
   useEffect(() => {
     const processTypingInstructions = async () => {
-      if (!streamState.useTypingMode || streamState.typingInstructions.length === 0 || isTyping) {
+      // Don't process if no instructions, already typing, or already processed these exact instructions
+      if (
+        !streamState.useTypingMode ||
+        streamState.typingInstructions.length === 0 ||
+        isTyping ||
+        processedInstructionsRef.current === streamState.typingInstructions
+      ) {
         return;
       }
 
       console.log('[GenerateTrip] Starting typing simulation...');
       setIsTyping(true);
+      processedInstructionsRef.current = streamState.typingInstructions;
 
       // Create abort controller for cancellation
       typingAbortRef.current = new AbortController();
@@ -72,6 +83,9 @@ export default function GenerateTripScreen() {
         if (documentRef.current) {
           documentRef.current.focusEditor();
           await sleep(500); // Wait for editor to focus
+
+          // Show the typing cursor indicator
+          documentRef.current.sendCommand('showTypingCursor');
         }
 
         const instructions = streamState.typingInstructions;
@@ -110,8 +124,8 @@ export default function GenerateTripScreen() {
                 documentRef.current.typeCharacter(char);
               }
 
-              // Delay between characters (realistic typing speed)
-              await sleep(50);
+              // Delay between characters (slower so cursor is visible)
+              await sleep(100);
             }
           } else if (instruction.type === 'insertParagraph') {
             // Insert paragraph break
@@ -120,7 +134,9 @@ export default function GenerateTripScreen() {
             }
             await sleep(500); // Pause after paragraph
           } else if (instruction.type === 'insertGeoMark') {
-            // First type the text character by character
+            console.log('[GenerateTrip] Processing insertGeoMark instruction:', instruction);
+
+            // Type the text character by character
             const text = instruction.text;
             for (let j = 0; j < text.length; j++) {
               if (typingAbortRef.current.signal.aborted) break;
@@ -140,7 +156,7 @@ export default function GenerateTripScreen() {
 
               // Send command to select text backwards and create geo-mark
               documentRef.current.sendCommand('selectBackward', { length: textLength });
-              await sleep(100); // Wait for selection
+              await sleep(300); // Wait for selection to be processed by WebView
 
               // Create geo-mark with attributes
               const geoMarkData = {
@@ -153,7 +169,7 @@ export default function GenerateTripScreen() {
               };
 
               documentRef.current.createGeoMarkWithData(geoMarkData);
-              await sleep(100); // Wait for geo-mark creation
+              await sleep(200); // Wait for geo-mark creation
             }
           }
         }
@@ -184,23 +200,16 @@ export default function GenerateTripScreen() {
             });
             console.log('[GenerateTrip] Trip saved:', newTrip.id);
 
-            // Show success message
-            Alert.alert(
-              'Trip Generated!',
-              `Your trip "${title}" has been created. You can now edit it.`,
-              [
-                {
-                  text: 'Open Trip',
-                  onPress: () => {
-                    router.replace(`/(mock)/trip/${newTrip.id}`);
-                  },
-                },
-                {
-                  text: 'Create Another',
-                  style: 'cancel',
-                },
-              ]
-            );
+            // Store trip ID and show bottom bar
+            setSavedTripId(newTrip.id);
+
+            // Animate bottom bar sliding up
+            Animated.spring(bottomBarAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 50,
+              friction: 8,
+            }).start();
           } catch (error) {
             console.error('[GenerateTrip] Failed to save trip:', error);
             Alert.alert('Error', 'Failed to save trip');
@@ -209,13 +218,17 @@ export default function GenerateTripScreen() {
       } catch (error) {
         console.error('[GenerateTrip] Typing error:', error);
       } finally {
+        // Hide the typing cursor indicator
+        if (documentRef.current) {
+          documentRef.current.sendCommand('hideTypingCursor');
+        }
         setIsTyping(false);
         typingAbortRef.current = null;
       }
     };
 
     processTypingInstructions();
-  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping, localDoc, router]);
+  }, [streamState.typingInstructions, streamState.useTypingMode, isTyping]);
 
   // Helper function for delays
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -230,17 +243,23 @@ export default function GenerateTripScreen() {
     setToolbarState(state);
   }, []);
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      return;
+  // Auto-start generation when screen loads
+  useEffect(() => {
+    const prompt = params.prompt;
+    if (prompt) {
+      // Reset local document state and processed instructions
+      setLocalDoc(null);
+      processedInstructionsRef.current = null;
+
+      console.log('[GenerateTrip] Auto-starting generation with prompt:', prompt);
+      startGeneration(prompt);
+    } else {
+      // No prompt provided, go back
+      Alert.alert('Error', 'No prompt provided', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
     }
-
-    // Reset local document state
-    setLocalDoc(null);
-
-    console.log('[GenerateTrip] Starting generation with prompt:', prompt);
-    await startGeneration(prompt);
-  };
+  }, [params.prompt]);
 
   // Handle errors
   useEffect(() => {
@@ -249,7 +268,7 @@ export default function GenerateTripScreen() {
         {
           text: 'Try Again',
           onPress: () => {
-            // Reset will happen automatically
+            router.back();
           },
         },
       ]);
@@ -282,176 +301,72 @@ export default function GenerateTripScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-          <Ionicons name="close" size={24} color="#374151" />
+        <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#3B82F6" />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Generate Trip with AI</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Prompt Input */}
-      <View style={styles.promptSection}>
-        <Text style={styles.promptLabel}>What kind of trip do you want to plan?</Text>
-        <View style={styles.promptInputContainer}>
-          <TextInput
-            style={styles.promptInput}
-            value={prompt}
-            onChangeText={setPrompt}
-            placeholder="e.g., Plan a 5-day trip to Tokyo for food lovers"
-            placeholderTextColor="#9ca3af"
-            multiline
-            maxLength={200}
-            editable={!isGenerating && !isTyping}
-          />
-          <TouchableOpacity
-            onPress={handleGenerate}
-            style={[
-              styles.generateButton,
-              (!prompt.trim() || isGenerating || isTyping) && styles.generateButtonDisabled
-            ]}
-            disabled={!prompt.trim() || isGenerating || isTyping}
-          >
-            {(isGenerating || isTyping) ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="sparkles" size={20} color="#fff" />
-                <Text style={styles.generateButtonText}>Generate</Text>
-              </>
-            )}
-          </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          {isGenerating && !isTyping && (
+            <>
+              <ActivityIndicator size="small" color="#3B82F6" style={{ marginRight: 8 }} />
+              <Text style={styles.headerStatus}>AI is preparing your trip...</Text>
+            </>
+          )}
+          {isTyping && (
+            <>
+              <Text style={styles.headerEmoji}>⌨️</Text>
+              <Text style={styles.headerStatus}>AI is typing your trip...</Text>
+            </>
+          )}
+          {!isGenerating && !isTyping && (
+            <Text style={styles.headerTitle}>New Trip</Text>
+          )}
         </View>
-        {isGenerating && !isTyping && (
-          <Text style={styles.generatingText}>
-            ✨ AI is preparing your trip...
-          </Text>
-        )}
-        {isTyping && (
-          <Text style={styles.generatingText}>
-            ⌨️ AI is typing your trip...
-          </Text>
-        )}
+        <View style={{ width: 60 }} />
       </View>
 
       {/* Document Editor */}
-      <KeyboardAvoidingView
-        style={styles.editorWrapper}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <View style={styles.editorContainer}>
-          <ProseMirrorWebView
-            ref={documentRef}
-            content={currentDoc}
-            editable={true}
-            onChange={handleDocumentChange}
-            onToolbarStateChange={handleToolbarStateChange}
-          />
-        </View>
+      <View style={styles.editorContainer}>
+        <ProseMirrorWebView
+          ref={documentRef}
+          content={currentDoc}
+          editable={true}
+          onChange={handleDocumentChange}
+          onToolbarStateChange={handleToolbarStateChange}
+        />
+      </View>
 
-        {/* Toolbar - Show during typing with highlights */}
-        {(!isGenerating || isTyping) && (
-          <View style={styles.toolbar}>
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('setParagraph')}
-              style={[
-                styles.toolbarButton,
-                toolbarState.paragraph && styles.toolbarButtonActive,
-                highlightedButton === 'paragraph' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.paragraph && styles.toolbarButtonTextActive,
-                highlightedButton === 'paragraph' && styles.toolbarButtonTextHighlighted
-              ]}>P</Text>
-            </TouchableOpacity>
+      {/* Bottom Action Bar - Slides up when complete */}
+      {isComplete && (
+        <Animated.View
+          style={[
+            styles.bottomBar,
+            {
+              transform: [{ translateY: bottomBarAnim }]
+            }
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryButton]}
+            onPress={() => {
+              if (savedTripId) {
+                router.replace(`/(mock)/trip/${savedTripId}`);
+              }
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#fff" />
+            <Text style={styles.primaryButtonText}>Open Trip</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('setHeading', { level: 1 })}
-              style={[
-                styles.toolbarButton,
-                toolbarState.h1 && styles.toolbarButtonActive,
-                highlightedButton === 'h1' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.h1 && styles.toolbarButtonTextActive,
-                highlightedButton === 'h1' && styles.toolbarButtonTextHighlighted
-              ]}>H1</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('setHeading', { level: 2 })}
-              style={[
-                styles.toolbarButton,
-                toolbarState.h2 && styles.toolbarButtonActive,
-                highlightedButton === 'h2' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.h2 && styles.toolbarButtonTextActive,
-                highlightedButton === 'h2' && styles.toolbarButtonTextHighlighted
-              ]}>H2</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('setHeading', { level: 3 })}
-              style={[
-                styles.toolbarButton,
-                toolbarState.h3 && styles.toolbarButtonActive,
-                highlightedButton === 'h3' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.h3 && styles.toolbarButtonTextActive,
-                highlightedButton === 'h3' && styles.toolbarButtonTextHighlighted
-              ]}>H3</Text>
-            </TouchableOpacity>
-
-            <View style={styles.separator} />
-
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('toggleBold')}
-              style={[
-                styles.toolbarButton,
-                toolbarState.bold && styles.toolbarButtonActive,
-                highlightedButton === 'bold' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.bold && styles.toolbarButtonTextActive,
-                highlightedButton === 'bold' && styles.toolbarButtonTextHighlighted
-              ]}>B</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => documentRef.current?.sendCommand('toggleItalic')}
-              style={[
-                styles.toolbarButton,
-                toolbarState.italic && styles.toolbarButtonActive,
-                highlightedButton === 'italic' && styles.toolbarButtonHighlighted
-              ]}
-              disabled={isTyping}
-            >
-              <Text style={[
-                styles.toolbarButtonText,
-                toolbarState.italic && styles.toolbarButtonTextActive,
-                highlightedButton === 'italic' && styles.toolbarButtonTextHighlighted
-              ]}>I</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </KeyboardAvoidingView>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#3B82F6" />
+            <Text style={styles.secondaryButtonText}>Create Another</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -469,128 +384,86 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
   },
-  headerButton: {
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     padding: 4,
-    width: 40,
+  },
+  backText: {
+    fontSize: 17,
+    color: '#3B82F6',
+  },
+  headerCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: '#111827',
-    flex: 1,
-    textAlign: 'center',
   },
-  promptSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  promptLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  promptInputContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  promptInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
+  headerStatus: {
     fontSize: 15,
-    backgroundColor: '#ffffff',
-    minHeight: 60,
-    maxHeight: 120,
-    textAlignVertical: 'top',
-  },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minHeight: 44,
-  },
-  generateButtonDisabled: {
-    backgroundColor: '#9ca3af',
-    opacity: 0.6,
-  },
-  generateButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  generatingText: {
-    marginTop: 12,
-    fontSize: 14,
+    fontWeight: '500',
     color: '#6b7280',
-    fontStyle: 'italic',
   },
-  editorWrapper: {
-    flex: 1,
+  headerEmoji: {
+    fontSize: 16,
+    marginRight: 8,
   },
   editorContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  toolbar: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#f9fafb',
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 32, // Extra padding for safe area
+    flexDirection: 'row',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
   },
-  toolbarButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    minWidth: 40,
-    alignItems: 'center',
-  },
-  toolbarButtonActive: {
+  primaryButton: {
     backgroundColor: '#3B82F6',
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
     borderColor: '#3B82F6',
   },
-  toolbarButtonText: {
-    fontSize: 14,
+  secondaryButtonText: {
+    color: '#3B82F6',
+    fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
-  },
-  toolbarButtonTextActive: {
-    color: '#ffffff',
-  },
-  toolbarButtonHighlighted: {
-    backgroundColor: '#8B5CF6',
-    borderColor: '#8B5CF6',
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  toolbarButtonTextHighlighted: {
-    color: '#ffffff',
-  },
-  separator: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#e5e7eb',
-    marginHorizontal: 4,
   },
 });
