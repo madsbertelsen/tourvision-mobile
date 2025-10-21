@@ -75,7 +75,7 @@ export default function TripDocumentView() {
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
   // Set up collaboration
-  const { setEditorRef } = useCollaboration();
+  const { setEditorRef, isCollaborating, startCollaboration } = useCollaboration();
   useEffect(() => {
     setEditorRef(documentRef);
   }, [setEditorRef]);
@@ -190,11 +190,20 @@ export default function TripDocumentView() {
   const handleAIPrompt = useCallback(async (prompt: string) => {
     console.log('[TripDocumentView] Starting AI generation with prompt:', prompt);
     console.log('[TripDocumentView] Resetting hasProcessedTypingRef to false');
+
+    // Auto-enable collaboration if not already active
+    if (!isCollaborating) {
+      console.log('[TripDocumentView] Auto-enabling collaboration for AI generation');
+      await startCollaboration(tripId);
+      // Give collaboration a moment to establish connection
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     // Reset flag so new content can be typed
     hasProcessedTypingRef.current = false;
-    // Keep modal open while generating
-    await startGeneration(prompt);
-  }, [startGeneration]);
+    // Use the trip ID for AI generation (not a temporary document ID)
+    await startGeneration(prompt, tripId);
+  }, [startGeneration, isCollaborating, startCollaboration, tripId]);
 
   // Inline AI edit handler (triggered by @ai comments)
   const handleInlineAIEdit = useCallback(async (
@@ -205,6 +214,14 @@ export default function TripDocumentView() {
   ) => {
     console.log('[TripDocumentView] Starting inline AI edit');
     console.log('[TripDocumentView] Resetting hasProcessedTypingRef to false for inline edit');
+
+    // Auto-enable collaboration if not already active
+    if (!isCollaborating) {
+      console.log('[TripDocumentView] Auto-enabling collaboration for inline AI edit');
+      await startCollaboration(tripId);
+      // Give collaboration a moment to establish connection
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
 
     // Reset flag so new content can be typed
     hasProcessedTypingRef.current = false;
@@ -223,9 +240,9 @@ Please generate replacement content that addresses the user's request. Only retu
     // Store the range to delete
     (window as any).__inlineEditRange = { from, to };
 
-    // Start generation
-    await startGeneration(prompt);
-  }, [startGeneration]);
+    // Start generation with trip ID
+    await startGeneration(prompt, tripId);
+  }, [startGeneration, isCollaborating, startCollaboration, tripId]);
 
   // Helper function for delays
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

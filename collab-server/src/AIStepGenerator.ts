@@ -1,9 +1,3 @@
-import { JSDOM } from 'jsdom';
-import { DOMParser } from 'prosemirror-model';
-import { Step, ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
-import { Schema } from 'prosemirror-model';
-import { schema as basicSchema } from 'prosemirror-schema-basic';
-import { addListNodes } from 'prosemirror-schema-list';
 import { CollaborationManager } from './CollaborationManager.js';
 
 // Step generation options
@@ -21,22 +15,9 @@ export interface StepGenerationOptions {
  */
 export class AIStepGenerator {
   private collabManager: CollaborationManager;
-  private schema: Schema;
-  private domParser: DOMParser;
 
   constructor(collabManager: CollaborationManager) {
     this.collabManager = collabManager;
-
-    // Initialize ProseMirror schema with list nodes
-    this.schema = new Schema({
-      nodes: addListNodes(basicSchema.spec.nodes as any, "paragraph block*", "block"),
-      marks: basicSchema.spec.marks
-    });
-
-    // Create DOM parser for HTML content
-    const dom = new JSDOM();
-    const document = dom.window.document;
-    this.domParser = DOMParser.fromSchema(this.schema);
   }
 
   /**
@@ -50,8 +31,8 @@ export class AIStepGenerator {
     documentId: string,
     content: string,
     options: StepGenerationOptions = {}
-  ): Promise<Step[]> {
-    const steps: Step[] = [];
+  ): Promise<any[]> {
+    const steps: any[] = [];
 
     try {
       // Get current document state
@@ -60,34 +41,11 @@ export class AIStepGenerator {
         throw new Error('Document not found');
       }
 
-      // Parse content based on type (HTML vs plain text)
-      const fragment = this.parseContent(content);
-
-      // Determine position for insertion
-      const position = this.determinePosition(docState, options);
-
-      // Create appropriate step based on options
-      if (options.replaceRange) {
-        // Create replace step for inline edits
-        const replaceStep = this.createReplaceStep(
-          options.replaceRange.from,
-          options.replaceRange.to,
-          fragment
-        );
-        steps.push(replaceStep);
-      } else {
-        // Create insert step for appending content
-        const insertStep = this.createInsertStep(position, fragment);
-        steps.push(insertStep);
-      }
-
-      // Add formatting steps if needed (for streaming)
-      if (options.isStreaming && !options.isFinal) {
-        // Add a temporary marker for streaming indication
-        const markerStep = this.createStreamingMarker(position);
-        if (markerStep) {
-          steps.push(markerStep);
-        }
+      // For now, create a simple text insertion step
+      // This is a simplified version - in production you'd want full ProseMirror integration
+      const step = this.createSimpleTextStep(content, options);
+      if (step) {
+        steps.push(step);
       }
 
       return steps;
@@ -98,137 +56,92 @@ export class AIStepGenerator {
   }
 
   /**
-   * Parse content into ProseMirror fragment
+   * Create a simple text insertion step
+   * This creates a basic step structure that can be applied to a ProseMirror document
    */
-  private parseContent(content: string): any {
-    // Check if content is HTML
-    if (content.includes('<') && content.includes('>')) {
-      return this.parseHTML(content);
-    }
+  private createSimpleTextStep(content: string, options: StepGenerationOptions): any {
+    // Parse content to extract structure
+    const blocks = this.parseContentToBlocks(content);
 
-    // Parse as plain text
-    return this.parsePlainText(content);
-  }
-
-  /**
-   * Parse HTML content into ProseMirror fragment
-   */
-  private parseHTML(html: string): any {
-    try {
-      // Create a DOM element with the HTML
-      const dom = new JSDOM(`<!DOCTYPE html><body>${html}</body>`);
-      const element = dom.window.document.body;
-
-      // Parse using ProseMirror's DOMParser
-      return this.domParser.parse(element);
-    } catch (error) {
-      console.error('Error parsing HTML:', error);
-      // Fallback to plain text
-      return this.parsePlainText(html);
-    }
-  }
-
-  /**
-   * Parse plain text into ProseMirror fragment
-   */
-  private parsePlainText(text: string): any {
-    // Split text into paragraphs
-    const paragraphs = text.split('\n\n').filter(p => p.trim());
-
-    // Create paragraph nodes
-    const nodes = paragraphs.map(para => {
-      // Handle special formatting (headers, lists, etc.)
-      if (para.startsWith('# ')) {
-        return this.schema.nodes.heading.create(
-          { level: 1 },
-          this.schema.text(para.substring(2))
-        );
-      } else if (para.startsWith('## ')) {
-        return this.schema.nodes.heading.create(
-          { level: 2 },
-          this.schema.text(para.substring(3))
-        );
-      } else if (para.startsWith('- ') || para.startsWith('* ')) {
-        // Create list item
-        return this.schema.nodes.bullet_list.create(null, [
-          this.schema.nodes.list_item.create(null, [
-            this.schema.nodes.paragraph.create(null,
-              this.schema.text(para.substring(2))
-            )
-          ])
-        ]);
-      } else {
-        // Regular paragraph
-        return this.schema.nodes.paragraph.create(null,
-          this.schema.text(para)
-        );
+    // Create a replace step that inserts the content
+    // Using a simplified step format that the client can interpret
+    const step = {
+      stepType: 'replace',
+      from: options.replaceRange?.from ?? 1, // Default to position 1 (after doc start)
+      to: options.replaceRange?.to ?? 1,
+      slice: {
+        content: blocks,
+        openStart: 0,
+        openEnd: 0
       }
-    });
+    };
 
-    // Create fragment from nodes
-    return this.schema.nodes.doc.create(null, nodes);
+    return step;
   }
 
   /**
-   * Determine the position for content insertion
+   * Parse content into block structure
+   * Converts plain text or simple HTML into block nodes
    */
-  private determinePosition(docState: any, options: StepGenerationOptions): number {
-    if (options.position !== undefined) {
-      return options.position;
+  private parseContentToBlocks(content: string): any[] {
+    const blocks: any[] = [];
+
+    // Remove HTML tags for now and just handle text
+    const plainText = content
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .trim();
+
+    if (!plainText) {
+      return blocks;
     }
 
-    // Default to end of document
-    // In a real implementation, we would parse the doc and find the actual end position
-    return docState.doc.content.size || 1;
-  }
+    // Split into paragraphs
+    const paragraphs = plainText.split(/\n\n+/);
 
-  /**
-   * Create a replace step
-   */
-  private createReplaceStep(from: number, to: number, fragment: any): Step {
-    // Create a ReplaceStep
-    // In a real implementation, this would properly construct the step
-    return new ReplaceStep(from, to, fragment.content.size ? fragment : fragment);
-  }
-
-  /**
-   * Create an insert step
-   */
-  private createInsertStep(position: number, fragment: any): Step {
-    // Create an insert step (ReplaceStep with from === to)
-    return new ReplaceStep(position, position, fragment);
-  }
-
-  /**
-   * Create a streaming marker step (for visual feedback)
-   */
-  private createStreamingMarker(position: number): Step | null {
-    try {
-      // Add a temporary decoration or marker
-      // This is optional and helps with UX during streaming
-      const marker = this.schema.text('█', [
-        this.schema.marks.code.create()
-      ]);
-      // Create a slice from the node
-      const slice = (this.schema.nodes.doc.create(null, marker) as any).slice(0);
-      return new ReplaceStep(position, position, slice);
-    } catch (error) {
-      // Markers are optional, so we can safely ignore errors
-      return null;
+    for (const para of paragraphs) {
+      if (para.trim()) {
+        // Create a paragraph node with text
+        blocks.push({
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: para.trim()
+            }
+          ]
+        });
+      }
     }
+
+    // If no paragraphs were created, create at least one with the content
+    if (blocks.length === 0 && plainText) {
+      blocks.push({
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: plainText
+          }
+        ]
+      });
+    }
+
+    return blocks;
   }
 
   /**
    * Convert steps to JSON for transmission
    */
-  static stepsToJSON(steps: Step[]): any[] {
-    return steps.map(step => step.toJSON());
+  static stepsToJSON(steps: any[]): any[] {
+    // Steps are already in JSON format
+    return steps;
   }
 
   /**
    * Create steps from JSON
    */
-  static stepsFromJSON(schema: Schema, stepsJSON: any[]): Step[] {
-    return stepsJSON.map(json => Step.fromJSON(schema, json));
+  static stepsFromJSON(schema: any, stepsJSON: any[]): any[] {
+    // Return steps as-is since we're using simplified format
+    return stepsJSON;
   }
 }

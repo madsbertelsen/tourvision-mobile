@@ -70,6 +70,7 @@ export class AIUserService {
    */
   async startGeneration(documentId: string, prompt: string, options: GenerationOptions = {}): Promise<string> {
     const generationId = uuidv4();
+    console.log(`[AIUserService] Starting generation ${generationId} for document ${documentId}`);
 
     try {
       // Get current document state
@@ -86,12 +87,17 @@ export class AIUserService {
       });
 
       // Select AI model based on options or default
-      const model = this.selectModel(options.model);
+      const modelName = options.model || process.env.DEFAULT_AI_MODEL || 'mistral-small-latest';
+      console.log(`[AIUserService] Using model: ${modelName}`);
+      const model = this.selectModel(modelName);
 
       // Build the system prompt with document context
       const systemPrompt = this.buildSystemPrompt(docState, options);
+      console.log(`[AIUserService] System prompt length: ${systemPrompt.length}`);
+      console.log(`[AIUserService] User prompt: ${prompt.substring(0, 100)}...`);
 
       // Stream the AI response
+      console.log(`[AIUserService] Starting AI stream...`);
       const { textStream } = await streamText({
         model,
         system: systemPrompt,
@@ -102,10 +108,13 @@ export class AIUserService {
       });
 
       // Process the stream and generate steps
+      console.log(`[AIUserService] Processing stream...`);
       this.processStream(generationId, documentId, textStream, docState.version, options);
 
       return generationId;
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`[AIUserService] Error starting generation:`, error);
+      console.error(`[AIUserService] Error details:`, error.message, error.stack);
       this.activeGenerations.delete(generationId);
       throw error;
     }
@@ -124,6 +133,8 @@ export class AIUserService {
     const generation = this.activeGenerations.get(generationId);
     if (!generation) return;
 
+    console.log(`[AIUserService] Processing stream for generation ${generationId}`);
+
     try {
       let buffer = '';
       let chunkCount = 0;
@@ -132,14 +143,17 @@ export class AIUserService {
       for await (const chunk of textStream) {
         // Check if generation was cancelled
         if (!this.activeGenerations.has(generationId)) {
+          console.log(`[AIUserService] Generation ${generationId} was cancelled`);
           break;
         }
 
         buffer += chunk;
         chunkCount++;
+        console.log(`[AIUserService] Received chunk ${chunkCount}, buffer size: ${buffer.length}`);
 
         // Generate steps periodically for streaming effect
         if (buffer.length >= batchSize || chunk.includes('\n')) {
+          console.log(`[AIUserService] Generating steps for buffer: ${buffer.substring(0, 50)}...`);
           const steps = await this.stepGenerator.generateStepsForContent(
             documentId,
             buffer,
@@ -151,6 +165,7 @@ export class AIUserService {
           );
 
           if (steps.length > 0) {
+            console.log(`[AIUserService] Sending ${steps.length} steps`);
             // Send steps through collaboration manager
             this.sendSteps(documentId, steps, startVersion + chunkCount);
           }
@@ -161,6 +176,7 @@ export class AIUserService {
 
       // Process any remaining content
       if (buffer.length > 0) {
+        console.log(`[AIUserService] Processing final buffer: ${buffer.substring(0, 50)}...`);
         const steps = await this.stepGenerator.generateStepsForContent(
           documentId,
           buffer,
@@ -173,14 +189,17 @@ export class AIUserService {
         );
 
         if (steps.length > 0) {
+          console.log(`[AIUserService] Sending final ${steps.length} steps`);
           this.sendSteps(documentId, steps, startVersion + chunkCount + 1);
         }
       }
 
       // Mark generation as complete
+      console.log(`[AIUserService] Generation ${generationId} complete`);
       this.completeGeneration(generationId);
-    } catch (error) {
-      console.error(`AI generation error for ${generationId}:`, error);
+    } catch (error: any) {
+      console.error(`[AIUserService] Stream processing error for ${generationId}:`, error);
+      console.error(`[AIUserService] Error details:`, error.message, error.stack);
       this.cancelGeneration(generationId);
       throw error;
     }

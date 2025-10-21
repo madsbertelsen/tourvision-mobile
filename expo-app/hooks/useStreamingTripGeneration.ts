@@ -246,7 +246,10 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     try {
       if (USE_COLLAB_SERVER) {
         console.log('[StreamingHook] Using COLLAB SERVER for AI generation');
-        await streamFromCollabServer(prompt, documentId || `doc-${Date.now()}`, abortControllerRef.current.signal);
+        // Use provided documentId (should be trip ID), fallback to temporary ID only if not provided
+        const docId = documentId || `doc-${Date.now()}`;
+        console.log('[StreamingHook] Using document ID:', docId);
+        await streamFromCollabServer(prompt, docId, abortControllerRef.current.signal);
       } else {
         console.log('[StreamingHook] Using REAL API streaming');
         await streamFromAPI(prompt, abortControllerRef.current.signal);
