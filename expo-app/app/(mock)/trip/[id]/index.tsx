@@ -6,6 +6,9 @@ import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMir
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 import CommentModal from '@/components/CommentModal';
 import AIAssistantModal from '@/components/AIAssistantModal';
+import CollaborationBar from '@/components/CollaborationBar';
+import ShareTripModal from '@/components/ShareTripModal';
+import { useCollaboration } from '@/contexts/CollaborationContext';
 import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
@@ -49,6 +52,9 @@ export default function TripDocumentView() {
   const [isTyping, setIsTyping] = useState(false);
   const typingAbortRef = useRef<AbortController | null>(null);
 
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+
   // Track keyboard visibility
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -67,6 +73,12 @@ export default function TripDocumentView() {
   }, []);
   const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
+
+  // Set up collaboration
+  const { setEditorRef } = useCollaboration();
+  useEffect(() => {
+    setEditorRef(documentRef);
+  }, [setEditorRef]);
 
   const handleSelectionChange = useCallback((empty: boolean) => {
     console.log('[TripDocumentView] Selection empty:', empty);
@@ -397,6 +409,14 @@ Please generate replacement content that addresses the user's request. Only retu
       {/* Controls */}
       <View style={styles.controls}>
         <TouchableOpacity
+          onPress={() => setShowShareModal(true)}
+          style={styles.shareButton}
+        >
+          <Ionicons name="share-outline" size={20} color="#3B82F6" />
+          <Text style={styles.shareButtonText}>Share</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           onPress={toggleEditMode}
           style={[styles.button, isEditMode && styles.buttonActive]}
         >
@@ -417,6 +437,9 @@ Please generate replacement content that addresses the user's request. Only retu
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Collaboration Bar */}
+      {tripId && <CollaborationBar tripId={tripId} />}
 
       {/* Toolbar - Only in edit mode, above editor */}
       {isEditMode && (
@@ -557,6 +580,16 @@ Please generate replacement content that addresses the user's request. Only retu
         isGenerating={streamState.isStreaming || isTyping}
       />
 
+      {/* Share Modal */}
+      {tripId && currentTrip && (
+        <ShareTripModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          tripId={tripId}
+          tripTitle={currentTrip.title || 'Untitled Trip'}
+        />
+      )}
+
       {/* Comment Modal */}
       <CommentModal
         visible={showCommentModal}
@@ -617,6 +650,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     borderWidth: 1,
     borderColor: '#d1d5db',
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#EBF5FF',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3B82F6',
   },
   buttonActive: {
     backgroundColor: '#3B82F6',

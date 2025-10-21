@@ -35,6 +35,8 @@ export default function TripLayout() {
   const params = useLocalSearchParams();
   const tripId = params.id as string;
 
+  console.log('[TripLayout] Component rendering with tripId:', tripId);
+
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
   const [isEditMode, setIsEditMode] = useState(true);
@@ -43,6 +45,15 @@ export default function TripLayout() {
   const documentRef = useRef<any>(null);
   const lastProcessedLocationRef = useRef<string | null>(null);
   const lastLoadedTripIdRef = useRef<string | null>(null);
+
+  // Update when tripId from params changes (useLocalSearchParams is reactive)
+  useEffect(() => {
+    console.log('[TripLayout] tripId from params changed to:', tripId);
+    // Reset state when trip changes
+    setCurrentTrip(null);
+    setCurrentDoc(null);
+    lastLoadedTripIdRef.current = null; // Force reload
+  }, [tripId]);
 
   // Listen for location data returned from create-location modal
   useFocusEffect(
@@ -83,17 +94,29 @@ export default function TripLayout() {
     }, [params.savedLocation, router])
   );
 
-  // Load trip data on mount AND whenever tripId changes
+  // Load trip data whenever tripId changes
   useEffect(() => {
+    if (!tripId) return;
+
     const loadTripData = async () => {
       try {
-        console.log('[TripLayout] [EFFECT RAN] Loading trip data for tripId:', tripId, 'prev:', lastLoadedTripIdRef.current);
+        console.log('[TripLayout] Loading trip data for tripId:', tripId, 'prev:', lastLoadedTripIdRef.current);
+
+        // Skip if we already loaded this trip
+        if (lastLoadedTripIdRef.current === tripId && currentTrip?.id === tripId) {
+          console.log('[TripLayout] Trip already loaded, skipping');
+          return;
+        }
+
         lastLoadedTripIdRef.current = tripId;
 
         const trip = await getTrip(tripId);
 
         if (!trip) {
           console.error('[TripLayout] Trip not found:', tripId);
+          // Reset state when trip not found
+          setCurrentTrip(null);
+          setCurrentDoc(null);
           return;
         }
 

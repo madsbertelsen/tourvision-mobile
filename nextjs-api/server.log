@@ -10,20 +10,907 @@
      ✓ ppr
 
  ✓ Starting...
- ✓ Compiled in 637ms
- ✓ Ready in 1537ms
+ ✓ Compiled in 554ms
+ ✓ Ready in 1399ms
  ⚠ Webpack is configured while Turbopack is not, which may cause problems.
  ⚠ See instructions if you need to configure Turbopack:
   https://nextjs.org/docs/app/api-reference/next-config-js/turbo
 
- ✓ Compiled /api/route in 395ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 909ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 906ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 457ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 414ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 442ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 414ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 373ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 409ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 373ms
- GET /api/route?waypoints=1.8538446%2C50.9524769%3B1.8926452140486434%2C50.93448439237802%3B4.368028462313517%2C51.20483252881349%3B4.370511903518863%2C51.206123512034274%3B4.385610399231062%2C51.208819023131674%3B4.3851349717989185%2C51.20895726573691%3B4.3997081%2C51.2211097&profile=driving 200 in 392ms
+ ✓ Compiled /api/route in 350ms
+ GET /api/route?waypoints=11.9737103,55.6043432;12.5700724,55.6867243&profile=walking 200 in 668ms
+ GET /api/route?waypoints=11.9737103,55.6043432;12.5700724,55.6867243&profile=walking 200 in 416ms
+ ✓ Compiled /api/chat-simple in 442ms
+[chat-simple] Request body: {
+  "messages": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Plan a 3-day trip to Paris"
+        }
+      ]
+    }
+  ]
+}
+[chat-simple] Transformed messages: [
+  {
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": "Plan a 3-day trip to Paris"
+      }
+    ]
+  }
+]
+[chat-simple] Google API Key configured: Yes (AIzaSyBQPF...)
+[EnrichmentPipeline] Initialized with API key: Yes
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 481
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-1" data-color-index="0" data-lat="48.8584" data-lng="2.2945"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-1" data-color-index="0" data-lat="48.8584" data-lng="2.2945" data-place-name="Eiffel Tower, Paris">Eiffel Towe
+[EnrichmentPipeline] Extracted place name: Eiffel Tower, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8584, lng: 2.2945 }
+[EnrichmentPipeline] Calling geocodeLocation for: Eiffel Tower, Paris
+[Geocoding] geocodeLocation called with: Eiffel Tower, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Eiffel Tower, Paris
+[Geocoding] Using proximity bias: 48.8584, 2.2945
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Av. Gustave Eiffel, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Eiffel Tower, Paris -> 48.858370099999995, 2.2944812999999997, photo: places/ChIJLU7jZClu5kcR4PcOOO6p3I0/photos/AciIO2czTfRP52XOyLYXOU20g4GBHHuyEyBEY3k2p-YIYQkiIat2x3taWut-9PhVVBLRVMLkkoNGkmL873Qr8GByaE-hQ_xtxKw1M4TV_zJke2K55xi3cHDdqCGoeJ0dZqrh2Zn2izSy__8YfVzpQItm8n1GyWIbYovl3vT3pfqJGHcEn0kNvnIAA9lB7mWk1ow_rwNMqbZjEFl0jttS1xFeFGhNlhluGYiz9G0oYf2j9KgGbUrx9TItvgpWdpdflxE81WwkojYzJ0ExoVwb63Qds1lL71rVMpH9tkJQfRyU-324l3ZumS76RfbGpiXaNvr-rZEd-j84qWy7NZGVLaS4Y--jah6n62B78VL47xDs1HLZaT4e4XATrrsvsluK97qHhZf9N_zAQMJT3Dv4max8ZT--Wo7ppRpMsKxORSfIXZ3bfUF3Vb_f_2NH_5cPQA, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.858370099999995,
+  lng: 2.2944812999999997,
+  photoName: 'places/ChIJLU7jZClu5kcR4PcOOO6p3I0/photos/AciIO2czTfRP52XOyLYXOU20g4GBHHuyEyBEY3k2p-YIYQkiIat2x3taWut-9PhVVBLRVMLkkoNGkmL873Qr8GByaE-hQ_xtxKw1M4TV_zJke2K55xi3cHDdqCGoeJ0dZqrh2Zn2izSy__8YfVzpQItm8n1GyWIbYovl3vT3pfqJGHcEn0kNvnIAA9lB7mWk1ow_rwNMqbZjEFl0jttS1xFeFGhNlhluGYiz9G0oYf2j9KgGbUrx9TItvgpWdpdflxE81WwkojYzJ0ExoVwb63Qds1lL71rVMpH9tkJQfRyU-324l3ZumS76RfbGpiXaNvr-rZEd-j84qWy7NZGVLaS4Y--jah6n62B78VL47xDs1HLZaT4e4XATrrsvsluK97qHhZf9N_zAQMJT3Dv4max8ZT--Wo7ppRpMsKxORSfIXZ3bfUF3Vb_f_2NH_5cPQA',
+  description: "Gustave Eiffel's iconic, wrought-iron 1889 tower, with steps and elevators to observation decks.",
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJLU7jZClu5kcR4PcOOO6p3I0/photos/AciIO2czTfRP52XOyLYXOU20g4GBHHuyEyBEY3k2p-YIYQkiIat2x3taWut-9PhVVBLRVMLkkoNGkmL873Qr8GByaE-
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-2" data-color-index="1" data-lat="48.8589" data-lng="2.2928"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-2" data-color-index="1" data-lat="48.8589" data-lng="2.2928" data-place-name="Café de l'Homme, Paris" data-tra
+[EnrichmentPipeline] Extracted place name: Café de l'Homme, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8589, lng: 2.2928 }
+[EnrichmentPipeline] Calling geocodeLocation for: Café de l'Homme, Paris
+[Geocoding] geocodeLocation called with: Café de l'Homme, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Café de l'Homme, Paris
+[Geocoding] Using proximity bias: 48.8589, 2.2928
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '17 Pl. du Trocadéro et du 11 Novembre, 75016 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Café de l'Homme, Paris -> 48.8622057, 2.2876293, photo: places/ChIJlSwHnvxv5kcR2JG3yHEsjG4/photos/AciIO2fIT2ZWqH9wZsaOuXV_NfvGS9_tPtU5PIde8FxY2W24IYH-TC6lFcHGfVgwjjg8S18731GZ-buTaOzbul0y_N7DaGmo3rlBZUlVNFf8e4ViOENbop5pYhg69unOIsw8JtFz1DD79w2hamPC1GT6dI7fEzG7v0XXN8Q-k0Cg4-6uGgr8QPPSR3ZBc6c4v9ftUweDbRZff-izXWR2GOaZM5r86p068Hwv6SoxNmJTDwcjvMyaCnasRneHbJVPfQdYF5m7u75s30wiMeh7ey7Kj_9mKP9ARFko8xPGNP1ioBoEiw, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8622057,
+  lng: 2.2876293,
+  photoName: 'places/ChIJlSwHnvxv5kcR2JG3yHEsjG4/photos/AciIO2fIT2ZWqH9wZsaOuXV_NfvGS9_tPtU5PIde8FxY2W24IYH-TC6lFcHGfVgwjjg8S18731GZ-buTaOzbul0y_N7DaGmo3rlBZUlVNFf8e4ViOENbop5pYhg69unOIsw8JtFz1DD79w2hamPC1GT6dI7fEzG7v0XXN8Q-k0Cg4-6uGgr8QPPSR3ZBc6c4v9ftUweDbRZff-izXWR2GOaZM5r86p068Hwv6SoxNmJTDwcjvMyaCnasRneHbJVPfQdYF5m7u75s30wiMeh7ey7Kj_9mKP9ARFko8xPGNP1ioBoEiw',
+  description: 'Cool French bistro at the Musee de l’Homme, featuring Eiffel Tower views from its outdoor tables.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJlSwHnvxv5kcR2JG3yHEsjG4/photos/AciIO2fIT2ZWqH9wZsaOuXV_NfvGS9_tPtU5PIde8FxY2W24IYH-TC6lFcHGfVgwjjg8S18731GZ-buTaOzbul0y_N7
+[chat-simple] Chunk was enriched:   <p>Start your day at the <span class="geo-mark" data-geo-id="loc-1" data-color-index="0" data-lat=  ->    <p>Start your day at the <span class="geo-mark" data-coord-source="google" data-photo-name="places
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 312
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-3" data-color-index="2" data-lat="48.8534" data-lng="2.3468"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-3" data-color-index="2" data-lat="48.8534" data-lng="2.3468" data-place-name="Seine River, Paris" data-transpo
+[EnrichmentPipeline] Extracted place name: Seine River, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8534, lng: 2.3468 }
+[EnrichmentPipeline] Calling geocodeLocation for: Seine River, Paris
+[Geocoding] geocodeLocation called with: Seine River, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Seine River, Paris
+[Geocoding] Using proximity bias: 48.8534, 2.3468
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Seine River, Paris -> 48.857547499999995, 2.3513764999999998, photo: places/ChIJD7fiBh9u5kcRYJSMaMOCCwQ/photos/AciIO2ehb-XaZM4tPMVBGx8xnOctqi88gZ3mg4QWAosBmUCdWS6mJbs4qybpBy_tcgFaUWpbKyJ5z6U2zsDJ1Lxaid_x022WmPmIzWtGrM3yUJrbdZ64l-6i8tbVgyfNyO1yI6cn3V_YgT9l64c4ZXosauCH525YaA7-iTztVcE3uCJhrcEn0oS138DHzfwDnQLlvgmnd4Db1rTctFZUislvva-T-w1yxLTgAyzdFs_St39dgdg02Gb8a7IX2WDApbhXiIm0Q-oPOcIawSxHnXmY3kvZurg6CDOaaAwy9AUuekO8SUS62_GQAYfwsjc8GheOjyuNCm7qL_ZvUQqBAxdFXdRhGqpwzNgF0B9ZquqycD-0EuDIIPRlpQZOgzxU8WGU8UriR2cdijYg-arl4WLsmDUks5YNNe5rR3DWYPjr0O_LDA, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.857547499999995,
+  lng: 2.3513764999999998,
+  photoName: 'places/ChIJD7fiBh9u5kcRYJSMaMOCCwQ/photos/AciIO2ehb-XaZM4tPMVBGx8xnOctqi88gZ3mg4QWAosBmUCdWS6mJbs4qybpBy_tcgFaUWpbKyJ5z6U2zsDJ1Lxaid_x022WmPmIzWtGrM3yUJrbdZ64l-6i8tbVgyfNyO1yI6cn3V_YgT9l64c4ZXosauCH525YaA7-iTztVcE3uCJhrcEn0oS138DHzfwDnQLlvgmnd4Db1rTctFZUislvva-T-w1yxLTgAyzdFs_St39dgdg02Gb8a7IX2WDApbhXiIm0Q-oPOcIawSxHnXmY3kvZurg6CDOaaAwy9AUuekO8SUS62_GQAYfwsjc8GheOjyuNCm7qL_ZvUQqBAxdFXdRhGqpwzNgF0B9ZquqycD-0EuDIIPRlpQZOgzxU8WGU8UriR2cdijYg-arl4WLsmDUks5YNNe5rR3DWYPjr0O_LDA',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJD7fiBh9u5kcRYJSMaMOCCwQ/photos/AciIO2ehb-XaZM4tPMVBGx8xnOctqi88gZ3mg4QWAosBmUCdWS6mJbs4qybpBy_tcgFaUWpbKyJ5z6U2zsDJ1Lxaid_
+[chat-simple] Chunk was enriched:   <p>After exploring the Eiffel Tower, take a scenic <span class="geo-mark" data-geo-id="loc-3" data  ->    <p>After exploring the Eiffel Tower, take a scenic <span class="geo-mark" data-coord-source="googl
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 498
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-4" data-color-index="3" data-lat="48.8606" data-lng="2.3376"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-4" data-color-index="3" data-lat="48.8606" data-lng="2.3376" data-place-name="Place de la Concorde, Paris" dat
+[EnrichmentPipeline] Extracted place name: Place de la Concorde, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8606, lng: 2.3376 }
+[EnrichmentPipeline] Calling geocodeLocation for: Place de la Concorde, Paris
+[Geocoding] geocodeLocation called with: Place de la Concorde, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Place de la Concorde, Paris
+[Geocoding] Using proximity bias: 48.8606, 2.3376
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '75008 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Place de la Concorde, Paris -> 48.8656331, 2.3212357, photo: places/ChIJAQquYc1v5kcRLKslDuENAxg/photos/AciIO2fBAZRnuGOuJdSZYmSrBnOEgdl8hd-Dxft3igbiMHhZ-8KdMyCRIjH4RdJiEZLMQWMkzHM2QT8BoD7avVG6ii10W94uUye9AKUmcoHrsWW63pD9q7aN-Kc4ZZMM_9kcMwJK_TsBpGSeBp4ivDNjmzizEQbad91xxB3zA_Cgu-Mac4ERRQ9SA3jhT8wlDJKMYQDCTIYualorffrttQbXaolRuySbAV6CGUnnSPl9P6OP8Hs2SsNmdWpuEqJyV6ohDRFyBlkk3DaDK7rqmKeD4f5XLnGK1ZmJqIfWwD7CCC9SAxnpOCCRglKy0sShM24bermJUe79KyUcw5cm7J_7QettbmvjZ48ZwaRPjYU61BRrcfXrJ7nZtnKth-u2on3w22jz6Qjx3WBbKIrF3NIpN2hM6NvFFikbi5L3O0RWYYIh6w, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8656331,
+  lng: 2.3212357,
+  photoName: 'places/ChIJAQquYc1v5kcRLKslDuENAxg/photos/AciIO2fBAZRnuGOuJdSZYmSrBnOEgdl8hd-Dxft3igbiMHhZ-8KdMyCRIjH4RdJiEZLMQWMkzHM2QT8BoD7avVG6ii10W94uUye9AKUmcoHrsWW63pD9q7aN-Kc4ZZMM_9kcMwJK_TsBpGSeBp4ivDNjmzizEQbad91xxB3zA_Cgu-Mac4ERRQ9SA3jhT8wlDJKMYQDCTIYualorffrttQbXaolRuySbAV6CGUnnSPl9P6OP8Hs2SsNmdWpuEqJyV6ohDRFyBlkk3DaDK7rqmKeD4f5XLnGK1ZmJqIfWwD7CCC9SAxnpOCCRglKy0sShM24bermJUe79KyUcw5cm7J_7QettbmvjZ48ZwaRPjYU61BRrcfXrJ7nZtnKth-u2on3w22jz6Qjx3WBbKIrF3NIpN2hM6NvFFikbi5L3O0RWYYIh6w',
+  description: 'Major public square, scene of executions, decorated with fountains, statues & an Egyptian obelisk.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJAQquYc1v5kcRLKslDuENAxg/photos/AciIO2fBAZRnuGOuJdSZYmSrBnOEgdl8hd-Dxft3igbiMHhZ-8KdMyCRIjH4RdJiEZLMQWMkzHM2QT8BoD7avVG6ii1
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-5" data-color-index="4" data-lat="48.8611" data-lng="2.3209"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-5" data-color-index="4" data-lat="48.8611" data-lng="2.3209" data-place-name="Louvre Museum, Paris" data-trans
+[EnrichmentPipeline] Extracted place name: Louvre Museum, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8611, lng: 2.3209 }
+[EnrichmentPipeline] Calling geocodeLocation for: Louvre Museum, Paris
+[Geocoding] geocodeLocation called with: Louvre Museum, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Louvre Museum, Paris
+[Geocoding] Using proximity bias: 48.8611, 2.3209
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '75001 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Louvre Museum, Paris -> 48.8606111, 2.337644, photo: places/ChIJD3uTd9hx5kcR1IQvGfr8dbk/photos/AciIO2cxeODoLJoqaEJqFvnSypZPXL77Jn-ly7dPI_KN4yCXbUFfDc4C4xdxvcaezC0p7CwpT3L7X6QBOD0IcYJ5930YWpM-MIBKzPZ6wDr8qOVhBzopY-m1T6tqzXoprwtcA2Bj_T35USruNzEmwftuX1fLU7iYhdlRkPTHs-SnMtGiENdjTlRKO_DiI3YAS9s4PWDFVr5RJIv3fYoXkepGfOc8qXXIeqJQBkgtJrUMgP7MtUcn6Kg9wLYrP9JAatQs6hF5fW_JSCDKVWfamQpA-8I5VT6kKPnj57af9wGlyCgvupMtCuipMejjcP-c8XMisv3_EP9LW0RS6fcUp5HuIYlyRio572gALGr9MpsyJe-NeLEpKBF1mOkxehJZf7nK0_jHqETGOcaZSdv1YCuteua4boJoG9chPDFGLguFO6Oogw, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8606111,
+  lng: 2.337644,
+  photoName: 'places/ChIJD3uTd9hx5kcR1IQvGfr8dbk/photos/AciIO2cxeODoLJoqaEJqFvnSypZPXL77Jn-ly7dPI_KN4yCXbUFfDc4C4xdxvcaezC0p7CwpT3L7X6QBOD0IcYJ5930YWpM-MIBKzPZ6wDr8qOVhBzopY-m1T6tqzXoprwtcA2Bj_T35USruNzEmwftuX1fLU7iYhdlRkPTHs-SnMtGiENdjTlRKO_DiI3YAS9s4PWDFVr5RJIv3fYoXkepGfOc8qXXIeqJQBkgtJrUMgP7MtUcn6Kg9wLYrP9JAatQs6hF5fW_JSCDKVWfamQpA-8I5VT6kKPnj57af9wGlyCgvupMtCuipMejjcP-c8XMisv3_EP9LW0RS6fcUp5HuIYlyRio572gALGr9MpsyJe-NeLEpKBF1mOkxehJZf7nK0_jHqETGOcaZSdv1YCuteua4boJoG9chPDFGLguFO6Oogw',
+  description: `Former historic palace housing huge art collection, from Roman sculptures to da Vinci's "Mona Lisa."`,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJD3uTd9hx5kcR1IQvGfr8dbk/photos/AciIO2cxeODoLJoqaEJqFvnSypZPXL77Jn-ly7dPI_KN4yCXbUFfDc4C4xdxvcaezC0p7CwpT3L7X6QBOD0IcYJ5930
+[chat-simple] Chunk was enriched:   <p>Walk to the <span class="geo-mark" data-geo-id="loc-4" data-color-index="3" data-lat="48.8606"   ->    <p>Walk to the <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJAQquY
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 340
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-6" data-color-index="5" data-lat="48.8603" data-lng="2.3224"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-6" data-color-index="5" data-lat="48.8603" data-lng="2.3224" data-place-name="Café Marly, Paris" data-transpor
+[EnrichmentPipeline] Extracted place name: Café Marly, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8603, lng: 2.3224 }
+[EnrichmentPipeline] Calling geocodeLocation for: Café Marly, Paris
+[Geocoding] geocodeLocation called with: Café Marly, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Café Marly, Paris
+[Geocoding] Using proximity bias: 48.8603, 2.3224
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '93 Rue de Rivoli, 75001 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Café Marly, Paris -> 48.8616689, 2.3359927, photo: places/ChIJw4rTzyVu5kcRabdrxQ12FOk/photos/AciIO2eP3KVEMuF63HI1rW2HH32Xf09T7zV9scqjpyU3IB7p7BEDWsXXrsfWTbklveAereUE79S6RXpBM_dqV5NyzNmA6wjn-gD1Q9Eez4BPP5pLObGehDRBA9iuRPPLU6WaVIqSnj2S2S_5JybE9blfkblAPDBSCMJpFVZaefZpvVn2LY5dUCM8U2iVL1v1a5l5yJScMNHA823jV-gK-wbFYlI9vjXipFyETwwjKi_9W6ic2JZgupdCJCGFABqvju1B92_2O1_8LiNc5RIhKfY0rUucJFUvSpQECScM0t1B5LMeHg, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8616689,
+  lng: 2.3359927,
+  photoName: 'places/ChIJw4rTzyVu5kcRabdrxQ12FOk/photos/AciIO2eP3KVEMuF63HI1rW2HH32Xf09T7zV9scqjpyU3IB7p7BEDWsXXrsfWTbklveAereUE79S6RXpBM_dqV5NyzNmA6wjn-gD1Q9Eez4BPP5pLObGehDRBA9iuRPPLU6WaVIqSnj2S2S_5JybE9blfkblAPDBSCMJpFVZaefZpvVn2LY5dUCM8U2iVL1v1a5l5yJScMNHA823jV-gK-wbFYlI9vjXipFyETwwjKi_9W6ic2JZgupdCJCGFABqvju1B92_2O1_8LiNc5RIhKfY0rUucJFUvSpQECScM0t1B5LMeHg',
+  description: 'Upscale dining in old-world interiors & an open-air arched passageway with Louvre views.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJw4rTzyVu5kcRabdrxQ12FOk/photos/AciIO2eP3KVEMuF63HI1rW2HH32Xf09T7zV9scqjpyU3IB7p7BEDWsXXrsfWTbklveAereUE79S6RXpBM_dqV5NyzNm
+[chat-simple] Chunk was enriched:   <p>Spend the afternoon exploring the Louvre's vast art collections. For lunch, try the <span class  ->    <p>Spend the afternoon exploring the Louvre's vast art collections. For lunch, try the <span class
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 534
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-7" data-color-index="6" data-lat="48.8534" data-lng="2.3488"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-7" data-color-index="6" data-lat="48.8534" data-lng="2.3488" data-place-name="Notre-Dame Cathedral, Paris" dat
+[EnrichmentPipeline] Extracted place name: Notre-Dame Cathedral, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8534, lng: 2.3488 }
+[EnrichmentPipeline] Calling geocodeLocation for: Notre-Dame Cathedral, Paris
+[Geocoding] geocodeLocation called with: Notre-Dame Cathedral, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Notre-Dame Cathedral, Paris
+[Geocoding] Using proximity bias: 48.8534, 2.3488
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '6 Parvis Notre-Dame - Pl. Jean-Paul II, 75004 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Notre-Dame Cathedral, Paris -> 48.85296820000001, 2.3499021, photo: places/ChIJATr1n-Fx5kcRjQb6q6cdQDY/photos/AciIO2d-yijvJFlNEm336JVv8cMOp8BWlIGRppQEaiiGtNEGpAShM3wxr32plbX7m2E76kl1wWwtmK0rX3HRqPHf-lev1IVc4_ltDs_80wHfGNmrOkRlBx7DwDo6cNTtX8s-GZmBmDR8RV5zxT-oha8ztxGV67s26k87hAXZGDoX4iVwBHAtSavFv3EZnl-_a4xYRZ-VI_VJfE90JLBBD9J58qLTkz43uKrYWXOsgK-hO1bwDWl-9KKOVTQFy05xRLWDY_hGsSl2sUCn11o6fBtkezwAAEnRNmda05bWDkVJSZRCbBSDz4ppnyczkc1jAOpTmgdZVTj8hbsxtX0-uMawjSKEj1g8qFx6IhW9oYNIwQh6jTaAtY9r4ze143BgfovyDYgqzvBLhF5GVp6trlRH2E5WFm4MObU1O5LCj2mlA01Fiw, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.85296820000001,
+  lng: 2.3499021,
+  photoName: 'places/ChIJATr1n-Fx5kcRjQb6q6cdQDY/photos/AciIO2d-yijvJFlNEm336JVv8cMOp8BWlIGRppQEaiiGtNEGpAShM3wxr32plbX7m2E76kl1wWwtmK0rX3HRqPHf-lev1IVc4_ltDs_80wHfGNmrOkRlBx7DwDo6cNTtX8s-GZmBmDR8RV5zxT-oha8ztxGV67s26k87hAXZGDoX4iVwBHAtSavFv3EZnl-_a4xYRZ-VI_VJfE90JLBBD9J58qLTkz43uKrYWXOsgK-hO1bwDWl-9KKOVTQFy05xRLWDY_hGsSl2sUCn11o6fBtkezwAAEnRNmda05bWDkVJSZRCbBSDz4ppnyczkc1jAOpTmgdZVTj8hbsxtX0-uMawjSKEj1g8qFx6IhW9oYNIwQh6jTaAtY9r4ze143BgfovyDYgqzvBLhF5GVp6trlRH2E5WFm4MObU1O5LCj2mlA01Fiw',
+  description: "Towering, 12th-century cathedral with flying buttresses & gargoyles, setting for Hugo's novel.",
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJATr1n-Fx5kcRjQb6q6cdQDY/photos/AciIO2d-yijvJFlNEm336JVv8cMOp8BWlIGRppQEaiiGtNEGpAShM3wxr32plbX7m2E76kl1wWwtmK0rX3HRqPHf-le
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-8" data-color-index="7" data-lat="48.8534" data-lng="2.3506"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-8" data-color-index="7" data-lat="48.8534" data-lng="2.3506" data-place-name="Île de la Cité, Paris" data-tran
+[EnrichmentPipeline] Extracted place name: Île de la Cité, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8534, lng: 2.3506 }
+[EnrichmentPipeline] Calling geocodeLocation for: Île de la Cité, Paris
+[Geocoding] geocodeLocation called with: Île de la Cité, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Île de la Cité, Paris
+[Geocoding] Using proximity bias: 48.8534, 2.3506
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Île de la Cité, Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Île de la Cité, Paris -> 48.854882499999995, 2.3474928, photo: places/ChIJPce7N-Bx5kcRQxfSLaOHKpw/photos/AciIO2fIFdqVRWGiXh4ZgAq2gyIWx3ZBoR0uD3hGIUcKpoa0gT2obAJzcVh8wnLuVoVnE_JtFTbdsRdABAhRaxh9UQNeuUnBegqEMkZ0b89U1lsr1hiDAY4P3LoBgg8nsUNRyPBBDb4mEJSx5kmZgpeG6XcEMFw2aRrwLzMhCBC-mxKeFMrjHzYm7PUFZOwQ9kWe3ASelUXFgQxzMFUTkdTRfrCU-e3At-UrsTbkw_sCdsCVvxKY_VDR9V2jtyUGg0IWGhtUoWA4q5Ye4NnSYGAjN3Txwtr8jT2Lsumgm2jYFjeZrjQp8CJ-un5af-eXI-I3uo8BP7j4-ryo8nUCMnqvhPTSRdTrY8DujXpLXk5R6ONcbwtEiIpxHd9YI0NvezH_o9zP_KecwPPXHI2_adF4TibqIxAsDN84gWCAGK2YnLwxbQ, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.854882499999995,
+  lng: 2.3474928,
+  photoName: 'places/ChIJPce7N-Bx5kcRQxfSLaOHKpw/photos/AciIO2fIFdqVRWGiXh4ZgAq2gyIWx3ZBoR0uD3hGIUcKpoa0gT2obAJzcVh8wnLuVoVnE_JtFTbdsRdABAhRaxh9UQNeuUnBegqEMkZ0b89U1lsr1hiDAY4P3LoBgg8nsUNRyPBBDb4mEJSx5kmZgpeG6XcEMFw2aRrwLzMhCBC-mxKeFMrjHzYm7PUFZOwQ9kWe3ASelUXFgQxzMFUTkdTRfrCU-e3At-UrsTbkw_sCdsCVvxKY_VDR9V2jtyUGg0IWGhtUoWA4q5Ye4NnSYGAjN3Txwtr8jT2Lsumgm2jYFjeZrjQp8CJ-un5af-eXI-I3uo8BP7j4-ryo8nUCMnqvhPTSRdTrY8DujXpLXk5R6ONcbwtEiIpxHd9YI0NvezH_o9zP_KecwPPXHI2_adF4TibqIxAsDN84gWCAGK2YnLwxbQ',
+  description: 'This Parisian isle connected by the ancient Pont Neuf bridge is home to the Notre Dame cathedral.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJPce7N-Bx5kcRQxfSLaOHKpw/photos/AciIO2fIFdqVRWGiXh4ZgAq2gyIWx3ZBoR0uD3hGIUcKpoa0gT2obAJzcVh8wnLuVoVnE_JtFTbdsRdABAhRaxh9UQN
+[chat-simple] Chunk was enriched:   <p>In the evening, visit the <span class="geo-mark" data-geo-id="loc-7" data-color-index="6" data-  ->    <p>In the evening, visit the <span class="geo-mark" data-coord-source="google" data-photo-name="pl
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 288
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-9" data-color-index="8" data-lat="48.8475" data-lng="2.3506"
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-9" data-color-index="8" data-lat="48.8475" data-lng="2.3506" data-place-name="Le Petit Châtelet, Paris" data-t
+[EnrichmentPipeline] Extracted place name: Le Petit Châtelet, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8475, lng: 2.3506 }
+[EnrichmentPipeline] Calling geocodeLocation for: Le Petit Châtelet, Paris
+[Geocoding] geocodeLocation called with: Le Petit Châtelet, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Le Petit Châtelet, Paris
+[Geocoding] Using proximity bias: 48.8475, 2.3506
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '39 Rue de la Bûcherie, 75005 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Le Petit Châtelet, Paris -> 48.852613999999996, 2.347021, photo: places/ChIJ56_YHeFx5kcRXURgPuqkdm8/photos/AciIO2dnFAS5pwNVtfADQZ8gDyyxfKmiUcd2QWjdGbntXgNAEPK053ePnI0YuK2D0T-5X-y73fB4rb0D0JkzfLpnGtBtqFzipV3z3eV_YcmwpH95L3iU0Pe4mSByamJ8kxA6ymk5p4ccN0V6ZdHXwFaNG2yo8R4vK2AgTe-_r62Nz5_Smjo-FzPchGViZ2TezpKQz-Ng0xj5oW4Zw3DNHn2SYXY_AOiNnSCwf24YOcyXZcV4K0WDtY9vSQ-UgYFvRIBGCiH_6EuVerE-7oXItiE-fwt08BShR7XteY77SnAxCx6NpQ, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.852613999999996,
+  lng: 2.347021,
+  photoName: 'places/ChIJ56_YHeFx5kcRXURgPuqkdm8/photos/AciIO2dnFAS5pwNVtfADQZ8gDyyxfKmiUcd2QWjdGbntXgNAEPK053ePnI0YuK2D0T-5X-y73fB4rb0D0JkzfLpnGtBtqFzipV3z3eV_YcmwpH95L3iU0Pe4mSByamJ8kxA6ymk5p4ccN0V6ZdHXwFaNG2yo8R4vK2AgTe-_r62Nz5_Smjo-FzPchGViZ2TezpKQz-Ng0xj5oW4Zw3DNHn2SYXY_AOiNnSCwf24YOcyXZcV4K0WDtY9vSQ-UgYFvRIBGCiH_6EuVerE-7oXItiE-fwt08BShR7XteY77SnAxCx6NpQ',
+  description: 'Classic regional dishes, chargrilled meats & crème brûlée in a cozy restaurant with sidewalk tables.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJ56_YHeFx5kcRXURgPuqkdm8/photos/AciIO2dnFAS5pwNVtfADQZ8gDyyxfKmiUcd2QWjdGbntXgNAEPK053ePnI0YuK2D0T-5X-y73fB4rb0D0JkzfLpnGtB
+[chat-simple] Chunk was enriched:   <p>For dinner, head to <span class="geo-mark" data-geo-id="loc-9" data-color-index="8" data-lat="4  ->    <p>For dinner, head to <span class="geo-mark" data-coord-source="google" data-photo-name="places/C
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 354
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-10" data-color-index="9" data-lat="48.8841" data-lng="2.3464
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-10" data-color-index="9" data-lat="48.8841" data-lng="2.3464" data-place-name="Sacré-Cœur Basilica, Paris" dat
+[EnrichmentPipeline] Extracted place name: Sacré-Cœur Basilica, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8841, lng: 2.3464 }
+[EnrichmentPipeline] Calling geocodeLocation for: Sacré-Cœur Basilica, Paris
+[Geocoding] geocodeLocation called with: Sacré-Cœur Basilica, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Sacré-Cœur Basilica, Paris
+[Geocoding] Using proximity bias: 48.8841, 2.3464
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '35 Rue du Chevalier de la Barre, 75018 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Sacré-Cœur Basilica, Paris -> 48.886704599999995, 2.3431043, photo: places/ChIJ442GNENu5kcRGYUrvgqHw88/photos/AciIO2eS0ZrFwMlmX_v17XFaYFn2AntEWnmXXBEKq1p34evEx9wZu_Cmnog5viHIj0WVMp9-8G2I2m4ysPp0w6i_Yo85fl-7s1oeVpO1gnKt649JUZ8UCemhphXx4RXEkb8lDX5WeLtNSVl-5_czvGHzLV7OOfcfyQ2J4nbjewWJhxN4QDgTth5S6QRHICBGjxpntqvilb8ztWSR5KyMcV2rJq7uu9jWv2IKH2A4mr8G9J4sD8QbLfmDoAWMUIz0zEdPH4zaMleZUp-Ke3ihKDxBURgXfkZ3_TeLgwoKqbvMOtdWblKdNSsrmuYgVlM0FFWB-Ol_zNua9QPB1hiol9eEvUyN9ORXWsd6NCRDwoeTRd6VQ3Xx61w8GvTuBGMzu5mOCRHtUzZl386MF3Kq9gUMnVBwimlhQG4vgZ6jU2a_jVhCuVXc, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.886704599999995,
+  lng: 2.3431043,
+  photoName: 'places/ChIJ442GNENu5kcRGYUrvgqHw88/photos/AciIO2eS0ZrFwMlmX_v17XFaYFn2AntEWnmXXBEKq1p34evEx9wZu_Cmnog5viHIj0WVMp9-8G2I2m4ysPp0w6i_Yo85fl-7s1oeVpO1gnKt649JUZ8UCemhphXx4RXEkb8lDX5WeLtNSVl-5_czvGHzLV7OOfcfyQ2J4nbjewWJhxN4QDgTth5S6QRHICBGjxpntqvilb8ztWSR5KyMcV2rJq7uu9jWv2IKH2A4mr8G9J4sD8QbLfmDoAWMUIz0zEdPH4zaMleZUp-Ke3ihKDxBURgXfkZ3_TeLgwoKqbvMOtdWblKdNSsrmuYgVlM0FFWB-Ol_zNua9QPB1hiol9eEvUyN9ORXWsd6NCRDwoeTRd6VQ3Xx61w8GvTuBGMzu5mOCRHtUzZl386MF3Kq9gUMnVBwimlhQG4vgZ6jU2a_jVhCuVXc',
+  description: 'Iconic, domed white church, completed in 1914, with interior mosaics, stained-glass windows & crypt.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJ442GNENu5kcRGYUrvgqHw88/photos/AciIO2eS0ZrFwMlmX_v17XFaYFn2AntEWnmXXBEKq1p34evEx9wZu_Cmnog5viHIj0WVMp9-8G2I2m4ysPp0w6i_Yo8
+[chat-simple] Chunk was enriched:   <p>Start your day with a visit to the <span class="geo-mark" data-geo-id="loc-10" data-color-index  ->    <p>Start your day with a visit to the <span class="geo-mark" data-coord-source="google" data-photo
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 288
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-11" data-color-index="0" data-lat="48.8850" data-lng="2.3411
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-11" data-color-index="0" data-lat="48.8850" data-lng="2.3411" data-place-name="Le Consulat, Paris" data-transp
+[EnrichmentPipeline] Extracted place name: Le Consulat, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.885, lng: 2.3411 }
+[EnrichmentPipeline] Calling geocodeLocation for: Le Consulat, Paris
+[Geocoding] geocodeLocation called with: Le Consulat, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Le Consulat, Paris
+[Geocoding] Using proximity bias: 48.885, 2.3411
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '18 Rue Norvins, 75018 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '14 Ave Parmentier, 75011 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '1 Ave Parmentier, 75011 Paris, France',
+      location: [Object],
+      displayName: [Object]
+    },
+    {
+      formattedAddress: '2 Rue Vercingétorix, 75014 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Le Consulat, Paris -> 48.887060999999996, 2.3398144999999997, photo: places/ChIJa6AtNltu5kcRA2OzteU9X1Y/photos/AciIO2d_RP9DiaAnU4NK8l8ryrhW_PHjZUIewZbIo_Mlzcc-LLpVHIaX2cyYsFQtsYK7EpPBBva-WqS9ywryaVk963hdYNNiMGPxEqG9IRbZfmQzcp7bEQldqKiTVi1Km9tDUo7f9ce6y9EnT5Pqa72RC21mM8vVw1kvts5Ywm4obrxbPKlt6OcyrCC7zLUxMFQeq1jbGGy6Kr9fFAgsrvCR6Ah-uSr_hOJ0Ffw8E7dYPS1t4J1ntJtRhbzLJvFYiniGiBalZbtMWkgLzyAO_Lx1Y1UI39-SOAJwwQygeIUw4_MFSJRmA_yDS_V_PfIX9t_htbaYM-5YLGmvScyGkFG1KYEAAoxpVVEo2sIkrHkqUlN54NLFNRIHS0F6gvaStVerhn3E1pBZCgc33ACPzMN13WX4vf6yu7U7gowlCg1rAgnCCg, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.887060999999996,
+  lng: 2.3398144999999997,
+  photoName: 'places/ChIJa6AtNltu5kcRA2OzteU9X1Y/photos/AciIO2d_RP9DiaAnU4NK8l8ryrhW_PHjZUIewZbIo_Mlzcc-LLpVHIaX2cyYsFQtsYK7EpPBBva-WqS9ywryaVk963hdYNNiMGPxEqG9IRbZfmQzcp7bEQldqKiTVi1Km9tDUo7f9ce6y9EnT5Pqa72RC21mM8vVw1kvts5Ywm4obrxbPKlt6OcyrCC7zLUxMFQeq1jbGGy6Kr9fFAgsrvCR6Ah-uSr_hOJ0Ffw8E7dYPS1t4J1ntJtRhbzLJvFYiniGiBalZbtMWkgLzyAO_Lx1Y1UI39-SOAJwwQygeIUw4_MFSJRmA_yDS_V_PfIX9t_htbaYM-5YLGmvScyGkFG1KYEAAoxpVVEo2sIkrHkqUlN54NLFNRIHS0F6gvaStVerhn3E1pBZCgc33ACPzMN13WX4vf6yu7U7gowlCg1rAgnCCg',
+  description: 'Storied artists’ haunt serving classics like onion soup & escargots, plus tables on a cobbled lane.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJa6AtNltu5kcRA2OzteU9X1Y/photos/AciIO2d_RP9DiaAnU4NK8l8ryrhW_PHjZUIewZbIo_Mlzcc-LLpVHIaX2cyYsFQtsYK7EpPBBva-WqS9ywryaVk963h
+[chat-simple] Chunk was enriched:   <p>Have breakfast at <span class="geo-mark" data-geo-id="loc-11" data-color-index="0" data-lat="48  ->    <p>Have breakfast at <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChI
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 521
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-12" data-color-index="1" data-lat="48.8944" data-lng="2.3742
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-12" data-color-index="1" data-lat="48.8944" data-lng="2.3742" data-place-name="Musée d'Orsay, Paris" data-tran
+[EnrichmentPipeline] Extracted place name: Musée d'Orsay, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8944, lng: 2.3742 }
+[EnrichmentPipeline] Calling geocodeLocation for: Musée d'Orsay, Paris
+[Geocoding] geocodeLocation called with: Musée d'Orsay, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Musée d'Orsay, Paris
+[Geocoding] Using proximity bias: 48.8944, 2.3742
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: "Esplanade Valéry Giscard d'Estaing, 75007 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Musée d'Orsay, Paris -> 48.859961399999996, 2.3265614, photo: places/ChIJG5Qwtitu5kcR2CNEsYy9cdA/photos/AciIO2dht3cKqwWL7ja2jjj4a0UNfwWW2D8uMCW2_cPOdoe3n4CAW_-FVUD6O2iEJVGfvEbSY4Tjls9pLJ3-HrgyXzyiJaJvqP-7yz5O-44yfIQJ2iDct01V5JNngNsKiS8gt8mjzDKgMe1gBU_v3cY-_qD0pcgg04ueTC6aG05kpbhvZbSVVbUa0GM4SyKv15ooP2Nze1YzfbI4uMyPLwfsNpafWWGc4bFocQkcjxBplQl6Pl0EvuH24LQN-oxqp7KxfdKXMpNOvpjx820AH2bGDEqSgbHPqBil7dVZY2g2Bhtij6WVuQilofPqZ1z87TakLxbneVUOLfbbzD6-7WgrzWNaudzo1gCYKQLpi9lQoOpiERCep267ojqwBDynG2UXI-eWfZXCjDbxGOhimY0nIHezSiWIcxnJlkhhvA2mFBY-BfAB, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.859961399999996,
+  lng: 2.3265614,
+  photoName: 'places/ChIJG5Qwtitu5kcR2CNEsYy9cdA/photos/AciIO2dht3cKqwWL7ja2jjj4a0UNfwWW2D8uMCW2_cPOdoe3n4CAW_-FVUD6O2iEJVGfvEbSY4Tjls9pLJ3-HrgyXzyiJaJvqP-7yz5O-44yfIQJ2iDct01V5JNngNsKiS8gt8mjzDKgMe1gBU_v3cY-_qD0pcgg04ueTC6aG05kpbhvZbSVVbUa0GM4SyKv15ooP2Nze1YzfbI4uMyPLwfsNpafWWGc4bFocQkcjxBplQl6Pl0EvuH24LQN-oxqp7KxfdKXMpNOvpjx820AH2bGDEqSgbHPqBil7dVZY2g2Bhtij6WVuQilofPqZ1z87TakLxbneVUOLfbbzD6-7WgrzWNaudzo1gCYKQLpi9lQoOpiERCep267ojqwBDynG2UXI-eWfZXCjDbxGOhimY0nIHezSiWIcxnJlkhhvA2mFBY-BfAB',
+  description: 'Major 19th- & 20th-century European art collections housed in a monumental, former railway station.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJG5Qwtitu5kcR2CNEsYy9cdA/photos/AciIO2dht3cKqwWL7ja2jjj4a0UNfwWW2D8uMCW2_cPOdoe3n4CAW_-FVUD6O2iEJVGfvEbSY4Tjls9pLJ3-HrgyXzy
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-13" data-color-index="2" data-lat="48.8936" data-lng="2.3728
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-13" data-color-index="2" data-lat="48.8936" data-lng="2.3728" data-place-name="Café Campana, Paris" data-trans
+[EnrichmentPipeline] Extracted place name: Café Campana, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8936, lng: 2.3728 }
+[EnrichmentPipeline] Calling geocodeLocation for: Café Campana, Paris
+[Geocoding] geocodeLocation called with: Café Campana, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Café Campana, Paris
+[Geocoding] Using proximity bias: 48.8936, 2.3728
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: "1 Rue de la Légion d'Honneur, 75007 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Café Campana, Paris -> 48.860234999999996, 2.3255811, photo: places/ChIJ07RVvStu5kcRqJp_isArHxg/photos/AciIO2evlNLkDwtsMpRC9lvk2BnzBPOR4qrDh-puN5cm2Ed3NlKeKcwK9alNIQAqWG16MmO-EEAc9MSgCx1JOLZLDqFvK6LJD9h6UqJW21HzOb-JUIreVSpu_9WlPw1r-DS8nG10P5xbHNdKol-5wyiwtEutzvuuALocrLvEUZc_aEy98ZKd1YvkwA3uzCm3lbmgYCer39USKjnJbtIK3Vs3Mk8jXr5NxvcwhMN6tx5nvQlwpBnKyjeSXTPFeElO1cE7I2W5LIpNtSl5r8tx23YwGr9bUFabkPPTDmsWHosn77ykh29QnOF7LKDAFhdj7WWSvF2ZfWtSl9B0XIXK-pwR9diwD_gK-e-WsEwNc5hFacydTh0mrboreJKJ71iIlv44Idk3LVUbBKd0s8sBtQ48aUCQLZp45Vk-MB0kSrgazvpsHnX3N_O2HaWtuMy2hHeQ, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.860234999999996,
+  lng: 2.3255811,
+  photoName: 'places/ChIJ07RVvStu5kcRqJp_isArHxg/photos/AciIO2evlNLkDwtsMpRC9lvk2BnzBPOR4qrDh-puN5cm2Ed3NlKeKcwK9alNIQAqWG16MmO-EEAc9MSgCx1JOLZLDqFvK6LJD9h6UqJW21HzOb-JUIreVSpu_9WlPw1r-DS8nG10P5xbHNdKol-5wyiwtEutzvuuALocrLvEUZc_aEy98ZKd1YvkwA3uzCm3lbmgYCer39USKjnJbtIK3Vs3Mk8jXr5NxvcwhMN6tx5nvQlwpBnKyjeSXTPFeElO1cE7I2W5LIpNtSl5r8tx23YwGr9bUFabkPPTDmsWHosn77ykh29QnOF7LKDAFhdj7WWSvF2ZfWtSl9B0XIXK-pwR9diwD_gK-e-WsEwNc5hFacydTh0mrboreJKJ71iIlv44Idk3LVUbBKd0s8sBtQ48aUCQLZp45Vk-MB0kSrgazvpsHnX3N_O2HaWtuMy2hHeQ',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJ07RVvStu5kcRqJp_isArHxg/photos/AciIO2evlNLkDwtsMpRC9lvk2BnzBPOR4qrDh-puN5cm2Ed3NlKeKcwK9alNIQAqWG16MmO-EEAc9MSgCx1JOLZLDqF
+[chat-simple] Chunk was enriched:   <p>Head to the <span class="geo-mark" data-geo-id="loc-12" data-color-index="1" data-lat="48.8944"  ->    <p>Head to the <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJG5Qwt
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 309
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-14" data-color-index="3" data-lat="48.8738" data-lng="2.3572
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-14" data-color-index="3" data-lat="48.8738" data-lng="2.3572" data-place-name="Palais Garnier, Paris" data-tra
+[EnrichmentPipeline] Extracted place name: Palais Garnier, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8738, lng: 2.3572 }
+[EnrichmentPipeline] Calling geocodeLocation for: Palais Garnier, Paris
+[Geocoding] geocodeLocation called with: Palais Garnier, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Palais Garnier, Paris
+[Geocoding] Using proximity bias: 48.8738, 2.3572
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: "Pl. de l'Opéra, 75009 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Palais Garnier, Paris -> 48.8719697, 2.3316014, photo: places/ChIJOYNm1DBu5kcRZwdtKBzyq6k/photos/AciIO2eXBwZvZFI8Pp19_bzaAkNfe7gQpmMqc_KgaJtMZuTLAbcQZK7zmG8zwk0jeyCfhcVe0JWJFvl-pI7GLJMIYZL-btP-dzkBjVsegBs5-XjGzxo-Oil_GX6ZErwazCVluxFsqPJFY1KEQCghCASTB2z0vUzgfishCh45iUzlyILSqVi7apAi70gobmK0Wt4E49QsyV7zw91GVlFlAKcxMq9V4CrnkADfBjMtnO9nB13Gt4ZKQ5PtgXuF6IpZWPL99NVGwirXWUAxrLqH6WxMgUPVISny25YXBh1bybIvBv1V4s3gdk92jmDRx-DVTwDUzVFKHmjdhm6kkasyby_bBnBlXGFAbwbvFwdAJ3dJ2yFIycUehgvnMSTklJ9lSPG72L_OujzxEmKn7N83heM4t_ItghFcIoguj7LwrQ73VYT2xbi1, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8719697,
+  lng: 2.3316014,
+  photoName: 'places/ChIJOYNm1DBu5kcRZwdtKBzyq6k/photos/AciIO2eXBwZvZFI8Pp19_bzaAkNfe7gQpmMqc_KgaJtMZuTLAbcQZK7zmG8zwk0jeyCfhcVe0JWJFvl-pI7GLJMIYZL-btP-dzkBjVsegBs5-XjGzxo-Oil_GX6ZErwazCVluxFsqPJFY1KEQCghCASTB2z0vUzgfishCh45iUzlyILSqVi7apAi70gobmK0Wt4E49QsyV7zw91GVlFlAKcxMq9V4CrnkADfBjMtnO9nB13Gt4ZKQ5PtgXuF6IpZWPL99NVGwirXWUAxrLqH6WxMgUPVISny25YXBh1bybIvBv1V4s3gdk92jmDRx-DVTwDUzVFKHmjdhm6kkasyby_bBnBlXGFAbwbvFwdAJ3dJ2yFIycUehgvnMSTklJ9lSPG72L_OujzxEmKn7N83heM4t_ItghFcIoguj7LwrQ73VYT2xbi1',
+  description: 'Italian-style opera house with ceiling painted by Chagall & library museum in 19th-century building.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJOYNm1DBu5kcRZwdtKBzyq6k/photos/AciIO2eXBwZvZFI8Pp19_bzaAkNfe7gQpmMqc_KgaJtMZuTLAbcQZK7zmG8zwk0jeyCfhcVe0JWJFvl-pI7GLJMIYZL
+[chat-simple] Chunk was enriched:   <p>In the evening, visit the <span class="geo-mark" data-geo-id="loc-14" data-color-index="3" data  ->    <p>In the evening, visit the <span class="geo-mark" data-coord-source="google" data-photo-name="pl
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 303
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-15" data-color-index="4" data-lat="48.8722" data-lng="2.3311
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-15" data-color-index="4" data-lat="48.8722" data-lng="2.3311" data-place-name="Bouillon Pigalle, Paris" data-t
+[EnrichmentPipeline] Extracted place name: Bouillon Pigalle, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8722, lng: 2.3311 }
+[EnrichmentPipeline] Calling geocodeLocation for: Bouillon Pigalle, Paris
+[Geocoding] geocodeLocation called with: Bouillon Pigalle, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Bouillon Pigalle, Paris
+[Geocoding] Using proximity bias: 48.8722, 2.3311
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '22 Bd de Clichy, 75018 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Bouillon Pigalle, Paris -> 48.882624199999995, 2.3374170999999997, photo: places/ChIJVb7Sx0Vu5kcR5gDcYjssPWw/photos/AciIO2eQm21zAKR-ZtnBSxVYjpBZhvOtqxCw6ezCrtLnLsSCXBbXZdFUblt7mXb43THJwt3qht7DnwUKs_GfGJ_sMuGuwu9ZCQTvucYGCTM7BWjdqPtUOntLcdp9j9JfPgDkgUju-37YrM0e7sEfsDOTtMfciRmJV7t9Uhvwd6TzlczX-Vr08tW0e_XInY0mtf3tMw4VrF8d_ReDJMqQFvP7WRj3vg52373zfnVpjI2AKHkLNRI24pDX7k2qlJO8KnL0u2_9srLgdyo1ogjWYeRHNyjPyWOjkOSlm00GqpfVFn52wA, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.882624199999995,
+  lng: 2.3374170999999997,
+  photoName: 'places/ChIJVb7Sx0Vu5kcR5gDcYjssPWw/photos/AciIO2eQm21zAKR-ZtnBSxVYjpBZhvOtqxCw6ezCrtLnLsSCXBbXZdFUblt7mXb43THJwt3qht7DnwUKs_GfGJ_sMuGuwu9ZCQTvucYGCTM7BWjdqPtUOntLcdp9j9JfPgDkgUju-37YrM0e7sEfsDOTtMfciRmJV7t9Uhvwd6TzlczX-Vr08tW0e_XInY0mtf3tMw4VrF8d_ReDJMqQFvP7WRj3vg52373zfnVpjI2AKHkLNRI24pDX7k2qlJO8KnL0u2_9srLgdyo1ogjWYeRHNyjPyWOjkOSlm00GqpfVFn52wA',
+  description: 'Popular casual bistro serving traditional French mains & desserts with house wines by the glass.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJVb7Sx0Vu5kcR5gDcYjssPWw/photos/AciIO2eQm21zAKR-ZtnBSxVYjpBZhvOtqxCw6ezCrtLnLsSCXBbXZdFUblt7mXb43THJwt3qht7DnwUKs_GfGJ_sMuG
+[chat-simple] Chunk was enriched:   <p>For dinner, try <span class="geo-mark" data-geo-id="loc-15" data-color-index="4" data-lat="48.8  ->    <p>For dinner, try <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJV
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 321
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-16" data-color-index="5" data-lat="48.8584" data-lng="2.2965
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-16" data-color-index="5" data-lat="48.8584" data-lng="2.2965" data-place-name="Les Invalides, Paris" data-tran
+[EnrichmentPipeline] Extracted place name: Les Invalides, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8584, lng: 2.2965 }
+[EnrichmentPipeline] Calling geocodeLocation for: Les Invalides, Paris
+[Geocoding] geocodeLocation called with: Les Invalides, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Les Invalides, Paris
+[Geocoding] Using proximity bias: 48.8584, 2.2965
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '1 Rue Fabert, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Les Invalides, Paris -> 48.856528999999995, 2.3127059, photo: places/ChIJUzCPuddv5kcRasGAnEUUWkU/photos/AciIO2eYTmQPUJwZ1WrJRuWLA8H6uf2Gl0OHYsw2A_ltGBBhhgHm9VeskkSXNcfxWg31e3NuSxj_HPMttgMLLuEffnO_Pn-uicbvSBm_365FGbOKXn9cULKfXfElxt03Xr3jPPGGxuyCYbKrFOB11CH6h4rWXxAz1fb3o65JvnGwD80sTPjsq5kc3NszcRocUys1-GvPzP68zx8IY7JK0Zhq1Va-nU2OVHVGrc9X7fywOmO-ialQ_C3yxf_0yVXEV-PwePyxUU8fYzxt9lagWQqemX7Bj20i8W5cZOmLufKlWo1ABCOa7a4jfDjJxXbVxop47Nls7pArrt5nHNwc9CLm-3RnG_Yyd59jPFAqaL8BurILvc-YEcFeRSoiQWaptkYmAjAXrzNLPJA_s_ov_eZWqYEBz-RhVsCW9Q6EgW2wrJo, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.856528999999995,
+  lng: 2.3127059,
+  photoName: 'places/ChIJUzCPuddv5kcRasGAnEUUWkU/photos/AciIO2eYTmQPUJwZ1WrJRuWLA8H6uf2Gl0OHYsw2A_ltGBBhhgHm9VeskkSXNcfxWg31e3NuSxj_HPMttgMLLuEffnO_Pn-uicbvSBm_365FGbOKXn9cULKfXfElxt03Xr3jPPGGxuyCYbKrFOB11CH6h4rWXxAz1fb3o65JvnGwD80sTPjsq5kc3NszcRocUys1-GvPzP68zx8IY7JK0Zhq1Va-nU2OVHVGrc9X7fywOmO-ialQ_C3yxf_0yVXEV-PwePyxUU8fYzxt9lagWQqemX7Bj20i8W5cZOmLufKlWo1ABCOa7a4jfDjJxXbVxop47Nls7pArrt5nHNwc9CLm-3RnG_Yyd59jPFAqaL8BurILvc-YEcFeRSoiQWaptkYmAjAXrzNLPJA_s_ov_eZWqYEBz-RhVsCW9Q6EgW2wrJo',
+  description: 'Series of army museums including a church & the tombs of many famed officers, including Napoleon.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJUzCPuddv5kcRasGAnEUUWkU/photos/AciIO2eYTmQPUJwZ1WrJRuWLA8H6uf2Gl0OHYsw2A_ltGBBhhgHm9VeskkSXNcfxWg31e3NuSxj_HPMttgMLLuEffnO
+[chat-simple] Chunk was enriched:   <p>Spend your last morning in Paris at the <span class="geo-mark" data-geo-id="loc-16" data-color-  ->    <p>Spend your last morning in Paris at the <span class="geo-mark" data-coord-source="google" data-
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 299
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-17" data-color-index="6" data-lat="48.8592" data-lng="2.3014
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-17" data-color-index="6" data-lat="48.8592" data-lng="2.3014" data-place-name="Café Invalides, Paris" data-tra
+[EnrichmentPipeline] Extracted place name: Café Invalides, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8592, lng: 2.3014 }
+[EnrichmentPipeline] Calling geocodeLocation for: Café Invalides, Paris
+[Geocoding] geocodeLocation called with: Café Invalides, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Café Invalides, Paris
+[Geocoding] Using proximity bias: 48.8592, 2.3014
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '52 Rue Fabert, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: "3 Pl. de l'École Militaire, 75007 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '32 Rue Cler, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '7 Av. de la Motte-Picquet, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '54 Rue Saint-Dominique, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '73 Rue Saint-Dominique, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '49 Bd de la Tour-Maubourg, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '96 Bd de la Tour-Maubourg, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '27 Bd de la Tour-Maubourg, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '184 Rue de Grenelle, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '36 Bd de la Tour-Maubourg, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: "86 Rue de l'Université, 75007 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: "83 Rue de l'Université, 75007 Paris, France",
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '40 Rue Cler, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '34 Rue de Bourgogne, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '2 Port des Invalides, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '40 Ter Rue Fabert, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '17 Av. de la Motte-Picquet, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '184 Rue de Grenelle, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '81 Av. Bosquet, 75007 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Café Invalides, Paris -> 48.8582288, 2.3110002, photo: places/ChIJX-lXitdv5kcRy8Rg-NPDda8/photos/AciIO2dQjSPHujfsTMK9W5rAR_IKFWz9jVb8MqWVMVcKOtVeXUavCfeeXh7swiMcaFOFYQk0ZvjRm8V3A4coYR8lqAR5yQsymbuMaRSYswOOqxgJlWF1Y8yB7E0dJ1A6IsL7kGJANTEUS43jlAmB96YO1a379vAAXN15sjQCfTfO8oGL9QcrXMK7fyXG0v9t4at1CcS6HuHnWOXPWvtWaEzPUIBMjFYOZAyoJJVSkU2HvVNXsyhGn-3DYUnpM8_De9tKbDSwS5TM6BAJMNSo-E--FKufOCJrEHZWl8Qe0z3IfiBHTg, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8582288,
+  lng: 2.3110002,
+  photoName: 'places/ChIJX-lXitdv5kcRy8Rg-NPDda8/photos/AciIO2dQjSPHujfsTMK9W5rAR_IKFWz9jVb8MqWVMVcKOtVeXUavCfeeXh7swiMcaFOFYQk0ZvjRm8V3A4coYR8lqAR5yQsymbuMaRSYswOOqxgJlWF1Y8yB7E0dJ1A6IsL7kGJANTEUS43jlAmB96YO1a379vAAXN15sjQCfTfO8oGL9QcrXMK7fyXG0v9t4at1CcS6HuHnWOXPWvtWaEzPUIBMjFYOZAyoJJVSkU2HvVNXsyhGn-3DYUnpM8_De9tKbDSwS5TM6BAJMNSo-E--FKufOCJrEHZWl8Qe0z3IfiBHTg',
+  description: 'Relaxed restaurant with a classy, old-school vibe offering classic cuisine & a robust wine list.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJX-lXitdv5kcRy8Rg-NPDda8/photos/AciIO2dQjSPHujfsTMK9W5rAR_IKFWz9jVb8MqWVMVcKOtVeXUavCfeeXh7swiMcaFOFYQk0ZvjRm8V3A4coYR8lqAR
+[chat-simple] Chunk was enriched:   <p>Have breakfast at <span class="geo-mark" data-geo-id="loc-17" data-color-index="6" data-lat="48  ->    <p>Have breakfast at <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChI
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 553
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-18" data-color-index="7" data-lat="48.8656" data-lng="2.2945
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-18" data-color-index="7" data-lat="48.8656" data-lng="2.2945" data-place-name="Champs-Élysées, Paris" data-tra
+[EnrichmentPipeline] Extracted place name: Champs-Élysées, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8656, lng: 2.2945 }
+[EnrichmentPipeline] Calling geocodeLocation for: Champs-Élysées, Paris
+[Geocoding] geocodeLocation called with: Champs-Élysées, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Champs-Élysées, Paris
+[Geocoding] Using proximity bias: 48.8656, 2.2945
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Av. des Champs-Élysées, 75008 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: 'Champs-Élysées, Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Champs-Élysées, Paris -> 48.8729602, 2.2978526, photo: places/ChIJUXgA-MRv5kcR9mSP84enoVo/photos/AciIO2ct43qxAfD31ISg8jCBNBmBNlM09CpAyaG33ECVkcldWKekcicO2LNTD6IOqiR2SERIkfI-jZmphGmvBDPvgENqki_WD9JYPsWB86DqmEiAja9hsBnDV1qc0HhDZmjk0BHe6N1AtjNPZGSDf8ZRIQ5HdgO-BI-x3EiDmuT3p4vu5fT0BwIT8he2POLFxLD2bglFHQhzDWgfmGQuQ2zuL1vbwjxiEpWx70qmWoGavkEyk2dI8tNh6NUnCnBqlr2lRiCUlsDW6Zb6TkZtGnkk8ZF5Gb3D1vivmH_ip7VOyaq4gdeUKSqnNilWNeu4Ez5KzrNugLa13hjcg9sUURPy_HrByLIJHvkCNvaF1SH7Tf8rv9qMqucK6QHaTaHqykZGYOvaYRJXmxdfvqpECjkQmEUXFTsy4zQWS83Iw9zYC1jU2MY, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8729602,
+  lng: 2.2978526,
+  photoName: 'places/ChIJUXgA-MRv5kcR9mSP84enoVo/photos/AciIO2ct43qxAfD31ISg8jCBNBmBNlM09CpAyaG33ECVkcldWKekcicO2LNTD6IOqiR2SERIkfI-jZmphGmvBDPvgENqki_WD9JYPsWB86DqmEiAja9hsBnDV1qc0HhDZmjk0BHe6N1AtjNPZGSDf8ZRIQ5HdgO-BI-x3EiDmuT3p4vu5fT0BwIT8he2POLFxLD2bglFHQhzDWgfmGQuQ2zuL1vbwjxiEpWx70qmWoGavkEyk2dI8tNh6NUnCnBqlr2lRiCUlsDW6Zb6TkZtGnkk8ZF5Gb3D1vivmH_ip7VOyaq4gdeUKSqnNilWNeu4Ez5KzrNugLa13hjcg9sUURPy_HrByLIJHvkCNvaF1SH7Tf8rv9qMqucK6QHaTaHqykZGYOvaYRJXmxdfvqpECjkQmEUXFTsy4zQWS83Iw9zYC1jU2MY',
+  description: 'Famed route of landmarks such as the Louvre, Tuileries & Arc de Triomphe plus shops & restaurants.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJUXgA-MRv5kcR9mSP84enoVo/photos/AciIO2ct43qxAfD31ISg8jCBNBmBNlM09CpAyaG33ECVkcldWKekcicO2LNTD6IOqiR2SERIkfI-jZmphGmvBDPvgEN
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-19" data-color-index="8" data-lat="48.8738" data-lng="2.2953
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-19" data-color-index="8" data-lat="48.8738" data-lng="2.2953" data-place-name="Arc de Triomphe, Paris" data-tr
+[EnrichmentPipeline] Extracted place name: Arc de Triomphe, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8738, lng: 2.2953 }
+[EnrichmentPipeline] Calling geocodeLocation for: Arc de Triomphe, Paris
+[Geocoding] geocodeLocation called with: Arc de Triomphe, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Arc de Triomphe, Paris
+[Geocoding] Using proximity bias: 48.8738, 2.2953
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: 'Pl. Charles de Gaulle, 75008 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Arc de Triomphe, Paris -> 48.8737917, 2.2950274999999998, photo: places/ChIJjx37cOxv5kcRPWQuEW5ntdk/photos/AciIO2eDiWa-ro7uSwVgi8kuM3p8gQcOxhN_GbqjOVz0TJ-iLLUm_q_CGHHW1OeSo309kLToTN5O-zS1NkQEi0aAbHoThKuTA3GTNKp5meCrMcMkjuKWqhy9U5y38e3F2aK1F0_sFmwyn42RcjseecTQ1GsL1-ihfEFF5kLtpXGJwhOBRgHJpfW-NbmLtG5kp2rR-Iji7KAOqOEz29WmpSZXk17Kprcgu0-YwKC2jxAqNokwrMbPXhdQnFjodHEXCbti5r9fvJ3HjN1WXPvVDcy24kK5sL9al63mWAYWaJCC_n-gOO-bSbVooQeTrNg9HNk8My2_dcVYizDrcciB10sLaxDzGDdJbqyaR7XQTdSWUkyoxHwnktajiMqx9DTSXJifO8HnPo4I_Xd0W-QxeZoIv4KYIoRmciAJ9E68AAywv0SldA, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8737917,
+  lng: 2.2950274999999998,
+  photoName: 'places/ChIJjx37cOxv5kcRPWQuEW5ntdk/photos/AciIO2eDiWa-ro7uSwVgi8kuM3p8gQcOxhN_GbqjOVz0TJ-iLLUm_q_CGHHW1OeSo309kLToTN5O-zS1NkQEi0aAbHoThKuTA3GTNKp5meCrMcMkjuKWqhy9U5y38e3F2aK1F0_sFmwyn42RcjseecTQ1GsL1-ihfEFF5kLtpXGJwhOBRgHJpfW-NbmLtG5kp2rR-Iji7KAOqOEz29WmpSZXk17Kprcgu0-YwKC2jxAqNokwrMbPXhdQnFjodHEXCbti5r9fvJ3HjN1WXPvVDcy24kK5sL9al63mWAYWaJCC_n-gOO-bSbVooQeTrNg9HNk8My2_dcVYizDrcciB10sLaxDzGDdJbqyaR7XQTdSWUkyoxHwnktajiMqx9DTSXJifO8HnPo4I_Xd0W-QxeZoIv4KYIoRmciAJ9E68AAywv0SldA',
+  description: "Iconic triumphal arch built to commemorate Napoleon's victories, with an observation deck.",
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJjx37cOxv5kcRPWQuEW5ntdk/photos/AciIO2eDiWa-ro7uSwVgi8kuM3p8gQcOxhN_GbqjOVz0TJ-iLLUm_q_CGHHW1OeSo309kLToTN5O-zS1NkQEi0aAbHo
+[chat-simple] Chunk was enriched:   <p>Take a leisurely stroll through the <span class="geo-mark" data-geo-id="loc-18" data-color-inde  ->    <p>Take a leisurely stroll through the <span class="geo-mark" data-coord-source="google" data-phot
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 312
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-20" data-color-index="9" data-lat="48.8701" data-lng="2.2992
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-20" data-color-index="9" data-lat="48.8701" data-lng="2.2992" data-place-name="Le Relais de l'Entrecôte, Paris
+[EnrichmentPipeline] Extracted place name: Le Relais de l'Entrecôte, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8701, lng: 2.2992 }
+[EnrichmentPipeline] Calling geocodeLocation for: Le Relais de l'Entrecôte, Paris
+[Geocoding] geocodeLocation called with: Le Relais de l'Entrecôte, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Le Relais de l'Entrecôte, Paris
+[Geocoding] Using proximity bias: 48.8701, 2.2992
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '15 Rue Marbeuf, 75008 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '20 Rue Saint-Benoît, 75006 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '29 Rue de Marignan, 75008 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '101 Bd du Montparnasse, 75006 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '271 Bd Pereire, 75017 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Le Relais de l'Entrecôte, Paris -> 48.868142, 2.3027971, photo: places/ChIJqeYv3MJv5kcR2PpHs5RdJEg/photos/AciIO2dmGg9FG9BIuSnmpPNzms_ktVWSU4yXKPbSGnSM7-T5bA36esSIBYREQ_GocmGh4jiuhmCIn4-4fEPPJj8GmyCI4NI0ZpaISbRU9aE5TldLoOeXIqzjy7SuBMzWHUIOvLl9T1KBtHvEl5Tscs3N-nFLS-PsdUt8hXcXNVT9Lb5KceeGPWSqg5QlZfsbRL5IzrLbh9XC3RlyQiaEICshxeTAkkQc4rJRfuMuzp0Idx400PCZShWx580K8WV2qfM8y2let9dXFS_bKEjeeKltLlgJakaBP4ko7tiSYiSENNY60w, description: none
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.868142,
+  lng: 2.3027971,
+  photoName: 'places/ChIJqeYv3MJv5kcR2PpHs5RdJEg/photos/AciIO2dmGg9FG9BIuSnmpPNzms_ktVWSU4yXKPbSGnSM7-T5bA36esSIBYREQ_GocmGh4jiuhmCIn4-4fEPPJj8GmyCI4NI0ZpaISbRU9aE5TldLoOeXIqzjy7SuBMzWHUIOvLl9T1KBtHvEl5Tscs3N-nFLS-PsdUt8hXcXNVT9Lb5KceeGPWSqg5QlZfsbRL5IzrLbh9XC3RlyQiaEICshxeTAkkQc4rJRfuMuzp0Idx400PCZShWx580K8WV2qfM8y2let9dXFS_bKEjeeKltLlgJakaBP4ko7tiSYiSENNY60w',
+  description: undefined,
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJqeYv3MJv5kcR2PpHs5RdJEg/photos/AciIO2dmGg9FG9BIuSnmpPNzms_ktVWSU4yXKPbSGnSM7-T5bA36esSIBYREQ_GocmGh4jiuhmCIn4-4fEPPJj8GmyC
+[chat-simple] Chunk was enriched:   <p>For lunch, enjoy a classic French bistro experience at <span class="geo-mark" data-geo-id="loc-  ->    <p>For lunch, enjoy a classic French bistro experience at <span class="geo-mark" data-coord-source
+[chat-simple] Found geo-mark in chunk, processing for enrichment
+[EnrichmentPipeline] Processing chunk with geo-mark, buffer size: 543
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-21" data-color-index="0" data-lat="48.8973" data-lng="2.3728
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-21" data-color-index="0" data-lat="48.8973" data-lng="2.3728" data-place-name="Gare du Nord, Paris" data-trans
+[EnrichmentPipeline] Extracted place name: Gare du Nord, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8973, lng: 2.3728 }
+[EnrichmentPipeline] Calling geocodeLocation for: Gare du Nord, Paris
+[Geocoding] geocodeLocation called with: Gare du Nord, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Gare du Nord, Paris
+[Geocoding] Using proximity bias: 48.8973, 2.3728
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '18 Rue de Dunkerque, 75010 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    },
+    {
+      formattedAddress: '75010 Paris, France',
+      location: [Object],
+      displayName: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Gare du Nord, Paris -> 48.8809706, 2.3561432, photo: places/ChIJf6NY_Gtu5kcRDHnd0mg3tk8/photos/AciIO2fAyrzYm5KEGHkjOo9DYPQpUhP2cMAYAY7K7xP-gqJpXTnTLuFrIEyJs_X4YQ0kFupib9LQhDx-2F05JLN6W08cftoUzt2InIM0KYMKanTpHWvEAIY0LWQr1QNPkbtOVovaHfSWPUF8qSLo8oVYDMUGkN5AD6ObJ-ZAbxFyXQdg6ECF6ukSj9-6jBH5ydWI4k-kzIYNffaSV5KRO3j64PkBWsoMv1V3z9x_oi_BWd-xqMOn3GkRPFzq-xCEkpOGYkc3oIDGwcqUaZ2Dgcomh_GVSVvYEjeqae2A9664SwSnFSP4hHt6O2siH_EOzx-DvzSmX97z1vaR1re-Ujd4PUlPG4KD7zG2GUch2Y4_dC6TFD6H5Eh0qqEhbC64-YmuwsfHXDx7LCO7C1-KeGfNMthFu9xnaNlzWO7R95p8aPTGKskx, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 48.8809706,
+  lng: 2.3561432,
+  photoName: 'places/ChIJf6NY_Gtu5kcRDHnd0mg3tk8/photos/AciIO2fAyrzYm5KEGHkjOo9DYPQpUhP2cMAYAY7K7xP-gqJpXTnTLuFrIEyJs_X4YQ0kFupib9LQhDx-2F05JLN6W08cftoUzt2InIM0KYMKanTpHWvEAIY0LWQr1QNPkbtOVovaHfSWPUF8qSLo8oVYDMUGkN5AD6ObJ-ZAbxFyXQdg6ECF6ukSj9-6jBH5ydWI4k-kzIYNffaSV5KRO3j64PkBWsoMv1V3z9x_oi_BWd-xqMOn3GkRPFzq-xCEkpOGYkc3oIDGwcqUaZ2Dgcomh_GVSVvYEjeqae2A9664SwSnFSP4hHt6O2siH_EOzx-DvzSmX97z1vaR1re-Ujd4PUlPG4KD7zG2GUch2Y4_dC6TFD6H5Eh0qqEhbC64-YmuwsfHXDx7LCO7C1-KeGfNMthFu9xnaNlzWO7R95p8aPTGKskx',
+  description: 'Vast 19th-century station serving northern France, the UK, Belgium, the Netherlands & Germany.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJf6NY_Gtu5kcRDHnd0mg3tk8/photos/AciIO2fAyrzYm5KEGHkjOo9DYPQpUhP2cMAYAY7K7xP-gqJpXTnTLuFrIEyJs_X4YQ0kFupib9LQhDx-2F05JLN6W08
+[EnrichmentPipeline] Found complete geo-mark: <span class="geo-mark" data-geo-id="loc-22" data-color-index="1" data-lat="48.8289" data-lng="2.3655
+[EnrichmentPipeline] enrichGeoMark called with: <span class="geo-mark" data-geo-id="loc-22" data-color-index="1" data-lat="48.8289" data-lng="2.3655" data-place-name="Charles de Gaulle Airport, Pari
+[EnrichmentPipeline] Extracted place name: Charles de Gaulle Airport, Paris
+[EnrichmentPipeline] LLM provided approximate coords: { lat: 48.8289, lng: 2.3655 }
+[EnrichmentPipeline] Calling geocodeLocation for: Charles de Gaulle Airport, Paris
+[Geocoding] geocodeLocation called with: Charles de Gaulle Airport, Paris API key: present
+[Geocoding] Calling Google Places API (Text Search) for: Charles de Gaulle Airport, Paris
+[Geocoding] Using proximity bias: 48.8289, 2.3655
+[Geocoding] Making POST request to Google Places API (Text Search)
+[Geocoding] Google API response: {
+  places: [
+    {
+      formattedAddress: '95700 Roissy-en-France, France',
+      location: [Object],
+      displayName: [Object],
+      editorialSummary: [Object],
+      photos: [Array]
+    }
+  ]
+}
+[Geocoding] Google API found: Charles de Gaulle Airport, Paris -> 49.007882699999996, 2.5507855, photo: places/ChIJW89MjgM-5kcRLKZbL5jgKwQ/photos/AciIO2cU76xjmh1smONdXYanolImIMoBNUPJW_1k-M6-GH5V8hNDHRf0Hvl9ImnV3_M1rLZB17jJb42Mkut3EVkHeQUuWVpRZm94FebnP7FB7GdwTlIb8rNIMdAkt8bzCJZfRPnYzD6SOr6NKKEG28kXUEY2Vw7KnQ1rdE3KTAaF0PpiT8hvzM314fcNuHOxL-bKd6lPrfGT-2l6QvwZfOrB0RLFnhvyKnqTxZFYkn2zUIKirsiL1VbLcXuqmZWEULRlzE7zl0NmlSEabbCKwrA3OluZSfVUk9Pr2Va0DTdLQ8maVA, description: present
+[EnrichmentPipeline] Geocoding result: {
+  lat: 49.007882699999996,
+  lng: 2.5507855,
+  photoName: 'places/ChIJW89MjgM-5kcRLKZbL5jgKwQ/photos/AciIO2cU76xjmh1smONdXYanolImIMoBNUPJW_1k-M6-GH5V8hNDHRf0Hvl9ImnV3_M1rLZB17jJb42Mkut3EVkHeQUuWVpRZm94FebnP7FB7GdwTlIb8rNIMdAkt8bzCJZfRPnYzD6SOr6NKKEG28kXUEY2Vw7KnQ1rdE3KTAaF0PpiT8hvzM314fcNuHOxL-bKd6lPrfGT-2l6QvwZfOrB0RLFnhvyKnqTxZFYkn2zUIKirsiL1VbLcXuqmZWEULRlzE7zl0NmlSEabbCKwrA3OluZSfVUk9Pr2Va0DTdLQ8maVA',
+  description: 'Massive hub serving Paris for intercontinental flights, plus train links to the city centre.',
+  source: 'google'
+}
+[EnrichmentPipeline] Enriched geo-mark: <span class="geo-mark" data-coord-source="google" data-photo-name="places/ChIJW89MjgM-5kcRLKZbL5jgKwQ/photos/AciIO2cU76xjmh1smONdXYanolImIMoBNUPJW_1k-M6-GH5V8hNDHRf0Hvl9ImnV3_M1rLZB17jJb42Mkut3EVkHeQU
+[chat-simple] Chunk was enriched:   <p>Before you depart, take a taxi to the <span class="geo-mark" data-geo-id="loc-21" data-color-in  ->    <p>Before you depart, take a taxi to the <span class="geo-mark" data-coord-source="google" data-ph
+Stream finished, messages count: 1
+ POST /api/chat-simple 200 in 22124ms

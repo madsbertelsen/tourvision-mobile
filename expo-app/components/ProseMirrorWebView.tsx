@@ -92,6 +92,8 @@ export interface ProseMirrorWebViewRef {
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
   triggerCreateLocation: () => void;
+  startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string) => void;
+  stopCollaboration: () => void;
 }
 
 interface ProseMirrorWebViewProps {
@@ -132,14 +134,15 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
   ) => {
     const webViewRef = useRef<WebView>(null);
     const [isReady, setIsReady] = useState(false);
+    // Force Metro reload after bundle rebuild - v3 (empty initial content)
     const lastProcessedGeoMarkRef = useRef<string | null>(null);
     const lastContentHashRef = useRef<string | null>(null);
     const isInternalChangeRef = useRef(false);
 
-    // Send message to WebView
-    const sendMessage = useCallback((message: any) => {
-      if (!webViewRef.current || !isReady) {
-        console.warn('[ProseMirrorWebView] WebView not ready yet');
+    // Internal send message that doesn't check isReady (for use in ready handler)
+    const sendMessageInternal = useCallback((message: any) => {
+      if (!webViewRef.current) {
+        console.warn('[ProseMirrorWebView] WebView ref not available');
         return;
       }
 
@@ -157,7 +160,16 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       } else {
         webViewRef.current.postMessage(jsonMessage);
       }
-    }, [isReady]);
+    }, []);
+
+    // Public send message that checks isReady
+    const sendMessage = useCallback((message: any) => {
+      if (!isReady) {
+        console.warn('[ProseMirrorWebView] WebView not ready yet');
+        return;
+      }
+      sendMessageInternal(message);
+    }, [isReady, sendMessageInternal]);
 
     // Handle messages from WebView
     const handleMessage = useCallback(
@@ -174,6 +186,9 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           switch (data.type) {
             case 'ready':
               console.log('[ProseMirrorWebView] WebView is ready');
+
+              // Reset hash to force content update
+              lastContentHashRef.current = null;
               setIsReady(true);
 
               // Inject shared CSS styles with consistent padding
@@ -195,12 +210,15 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               `;
               webViewRef.current?.injectJavaScript(cssInjection);
 
-              // Send initial content once ready
+              // Send initial content once ready (use internal to avoid isReady check)
               if (content) {
-                sendMessage({ type: 'setContent', content });
+                console.log('[ProseMirrorWebView] Sending initial content on ready');
+                // Update the hash to prevent duplicate sends from useEffect
+                lastContentHashRef.current = JSON.stringify(content);
+                sendMessageInternal({ type: 'setContent', content });
               }
               // Send initial editable state
-              sendMessage({ type: 'setEditable', editable });
+              sendMessageInternal({ type: 'setEditable', editable });
               break;
 
             case 'test':
@@ -276,6 +294,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               console.log('[ProseMirrorWebView] State response:', data.state);
               break;
 
+            // Collaboration message handlers
+            case 'collaborationStarted':
+            case 'collaborationStopped':
+            case 'collaborationStatus':
+            case 'collaborationUsers':
+              console.log('[ProseMirrorWebView] Collaboration message:', data.type);
+              // Forward to global handler if it exists
+              if ((global as any).handleCollaborationMessage) {
+                (global as any).handleCollaborationMessage(data);
+              }
+              break;
+
             default:
               console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
           }
@@ -283,12 +313,20 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.error('[ProseMirrorWebView] Error handling message:', error);
         }
       },
-      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, onShowCommentEditor, onCommentClick, content, editable, sendMessage]
+      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, onShowCommentEditor, onCommentClick, content, editable, sendMessageInternal]
     );
 
     // Update content when it changes externally
     useEffect(() => {
-      if (!isReady || !content) return;
+      if (!isReady) {
+        console.log('[ProseMirrorWebView] WebView not ready, skipping content update');
+        return;
+      }
+
+      if (!content) {
+        console.log('[ProseMirrorWebView] No content to send');
+        return;
+      }
 
       // Skip if this is from our own onChange callback
       if (isInternalChangeRef.current) {
@@ -308,11 +346,12 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       sendMessage({ type: 'setContent', content });
     }, [content, isReady, sendMessage]);
 
-    // Reset internal state refs when component unmounts or content prop changes
+    // Reset internal state when component unmounts
     useEffect(() => {
       return () => {
         // Cleanup on unmount
-        console.log('[ProseMirrorWebView] Cleanup - resetting refs');
+        console.log('[ProseMirrorWebView] Component unmounting - resetting all refs');
+        setIsReady(false);
         isInternalChangeRef.current = false;
         lastContentHashRef.current = null;
         lastProcessedGeoMarkRef.current = null;
@@ -431,6 +470,20 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               true;
             `);
           }
+        },
+        startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string) => {
+          console.log('[ProseMirrorWebView] Starting collaboration:', { serverUrl, documentId, userId, userName });
+          sendMessage({
+            type: 'startCollaboration',
+            serverUrl,
+            documentId,
+            userId,
+            userName
+          });
+        },
+        stopCollaboration: () => {
+          console.log('[ProseMirrorWebView] Stopping collaboration');
+          sendMessage({ type: 'stopCollaboration' });
         },
       }),
       [sendMessage]

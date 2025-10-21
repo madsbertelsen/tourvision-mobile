@@ -1,5 +1,6 @@
 import TripsSidebar from '@/components/TripsSidebar';
 import { MockProvider } from '@/contexts/MockContext';
+import { CollaborationProvider } from '@/contexts/CollaborationContext';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React from 'react';
@@ -13,21 +14,25 @@ function CustomDrawerContent(props: any) {
   const router = useRouter();
 
   const handleTripSelect = (tripId: string, initialMessage?: string) => {
-    // Navigate to trip detail page
+    // Navigate to trip detail page using proper dynamic route syntax
     router.push({
-      pathname: `/(mock)/trip/${tripId}` as any,
-      params: initialMessage ? { initialMessage } : undefined
+      pathname: '/(mock)/trip/[id]' as any,
+      params: {
+        id: tripId,
+        ...(initialMessage ? { initialMessage } : {})
+      }
     });
     // Close drawer on mobile
     props.navigation.closeDrawer();
   };
 
   const handleLocationSelect = (tripId: string, locationId: string, location: any) => {
-    // Navigate to location detail page
+    // Navigate to location detail page using proper dynamic route syntax
     router.push({
-      pathname: `/(mock)/trip/${tripId}/location/${locationId}` as any,
+      pathname: '/(mock)/trip/[id]/location/[locationId]' as any,
       params: {
-        id: locationId,
+        id: tripId,
+        locationId: locationId,
         name: location.name,
         lat: location.lat.toString(),
         lng: location.lng.toString(),
@@ -133,7 +138,9 @@ function MockLayoutContent() {
 export default function MockLayout() {
   return (
     <MockProvider>
-      <MockLayoutContent />
+      <CollaborationProvider>
+        <MockLayoutContent />
+      </CollaborationProvider>
     </MockProvider>
   );
 }

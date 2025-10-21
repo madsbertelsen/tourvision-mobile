@@ -9,6 +9,12 @@ import { addListNodes } from 'prosemirror-schema-list';
 import { keymap } from 'prosemirror-keymap';
 import { history, undo, redo } from 'prosemirror-history';
 import { baseKeymap } from 'prosemirror-commands';
+import { Step } from 'prosemirror-transform';
+import { Decoration, DecorationSet } from 'prosemirror-view';
+import { Plugin, PluginKey } from 'prosemirror-state';
+
+// Import collaboration plugin
+import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
 
 // Create a custom schema with list support and geo-mark
 const mySchema = new Schema({
@@ -119,13 +125,15 @@ const mySchema = new Schema({
 
 // Export everything to window.PM for the HTML to use
 window.PM = {
-  state: { EditorState, TextSelection },
-  view: { EditorView },
+  state: { EditorState, TextSelection, Plugin, PluginKey },
+  view: { EditorView, Decoration, DecorationSet },
   model: { Schema, DOMParser, DOMSerializer },
+  transform: { Step },
   schema: mySchema,
   keymap: keymap,
   history: { history, undo, redo },
-  commands: { baseKeymap }
+  commands: { baseKeymap },
+  collab: { CollabConnection, createCollabPlugin, initializeCollaboration }
 };
 
 console.log('[ProseMirror Bundle] Loaded successfully');

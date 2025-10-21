@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ProseMirror Editor</title>
+  <!-- Socket.io client for collaboration -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -97,6 +99,73 @@
       display: block;
     }
 
+    /* Collaboration cursors and selections */
+    .collab-cursor {
+      position: relative;
+      display: inline-block;
+      width: 0;
+      height: 1em;
+    }
+
+    .collab-cursor-label {
+      position: absolute;
+      bottom: 100%;
+      left: -2px;
+      background-color: #3b82f6;
+      color: white;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .collab-selection {
+      background-color: rgba(59, 130, 246, 0.2);
+    }
+
+    /* Collaboration status indicator */
+    #collab-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 11px;
+      border-radius: 4px;
+      z-index: 100;
+      display: none;
+    }
+
+    #collab-status.connected {
+      background: rgba(16, 185, 129, 0.9);
+      display: block;
+    }
+
+    #collab-status.disconnected {
+      background: rgba(239, 68, 68, 0.9);
+      display: block;
+    }
+
+    #collab-users {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+    }
+
+    .collab-user {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: white;
+      font-weight: 500;
+    }
+
     .ProseMirror h1 {
       font-size: 2em;
       margin: 0.67em 0;
@@ -173,6 +242,8 @@
 </head>
 <body>
   <div class="status-bar" id="status">Loading ProseMirror...</div>
+  <div id="collab-status">Disconnected</div>
+  <div id="collab-users"></div>
   <div id="editor-container"></div>
   <div id="typing-cursor"></div>
 
@@ -241,28 +312,27 @@
       setStatus('ProseMirror loaded successfully!');
 
       // Initialize editor
-      const { EditorState } = window.PM.state;
-      const { EditorView } = window.PM.view;
+      const { EditorState, Plugin, PluginKey } = window.PM.state;
+      const { EditorView, Decoration, DecorationSet } = window.PM.view;
       const { schema } = window.PM;
       const { keymap } = window.PM;
       const { history, undo, redo } = window.PM.history;
       const { baseKeymap } = window.PM.commands;
+      const { Step } = window.PM.transform;
 
       console.log('[WebView] Creating editor state...');
 
       let editorView = null;
+      let collabConnection = null;
+      let collabPlugin = null;
+      let socket = null;
 
-      // Create initial document with some test content
+      // Create initial document - empty, content will be sent from React Native
       const { DOMParser: PMDOMParser } = window.PM.model;
 
-      // Create a simple test document
+      // Start with empty document
       const doc = schema.node('doc', null, [
-        schema.node('paragraph', null, [
-          schema.text('Welcome to ProseMirror! This editor is working correctly.')
-        ]),
-        schema.node('paragraph', null, [
-          schema.text('Click "Load Sample" to load the test content, or enable "Edit Mode" to start typing.')
-        ])
+        schema.node('paragraph', null, [])
       ]);
 
       // Create initial editor state
@@ -370,6 +440,24 @@
       window.hideTypingCursor = hideTypingCursor;
 
       // Helper functions for toolbar state (must be defined before EditorView)
+      // Helper function to update collaboration users display
+      function updateCollabUsers() {
+        if (!collabConnection) return;
+
+        const usersEl = document.getElementById('collab-users');
+        usersEl.innerHTML = '';
+
+        collabConnection.users.forEach((user, userId) => {
+          if (userId !== collabConnection.userId) {
+            const userEl = document.createElement('div');
+            userEl.className = 'collab-user';
+            userEl.style.backgroundColor = user.color;
+            userEl.textContent = user.name;
+            usersEl.appendChild(userEl);
+          }
+        });
+      }
+
       function isNodeTypeActive(state, nodeType, attrs = {}) {
         const { $from } = state.selection;
         const node = $from.parent;
@@ -982,6 +1070,111 @@
                 default:
                   console.warn('[WebView] Unknown command:', data.command);
               }
+              break;
+
+            case 'startCollaboration':
+              console.log('[WebView] Starting collaboration:', data);
+              if (editorView && window.io && window.PM.collab) {
+                const { serverUrl, documentId, userId, userName } = data;
+
+                // Connect to WebSocket server
+                socket = window.io(serverUrl, {
+                  transports: ['websocket'],
+                  reconnectionDelayMax: 10000
+                });
+
+                // Initialize collaboration
+                const { CollabConnection, createCollabPlugin } = window.PM.collab;
+                collabConnection = new CollabConnection(socket, documentId, userId, userName);
+                collabPlugin = createCollabPlugin(collabConnection);
+
+                // Update editor state with collaboration plugin
+                const plugins = editorView.state.plugins.filter(p => !p.spec.key || p.spec.key.key !== 'collab');
+                plugins.push(collabPlugin);
+
+                const newState = editorView.state.reconfigure({ plugins });
+                editorView.updateState(newState);
+
+                // Update UI
+                const statusEl = document.getElementById('collab-status');
+                statusEl.textContent = 'Connecting...';
+                statusEl.className = 'disconnected';
+
+                // Socket event handlers for UI updates
+                socket.on('connect', () => {
+                  console.log('[WebView] Connected to collaboration server');
+                  statusEl.textContent = 'Connected';
+                  statusEl.className = 'connected';
+
+                  sendMessageToNative({
+                    type: 'collaborationStatus',
+                    status: 'connected'
+                  });
+                });
+
+                socket.on('disconnect', () => {
+                  console.log('[WebView] Disconnected from collaboration server');
+                  statusEl.textContent = 'Disconnected';
+                  statusEl.className = 'disconnected';
+
+                  sendMessageToNative({
+                    type: 'collaborationStatus',
+                    status: 'disconnected'
+                  });
+                });
+
+                socket.on('user-joined', ({ userId, userName, userColor }) => {
+                  console.log('[WebView] User joined:', userName);
+                  updateCollabUsers();
+                });
+
+                socket.on('user-left', ({ userId }) => {
+                  console.log('[WebView] User left:', userId);
+                  updateCollabUsers();
+                });
+
+                sendMessageToNative({
+                  type: 'collaborationStarted',
+                  success: true
+                });
+              } else {
+                console.error('[WebView] Cannot start collaboration - missing dependencies');
+                sendMessageToNative({
+                  type: 'collaborationStarted',
+                  success: false,
+                  error: 'Missing Socket.io or collaboration plugin'
+                });
+              }
+              break;
+
+            case 'stopCollaboration':
+              console.log('[WebView] Stopping collaboration');
+              if (socket) {
+                socket.disconnect();
+                socket = null;
+              }
+              if (collabConnection) {
+                collabConnection.disconnect();
+                collabConnection = null;
+              }
+
+              // Remove collaboration plugin
+              if (editorView && collabPlugin) {
+                const plugins = editorView.state.plugins.filter(p => p !== collabPlugin);
+                const newState = editorView.state.reconfigure({ plugins });
+                editorView.updateState(newState);
+                collabPlugin = null;
+              }
+
+              // Update UI
+              const statusEl = document.getElementById('collab-status');
+              statusEl.textContent = 'Disconnected';
+              statusEl.className = 'disconnected';
+              document.getElementById('collab-users').innerHTML = '';
+
+              sendMessageToNative({
+                type: 'collaborationStopped'
+              });
               break;
 
             default:
