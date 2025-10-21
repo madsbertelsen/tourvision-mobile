@@ -1,4 +1,8 @@
 import { CollaborationManager } from './CollaborationManager.js';
+import { Schema } from 'prosemirror-model';
+import { schema as basicSchema } from 'prosemirror-schema-basic';
+import { addListNodes } from 'prosemirror-schema-list';
+import { ReplaceStep } from 'prosemirror-transform';
 
 // Step generation options
 export interface StepGenerationOptions {
@@ -15,9 +19,56 @@ export interface StepGenerationOptions {
  */
 export class AIStepGenerator {
   private collabManager: CollaborationManager;
+  private schema: Schema;
 
   constructor(collabManager: CollaborationManager) {
     this.collabManager = collabManager;
+
+    // Create schema matching the client's schema
+    // This MUST match the schema used in the WebView's ProseMirror instance
+    const baseNodes = addListNodes(basicSchema.spec.nodes, 'paragraph block*', 'block');
+
+    // Add geoMark node to match client schema
+    const nodes = baseNodes.addToEnd('geoMark', {
+      inline: true,
+      group: 'inline',
+      content: 'text*',
+      attrs: {
+        geoId: { default: null },
+        placeName: { default: '' },
+        lat: { default: '' },
+        lng: { default: '' },
+        colorIndex: { default: 0 },
+        coordSource: { default: 'manual' },
+        description: { default: null },
+        transportFrom: { default: null },
+        transportProfile: { default: null },
+        waypoints: { default: null },
+        visitDocument: { default: null },
+        photoName: { default: null }
+      }
+    });
+
+    // Add comment mark to match client schema
+    const marks = basicSchema.spec.marks.addToEnd('comment', {
+      attrs: {
+        commentId: { default: null },
+        userId: { default: null },
+        userName: { default: '' },
+        content: { default: '' },
+        createdAt: { default: null },
+        resolved: { default: false },
+        replies: { default: null }
+      },
+      inclusive: false
+    });
+
+    const mySchema = new Schema({
+      nodes: nodes,
+      marks: marks
+    });
+
+    this.schema = mySchema;
   }
 
   /**
@@ -56,27 +107,35 @@ export class AIStepGenerator {
   }
 
   /**
-   * Create a simple text insertion step
-   * This creates a basic step structure that can be applied to a ProseMirror document
+   * Create a proper ProseMirror text insertion step
+   * This creates a real ReplaceStep that can be applied to a ProseMirror document
    */
   private createSimpleTextStep(content: string, options: StepGenerationOptions): any {
-    // Parse content to extract structure
-    const blocks = this.parseContentToBlocks(content);
+    try {
+      // Parse content into ProseMirror nodes
+      const blocks = this.parseContentToBlocks(content);
 
-    // Create a replace step that inserts the content
-    // Using a simplified step format that the client can interpret
-    const step = {
-      stepType: 'replace',
-      from: options.replaceRange?.from ?? 1, // Default to position 1 (after doc start)
-      to: options.replaceRange?.to ?? 1,
-      slice: {
-        content: blocks,
-        openStart: 0,
-        openEnd: 0
-      }
-    };
+      // Create a proper ProseMirror fragment
+      const fragment = this.schema.nodeFromJSON({
+        type: 'doc',
+        content: blocks
+      }).content;
 
-    return step;
+      // Create a slice from the fragment
+      const slice = fragment.slice(0);
+
+      // Create a proper ReplaceStep
+      const from = options.replaceRange?.from ?? 1; // Default to position 1 (after doc start)
+      const to = options.replaceRange?.to ?? from;
+
+      const step = new ReplaceStep(from, to, slice);
+
+      // Return the JSON representation that can be sent over the wire
+      return step.toJSON();
+    } catch (error) {
+      console.error('[AIStepGenerator] Error creating step:', error);
+      return null;
+    }
   }
 
   /**
