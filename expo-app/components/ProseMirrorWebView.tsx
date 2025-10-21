@@ -3,6 +3,85 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 
+// Web-only iframe component
+const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    injectJavaScript: (script: string) => {
+      if (iframeRef.current?.contentWindow) {
+        try {
+          // Remove 'true;' at the end if it exists
+          const cleanScript = script.replace(/\s*true;\s*$/, '');
+          iframeRef.current.contentWindow.eval(cleanScript);
+        } catch (error) {
+          console.error('[IframeWebView] Error injecting JS:', error);
+        }
+      }
+    },
+    postMessage: (message: string) => {
+      if (iframeRef.current?.contentWindow) {
+        // Parse the message if it's a string, then send it
+        const messageData = typeof message === 'string' ? message : JSON.stringify(message);
+        iframeRef.current.contentWindow.postMessage(messageData, '*');
+      }
+    }
+  }));
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Only process messages from our iframe
+      if (event.source === iframeRef.current?.contentWindow) {
+        // Ensure data is in the right format
+        const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+        console.log('[IframeWebView] Received message from iframe:', data);
+        onMessage?.({ nativeEvent: { data } });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onMessage]);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (iframe) {
+      const handleLoad = () => {
+        console.log('[IframeWebView] Iframe loaded');
+        onLoadEnd?.();
+      };
+      const handleLoadStart = () => {
+        console.log('[IframeWebView] Iframe loading...');
+        onLoadStart?.();
+      };
+
+      iframe.addEventListener('load', handleLoad);
+      // Note: loadstart doesn't exist on iframe, using load instead
+      handleLoadStart();
+
+      return () => {
+        iframe.removeEventListener('load', handleLoad);
+      };
+    }
+  }, [onLoadEnd, onLoadStart]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      srcDoc={source.html}
+      style={{
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        backgroundColor: '#ffffff',
+      }}
+      sandbox="allow-scripts allow-same-origin"
+    />
+  );
+});
+
+IframeWebView.displayName = 'IframeWebView';
+
 export interface ProseMirrorWebViewRef {
   sendCommand: (command: string, params?: any) => void;
   scrollToNode: (nodeId: string) => void;
@@ -67,7 +146,10 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       const jsonMessage = JSON.stringify(message);
       console.log('[ProseMirrorWebView] Sending message to WebView:', message.type);
 
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === 'web') {
+        // On web, use postMessage (handled by IframeWebView)
+        webViewRef.current.postMessage(jsonMessage);
+      } else if (Platform.OS === 'ios') {
         webViewRef.current.injectJavaScript(`
           window.postMessage(${jsonMessage}, '*');
           true;
@@ -226,6 +308,17 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       sendMessage({ type: 'setContent', content });
     }, [content, isReady, sendMessage]);
 
+    // Reset internal state refs when component unmounts or content prop changes
+    useEffect(() => {
+      return () => {
+        // Cleanup on unmount
+        console.log('[ProseMirrorWebView] Cleanup - resetting refs');
+        isInternalChangeRef.current = false;
+        lastContentHashRef.current = null;
+        lastProcessedGeoMarkRef.current = null;
+      };
+    }, []);
+
     // Update editable state when it changes
     useEffect(() => {
       if (isReady) {
@@ -345,7 +438,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
     // Load HTML inline (works on all platforms)
     // Import HTML with inlined ProseMirror (no CDN dependencies)
-    // Rebuilt bundle includes geo-mark message handler - v2
+    // Rebuilt bundle v6: iframe + hoisting + renamed state->editorState to fix TDZ
     let htmlContent;
 
     // Try loading the esbuild-bundled ProseMirror editor
@@ -387,9 +480,12 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       default: undefined
     });
 
+    // Use platform-specific component
+    const WebViewComponent = Platform.OS === 'web' ? IframeWebView : WebView;
+
     return (
       <View style={styles.container}>
-        <WebView
+        <WebViewComponent
           ref={webViewRef}
           source={{
             html: htmlContent,
@@ -399,11 +495,11 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           onMessage={handleMessage}
           style={styles.webview}
           scrollEnabled={true}
-          // iOS-specific props
+          // iOS-specific props (ignored on web)
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
           allowsBackForwardNavigationGestures={false}
-          // Android-specific props
+          // Android-specific props (ignored on web)
           domStorageEnabled={true}
           javaScriptEnabled={true}
           mixedContentMode="always"

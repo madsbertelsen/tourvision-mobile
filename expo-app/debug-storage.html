@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Debug Storage</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    button { margin: 10px 5px; padding: 10px; }
+    pre { background: #f0f0f0; padding: 10px; overflow: auto; max-height: 500px; }
+  </style>
+</head>
+<body>
+  <h1>AsyncStorage Debug Tool</h1>
+  <div>
+    <button onclick="loadTrips()">Load Trips</button>
+    <button onclick="clearTrips()">Clear All Trips</button>
+    <button onclick="watchChanges()">Watch Changes</button>
+    <button onclick="stopWatching()">Stop Watching</button>
+  </div>
+  <pre id="output"></pre>
+  
+  <script>
+    const KEY = '@tourvision_trips';
+    let watching = false;
+    let watchInterval;
+    let lastValue = null;
+    
+    function loadTrips() {
+      const data = localStorage.getItem(KEY);
+      const output = document.getElementById('output');
+      
+      if (data) {
+        try {
+          const trips = JSON.parse(data);
+          output.textContent = `Found ${trips.length} trip(s):\n\n` + JSON.stringify(trips, null, 2);
+        } catch (e) {
+          output.textContent = 'Error: ' + e.message;
+        }
+      } else {
+        output.textContent = 'No trips in storage';
+      }
+    }
+    
+    function clearTrips() {
+      if (confirm('Clear all trips?')) {
+        localStorage.removeItem(KEY);
+        loadTrips();
+      }
+    }
+    
+    function watchChanges() {
+      watching = true;
+      lastValue = localStorage.getItem(KEY);
+      
+      watchInterval = setInterval(() => {
+        const currentValue = localStorage.getItem(KEY);
+        if (currentValue !== lastValue) {
+          console.log('Storage changed!');
+          loadTrips();
+          lastValue = currentValue;
+        }
+      }, 500);
+      
+      document.getElementById('output').textContent = 'Watching for changes...';
+    }
+    
+    function stopWatching() {
+      watching = false;
+      if (watchInterval) {
+        clearInterval(watchInterval);
+      }
+      loadTrips();
+    }
+    
+    // Auto-load on start
+    loadTrips();
+  </script>
+</body>
+</html>

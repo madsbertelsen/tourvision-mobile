@@ -42,6 +42,7 @@ export default function TripLayout() {
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
   const documentRef = useRef<any>(null);
   const lastProcessedLocationRef = useRef<string | null>(null);
+  const lastLoadedTripIdRef = useRef<string | null>(null);
 
   // Listen for location data returned from create-location modal
   useFocusEffect(
@@ -82,26 +83,31 @@ export default function TripLayout() {
     }, [params.savedLocation, router])
   );
 
-  // Load trip data on mount
+  // Load trip data on mount AND whenever tripId changes
   useEffect(() => {
     const loadTripData = async () => {
       try {
+        console.log('[TripLayout] [EFFECT RAN] Loading trip data for tripId:', tripId, 'prev:', lastLoadedTripIdRef.current);
+        lastLoadedTripIdRef.current = tripId;
+
         const trip = await getTrip(tripId);
 
         if (!trip) {
-          console.error('Trip not found:', tripId);
+          console.error('[TripLayout] Trip not found:', tripId);
           return;
         }
 
+        console.log('[TripLayout] Trip loaded:', trip.title, 'Document exists:', !!trip.document);
         setCurrentTrip(trip);
 
         // Load document from trip
         if (trip.document) {
-          console.log('[TripLayout] Loading document from trip');
-          console.log('[TripLayout] Loaded document structure:', JSON.stringify(trip.document));
+          console.log('[TripLayout] Loading document from trip:', tripId);
+          console.log('[TripLayout] Document content length:', JSON.stringify(trip.document).length);
+          console.log('[TripLayout] Document preview:', JSON.stringify(trip.document).substring(0, 200));
           setCurrentDoc(trip.document);
         } else {
-          console.log('[TripLayout] No document found, creating blank');
+          console.log('[TripLayout] No document found for trip:', tripId, '- creating blank');
           const blankDoc = {
             type: 'doc',
             content: [
@@ -111,7 +117,7 @@ export default function TripLayout() {
           setCurrentDoc(blankDoc);
         }
       } catch (error) {
-        console.error('Error loading trip:', error);
+        console.error('[TripLayout] Error loading trip:', error);
       }
     };
 

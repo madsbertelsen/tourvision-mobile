@@ -418,12 +418,111 @@ Please generate replacement content that addresses the user's request. Only retu
         )}
       </View>
 
+      {/* Toolbar - Only in edit mode, above editor */}
+      {isEditMode && (
+        <ScrollView
+          horizontal
+          style={styles.toolbar}
+          contentContainerStyle={styles.toolbarContent}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          alwaysBounceVertical={false}
+          alwaysBounceHorizontal={true}
+          scrollEnabled={true}
+          scrollsToTop={false}
+          overScrollMode="never"
+        >
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setParagraph')}
+            style={[styles.toolbarButton, toolbarState.paragraph && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.paragraph && styles.toolbarButtonTextActive]}>P</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 1 })}
+            style={[styles.toolbarButton, toolbarState.h1 && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.h1 && styles.toolbarButtonTextActive]}>H1</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 2 })}
+            style={[styles.toolbarButton, toolbarState.h2 && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.h2 && styles.toolbarButtonTextActive]}>H2</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 3 })}
+            style={[styles.toolbarButton, toolbarState.h3 && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.h3 && styles.toolbarButtonTextActive]}>H3</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleBold')}
+            style={[styles.toolbarButton, toolbarState.bold && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.bold && styles.toolbarButtonTextActive]}>B</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleItalic')}
+            style={[styles.toolbarButton, toolbarState.italic && styles.toolbarButtonActive]}
+          >
+            <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            onPress={() => {
+              // Trigger comment on selection
+              if (!selectionEmpty && documentRef.current) {
+                documentRef.current.sendCommand('addComment');
+              }
+            }}
+            style={[styles.toolbarButton, selectionEmpty && styles.toolbarButtonDisabled]}
+            disabled={selectionEmpty}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color={selectionEmpty ? "#9CA3AF" : "#3B82F6"} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowAIModal(true)}
+            style={styles.toolbarButton}
+          >
+            <Ionicons name="sparkles" size={18} color="#8B5CF6" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              // Navigate to video playback route
+              router.push({
+                pathname: `/(mock)/trip/${tripId}/video`,
+                params: {
+                  tripId: tripId,
+                  documentContent: JSON.stringify(currentDoc),
+                }
+              });
+            }}
+            style={styles.toolbarButton}
+          >
+            <Ionicons name="play-circle" size={18} color="#10B981" />
+          </TouchableOpacity>
+        </ScrollView>
+      )}
 
       {/* Editor - Keep WebView mounted but hidden in read mode */}
       <View style={styles.editorWrapper}>
         {/* WebView - Always mounted, hidden in read mode */}
         <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
           <ProseMirrorWebView
+            key={tripId} // Force remount when trip changes
             ref={documentRef}
             content={currentDoc}
             editable={isEditMode}
@@ -445,109 +544,6 @@ Please generate replacement content that addresses the user's request. Only retu
           </View>
         )}
       </View>
-
-      {/* Toolbar - Only in edit mode, outside editor wrapper */}
-      {isEditMode && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'position' : undefined}
-        >
-          <ScrollView
-            horizontal
-            style={[styles.toolbar, !keyboardVisible && { paddingBottom: insets.bottom }]}
-            contentContainerStyle={styles.toolbarContent}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            alwaysBounceVertical={false}
-            alwaysBounceHorizontal={true}
-            scrollEnabled={true}
-            scrollsToTop={false}
-            overScrollMode="never"
-          >
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setParagraph')}
-              style={[styles.toolbarButton, toolbarState.paragraph && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.paragraph && styles.toolbarButtonTextActive]}>P</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 1 })}
-              style={[styles.toolbarButton, toolbarState.h1 && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.h1 && styles.toolbarButtonTextActive]}>H1</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 2 })}
-              style={[styles.toolbarButton, toolbarState.h2 && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.h2 && styles.toolbarButtonTextActive]}>H2</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('setHeading', { level: 3 })}
-              style={[styles.toolbarButton, toolbarState.h3 && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.h3 && styles.toolbarButtonTextActive]}>H3</Text>
-            </TouchableOpacity>
-
-            <View style={styles.separator} />
-
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleBold')}
-              style={[styles.toolbarButton, toolbarState.bold && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.bold && styles.toolbarButtonTextActive]}>B</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => (documentRef as React.MutableRefObject<ProseMirrorWebViewRef>).current?.sendCommand('toggleItalic')}
-              style={[styles.toolbarButton, toolbarState.italic && styles.toolbarButtonActive]}
-            >
-              <Text style={[styles.toolbarButtonText, toolbarState.italic && styles.toolbarButtonTextActive]}>I</Text>
-            </TouchableOpacity>
-
-            <View style={styles.separator} />
-
-            <TouchableOpacity
-              onPress={() => {
-                // Trigger comment on selection
-                if (!selectionEmpty && documentRef.current) {
-                  documentRef.current.sendCommand('addComment');
-                }
-              }}
-              style={[styles.toolbarButton, selectionEmpty && styles.toolbarButtonDisabled]}
-              disabled={selectionEmpty}
-            >
-              <Ionicons name="chatbubble-outline" size={18} color={selectionEmpty ? "#9CA3AF" : "#3B82F6"} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setShowAIModal(true)}
-              style={styles.toolbarButton}
-            >
-              <Ionicons name="sparkles" size={18} color="#8B5CF6" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                // Navigate to video playback route
-                router.push({
-                  pathname: `/(mock)/trip/${tripId}/video`,
-                  params: {
-                    tripId: tripId,
-                    documentContent: JSON.stringify(currentDoc),
-                  }
-                });
-              }}
-              style={styles.toolbarButton}
-            >
-              <Ionicons name="play-circle" size={18} color="#10B981" />
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      )}
 
       {/* AI Assistant Modal */}
       <AIAssistantModal
@@ -666,9 +662,9 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     backgroundColor: '#f9fafb',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    overflow: 'hidden', // Prevent content from expanding vertically
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    maxHeight: 56, // Limit toolbar height
   },
   toolbarContent: {
     flexDirection: 'row',
