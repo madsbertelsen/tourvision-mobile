@@ -13,12 +13,22 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
-import Mapbox from '@rnmapbox/maps';
 import { getTrip, saveTrip } from '@/utils/trips-storage';
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
+import { Platform } from 'react-native';
 
-// Set Mapbox access token
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+// Conditionally import map libraries based on platform
+let Mapbox: any = null;
+let LocationMapWeb: any = null;
+
+if (Platform.OS !== 'web') {
+  Mapbox = require('@rnmapbox/maps').default;
+  // Set Mapbox access token
+  Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+} else {
+  // Import web map component for web platform
+  LocationMapWeb = require('@/components/LocationMapWeb').default;
+}
 
 const MAP_HEIGHT = 400;
 
@@ -58,7 +68,7 @@ export default function LocationDetailScreen() {
   const [routeGeometry, setRouteGeometry] = useState<any>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
-  const cameraRef = useRef<Mapbox.Camera>(null);
+  const cameraRef = useRef<any>(null);
 
   // Use bookmark hook
   const { bookmarked, isToggling, toggle: handleToggleBookmark } = useBookmark({
@@ -357,6 +367,23 @@ export default function LocationDetailScreen() {
       <View style={styles.content}>
         {/* Map View */}
         <View style={styles.mapContainer}>
+          {Platform.OS === 'web' && LocationMapWeb ? (
+            // Web map using react-map-gl and deck.gl
+            <LocationMapWeb
+              latitude={parseFloat(lat)}
+              longitude={parseFloat(lng)}
+              name={name}
+              colorIndex={parseInt(colorIndex || '0')}
+              transportFrom={transportFrom && availableLocations.find(loc => loc.id === transportFrom) ? {
+                lat: availableLocations.find(loc => loc.id === transportFrom)!.lat,
+                lng: availableLocations.find(loc => loc.id === transportFrom)!.lng,
+                name: availableLocations.find(loc => loc.id === transportFrom)!.name
+              } : null}
+              routeGeometry={routeGeometry}
+              routeDistance={routeDistance}
+              routeDuration={routeDuration}
+            />
+          ) : Mapbox ? (
           <Mapbox.MapView
             style={styles.map}
             styleURL={Mapbox.StyleURL.Street}
@@ -423,6 +450,13 @@ export default function LocationDetailScreen() {
               </View>
             </Mapbox.PointAnnotation>
           </Mapbox.MapView>
+          ) : (
+            // Fallback if Mapbox is not available
+            <View style={[styles.map, styles.webMapPlaceholder]}>
+              <Ionicons name="map" size={48} color="#9CA3AF" />
+              <Text style={styles.webMapText}>Map not available</Text>
+            </View>
+          )}
         </View>
 
         {/* Transport Configuration */}
@@ -709,6 +743,22 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  webMapPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  webMapText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  webMapCoords: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   markerContainer: {
     alignItems: 'center',
