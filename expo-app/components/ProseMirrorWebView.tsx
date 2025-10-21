@@ -438,7 +438,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
     // Load HTML inline (works on all platforms)
     // Import HTML with inlined ProseMirror (no CDN dependencies)
-    // Rebuilt bundle v6: iframe + hoisting + renamed state->editorState to fix TDZ
+    // Rebuilt bundle v7: iframe + hoisting + TDZ fix + full-height editor
     let htmlContent;
 
     // Try loading the esbuild-bundled ProseMirror editor
