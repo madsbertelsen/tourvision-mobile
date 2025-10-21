@@ -80,6 +80,29 @@ export default function TripDocumentView() {
     setEditorRef(documentRef);
   }, [setEditorRef]);
 
+  // Subscribe to collaboration steps and forward to WebView
+  useEffect(() => {
+    const { subscribe } = require('@/lib/collab-socket');
+
+    const unsubscribe = subscribe('steps', (data: any) => {
+      console.log('[TripDocumentView] Received collab steps:', {
+        clientID: data.clientID,
+        version: data.version,
+        stepsCount: data.steps?.length,
+        isAI: data.isAI
+      });
+
+      // Forward steps to the WebView for application
+      if (documentRef.current && data.steps && data.steps.length > 0) {
+        documentRef.current.applySteps(data.steps, data.version, data.clientID);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [documentRef]);
+
   const handleSelectionChange = useCallback((empty: boolean) => {
     console.log('[TripDocumentView] Selection empty:', empty);
     setSelectionEmpty(empty);

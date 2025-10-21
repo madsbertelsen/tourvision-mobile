@@ -1177,6 +1177,42 @@
               });
               break;
 
+            case 'applySteps':
+              console.log('[WebView] Applying steps from', data.clientID, '- version:', data.version, '- steps:', data.steps.length);
+              if (editorView && data.steps && data.steps.length > 0) {
+                try {
+                  let tr = editorView.state.tr;
+
+                  // Apply each step to the transaction
+                  for (const stepJSON of data.steps) {
+                    const step = Step.fromJSON(schema, stepJSON);
+                    const result = step.apply(tr.doc);
+
+                    if (result.failed) {
+                      console.error('[WebView] Step application failed:', result.failed);
+                      break;
+                    }
+
+                    tr = editorView.state.tr.setDoc(result.doc);
+                  }
+
+                  // Apply the transaction to update the editor
+                  editorView.dispatch(tr);
+                  editorState = editorView.state;
+
+                  console.log('[WebView] Successfully applied', data.steps.length, 'steps');
+
+                  // Notify React Native that document changed
+                  sendMessageToNative({
+                    type: 'documentChange',
+                    document: editorView.state.doc.toJSON()
+                  });
+                } catch (e) {
+                  console.error('[WebView] Error applying steps:', e);
+                }
+              }
+              break;
+
             default:
               console.warn('[WebView] Unknown message type:', data.type);
           }

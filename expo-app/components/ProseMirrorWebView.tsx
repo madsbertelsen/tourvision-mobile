@@ -94,6 +94,7 @@ export interface ProseMirrorWebViewRef {
   triggerCreateLocation: () => void;
   startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string) => void;
   stopCollaboration: () => void;
+  applySteps: (steps: any[], version: number, clientID: string) => void;
 }
 
 interface ProseMirrorWebViewProps {
@@ -484,6 +485,15 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
         stopCollaboration: () => {
           console.log('[ProseMirrorWebView] Stopping collaboration');
           sendMessage({ type: 'stopCollaboration' });
+        },
+        applySteps: (steps: any[], version: number, clientID: string) => {
+          console.log('[ProseMirrorWebView] Applying steps from', clientID, '- version:', version, '- steps:', steps.length);
+          sendMessage({
+            type: 'applySteps',
+            steps,
+            version,
+            clientID
+          });
         },
       }),
       [sendMessage]
