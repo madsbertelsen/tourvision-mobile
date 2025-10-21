@@ -1,9 +1,17 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { generateAPIUrl } from '@/lib/ai-sdk-config';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
+import {
+  getSocket,
+  joinDocument,
+  requestAIGeneration,
+  subscribe,
+  disconnect,
+  getCurrentDocumentId
+} from '@/lib/collab-socket';
 
-// Toggle to use mock streaming instead of real API
-const USE_MOCK_STREAMING = true;
+// Toggle to use collab server or real API
+const USE_COLLAB_SERVER = true; // Changed from USE_MOCK_STREAMING
 
 // Typing instruction types
 export type TypingInstruction =
@@ -109,31 +117,6 @@ function parseHTMLToTypingInstructions(html: string): TypingInstruction[] {
   return instructions;
 }
 
-// Mock HTML response that aligns with ProseMirror schema (full trip)
-const MOCK_TRIP_HTML = `<itinerary>
-<h1>Tokyo Food Tour</h1>
-
-<h2>Day 1: Traditional Tokyo</h2>
-
-<h3>Morning: Temple & Markets</h3>
-<p>Start your journey at <span class="geo-mark" data-geo-id="loc-001" data-place-name="Senso-ji Temple, Tokyo, Japan" data-lat="35.7148" data-lng="139.7967" data-color-index="0" data-coord-source="google">Senso-ji Temple</span>, Tokyo's oldest Buddhist temple. Explore the vibrant <span class="geo-mark" data-geo-id="loc-002" data-place-name="Nakamise Shopping Street, Tokyo, Japan" data-lat="35.7119" data-lng="139.7965" data-color-index="1" data-coord-source="google">Nakamise Shopping Street</span> for traditional snacks.</p>
-
-<h3>Lunch: Authentic Ramen</h3>
-<p>Head to <span class="geo-mark" data-geo-id="loc-003" data-place-name="Ichiran Ramen Shibuya, Tokyo, Japan" data-lat="35.6595" data-lng="139.7004" data-color-index="2" data-coord-source="google">Ichiran Ramen</span> for tonkotsu ramen in solo dining booths.</p>
-
-<blockquote>
-<p><strong>Pro Tip:</strong> Get a Suica card for easy transportation. Most restaurants accept cash only!</p>
-</blockquote>
-</itinerary>`;
-
-// Mock HTML for inline edit (replacing ramen section with sushi alternatives)
-const MOCK_INLINE_EDIT_HTML = `<h3>Lunch: Sushi Experience</h3>
-<p>Visit <span class="geo-mark" data-geo-id="loc-new-001" data-place-name="Sushi Dai, Tsukiji, Tokyo, Japan" data-lat="35.6654" data-lng="139.7707" data-color-index="3" data-coord-source="google">Sushi Dai</span> at the outer Tsukiji Market for incredibly fresh sushi. Alternatively, try <span class="geo-mark" data-geo-id="loc-new-002" data-place-name="Sushizanmai Tsukiji, Tokyo, Japan" data-lat="35.6657" data-lng="139.7703" data-color-index="4" data-coord-source="google">Sushizanmai</span> for a more accessible option with excellent quality.</p>
-
-<blockquote>
-<p><strong>Sushi Tip:</strong> Arrive early at Sushi Dai as lines can be 2+ hours. Sushizanmai is open 24/7 and has shorter waits!</p>
-</blockquote>`;
-
 export interface StreamingState {
   isStreaming: boolean;
   isComplete: boolean;
@@ -141,11 +124,12 @@ export interface StreamingState {
   document: any;
   typingInstructions: TypingInstruction[];
   useTypingMode: boolean; // If true, use typing instructions instead of document updates
+  generationId?: string; // Track the current generation
 }
 
 export interface UseStreamingTripGenerationReturn {
   state: StreamingState;
-  startGeneration: (prompt: string) => Promise<void>;
+  startGeneration: (prompt: string, documentId?: string) => Promise<void>;
   cancel: () => void;
 }
 
@@ -166,6 +150,66 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const htmlBufferRef = useRef<string>('');
+  const unsubscribersRef = useRef<Array<() => void>>([]);
+
+  // Set up Socket.IO event listeners
+  useEffect(() => {
+    if (!USE_COLLAB_SERVER) return;
+
+    // Subscribe to AI generation events
+    const unsubStart = subscribe('ai-generation-started', (data: any) => {
+      console.log('[StreamingHook] AI generation started:', data);
+      setState(prev => ({
+        ...prev,
+        generationId: data.generationId,
+      }));
+    });
+
+    const unsubSteps = subscribe('steps', (data: any) => {
+      console.log('[StreamingHook] Received steps:', data);
+      // Process steps from AI
+      if (data.clientID === 'ai-assistant' && data.isAI) {
+        // Convert ProseMirror steps to typing instructions
+        // For now, we'll just log them
+        console.log('[StreamingHook] AI steps received, would convert to typing instructions');
+      }
+    });
+
+    const unsubComplete = subscribe('ai-generation-complete', (data: any) => {
+      console.log('[StreamingHook] AI generation complete:', data);
+      setState(prev => ({
+        ...prev,
+        isStreaming: false,
+        isComplete: true,
+      }));
+    });
+
+    const unsubCancelled = subscribe('ai-generation-cancelled', (data: any) => {
+      console.log('[StreamingHook] AI generation cancelled:', data);
+      setState(prev => ({
+        ...prev,
+        isStreaming: false,
+        error: 'Generation cancelled',
+      }));
+    });
+
+    const unsubError = subscribe('ai-error', (error: any) => {
+      console.error('[StreamingHook] AI error:', error);
+      setState(prev => ({
+        ...prev,
+        isStreaming: false,
+        error: error.message || 'AI generation failed',
+      }));
+    });
+
+    unsubscribersRef.current = [unsubStart, unsubSteps, unsubComplete, unsubCancelled, unsubError];
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribersRef.current.forEach(unsub => unsub());
+      unsubscribersRef.current = [];
+    };
+  }, []);
 
   const cancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -179,7 +223,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     }));
   }, []);
 
-  const startGeneration = useCallback(async (prompt: string) => {
+  const startGeneration = useCallback(async (prompt: string, documentId?: string) => {
     // Reset state
     htmlBufferRef.current = '';
     setState({
@@ -200,9 +244,9 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     abortControllerRef.current = new AbortController();
 
     try {
-      if (USE_MOCK_STREAMING) {
-        console.log('[StreamingHook] Using MOCK streaming');
-        await simulateMockStreaming(prompt, abortControllerRef.current.signal);
+      if (USE_COLLAB_SERVER) {
+        console.log('[StreamingHook] Using COLLAB SERVER for AI generation');
+        await streamFromCollabServer(prompt, documentId || `doc-${Date.now()}`, abortControllerRef.current.signal);
       } else {
         console.log('[StreamingHook] Using REAL API streaming');
         await streamFromAPI(prompt, abortControllerRef.current.signal);
@@ -225,50 +269,57 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     }
   }, []);
 
-  // Mock streaming simulation - generates typing instructions for realistic typing
-  const simulateMockStreaming = async (prompt: string, signal: AbortSignal) => {
-    console.log('[StreamingHook] Starting mock streaming (typing mode)...');
+  // Stream from collab server via Socket.IO
+  const streamFromCollabServer = async (prompt: string, documentId: string, signal: AbortSignal) => {
+    console.log('[StreamingHook] Starting collab server streaming...');
+    console.log('[StreamingHook] Document ID:', documentId);
     console.log('[StreamingHook] Prompt:', prompt);
 
-    // Detect if this is an inline edit (replacement) or full trip generation
-    const isInlineEdit = prompt.includes('selected this text');
-    console.log('[StreamingHook] Is inline edit:', isInlineEdit);
+    try {
+      // Join document if not already joined
+      const currentDocId = getCurrentDocumentId();
+      if (currentDocId !== documentId) {
+        console.log('[StreamingHook] Joining document:', documentId);
+        await joinDocument(documentId, 'User', undefined);
+      }
 
-    // Simulate a brief "thinking" delay before starting
-    await new Promise(resolve => setTimeout(resolve, 500));
+      // Detect if this is an inline edit
+      const isInlineEdit = prompt.includes('selected this text');
+      console.log('[StreamingHook] Is inline edit:', isInlineEdit);
 
-    // Choose appropriate mock HTML based on prompt type
-    const mockHtml = isInlineEdit ? MOCK_INLINE_EDIT_HTML : MOCK_TRIP_HTML;
-    console.log('[StreamingHook] Using mock HTML length:', mockHtml.length);
+      // Request AI generation with options
+      const options: any = {
+        model: process.env.EXPO_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+        temperature: 0.7,
+      };
 
-    // Parse the mock HTML into typing instructions
-    const instructions = parseHTMLToTypingInstructions(mockHtml);
+      // If inline edit, extract the selection range from prompt
+      if (isInlineEdit) {
+        // Parse the prompt to extract context
+        // For now, just set example values
+        options.replaceRange = { from: 100, to: 200 };
+      }
 
-    console.log(`[StreamingHook] Generated ${instructions.length} typing instructions`);
+      console.log('[StreamingHook] Requesting AI generation with options:', options);
+      const generationId = await requestAIGeneration(documentId, prompt, options);
 
-    // Debug: Count instruction types
-    const typeCounts = instructions.reduce((acc, inst) => {
-      acc[inst.type] = (acc[inst.type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    console.log('[StreamingHook] Instruction types:', typeCounts);
+      console.log('[StreamingHook] Generation started with ID:', generationId);
 
-    // Debug: Show first few geo-mark instructions
-    const geoMarkInstructions = instructions.filter(inst => inst.type === 'insertGeoMark');
-    console.log('[StreamingHook] First 3 geo-mark instructions:', geoMarkInstructions.slice(0, 3));
+      // Update state with generation ID
+      setState(prev => ({
+        ...prev,
+        generationId,
+      }));
 
-    // Set the instructions but keep document empty - it will be built by typing
-    setState(prev => ({
-      ...prev,
-      isStreaming: false,
-      isComplete: false, // Not complete until typing finishes
-      typingInstructions: instructions,
-    }));
+      // The actual content will come through the Socket.IO events we subscribed to in useEffect
 
-    console.log('[StreamingHook] Mock streaming complete! Ready to type.');
+    } catch (error: any) {
+      console.error('[StreamingHook] Collab server error:', error);
+      throw error;
+    }
   };
 
-  // Real API streaming
+  // Real API streaming (existing code)
   const streamFromAPI = async (prompt: string, signal: AbortSignal) => {
     const apiUrl = generateAPIUrl('/api/chat-simple');
     console.log('[StreamingHook] Calling API:', apiUrl);
