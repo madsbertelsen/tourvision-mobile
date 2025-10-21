@@ -181,17 +181,17 @@ export default function TripListScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Generate with AI Button */}
-      <View style={styles.aiButtonSection}>
-        <TouchableOpacity
-          style={styles.aiButton}
-          onPress={() => router.push('/(mock)/generate-trip')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="sparkles" size={24} color="#fff" />
-          <Text style={styles.aiButtonText}>Generate Trip with AI</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
+      {/* Info: How to use AI */}
+      <View style={styles.aiInfoSection}>
+        <View style={styles.aiInfoCard}>
+          <Ionicons name="sparkles" size={24} color="#8B5CF6" />
+          <View style={styles.aiInfoText}>
+            <Text style={styles.aiInfoTitle}>AI Assistant Available</Text>
+            <Text style={styles.aiInfoDescription}>
+              Create a trip, then tap the ✨ icon in the editor to generate content with AI
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* Trip List */}
@@ -319,31 +319,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#9CA3AF',
     opacity: 0.5,
   },
-  aiButtonSection: {
+  aiInfoSection: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  aiButton: {
+  aiInfoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: '#8B5CF6',
-    paddingVertical: 16,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  aiButtonText: {
-    fontSize: 16,
+  aiInfoText: {
+    flex: 1,
+  },
+  aiInfoTitle: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#fff',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  aiInfoDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   scrollView: {
     flex: 1,

@@ -903,6 +903,9 @@ export default function MapViewSimple({
     startState?: { longitude: number; latitude: number; zoom: number };
     targetState?: { longitude: number; latitude: number; zoom: number };
     duration: number;
+    lastFrameTime?: number;
+    lastLoggedProgress?: number;
+    frameCount?: number;
   } | null>(null);
 
   const deckRef = useRef<MapRef | null>(null);
@@ -1076,10 +1079,23 @@ export default function MapViewSimple({
         bearing: 0,
       }));
 
+      // Debug logging to track animation performance
+      const frameTime = timestamp - (animationRef.current.lastFrameTime || timestamp);
+      animationRef.current.lastFrameTime = timestamp;
+
+      // Log every 20% progress with frame time info
+      const progressPercent = Math.floor(progress * 100);
+      if (progressPercent % 20 === 0 && progressPercent !== (animationRef.current.lastLoggedProgress || -1)) {
+        console.log(`[Camera Animation] ${progressPercent}% - Frame time: ${frameTime.toFixed(1)}ms, Elapsed: ${elapsed.toFixed(0)}ms, Position: ${newLatitude.toFixed(4)}, ${newLongitude.toFixed(4)}`);
+        animationRef.current.lastLoggedProgress = progressPercent;
+      }
+
       // Continue animation if not complete
       if (progress < 1) {
         animationRef.current.frameId = requestAnimationFrame(animate);
       } else {
+        console.log(`[Camera Animation] Complete - Total frames: ${animationRef.current.frameCount || 0}, Average frame time: ${(elapsed / (animationRef.current.frameCount || 1)).toFixed(1)}ms`);
+
         // Animation complete - hide the marker and trail
         setFlyingMarker(null);
         setMarkerTrail([]);
@@ -1088,6 +1104,11 @@ export default function MapViewSimple({
         // Clear animating flag to show edge labels again
         setIsAnimating(false);
         isAnimatingRef.current = false; // Mark animation complete
+      }
+
+      // Track frame count
+      if (animationRef.current) {
+        animationRef.current.frameCount = (animationRef.current.frameCount || 0) + 1;
       }
     };
 
@@ -1157,7 +1178,7 @@ export default function MapViewSimple({
         setSavedViewState(null); // Clear after restoring
       }
     }
-  }); // No dependencies - runs on every render but checks manually
+  }, [focusedLocation]); // Re-run when focusedLocation changes
 
   // Update container dimensions for hex grid
   useEffect(() => {
