@@ -1,5 +1,5 @@
 import { CollaborationManager } from './CollaborationManager.js';
-import { Schema, DOMParser } from 'prosemirror-model';
+import { Schema, DOMParser, Fragment, Slice } from 'prosemirror-model';
 import { schema as basicSchema } from 'prosemirror-schema-basic';
 import { addListNodes } from 'prosemirror-schema-list';
 import { ReplaceStep } from 'prosemirror-transform';
@@ -84,8 +84,6 @@ export class AIStepGenerator {
     content: string,
     options: StepGenerationOptions = {}
   ): Promise<any[]> {
-    const steps: any[] = [];
-
     try {
       // Get current document state
       const docState = this.collabManager.getDocument(documentId);
@@ -95,22 +93,23 @@ export class AIStepGenerator {
 
       console.log(`[AIStepGenerator] Generating steps for content (${content.length} chars)`);
 
-      // Create step from HTML content
-      const step = this.createStepFromHTML(content, options);
-      if (!step) {
-        console.error('[AIStepGenerator] Failed to create step');
+      // Create multiple steps from HTML content
+      const steps = this.createStepsFromHTML(content, options);
+      if (!steps || steps.length === 0) {
+        console.error('[AIStepGenerator] Failed to create steps');
         return [];
       }
 
-      // Validate the step by applying it to an empty document on the server
-      const isValid = this.validateStep(step);
+      console.log(`[AIStepGenerator] Generated ${steps.length} steps`);
+
+      // Validate all steps by applying them sequentially
+      const isValid = this.validateSteps(steps);
       if (!isValid) {
-        console.error('[AIStepGenerator] Step validation failed');
+        console.error('[AIStepGenerator] Steps validation failed');
         return [];
       }
 
-      console.log('[AIStepGenerator] Step validated successfully');
-      steps.push(step);
+      console.log('[AIStepGenerator] All steps validated successfully');
 
       return steps;
     } catch (error) {
@@ -120,35 +119,43 @@ export class AIStepGenerator {
   }
 
   /**
-   * Validate a step by applying it to an empty ProseMirror document
-   * @param stepJSON - The step in JSON format
-   * @returns true if the step is valid and can be applied
+   * Validate multiple steps by applying them sequentially to an empty document
+   * @param stepsJSON - Array of steps in JSON format
+   * @returns true if all steps can be applied successfully
    */
-  private validateStep(stepJSON: any): boolean {
+  private validateSteps(stepsJSON: any[]): boolean {
     try {
       // Create an empty document with one paragraph
-      const emptyDoc = this.schema.nodes.doc.create(null, [
+      let currentDoc = this.schema.nodes.doc.create(null, [
         this.schema.nodes.paragraph.create()
       ]);
 
-      console.log('[AIStepGenerator] Validating step against empty document');
-      console.log('[AIStepGenerator] Empty doc:', JSON.stringify(emptyDoc.toJSON()));
+      console.log('[AIStepGenerator] Validating', stepsJSON.length, 'steps against empty document');
+      console.log('[AIStepGenerator] Empty doc:', JSON.stringify(currentDoc.toJSON()));
 
-      // Recreate the step from JSON using the imported ReplaceStep
-      const step = ReplaceStep.fromJSON(this.schema, stepJSON);
+      // Apply each step sequentially
+      for (let i = 0; i < stepsJSON.length; i++) {
+        const stepJSON = stepsJSON[i];
+        console.log(`[AIStepGenerator] Validating step ${i + 1}/${stepsJSON.length}`);
 
-      console.log('[AIStepGenerator] Step recreated from JSON');
+        // Recreate the step from JSON
+        const step = ReplaceStep.fromJSON(this.schema, stepJSON);
 
-      // Try to apply the step to the empty document
-      const result = step.apply(emptyDoc);
+        // Try to apply the step to the current document
+        const result = step.apply(currentDoc);
 
-      if (result.failed) {
-        console.error('[AIStepGenerator] Validation failed:', result.failed);
-        return false;
+        if (result.failed) {
+          console.error(`[AIStepGenerator] Step ${i + 1} validation failed:`, result.failed);
+          return false;
+        }
+
+        // Update current document for next step
+        currentDoc = result.doc;
+        console.log(`[AIStepGenerator] Step ${i + 1} validated, doc now has ${currentDoc.content.childCount} blocks`);
       }
 
-      console.log('[AIStepGenerator] Validation successful!');
-      console.log('[AIStepGenerator] Result doc:', JSON.stringify(result.doc.toJSON(), null, 2));
+      console.log('[AIStepGenerator] All steps validated successfully!');
+      console.log('[AIStepGenerator] Final doc:', JSON.stringify(currentDoc.toJSON(), null, 2));
       return true;
     } catch (error) {
       console.error('[AIStepGenerator] Validation error:', error);
@@ -157,12 +164,13 @@ export class AIStepGenerator {
   }
 
   /**
-   * Create a proper ProseMirror step by parsing HTML content
+   * Create multiple ProseMirror steps by parsing HTML content into blocks
    * This uses ProseMirror's DOMParser to convert HTML to document structure
+   * and creates incremental steps for each block
    */
-  private createStepFromHTML(content: string, options: StepGenerationOptions): any {
+  private createStepsFromHTML(content: string, options: StepGenerationOptions): any[] {
     try {
-      console.log('[AIStepGenerator] Creating step from HTML content:', content.substring(0, 200));
+      console.log('[AIStepGenerator] Creating steps from HTML content:', content.substring(0, 200));
 
       // Parse HTML using JSDOM and ProseMirror's DOMParser
       const dom = new JSDOM(content);
@@ -171,31 +179,59 @@ export class AIStepGenerator {
 
       console.log('[AIStepGenerator] Parsed document:', JSON.stringify(parsedDoc.toJSON(), null, 2));
 
-      // Create a slice from the parsed document
-      const slice = parsedDoc.slice(0, parsedDoc.content.size);
+      // Extract blocks from parsed document
+      const blocks: any[] = [];
+      parsedDoc.content.forEach((node) => {
+        blocks.push(node);
+      });
 
-      // Replace the entire document content
-      // For an empty document with one paragraph, this is from 0 to 2
-      const from = options.replaceRange?.from ?? 0;
-      const to = options.replaceRange?.to ?? 2;
+      console.log(`[AIStepGenerator] Extracted ${blocks.length} blocks from HTML`);
 
-      console.log(`[AIStepGenerator] Creating ReplaceStep from ${from} to ${to}`);
+      if (blocks.length === 0) {
+        console.error('[AIStepGenerator] No blocks found in parsed content');
+        return [];
+      }
 
-      // Create the ReplaceStep
-      const step = new ReplaceStep(from, to, slice);
-      const stepJSON = step.toJSON();
+      const steps: any[] = [];
+      let currentPosition = 2; // Start after empty paragraph (position 0-2)
 
-      console.log('[AIStepGenerator] Step JSON preview:', JSON.stringify({
-        stepType: stepJSON.stepType,
-        from: stepJSON.from,
-        to: stepJSON.to,
-        contentBlockCount: stepJSON.slice?.content?.length || 0
-      }));
+      // Create steps for each block
+      for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
 
-      return stepJSON;
+        if (i === 0) {
+          // First block: replace the empty paragraph (0, 2)
+          const fragment = Fragment.from(block);
+          const slice = new Slice(fragment, 0, 0);
+          const step = new ReplaceStep(0, 2, slice);
+
+          console.log(`[AIStepGenerator] Step ${i + 1}: Replace empty paragraph (0, 2) with ${block.type.name}`);
+
+          steps.push(step.toJSON());
+
+          // Update position to end of first block
+          currentPosition = block.nodeSize;
+        } else {
+          // Subsequent blocks: append at the current end position
+          const fragment = Fragment.from(block);
+          const slice = new Slice(fragment, 0, 0);
+          const step = new ReplaceStep(currentPosition, currentPosition, slice);
+
+          console.log(`[AIStepGenerator] Step ${i + 1}: Append ${block.type.name} at position ${currentPosition}`);
+
+          steps.push(step.toJSON());
+
+          // Update position to account for the newly added block
+          currentPosition += block.nodeSize;
+        }
+      }
+
+      console.log(`[AIStepGenerator] Generated ${steps.length} steps total`);
+
+      return steps;
     } catch (error) {
-      console.error('[AIStepGenerator] Error creating step:', error);
-      return null;
+      console.error('[AIStepGenerator] Error creating steps:', error);
+      return [];
     }
   }
 
