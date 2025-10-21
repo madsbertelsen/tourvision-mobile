@@ -1,8 +1,9 @@
 import { CollaborationManager } from './CollaborationManager.js';
-import { Schema } from 'prosemirror-model';
+import { Schema, DOMParser } from 'prosemirror-model';
 import { schema as basicSchema } from 'prosemirror-schema-basic';
 import { addListNodes } from 'prosemirror-schema-list';
 import { ReplaceStep } from 'prosemirror-transform';
+import { JSDOM } from 'jsdom';
 
 // Step generation options
 export interface StepGenerationOptions {
@@ -107,31 +108,42 @@ export class AIStepGenerator {
   }
 
   /**
-   * Create a proper ProseMirror text insertion step
-   * This creates a real ReplaceStep that can be applied to a ProseMirror document
+   * Create a proper ProseMirror step by parsing HTML content
+   * This uses ProseMirror's DOMParser to convert HTML to document structure
    */
   private createSimpleTextStep(content: string, options: StepGenerationOptions): any {
     try {
-      // Parse content into ProseMirror nodes
-      const blocks = this.parseContentToBlocks(content);
+      console.log('[AIStepGenerator] Creating step from content:', content.substring(0, 100));
 
-      // Create a proper ProseMirror fragment
-      const fragment = this.schema.nodeFromJSON({
-        type: 'doc',
-        content: blocks
-      }).content;
+      // For now, wrap plain text in a simple HTML structure
+      const htmlContent = `<p>${content}</p>`;
 
-      // Create a slice from the fragment
-      const slice = fragment.slice(0);
+      console.log('[AIStepGenerator] HTML content:', htmlContent);
 
-      // Create a proper ReplaceStep
-      const from = options.replaceRange?.from ?? 1; // Default to position 1 (after doc start)
-      const to = options.replaceRange?.to ?? from;
+      // Parse HTML using JSDOM and ProseMirror's DOMParser
+      const dom = new JSDOM(htmlContent);
+      const parser = DOMParser.fromSchema(this.schema);
+      const parsedDoc = parser.parse(dom.window.document.body);
 
+      console.log('[AIStepGenerator] Parsed document:', JSON.stringify(parsedDoc.toJSON(), null, 2));
+
+      // Create a slice from the parsed document
+      const slice = parsedDoc.slice(0, parsedDoc.content.size);
+
+      // Replace the entire document content
+      // For an empty document with one paragraph, this is from 0 to 2
+      const from = options.replaceRange?.from ?? 0;
+      const to = options.replaceRange?.to ?? 2;
+
+      console.log(`[AIStepGenerator] Creating ReplaceStep from ${from} to ${to}`);
+
+      // Create the ReplaceStep
       const step = new ReplaceStep(from, to, slice);
+      const stepJSON = step.toJSON();
 
-      // Return the JSON representation that can be sent over the wire
-      return step.toJSON();
+      console.log('[AIStepGenerator] Step JSON:', JSON.stringify(stepJSON, null, 2));
+
+      return stepJSON;
     } catch (error) {
       console.error('[AIStepGenerator] Error creating step:', error);
       return null;
@@ -154,25 +166,62 @@ export class AIStepGenerator {
       return blocks;
     }
 
-    // Split into paragraphs
+    // Split into paragraphs by double newlines
     const paragraphs = plainText.split(/\n\n+/);
 
     for (const para of paragraphs) {
-      if (para.trim()) {
-        // Create a paragraph node with text
-        blocks.push({
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: para.trim()
+      const trimmedPara = para.trim();
+      if (trimmedPara) {
+        // Split lines within paragraph
+        const lines = trimmedPara.split('\n');
+
+        // Process each line
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          // Check if it's a heading (starts with **)
+          if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+            const headingText = trimmedLine.slice(2, -2).trim();
+            // Determine heading level based on content
+            let headingLevel = 2; // Default to h2
+            if (headingText.includes('Day')) {
+              headingLevel = 3;
+            } else if (headingText.includes('Weekend') || headingText.includes('Trip')) {
+              headingLevel = 1;
             }
-          ]
-        });
+
+            blocks.push({
+              type: 'heading',
+              attrs: { level: headingLevel },
+              content: [
+                {
+                  type: 'text',
+                  text: headingText
+                }
+              ]
+            });
+          } else {
+            // Regular paragraph - remove markdown bold markers
+            let processedText = trimmedLine
+              .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** markers
+              .replace(/^- /, '• '); // Convert markdown lists to bullet points
+
+            blocks.push({
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: processedText
+                }
+              ]
+            });
+          }
+        }
       }
     }
 
-    // If no paragraphs were created, create at least one with the content
+    // If no blocks were created, create at least one with the content
     if (blocks.length === 0 && plainText) {
       blocks.push({
         type: 'paragraph',

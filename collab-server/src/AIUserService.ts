@@ -96,8 +96,22 @@ export class AIUserService {
       console.log(`[AIUserService] System prompt length: ${systemPrompt.length}`);
       console.log(`[AIUserService] User prompt: ${prompt.substring(0, 100)}...`);
 
-      // Stream the AI response
-      console.log(`[AIUserService] Starting AI stream...`);
+      // TESTING: Replace with static content instead of AI
+      console.log(`[AIUserService] Using STATIC TEST CONTENT instead of AI...`);
+
+      // Create a simple async iterable that yields our test content
+      const testContent = "This is a simple test paragraph without any special formatting.";
+      const textStream = (async function* () {
+        // Simulate streaming by yielding the content in chunks
+        const chunkSize = 10;
+        for (let i = 0; i < testContent.length; i += chunkSize) {
+          yield testContent.slice(i, i + chunkSize);
+          // Small delay to simulate streaming
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      })();
+
+      /* DISABLED FOR TESTING
       const { textStream } = await streamText({
         model,
         system: systemPrompt,
@@ -106,6 +120,7 @@ export class AIUserService {
         maxRetries: 3,
         abortSignal: this.activeGenerations.get(generationId)!.abortController.signal
       });
+      */
 
       // Process the stream and generate steps
       console.log(`[AIUserService] Processing stream...`);
@@ -136,10 +151,11 @@ export class AIUserService {
     console.log(`[AIUserService] Processing stream for generation ${generationId}`);
 
     try {
-      let buffer = '';
+      // Collect the entire AI response first
+      let completeText = '';
       let chunkCount = 0;
-      const batchSize = options.batchSize || 50; // Characters to batch before creating a step
 
+      console.log(`[AIUserService] Collecting AI response...`);
       for await (const chunk of textStream) {
         // Check if generation was cancelled
         if (!this.activeGenerations.has(generationId)) {
@@ -147,39 +163,25 @@ export class AIUserService {
           break;
         }
 
-        buffer += chunk;
+        completeText += chunk;
         chunkCount++;
-        console.log(`[AIUserService] Received chunk ${chunkCount}, buffer size: ${buffer.length}`);
 
-        // Generate steps periodically for streaming effect
-        if (buffer.length >= batchSize || chunk.includes('\n')) {
-          console.log(`[AIUserService] Generating steps for buffer: ${buffer.substring(0, 50)}...`);
-          const steps = await this.stepGenerator.generateStepsForContent(
-            documentId,
-            buffer,
-            {
-              position: options.position,
-              replaceRange: options.replaceRange,
-              isStreaming: true
-            }
-          );
-
-          if (steps.length > 0) {
-            console.log(`[AIUserService] Sending ${steps.length} steps`);
-            // Send steps through collaboration manager
-            this.sendSteps(documentId, steps, startVersion + chunkCount);
-          }
-
-          buffer = ''; // Clear buffer after processing
+        // Log progress every 10 chunks
+        if (chunkCount % 10 === 0) {
+          console.log(`[AIUserService] Received ${chunkCount} chunks, total length: ${completeText.length}`);
         }
       }
 
-      // Process any remaining content
-      if (buffer.length > 0) {
-        console.log(`[AIUserService] Processing final buffer: ${buffer.substring(0, 50)}...`);
+      console.log(`[AIUserService] Complete response received: ${completeText.length} characters`);
+      console.log(`[AIUserService] Response preview: ${completeText.substring(0, 200)}...`);
+
+      // Now generate ProseMirror steps from the complete content
+      if (completeText.length > 0) {
+        console.log(`[AIUserService] Generating ProseMirror steps for complete content...`);
+
         const steps = await this.stepGenerator.generateStepsForContent(
           documentId,
-          buffer,
+          completeText,
           {
             position: options.position,
             replaceRange: options.replaceRange,
@@ -189,8 +191,18 @@ export class AIUserService {
         );
 
         if (steps.length > 0) {
-          console.log(`[AIUserService] Sending final ${steps.length} steps`);
-          this.sendSteps(documentId, steps, startVersion + chunkCount + 1);
+          console.log(`[AIUserService] Generated ${steps.length} steps`);
+          console.log(`[AIUserService] Step details:`, JSON.stringify(steps[0], null, 2));
+
+          // Get current document version
+          const docState = this.collabManager.getDocument(documentId);
+          const currentVersion = docState?.version || startVersion;
+
+          // Send all steps at once
+          const result = this.sendSteps(documentId, steps, currentVersion);
+          console.log(`[AIUserService] Steps sent with result:`, result);
+        } else {
+          console.log(`[AIUserService] No steps generated from content`);
         }
       }
 
