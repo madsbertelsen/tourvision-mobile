@@ -14,10 +14,15 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
-import Mapbox from '@rnmapbox/maps';
+import LocationMapWeb from '@/components/LocationMapWeb';
 
-// Set Mapbox access token
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+// Conditionally import Mapbox only on native platforms
+let Mapbox: any = null;
+if (Platform.OS !== 'web') {
+  Mapbox = require('@rnmapbox/maps').default;
+  // Set Mapbox access token
+  Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_HEIGHT = 400;
@@ -264,66 +269,80 @@ export default function CreateLocationScreen() {
       {/* Map View */}
       {suggestions.length > 0 && (
         <View style={styles.mapContainer}>
-          <Mapbox.MapView
-            style={styles.map}
-            styleURL={Mapbox.StyleURL.Street}
-            zoomEnabled={true}
-            scrollEnabled={true}
-            pitchEnabled={false}
-            rotateEnabled={false}
-          >
-            <Mapbox.Camera
-              ref={cameraRef}
-              zoomLevel={14}
-              centerCoordinate={
-                suggestions.length > 0
-                  ? [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)]
-                  : [0, 0]
-              }
-              animationDuration={500}
-            />
+          {Platform.OS === 'web' ? (
+            /* Web: Use react-map-gl */
+            selectedLocation && (
+              <LocationMapWeb
+                latitude={parseFloat(selectedLocation.lat)}
+                longitude={parseFloat(selectedLocation.lon)}
+                name={selectedLocation.display_name}
+                colorIndex={selectedIndex}
+              />
+            )
+          ) : Mapbox ? (
+            /* Native: Use Mapbox */
+            <>
+              <Mapbox.MapView
+                style={styles.map}
+                styleURL={Mapbox.StyleURL.Street}
+                zoomEnabled={true}
+                scrollEnabled={true}
+                pitchEnabled={false}
+                rotateEnabled={false}
+              >
+                <Mapbox.Camera
+                  ref={cameraRef}
+                  zoomLevel={14}
+                  centerCoordinate={
+                    suggestions.length > 0
+                      ? [parseFloat(suggestions[0].lon), parseFloat(suggestions[0].lat)]
+                      : [0, 0]
+                  }
+                  animationDuration={500}
+                />
 
-            {/* Markers for all suggestions */}
-            {suggestions.map((suggestion, index) => {
-              const isSelected = index === selectedIndex;
-              const locationName = suggestion.display_name.split(',')[0];
+                {/* Markers for all suggestions */}
+                {suggestions.map((suggestion, index) => {
+                  const isSelected = index === selectedIndex;
 
-              return (
-                <Mapbox.PointAnnotation
-                  key={suggestion.place_id}
-                  id={`location-${suggestion.place_id}`}
-                  coordinate={[parseFloat(suggestion.lon), parseFloat(suggestion.lat)]}
-                  onSelected={() => {
-                    console.log('[CreateLocation] Marker tapped, selecting index:', index);
-                    setSelectedIndex(index);
-                  }}
-                >
-                  <View style={[
-                    styles.markerContainer,
-                    isSelected && styles.markerSelected
-                  ]}>
-                    <Ionicons
-                      name={isSelected ? "location" : "location-outline"}
-                      size={isSelected ? 40 : 28}
-                      color={isSelected ? "#007AFF" : "#8E8E93"}
-                    />
-                  </View>
-                </Mapbox.PointAnnotation>
-              );
-            })}
-          </Mapbox.MapView>
+                  return (
+                    <Mapbox.PointAnnotation
+                      key={suggestion.place_id}
+                      id={`location-${suggestion.place_id}`}
+                      coordinate={[parseFloat(suggestion.lon), parseFloat(suggestion.lat)]}
+                      onSelected={() => {
+                        console.log('[CreateLocation] Marker tapped, selecting index:', index);
+                        setSelectedIndex(index);
+                      }}
+                    >
+                      <View style={[
+                        styles.markerContainer,
+                        isSelected && styles.markerSelected
+                      ]}>
+                        <Ionicons
+                          name={isSelected ? "location" : "location-outline"}
+                          size={isSelected ? 40 : 28}
+                          color={isSelected ? "#007AFF" : "#8E8E93"}
+                        />
+                      </View>
+                    </Mapbox.PointAnnotation>
+                  );
+                })}
+              </Mapbox.MapView>
 
-          {/* Location info overlay for selected location */}
-          {selectedLocation && (
-            <View style={styles.locationInfoOverlay}>
-              <Text style={styles.locationName} numberOfLines={2}>
-                {selectedLocation.display_name}
-              </Text>
-              <Text style={styles.locationCoords}>
-                {parseFloat(selectedLocation.lat).toFixed(6)}, {parseFloat(selectedLocation.lon).toFixed(6)}
-              </Text>
-            </View>
-          )}
+              {/* Location info overlay for selected location */}
+              {selectedLocation && (
+                <View style={styles.locationInfoOverlay}>
+                  <Text style={styles.locationName} numberOfLines={2}>
+                    {selectedLocation.display_name}
+                  </Text>
+                  <Text style={styles.locationCoords}>
+                    {parseFloat(selectedLocation.lat).toFixed(6)}, {parseFloat(selectedLocation.lon).toFixed(6)}
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : null}
         </View>
       )}
 
