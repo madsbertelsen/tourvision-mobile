@@ -1,5 +1,5 @@
 import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
-import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, useGlobalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState, createContext, useContext } from 'react';
 
 // Context for sharing trip state across nested routes
@@ -32,10 +32,11 @@ export function useTripContext() {
 
 export default function TripLayout() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useGlobalSearchParams();
   const tripId = params.id as string;
 
   console.log('[TripLayout] Component rendering with tripId:', tripId);
+  console.log('[TripLayout] Using useGlobalSearchParams - params:', params);
 
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
@@ -46,9 +47,10 @@ export default function TripLayout() {
   const lastProcessedLocationRef = useRef<string | null>(null);
   const lastLoadedTripIdRef = useRef<string | null>(null);
 
-  // Update when tripId from params changes (useLocalSearchParams is reactive)
+  // Update when tripId from params changes (testing useGlobalSearchParams)
   useEffect(() => {
     console.log('[TripLayout] tripId from params changed to:', tripId);
+    console.log('[TripLayout] useEffect triggered - this proves params updated!');
     // Reset state when trip changes
     setCurrentTrip(null);
     setCurrentDoc(null);
