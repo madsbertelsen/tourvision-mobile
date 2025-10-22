@@ -73,6 +73,7 @@ export default function TripDocumentView() {
     };
   }, []);
   const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
+  const hasSavedGeneratedDocRef = useRef<boolean>(false); // Track if we've saved the generated document
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
   // Debug: Log when streamState changes
@@ -85,10 +86,11 @@ export default function TripDocumentView() {
     });
   }, [streamState.isStreaming, streamState.isComplete, streamState.document]);
 
-  // Save generated document when streaming completes
+  // Save generated document when streaming completes (only once)
   useEffect(() => {
-    if (streamState.isComplete && streamState.document && !streamState.isStreaming) {
+    if (streamState.isComplete && streamState.document && !streamState.isStreaming && !hasSavedGeneratedDocRef.current) {
       console.log('[TripDocumentView] Saving generated document to trip');
+      hasSavedGeneratedDocRef.current = true;
       handleDocumentChange(streamState.document);
     }
   }, [streamState.isComplete, streamState.isStreaming, streamState.document, handleDocumentChange]);
@@ -301,7 +303,7 @@ export default function TripDocumentView() {
   // AI Assistant handlers
   const handleAIPrompt = useCallback(async (prompt: string) => {
     console.log('[TripDocumentView] Starting AI generation with prompt:', prompt);
-    console.log('[TripDocumentView] Resetting hasProcessedTypingRef to false');
+    console.log('[TripDocumentView] Resetting hasProcessedTypingRef and hasSavedGeneratedDocRef to false');
 
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
@@ -311,8 +313,9 @@ export default function TripDocumentView() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Reset flag so new content can be typed
+    // Reset flags for new generation
     hasProcessedTypingRef.current = false;
+    hasSavedGeneratedDocRef.current = false;
     // Use the trip ID for AI generation (not a temporary document ID)
     await startGeneration(prompt, tripId);
   }, [startGeneration, isCollaborating, startCollaboration, tripId]);
