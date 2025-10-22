@@ -191,8 +191,11 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
           console.log('[StreamingHook] Generation started');
         })
         .on('broadcast', { event: 'generation-delta' }, (payload: any) => {
-          const { delta } = payload.payload;
+          const { delta, chunkNumber } = payload.payload;
           if (delta) {
+            if (chunkNumber % 50 === 0) {
+              console.log(`[StreamingHook] Received delta chunk ${chunkNumber}, buffer size: ${htmlBufferRef.current.length}`);
+            }
             // Append delta to buffer
             htmlBufferRef.current += delta;
 
@@ -215,11 +218,15 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
         })
         .on('broadcast', { event: 'generation-complete' }, (payload: any) => {
           console.log('[StreamingHook] Generation complete');
+          console.log('[StreamingHook] Buffer length:', htmlBufferRef.current.length);
+          console.log('[StreamingHook] Buffer preview:', htmlBufferRef.current.substring(0, 100));
 
           // Final parse
           const finalMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
           if (finalMatch) {
+            console.log('[StreamingHook] Found itinerary tags, parsing...');
             const pmDoc = htmlToProsemirror(finalMatch[1]);
+            console.log('[StreamingHook] Setting state with document');
             setState(prev => ({
               ...prev,
               isStreaming: false,
@@ -227,6 +234,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
               document: pmDoc,
             }));
           } else {
+            console.log('[StreamingHook] No itinerary tags, parsing raw buffer');
             const pmDoc = htmlToProsemirror(htmlBufferRef.current);
             setState(prev => ({
               ...prev,
