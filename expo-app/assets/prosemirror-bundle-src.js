@@ -13,7 +13,12 @@ import { Step } from 'prosemirror-transform';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Plugin, PluginKey } from 'prosemirror-state';
 
-// Import collaboration plugin
+// Import Y.js for CRDT-based collaboration
+import * as Y from 'yjs';
+import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
+import * as awarenessProtocol from 'y-protocols/awareness';
+
+// Import old collaboration plugin (will be deprecated)
 import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
 
 // Create a custom schema with list support and geo-mark
@@ -134,7 +139,12 @@ window.PM = {
   keymap: keymap,
   history: { history, undo, redo },
   commands: { baseKeymap },
-  collab: { CollabConnection, createCollabPlugin, initializeCollaboration }
+  collab: { CollabConnection, createCollabPlugin, initializeCollaboration },
+  // Y.js exports for CRDT collaboration
+  Y: Y,
+  yProsemirror: { ySyncPlugin, yCursorPlugin, yUndoPlugin },
+  Awareness: awarenessProtocol.Awareness,
+  awarenessProtocol: awarenessProtocol
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js support');
