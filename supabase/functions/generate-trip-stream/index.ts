@@ -324,12 +324,13 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       console.log('[Generate Trip] Warning: Incomplete block at end of stream:', currentBlockHtml.substring(0, 100));
     }
 
-    // Persist to database
-    console.log('[Generate Trip] Persisting to database');
-    await provider.persist();
+    // Hocuspocus automatically persists via onStoreDocument hook
+    // Just wait a moment for final save, then cleanup
+    console.log('[Generate Trip] Waiting for Hocuspocus to persist...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Cleanup
-    await provider.destroy();
+    provider.destroy();
     console.log('[Generate Trip] Generation complete');
 
     // Return success response
