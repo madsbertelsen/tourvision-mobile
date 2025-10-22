@@ -324,6 +324,10 @@ verify_jwt = false
 # Skip JWT verification for CORS compatibility
 verify_jwt = false
 
+[functions.hocuspocus-ws]
+# Skip JWT verification - authentication handled via query params in WebSocket URL
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
