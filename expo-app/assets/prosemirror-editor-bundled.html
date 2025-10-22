@@ -1466,7 +1466,10 @@
 
               (async () => {
                 try {
-                  const { documentId, userId, userName, token, hocuspocusUrl = 'ws://127.0.0.1:1234/collaboration' } = data;
+                  // TEST: Use Edge Function instead of standalone server
+                  // Standalone: ws://127.0.0.1:1234/collaboration
+                  // Edge Function: ws://127.0.0.1:54321/functions/v1/hocuspocus-ws
+                  const { documentId, userId, userName, token, hocuspocusUrl = 'ws://127.0.0.1:54321/functions/v1/hocuspocus-ws' } = data;
                   console.log('[WebView] Creating Hocuspocus collaboration for document:', documentId);
                   console.log('[WebView] Hocuspocus URL:', hocuspocusUrl);
                   console.log('[WebView] Auth token:', token ? 'present' : 'missing');
@@ -1496,12 +1499,17 @@
 
                   console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
 
+                  // For Edge Function: append token to URL (WebSocket can't send custom headers)
+                  const urlWithToken = `${hocuspocusUrl}?token=${encodeURIComponent(token)}`;
+                  console.log('[WebView] Connection URL (Edge Function):', urlWithToken.replace(token, 'REDACTED'));
+
                   // Create Hocuspocus provider
                   yProvider = new HocuspocusProvider({
-                    url: hocuspocusUrl,
+                    url: urlWithToken,
                     name: documentId,
                     document: ydoc,
-                    token: token,
+                    // Don't pass token separately for Edge Function (already in URL)
+                    // token: token,
                     awareness: awareness,
                     onConnect: () => {
                       console.log('[WebView] Hocuspocus connected');
