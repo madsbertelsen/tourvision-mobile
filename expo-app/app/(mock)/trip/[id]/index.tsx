@@ -75,6 +75,16 @@ export default function TripDocumentView() {
   const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
+  // Debug: Log when streamState changes
+  useEffect(() => {
+    console.log('[TripDocumentView] streamState changed:', {
+      isStreaming: streamState.isStreaming,
+      isComplete: streamState.isComplete,
+      hasDocument: !!streamState.document,
+      documentContentLength: JSON.stringify(streamState.document).length,
+    });
+  }, [streamState.isStreaming, streamState.isComplete, streamState.document]);
+
   // Set up Y.js collaboration
   const { setEditorRef, isCollaborating, startCollaboration } = useYjsCollaboration();
   useEffect(() => {
@@ -680,6 +690,12 @@ Please generate replacement content that addresses the user's request. Only retu
       </View>
 
       {/* AI Assistant Modal */}
+      {console.log('[TripDocumentView] Rendering AIAssistantModal:', {
+        showAIModal,
+        isStreaming: streamState.isStreaming,
+        isTyping,
+        isGenerating: streamState.isStreaming || isTyping,
+      })}
       <AIAssistantModal
         visible={showAIModal}
         onClose={() => {
