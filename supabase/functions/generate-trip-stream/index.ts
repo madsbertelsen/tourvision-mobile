@@ -81,8 +81,8 @@ serve(async (req) => {
       url: urlWithToken,
       name: tripId,
       document: ydoc,
-      // Don't pass token separately for Edge Function (already in URL)
-      // token: authToken,
+      // Pass token both in URL (for Edge Function) and as parameter (for Hocuspocus protocol)
+      token: authToken,
       // WebSocket polyfill for Deno
       WebSocketPolyfill: WebSocket as any,
     });
