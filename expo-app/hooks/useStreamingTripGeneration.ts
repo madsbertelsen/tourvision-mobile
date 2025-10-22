@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
+import { supabase } from '@/lib/supabase/client';
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
@@ -141,6 +142,8 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const htmlBufferRef = useRef<string>('');
+  const sessionIdRef = useRef<string | null>(null);
+  const channelRef = useRef<any>(null);
 
   const cancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -157,6 +160,9 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
   const startGeneration = useCallback(async (prompt: string, documentId?: string) => {
     // Reset state
     htmlBufferRef.current = '';
+    const sessionId = `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    sessionIdRef.current = sessionId;
+
     setState({
       isStreaming: true,
       isComplete: false,
@@ -175,8 +181,93 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     abortControllerRef.current = new AbortController();
 
     try {
-      console.log('[StreamingHook] Using Edge Function for AI generation');
-      await streamFromEdgeFunction(prompt, abortControllerRef.current.signal);
+      console.log('[StreamingHook] Starting generation with sessionId:', sessionId);
+
+      // Subscribe to Realtime channel for deltas
+      channelRef.current = supabase.channel(`trip-generation:${sessionId}`);
+
+      channelRef.current
+        .on('broadcast', { event: 'generation-start' }, (payload: any) => {
+          console.log('[StreamingHook] Generation started');
+        })
+        .on('broadcast', { event: 'generation-delta' }, (payload: any) => {
+          const { delta } = payload.payload;
+          if (delta) {
+            // Append delta to buffer
+            htmlBufferRef.current += delta;
+
+            // Try to parse and update document
+            const itineraryMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)(?:<\/itinerary>|$)/is);
+            if (itineraryMatch) {
+              const itineraryHTML = itineraryMatch[1];
+              try {
+                const pmDoc = htmlToProsemirror(itineraryHTML);
+                setState(prev => ({
+                  ...prev,
+                  document: pmDoc,
+                }));
+              } catch (parseError) {
+                // Continue streaming even if parse fails
+                console.warn('[StreamingHook] Parse error:', parseError);
+              }
+            }
+          }
+        })
+        .on('broadcast', { event: 'generation-complete' }, (payload: any) => {
+          console.log('[StreamingHook] Generation complete');
+
+          // Final parse
+          const finalMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
+          if (finalMatch) {
+            const pmDoc = htmlToProsemirror(finalMatch[1]);
+            setState(prev => ({
+              ...prev,
+              isStreaming: false,
+              isComplete: true,
+              document: pmDoc,
+            }));
+          } else {
+            const pmDoc = htmlToProsemirror(htmlBufferRef.current);
+            setState(prev => ({
+              ...prev,
+              isStreaming: false,
+              isComplete: true,
+              document: pmDoc,
+            }));
+          }
+
+          // Cleanup channel
+          if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+            channelRef.current = null;
+          }
+        })
+        .subscribe();
+
+      // Call Edge Function to start generation
+      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-trip-stream`;
+      const response = await fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          sessionId,
+          model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
+          temperature: 0.7,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge Function error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('[StreamingHook] Edge Function result:', result);
+
     } catch (error: any) {
       console.error('[StreamingHook] Error:', error);
 
@@ -190,99 +281,26 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
         isStreaming: false,
         error: error.message || 'Failed to generate trip',
       }));
+
+      // Cleanup channel on error
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     } finally {
       abortControllerRef.current = null;
     }
   }, []);
 
-  // Stream from Edge Function
-  const streamFromEdgeFunction = async (prompt: string, signal: AbortSignal) => {
-    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-trip-stream`;
-    console.log('[StreamingHook] Calling Edge Function:', edgeFunctionUrl);
-
-    const response = await fetch(edgeFunctionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
-        temperature: 0.7,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
-    }
-
-    if (!response.body) {
-      throw new Error('Response body is null');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        console.log('[StreamingHook] Stream complete');
-        break;
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
-
-      const chunk = decoder.decode(value, { stream: true });
-      console.log('[StreamingHook] Received chunk:', chunk.substring(0, 100));
-
-      // Add chunk to buffer
-      htmlBufferRef.current += chunk;
-
-      // Try to extract itinerary content
-      const itineraryMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)(?:<\/itinerary>|$)/is);
-
-      if (itineraryMatch) {
-        const itineraryHTML = itineraryMatch[1];
-
-        // Convert HTML to ProseMirror JSON
-        try {
-          const pmDoc = htmlToProsemirror(itineraryHTML);
-
-          // Update document state
-          setState(prev => ({
-            ...prev,
-            document: pmDoc,
-          }));
-        } catch (parseError) {
-          console.warn('[StreamingHook] Parse error (continuing):', parseError);
-          // Continue streaming even if parse fails
-        }
-      }
-    }
-
-    // Final parse of complete content
-    const finalMatch = htmlBufferRef.current.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
-    if (finalMatch) {
-      const pmDoc = htmlToProsemirror(finalMatch[1]);
-      setState(prev => ({
-        ...prev,
-        isStreaming: false,
-        isComplete: true,
-        document: pmDoc,
-      }));
-    } else {
-      // No itinerary tags found, try parsing the whole buffer
-      console.warn('[StreamingHook] No itinerary tags found, parsing raw HTML');
-      const pmDoc = htmlToProsemirror(htmlBufferRef.current);
-      setState(prev => ({
-        ...prev,
-        isStreaming: false,
-        isComplete: true,
-        document: pmDoc,
-      }));
-    }
-  };
+    };
+  }, []);
 
   return {
     state,

@@ -1,4 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { Mistral } from 'npm:@mistralai/mistralai@1.3.7';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -8,6 +10,7 @@ const corsHeaders = {
 
 interface TripGenerationRequest {
   prompt: string;
+  sessionId: string; // Client provides session ID for Realtime channel
   model?: string;
   temperature?: number;
 }
@@ -20,9 +23,19 @@ serve(async (req) => {
 
   try {
     // Parse request body
-    const { prompt, model = 'mistral-small-latest', temperature = 0.7 }: TripGenerationRequest = await req.json();
+    const {
+      prompt,
+      sessionId,
+      model = 'mistral-small-latest',
+      temperature = 0.7
+    }: TripGenerationRequest = await req.json();
+
+    if (!sessionId) {
+      throw new Error('sessionId is required');
+    }
 
     console.log('[Generate Trip] Processing request:', {
+      sessionId,
       prompt: prompt.substring(0, 100) + '...',
       model,
     });
@@ -32,6 +45,11 @@ serve(async (req) => {
     if (!mistralApiKey) {
       throw new Error('MISTRAL_API_KEY not configured');
     }
+
+    // Create Supabase client for Realtime
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Build the system prompt
     const systemPrompt = `You are an AI assistant helping to write a travel itinerary document.
@@ -64,102 +82,86 @@ Example format:
 
 Wrap your entire response in <itinerary></itinerary> tags.`;
 
-    // Call Mistral API for streaming completion
-    const mistralResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${mistralApiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        temperature,
-        max_tokens: 4000,
-        stream: true, // Enable streaming
-      }),
+    // Initialize Mistral client
+    const mistralClient = new Mistral({ apiKey: mistralApiKey });
+
+    // Broadcast start event
+    const channel = supabase.channel(`trip-generation:${sessionId}`);
+    await channel.send({
+      type: 'broadcast',
+      event: 'generation-start',
+      payload: { sessionId, timestamp: new Date().toISOString() },
     });
 
-    if (!mistralResponse.ok) {
-      const error = await mistralResponse.text();
-      console.error('[Generate Trip] Mistral API error:', error);
-      throw new Error(`Mistral API error: ${mistralResponse.status}`);
+    // Stream completion with Mistral SDK
+    const streamResponse = await mistralClient.chat.stream({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ],
+      temperature,
+      maxTokens: 4000,
+    });
+
+    // Process stream and broadcast deltas via Realtime
+    let fullContent = '';
+    let chunkCount = 0;
+
+    for await (const chunk of streamResponse) {
+      const delta = chunk.data.choices[0]?.delta?.content;
+
+      if (delta) {
+        fullContent += delta;
+        chunkCount++;
+
+        // Broadcast delta via Realtime
+        await channel.send({
+          type: 'broadcast',
+          event: 'generation-delta',
+          payload: {
+            sessionId,
+            delta,
+            chunkNumber: chunkCount,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
     }
 
-    // Create a ReadableStream to stream the response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = mistralResponse.body?.getReader();
-        if (!reader) {
-          controller.close();
-          return;
-        }
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-
-            if (done) {
-              // Send any remaining buffer
-              if (buffer) {
-                controller.enqueue(new TextEncoder().encode(buffer));
-              }
-              controller.close();
-              break;
-            }
-
-            // Decode the chunk
-            const chunk = decoder.decode(value, { stream: true });
-            buffer += chunk;
-
-            // Process SSE (Server-Sent Events) format
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6); // Remove 'data: ' prefix
-
-                if (data === '[DONE]') {
-                  continue;
-                }
-
-                try {
-                  const json = JSON.parse(data);
-                  const content = json.choices?.[0]?.delta?.content;
-
-                  if (content) {
-                    // Stream the content directly to the client
-                    controller.enqueue(new TextEncoder().encode(content));
-                  }
-                } catch (parseError) {
-                  console.warn('[Generate Trip] Failed to parse SSE data:', data);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('[Generate Trip] Stream error:', error);
-          controller.error(error);
-        }
+    // Broadcast completion event
+    await channel.send({
+      type: 'broadcast',
+      event: 'generation-complete',
+      payload: {
+        sessionId,
+        fullContent,
+        chunkCount,
+        timestamp: new Date().toISOString(),
       },
     });
 
-    // Return the streaming response
-    return new Response(stream, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
+    console.log('[Generate Trip] Generation complete:', {
+      sessionId,
+      contentLength: fullContent.length,
+      chunkCount,
     });
+
+    // Return success response (non-streaming)
+    return new Response(
+      JSON.stringify({
+        success: true,
+        sessionId,
+        contentLength: fullContent.length,
+        chunkCount,
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   } catch (error) {
     console.error('[Generate Trip] Error:', error);
     return new Response(
