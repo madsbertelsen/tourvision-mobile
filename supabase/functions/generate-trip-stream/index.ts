@@ -85,8 +85,11 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     // Initialize Mistral client
     const mistralClient = new Mistral({ apiKey: mistralApiKey });
 
-    // Broadcast start event
+    // Subscribe to Realtime channel for broadcasting
     const channel = supabase.channel(`trip-generation:${sessionId}`);
+    await channel.subscribe();
+
+    // Broadcast start event
     await channel.send({
       type: 'broadcast',
       event: 'generation-start',
@@ -170,6 +173,9 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       contentLength: fullContent.length,
       chunkCount,
     });
+
+    // Cleanup: unsubscribe from channel
+    await supabase.removeChannel(channel);
 
     // Return success response with full content and event log
     return new Response(
