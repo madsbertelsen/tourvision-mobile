@@ -206,8 +206,8 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
 
           console.log(`[Generate Trip] Complete block detected: ${name} (length: ${currentBlockHtml.length})`);
 
-          // Process accumulated blocks periodically
-          if (completeBlocks.length >= 2) {
+          // Process accumulated blocks periodically (batch of 3 for less frequent updates)
+          if (completeBlocks.length >= 3) {
             const blocksToProcess = [...completeBlocks];
             completeBlocks = [];
 
@@ -226,7 +226,10 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
               // Append to Y.js document (broadcasts to clients)
               appendProseMirrorNodesToYjs(ydoc, nodes);
               totalNodesApplied += nodes.length;
-              console.log(`[Generate Trip] Streamed ${nodes.length} nodes to document`);
+
+              // Get current document size for verification
+              const fragment = ydoc.getXmlFragment('prosemirror');
+              console.log(`[Generate Trip] Streamed ${nodes.length} nodes to document (total in fragment: ${fragment.length})`);
             }
           }
 
