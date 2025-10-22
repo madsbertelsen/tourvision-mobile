@@ -327,6 +327,11 @@
       let collabPlugin = null;
       let socket = null;
 
+      // Y.js collaboration variables
+      let ydoc = null;
+      let yXmlFragment = null;
+      let awareness = null;
+
       // Create initial document - empty, content will be sent from React Native
       const { DOMParser: PMDOMParser } = window.PM.model;
 
@@ -665,6 +670,50 @@
 
       // Expose to window for iOS to call
       window.handleCreateLocation = window.createLocationFromSelection;
+
+      // Y.js helper functions
+      function setupYjsListeners() {
+        if (!ydoc || !awareness) {
+          console.error('[WebView] Cannot setup Y.js listeners - missing ydoc or awareness');
+          return;
+        }
+
+        console.log('[WebView] Setting up Y.js listeners');
+
+        // Forward Y.js updates to React Native
+        ydoc.on('update', (update, origin) => {
+          if (origin !== 'remote') {
+            console.log('[WebView] Y.js update detected, forwarding to native');
+            sendMessageToNative({
+              type: 'yjsUpdate',
+              update: Array.from(update)
+            });
+          }
+        });
+
+        // Forward awareness changes
+        awareness.on('change', () => {
+          const update = window.PM.awarenessProtocol.encodeAwarenessUpdate(
+            awareness,
+            Array.from(awareness.getStates().keys())
+          );
+          console.log('[WebView] Awareness update detected, forwarding to native');
+          sendMessageToNative({
+            type: 'awarenessUpdate',
+            update: Array.from(update)
+          });
+        });
+
+        console.log('[WebView] Y.js listeners setup complete');
+      }
+
+      function getRandomColor() {
+        const colors = [
+          '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+          '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
 
       // Listen for messages from React Native and native iOS menu
       window.addEventListener('message', function(event) {
@@ -1123,76 +1172,89 @@
               break;
 
             case 'startCollaboration':
-              console.log('[WebView] Starting collaboration:', data);
-              if (editorView && window.io && window.PM.collab) {
-                const { serverUrl, documentId, userId, userName } = data;
+              console.log('[WebView] Starting Y.js collaboration:', data);
 
-                // Connect to WebSocket server
-                socket = window.io(serverUrl, {
-                  transports: ['websocket'],
-                  reconnectionDelayMax: 10000
-                });
-
-                // Initialize collaboration
-                const { CollabConnection, createCollabPlugin } = window.PM.collab;
-                collabConnection = new CollabConnection(socket, documentId, userId, userName);
-                collabPlugin = createCollabPlugin(collabConnection);
-
-                // Update editor state with collaboration plugin
-                const plugins = editorView.state.plugins.filter(p => !p.spec.key || p.spec.key.key !== 'collab');
-                plugins.push(collabPlugin);
-
-                const newState = editorView.state.reconfigure({ plugins });
-                editorView.updateState(newState);
-
-                // Update UI
-                const statusEl = document.getElementById('collab-status');
-                statusEl.textContent = 'Connecting...';
-                statusEl.className = 'disconnected';
-
-                // Socket event handlers for UI updates
-                socket.on('connect', () => {
-                  console.log('[WebView] Connected to collaboration server');
-                  statusEl.textContent = 'Connected';
-                  statusEl.className = 'connected';
-
-                  sendMessageToNative({
-                    type: 'collaborationStatus',
-                    status: 'connected'
-                  });
-                });
-
-                socket.on('disconnect', () => {
-                  console.log('[WebView] Disconnected from collaboration server');
-                  statusEl.textContent = 'Disconnected';
-                  statusEl.className = 'disconnected';
-
-                  sendMessageToNative({
-                    type: 'collaborationStatus',
-                    status: 'disconnected'
-                  });
-                });
-
-                socket.on('user-joined', ({ userId, userName, userColor }) => {
-                  console.log('[WebView] User joined:', userName);
-                  updateCollabUsers();
-                });
-
-                socket.on('user-left', ({ userId }) => {
-                  console.log('[WebView] User left:', userId);
-                  updateCollabUsers();
-                });
-
-                sendMessageToNative({
-                  type: 'collaborationStarted',
-                  success: true
-                });
-              } else {
-                console.error('[WebView] Cannot start collaboration - missing dependencies');
+              if (!editorView) {
+                console.error('[WebView] Cannot start collaboration - editor not ready');
                 sendMessageToNative({
                   type: 'collaborationStarted',
                   success: false,
-                  error: 'Missing Socket.io or collaboration plugin'
+                  error: 'Editor not ready'
+                });
+                break;
+              }
+
+              if (!window.PM.Y || !window.PM.yProsemirror) {
+                console.error('[WebView] Cannot start collaboration - Y.js not loaded');
+                sendMessageToNative({
+                  type: 'collaborationStarted',
+                  success: false,
+                  error: 'Y.js not loaded'
+                });
+                break;
+              }
+
+              try {
+                const { documentId, userId, userName } = data;
+                console.log('[WebView] Creating Y.Doc for document:', documentId);
+
+                // Create Y.Doc and fragment
+                ydoc = new window.PM.Y.Doc();
+                yXmlFragment = ydoc.getXmlFragment('prosemirror');
+                awareness = new window.PM.Awareness(ydoc);
+
+                // Set local awareness state
+                awareness.setLocalStateField('user', {
+                  id: userId,
+                  name: userName,
+                  color: getRandomColor()
+                });
+
+                console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
+
+                // Get current document content
+                const currentDoc = editorView.state.doc;
+
+                // Recreate editor with Y.js plugins
+                const newState = EditorState.create({
+                  schema: schema,
+                  doc: currentDoc,
+                  plugins: [
+                    window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
+                    window.PM.yProsemirror.yCursorPlugin(awareness),
+                    window.PM.yProsemirror.yUndoPlugin(),
+                    keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                    keymap(baseKeymap)
+                  ]
+                });
+
+                editorView.updateState(newState);
+                console.log('[WebView] Editor state updated with Y.js plugins');
+
+                // Set up listeners
+                setupYjsListeners();
+
+                // Update UI
+                const statusEl = document.getElementById('collab-status');
+                if (statusEl) {
+                  statusEl.textContent = 'Connected (Y.js)';
+                  statusEl.className = 'connected';
+                }
+
+                // Notify React Native
+                sendMessageToNative({
+                  type: 'collaborationStarted',
+                  success: true,
+                  clientId: ydoc.clientID
+                });
+
+                console.log('[WebView] Y.js collaboration started successfully');
+              } catch (error) {
+                console.error('[WebView] Failed to start Y.js collaboration:', error);
+                sendMessageToNative({
+                  type: 'collaborationStarted',
+                  success: false,
+                  error: error.message
                 });
               }
               break;
@@ -1253,6 +1315,42 @@
                 } catch (e) {
                   console.error('[WebView] Error applying steps:', e);
                 }
+              }
+              break;
+
+            case 'yjsUpdate':
+              // Handle incoming Y.js update from React Native
+              if (ydoc && data.update) {
+                try {
+                  const update = new Uint8Array(data.update);
+                  console.log('[WebView] Applying Y.js update from native, size:', update.length);
+                  window.PM.Y.applyUpdate(ydoc, update, 'remote');
+                  console.log('[WebView] Y.js update applied successfully');
+                } catch (error) {
+                  console.error('[WebView] Error applying Y.js update:', error);
+                }
+              } else {
+                console.warn('[WebView] Received yjsUpdate but ydoc not initialized or no update data');
+              }
+              break;
+
+            case 'awarenessUpdate':
+              // Handle incoming awareness update from React Native
+              if (awareness && data.update) {
+                try {
+                  const update = new Uint8Array(data.update);
+                  console.log('[WebView] Applying awareness update from native, size:', update.length);
+                  window.PM.awarenessProtocol.applyAwarenessUpdate(
+                    awareness,
+                    update,
+                    'remote'
+                  );
+                  console.log('[WebView] Awareness update applied successfully');
+                } catch (error) {
+                  console.error('[WebView] Error applying awareness update:', error);
+                }
+              } else {
+                console.warn('[WebView] Received awarenessUpdate but awareness not initialized or no update data');
               }
               break;
 

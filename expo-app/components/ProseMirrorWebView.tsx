@@ -2,6 +2,9 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef,
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
+import * as Y from 'yjs';
+import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
+import { useSupabase } from '@/lib/supabase/provider';
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -139,6 +142,11 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     const lastProcessedGeoMarkRef = useRef<string | null>(null);
     const lastContentHashRef = useRef<string | null>(null);
     const isInternalChangeRef = useRef(false);
+
+    // Y.js collaboration state
+    const ydocRef = useRef<Y.Doc | null>(null);
+    const providerRef = useRef<YSupabaseProvider | null>(null);
+    const { supabase } = useSupabase();
 
     // Internal send message that doesn't check isReady (for use in ready handler)
     const sendMessageInternal = useCallback((message: any) => {
@@ -307,6 +315,36 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               }
               break;
 
+            // Y.js message handlers
+            case 'yjsUpdate':
+              // Handle Y.js updates from WebView
+              if (ydocRef.current && data.update) {
+                console.log('[ProseMirrorWebView] Received Y.js update from WebView, size:', data.update.length);
+                try {
+                  const update = new Uint8Array(data.update);
+                  Y.applyUpdate(ydocRef.current, update);
+                  console.log('[ProseMirrorWebView] Applied Y.js update to local ydoc');
+                } catch (error) {
+                  console.error('[ProseMirrorWebView] Error applying Y.js update:', error);
+                }
+              }
+              break;
+
+            case 'awarenessUpdate':
+              // Handle awareness updates from WebView
+              if (providerRef.current && data.update) {
+                console.log('[ProseMirrorWebView] Received awareness update from WebView, size:', data.update.length);
+                try {
+                  const update = new Uint8Array(data.update);
+                  const { applyAwarenessUpdate } = await import('y-protocols/awareness');
+                  applyAwarenessUpdate(providerRef.current.awareness, update, 'webview');
+                  console.log('[ProseMirrorWebView] Applied awareness update');
+                } catch (error) {
+                  console.error('[ProseMirrorWebView] Error applying awareness update:', error);
+                }
+              }
+              break;
+
             default:
               console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
           }
@@ -351,7 +389,21 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     useEffect(() => {
       return () => {
         // Cleanup on unmount
-        console.log('[ProseMirrorWebView] Component unmounting - resetting all refs');
+        console.log('[ProseMirrorWebView] Component unmounting - resetting all refs and cleaning up Y.js');
+
+        // Clean up Y.js resources
+        if (providerRef.current) {
+          providerRef.current.destroy().catch(err =>
+            console.error('[ProseMirrorWebView] Error destroying provider on unmount:', err)
+          );
+          providerRef.current = null;
+        }
+
+        if (ydocRef.current) {
+          ydocRef.current.destroy();
+          ydocRef.current = null;
+        }
+
         setIsReady(false);
         isInternalChangeRef.current = false;
         lastContentHashRef.current = null;
@@ -472,19 +524,89 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             `);
           }
         },
-        startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string) => {
-          console.log('[ProseMirrorWebView] Starting collaboration:', { serverUrl, documentId, userId, userName });
-          sendMessage({
-            type: 'startCollaboration',
-            serverUrl,
-            documentId,
-            userId,
-            userName
-          });
+        startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string) => {
+          console.log('[ProseMirrorWebView] Starting Y.js collaboration:', { documentId, userId, userName });
+
+          try {
+            // Create Y.Doc
+            ydocRef.current = new Y.Doc();
+            console.log('[ProseMirrorWebView] Created Y.Doc with clientID:', ydocRef.current.clientID);
+
+            // Create Supabase provider
+            providerRef.current = new YSupabaseProvider(ydocRef.current, {
+              supabase,
+              documentId,
+              userId,
+              userName,
+              debug: true
+            });
+
+            console.log('[ProseMirrorWebView] Created YSupabaseProvider');
+
+            // Listen for Y.js updates to forward to WebView
+            ydocRef.current.on('update', (update: Uint8Array, origin: any) => {
+              if (origin === 'remote') {
+                console.log('[ProseMirrorWebView] Y.js remote update, forwarding to WebView, size:', update.length);
+                sendMessage({
+                  type: 'yjsUpdate',
+                  data: { update: Array.from(update) }
+                });
+              }
+            });
+
+            // Listen for awareness updates
+            providerRef.current.awareness.on('change', () => {
+              // Get the awareness update for all clients
+              const { encodeAwarenessUpdate } = require('y-protocols/awareness');
+              const states = Array.from(providerRef.current!.awareness.getStates().keys());
+              const update = encodeAwarenessUpdate(providerRef.current!.awareness, states);
+
+              console.log('[ProseMirrorWebView] Awareness changed, forwarding to WebView');
+              sendMessage({
+                type: 'awarenessUpdate',
+                data: { update: Array.from(update) }
+              });
+            });
+
+            // Tell WebView to initialize Y.js
+            sendMessage({
+              type: 'startCollaboration',
+              documentId,
+              userId,
+              userName
+            });
+
+            console.log('[ProseMirrorWebView] Y.js collaboration started successfully');
+          } catch (error) {
+            console.error('[ProseMirrorWebView] Failed to start Y.js collaboration:', error);
+            throw error;
+          }
         },
-        stopCollaboration: () => {
-          console.log('[ProseMirrorWebView] Stopping collaboration');
-          sendMessage({ type: 'stopCollaboration' });
+        stopCollaboration: async () => {
+          console.log('[ProseMirrorWebView] Stopping Y.js collaboration');
+
+          try {
+            // Cleanup provider
+            if (providerRef.current) {
+              await providerRef.current.destroy();
+              providerRef.current = null;
+              console.log('[ProseMirrorWebView] Provider destroyed');
+            }
+
+            // Cleanup ydoc
+            if (ydocRef.current) {
+              ydocRef.current.destroy();
+              ydocRef.current = null;
+              console.log('[ProseMirrorWebView] Y.Doc destroyed');
+            }
+
+            // Tell WebView to stop
+            sendMessage({ type: 'stopCollaboration' });
+
+            console.log('[ProseMirrorWebView] Y.js collaboration stopped successfully');
+          } catch (error) {
+            console.error('[ProseMirrorWebView] Error stopping Y.js collaboration:', error);
+          }
         },
         applySteps: (steps: any[], version: number, clientID: string) => {
           console.log('[ProseMirrorWebView] Applying steps from', clientID, '- version:', version, '- steps:', steps.length);
