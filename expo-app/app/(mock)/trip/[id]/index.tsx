@@ -86,14 +86,20 @@ export default function TripDocumentView() {
     });
   }, [streamState.isStreaming, streamState.isComplete, streamState.document]);
 
-  // Save generated document when streaming completes (only once)
+  // Update document as streaming progresses and when complete
   useEffect(() => {
-    if (streamState.isComplete && streamState.document && !streamState.isStreaming && !hasSavedGeneratedDocRef.current) {
-      console.log('[TripDocumentView] Saving generated document to trip');
-      hasSavedGeneratedDocRef.current = true;
-      handleDocumentChange(streamState.document);
+    if (streamState.document) {
+      if (streamState.isStreaming) {
+        // During streaming: update the document (this will show incremental updates)
+        handleDocumentChange(streamState.document);
+      } else if (streamState.isComplete && !hasSavedGeneratedDocRef.current) {
+        // On completion: final save (only once)
+        console.log('[TripDocumentView] Saving final generated document to trip');
+        hasSavedGeneratedDocRef.current = true;
+        handleDocumentChange(streamState.document);
+      }
     }
-  }, [streamState.isComplete, streamState.isStreaming, streamState.document, handleDocumentChange]);
+  }, [streamState.isStreaming, streamState.isComplete, streamState.document, handleDocumentChange]);
 
   // Set up Y.js collaboration
   const { setEditorRef, isCollaborating, startCollaboration } = useYjsCollaboration();
