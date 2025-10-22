@@ -81,25 +81,12 @@ SET full_name = EXCLUDED.full_name,
     username = EXCLUDED.username;
 
 -- Create one sample trip for testing
-INSERT INTO public.trips (id, title, description, itinerary_document, created_by, is_public)
+-- Note: yjs_state will be null initially, will be populated when user first edits
+INSERT INTO public.trips (id, title, description, created_by, is_public)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'Barcelona Adventure',
     'A 5-day trip exploring the best of Barcelona',
-    '{
-        "type": "doc",
-        "content": [
-            {
-                "type": "heading",
-                "attrs": {"level": 1},
-                "content": [{"type": "text", "text": "Barcelona Adventure"}]
-            },
-            {
-                "type": "paragraph",
-                "content": [{"type": "text", "text": "Planning a trip to Barcelona"}]
-            }
-        ]
-    }'::jsonb,
     'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
     true
 )

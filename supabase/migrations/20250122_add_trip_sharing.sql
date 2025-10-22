@@ -84,7 +84,7 @@ CREATE POLICY "Trip owners can create shares"
     owner_id = auth.uid() AND
     EXISTS (
       SELECT 1 FROM trips
-      WHERE id = trip_id AND user_id = auth.uid()
+      WHERE id = trip_id AND created_by = auth.uid()
     )
   );
 
@@ -103,7 +103,7 @@ CREATE POLICY "Users can view their own share links"
     created_by = auth.uid() OR
     -- Allow viewing if user has access to the trip
     EXISTS (
-      SELECT 1 FROM trips WHERE id = trip_id AND user_id = auth.uid()
+      SELECT 1 FROM trips WHERE id = trip_id AND created_by = auth.uid()
     ) OR
     EXISTS (
       SELECT 1 FROM trip_shares
@@ -118,7 +118,7 @@ CREATE POLICY "Trip owners can create share links"
     created_by = auth.uid() AND
     EXISTS (
       SELECT 1 FROM trips
-      WHERE id = trip_id AND user_id = auth.uid()
+      WHERE id = trip_id AND created_by = auth.uid()
     )
   );
 
@@ -150,7 +150,7 @@ BEGIN
   -- Check if user owns the trip
   IF EXISTS (
     SELECT 1 FROM trips
-    WHERE id = p_trip_id AND user_id = p_user_id
+    WHERE id = p_trip_id AND created_by = p_user_id
   ) THEN
     RETURN TRUE;
   END IF;
@@ -285,7 +285,7 @@ BEGIN
   RETURN QUERY
   -- Get the owner
   SELECT
-    t.user_id,
+    t.created_by as user_id,
     u.email,
     p.full_name,
     'admin'::share_permission,
@@ -293,8 +293,8 @@ BEGIN
     t.created_at as shared_at,
     t.created_at as accepted_at
   FROM trips t
-  JOIN auth.users u ON u.id = t.user_id
-  LEFT JOIN profiles p ON p.id = t.user_id
+  JOIN auth.users u ON u.id = t.created_by
+  LEFT JOIN profiles p ON p.id = t.created_by
   WHERE t.id = p_trip_id
 
   UNION ALL
