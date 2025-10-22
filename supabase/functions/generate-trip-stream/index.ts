@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Mistral } from 'npm:@mistralai/mistralai@1.3.7';
+import { Mistral } from 'npm:@mistralai/mistralai@1.3.0';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -107,6 +107,13 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     // Process stream and broadcast deltas via Realtime
     let fullContent = '';
     let chunkCount = 0;
+    const eventLog: Array<{ event: string; timestamp: string; data?: any }> = [];
+
+    // Log start event
+    eventLog.push({
+      event: 'generation-start',
+      timestamp: new Date().toISOString(),
+    });
 
     for await (const chunk of streamResponse) {
       const delta = chunk.data.choices[0]?.delta?.content;
@@ -126,6 +133,16 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
             timestamp: new Date().toISOString(),
           },
         });
+
+        // Log delta (first 50 chars only for brevity)
+        eventLog.push({
+          event: 'generation-delta',
+          timestamp: new Date().toISOString(),
+          data: {
+            chunkNumber: chunkCount,
+            deltaPreview: delta.substring(0, 50) + (delta.length > 50 ? '...' : ''),
+          },
+        });
       }
     }
 
@@ -141,20 +158,31 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       },
     });
 
+    // Log completion event
+    eventLog.push({
+      event: 'generation-complete',
+      timestamp: new Date().toISOString(),
+      data: { contentLength: fullContent.length, chunkCount },
+    });
+
     console.log('[Generate Trip] Generation complete:', {
       sessionId,
       contentLength: fullContent.length,
       chunkCount,
     });
 
-    // Return success response (non-streaming)
+    // Return success response with full content and event log
     return new Response(
       JSON.stringify({
         success: true,
         sessionId,
         contentLength: fullContent.length,
         chunkCount,
-      }),
+        fullContent, // Include the generated content for testing
+        eventLog, // Include log of Realtime events broadcast
+        realtimeChannel: `trip-generation:${sessionId}`,
+        note: 'This response includes the full generated content for testing. In production, clients subscribe to the Realtime channel to receive deltas.',
+      }, null, 2),
       {
         headers: {
           ...corsHeaders,

@@ -98,6 +98,8 @@ Guidelines:
 
     // Broadcast the reply via Realtime
     const channel = supabase.channel(`doc:${documentId}`);
+    const broadcastTimestamp = new Date().toISOString();
+
     await channel.send({
       type: 'broadcast',
       event: 'ai-comment-reply',
@@ -106,17 +108,32 @@ Guidelines:
         aiReply,
         userId,
         userName,
-        timestamp: new Date().toISOString(),
+        timestamp: broadcastTimestamp,
       },
     });
 
-    // Return the AI reply
+    // Return the AI reply with event log for testing
     return new Response(
       JSON.stringify({
         success: true,
         commentId,
         aiReply,
-      }),
+        realtimeChannel: `doc:${documentId}`,
+        eventBroadcast: {
+          event: 'ai-comment-reply',
+          timestamp: broadcastTimestamp,
+          payload: {
+            commentId,
+            aiReplyPreview: aiReply.substring(0, 100) + (aiReply.length > 100 ? '...' : ''),
+          },
+        },
+        request: {
+          documentId,
+          selectedText: selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''),
+          instruction: instruction.substring(0, 100) + (instruction.length > 100 ? '...' : ''),
+        },
+        note: 'This response includes the AI reply and broadcast info for testing. In production, clients subscribe to the Realtime channel to receive the reply.',
+      }, null, 2),
       {
         headers: {
           ...corsHeaders,
