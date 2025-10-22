@@ -148,10 +148,26 @@ const hocuspocusUrl = 'ws://127.0.0.1:54321/functions/v1/hocuspocus-ws';
 - Reconnection handling
 - Performance under load
 
-### ⚠️ Known Issues
-- Deno WebSocket API compatibility with Hocuspocus (needs testing)
-- Token extraction from HocuspocusProvider (may need custom implementation)
-- Long-running connection stability
+### ⚠️ Known Issues and Solutions
+
+**WebSocket API Compatibility**:
+- ✅ **SOLVED**: Deno's WebSocket uses browser-style `.addEventListener()`, but Hocuspocus expects Node.js-style `.on()` events
+- **Solution**: Created `WebSocketAdapter` class that wraps Deno WebSocket and provides EventEmitter-compatible interface
+- The adapter forwards all events (`message`, `close`, `error`, `open`) to Hocuspocus
+
+**Token Authentication**:
+- ✅ **SOLVED**: WebSocket clients can't send custom headers
+- **Solution**: Token passed as query parameter (`?token=...`)
+- Edge Function extracts token and passes via `context` object to Hocuspocus
+
+**JWT Verification**:
+- ✅ **SOLVED**: Default Edge Function JWT verification blocks WebSocket requests
+- **Solution**: Added `verify_jwt = false` to `supabase/config.toml`
+- Authentication handled inside function via `onAuthenticate` hook
+
+**Long-running Connection Stability**:
+- ⚠️ **TO TEST**: Edge Functions may timeout on long-lived connections
+- Need to test reconnection behavior and stability
 
 ## Next Steps
 

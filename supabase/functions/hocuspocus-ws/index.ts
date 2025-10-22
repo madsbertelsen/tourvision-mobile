@@ -125,6 +125,91 @@ const hocuspocus = new Hocuspocus({
 
 console.log('[Hocuspocus Edge] Hocuspocus instance created');
 
+// Adapter to make Deno WebSocket compatible with Hocuspocus (Node.js-style)
+class WebSocketAdapter {
+  private ws: WebSocket;
+  private eventHandlers: Map<string, Function[]> = new Map();
+
+  constructor(ws: WebSocket) {
+    this.ws = ws;
+
+    // Forward Deno WebSocket events to Node.js-style event handlers
+    ws.addEventListener('message', (event) => {
+      this.emit('message', event.data);
+    });
+
+    ws.addEventListener('close', (event) => {
+      this.emit('close', event.code, event.reason);
+    });
+
+    ws.addEventListener('error', (event) => {
+      this.emit('error', event);
+    });
+
+    ws.addEventListener('open', () => {
+      this.emit('open');
+    });
+  }
+
+  // Node.js EventEmitter-style methods
+  on(event: string, handler: Function) {
+    if (!this.eventHandlers.has(event)) {
+      this.eventHandlers.set(event, []);
+    }
+    this.eventHandlers.get(event)!.push(handler);
+  }
+
+  once(event: string, handler: Function) {
+    const wrappedHandler = (...args: any[]) => {
+      handler(...args);
+      this.off(event, wrappedHandler);
+    };
+    this.on(event, wrappedHandler);
+  }
+
+  off(event: string, handler: Function) {
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  }
+
+  private emit(event: string, ...args: any[]) {
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      handlers.forEach(handler => handler(...args));
+    }
+  }
+
+  // Forward WebSocket methods
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+    this.ws.send(data);
+  }
+
+  close(code?: number, reason?: string) {
+    this.ws.close(code, reason);
+  }
+
+  // Expose readyState
+  get readyState() {
+    return this.ws.readyState;
+  }
+
+  // Constants for readyState
+  static get CONNECTING() { return 0; }
+  static get OPEN() { return 1; }
+  static get CLOSING() { return 2; }
+  static get CLOSED() { return 3; }
+
+  get CONNECTING() { return 0; }
+  get OPEN() { return 1; }
+  get CLOSING() { return 2; }
+  get CLOSED() { return 3; }
+}
+
 // Serve WebSocket connections
 serve((req) => {
   const upgrade = req.headers.get('upgrade') || '';
@@ -159,6 +244,9 @@ serve((req) => {
   // Upgrade to WebSocket
   const { socket, response } = Deno.upgradeWebSocket(req);
 
+  // Wrap Deno WebSocket with Node.js-compatible adapter
+  const adaptedSocket = new WebSocketAdapter(socket);
+
   // Let Hocuspocus handle the WebSocket connection
   // Pass token via context since it came from query params
   const context = {
@@ -166,9 +254,9 @@ serve((req) => {
   };
 
   try {
-    // Hocuspocus handleConnection expects a WebSocket-like object
-    // Deno's WebSocket API should be compatible
-    hocuspocus.handleConnection(socket, req, context);
+    // Hocuspocus handleConnection expects a Node.js-style WebSocket
+    // Our adapter makes Deno's WebSocket compatible
+    hocuspocus.handleConnection(adaptedSocket as any, req, context);
     console.log('[Hocuspocus Edge] Connection handed to Hocuspocus');
   } catch (error) {
     console.error('[Hocuspocus Edge] Error handling connection:', error);
