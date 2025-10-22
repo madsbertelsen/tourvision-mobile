@@ -85,6 +85,14 @@ export default function TripDocumentView() {
     });
   }, [streamState.isStreaming, streamState.isComplete, streamState.document]);
 
+  // Save generated document when streaming completes
+  useEffect(() => {
+    if (streamState.isComplete && streamState.document && !streamState.isStreaming) {
+      console.log('[TripDocumentView] Saving generated document to trip');
+      handleDocumentChange(streamState.document);
+    }
+  }, [streamState.isComplete, streamState.isStreaming, streamState.document, handleDocumentChange]);
+
   // Set up Y.js collaboration
   const { setEditorRef, isCollaborating, startCollaboration } = useYjsCollaboration();
   useEffect(() => {
