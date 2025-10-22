@@ -1508,8 +1508,8 @@
                     url: urlWithToken,
                     name: documentId,
                     document: ydoc,
-                    // Don't pass token separately for Edge Function (already in URL)
-                    // token: token,
+                    // Pass token both in URL (for Edge Function) and as parameter (for Hocuspocus protocol)
+                    token: token,
                     awareness: awareness,
                     onConnect: () => {
                       console.log('[WebView] Hocuspocus connected');
