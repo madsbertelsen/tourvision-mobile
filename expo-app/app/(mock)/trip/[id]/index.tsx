@@ -12,7 +12,8 @@ import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
 import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
-import { getSocket, subscribe } from '@/lib/collab-socket'; // Still used for AI comment features
+import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-service';
+import { subscribe } from '@/lib/collab-socket'; // Only for legacy events if needed
 
 export default function TripDocumentView() {
   console.log('[TripDocumentView] Component mounted');
@@ -84,37 +85,43 @@ export default function TripDocumentView() {
   // Note: Y.js collaboration handles sync automatically through YSupabaseProvider
   // No need for manual step subscription like with Socket.IO
 
-  // Set up event listeners
+  // Subscribe to AI comment replies via Supabase Realtime
   useEffect(() => {
-    // Subscribe to AI comment reply events
-    const unsubscribeReplyStarted = subscribe('ai-comment-reply-started', (data: any) => {
-      console.log('[TripDocumentView] AI comment reply started:', data);
-      // Could show a loading indicator on the comment here
-    });
+    if (!tripId) return;
 
-    const unsubscribeReplyReady = subscribe('ai-comment-reply-ready', (data: any) => {
-      console.log('[TripDocumentView] AI comment reply ready:', {
+    console.log('[TripDocumentView] Setting up AI reply subscription for trip:', tripId);
+
+    const unsubscribe = subscribeToAIReplies(tripId, (data) => {
+      console.log('[TripDocumentView] AI comment reply received:', {
         commentId: data.commentId,
-        from: data.from,
-        to: data.to,
-        aiReplyDoc: data.aiReplyDoc
+        replyLength: data.aiReply.length,
       });
 
       // Update the comment with the AI reply
-      // This will store the reply in the comment's aiReply attribute
+      // Convert the plain text AI reply to a simple ProseMirror doc
+      const aiReplyDoc = {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'text',
+            text: data.aiReply
+          }]
+        }]
+      };
+
       if (documentRef.current) {
         documentRef.current.sendCommand('updateCommentAIReply', {
           commentId: data.commentId,
-          aiReplyDoc: data.aiReplyDoc
+          aiReplyDoc: aiReplyDoc
         });
       }
     });
 
     return () => {
-      unsubscribeReplyStarted();
-      unsubscribeReplyReady();
+      unsubscribe();
     };
-  }, [documentRef]);
+  }, [tripId, documentRef]);
 
   const handleSelectionChange = useCallback((empty: boolean) => {
     console.log('[TripDocumentView] Selection empty:', empty);
@@ -217,26 +224,38 @@ export default function TripDocumentView() {
           }
         }
 
-        // Now request AI reply for the comment
-        console.log('[TripDocumentView] Getting socket for AI comment reply...');
-        const socket = getSocket();
-        console.log('[TripDocumentView] Socket available:', !!socket, 'Connected:', socket?.connected);
+        // Now request AI reply for the comment via Edge Function
+        console.log('[TripDocumentView] Requesting AI comment reply via Edge Function...');
 
-        if (socket && socket.connected) {
-          console.log('[TripDocumentView] Requesting AI comment reply');
-          socket.emit('request-ai-comment-reply', {
+        try {
+          const result = await requestAICommentReply({
             documentId: tripId,
             commentId: comment.commentId,
             from: commentData.from,
             to: commentData.to,
             instruction: instruction,
-            options: {
-              model: 'mistral-small-latest'
-            }
+            selectedText: commentData.selectedText || '',
+            userId: comment.userId,
+            userName: comment.userName,
           });
-        } else {
-          console.error('[TripDocumentView] Socket not available or not connected. Socket:', !!socket, 'Connected:', socket?.connected);
-          console.error('[TripDocumentView] Please enable collaboration first and try again');
+
+          if (!result.success) {
+            console.error('[TripDocumentView] AI comment reply failed:', result.error);
+            if (Platform.OS === 'web') {
+              window.alert(`AI reply failed: ${result.error}`);
+            } else {
+              Alert.alert('AI Reply Failed', result.error || 'Unknown error');
+            }
+          } else {
+            console.log('[TripDocumentView] AI comment reply requested successfully');
+          }
+        } catch (error) {
+          console.error('[TripDocumentView] Error requesting AI reply:', error);
+          if (Platform.OS === 'web') {
+            window.alert('Failed to request AI reply');
+          } else {
+            Alert.alert('Error', 'Failed to request AI reply');
+          }
         }
       } else {
         // Regular comment - send command to ProseMirror WebView to create the comment
