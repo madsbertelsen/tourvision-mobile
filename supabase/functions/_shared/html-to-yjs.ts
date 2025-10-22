@@ -99,22 +99,24 @@ function parseInlineContent(html: string): any[] {
   let currentMarks: any[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i].trim();
+    const token = tokens[i];
     if (!token) continue;
 
-    if (token.startsWith('<')) {
+    // Check if it's a tag (don't trim tags)
+    const trimmedToken = token.trim();
+    if (trimmedToken.startsWith('<')) {
       // It's a tag
-      if (token.startsWith('<strong')) {
+      if (trimmedToken.startsWith('<strong')) {
         currentMarks.push({ type: 'strong' });
-      } else if (token === '</strong>') {
+      } else if (trimmedToken === '</strong>') {
         currentMarks = currentMarks.filter(m => m.type !== 'strong');
-      } else if (token.startsWith('<em')) {
+      } else if (trimmedToken.startsWith('<em')) {
         currentMarks.push({ type: 'em' });
-      } else if (token === '</em>') {
+      } else if (trimmedToken === '</em>') {
         currentMarks = currentMarks.filter(m => m.type !== 'em');
-      } else if (token.match(/<span\s+class="geo-mark"/)) {
+      } else if (trimmedToken.match(/<span\s+class="geo-mark"/)) {
         // Parse geo-mark attributes
-        const geoMarkAttrs = parseGeoMarkAttrs(token);
+        const geoMarkAttrs = parseGeoMarkAttrs(trimmedToken);
         const textContent = tokens[i + 1] || '';
 
         // Geo-marks are inline nodes, not marks
@@ -129,9 +131,9 @@ function parseInlineContent(html: string): any[] {
       }
       // Ignore closing tags and other tags
     } else {
-      // It's text content
+      // It's text content - preserve whitespace!
       const text = decodeHTMLEntities(token);
-      if (text.trim()) {
+      if (text) {  // Only skip completely empty strings, not whitespace
         const textNode: any = { type: 'text', text };
         if (currentMarks.length > 0) {
           textNode.marks = [...currentMarks];
