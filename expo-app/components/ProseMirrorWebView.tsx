@@ -5,7 +5,7 @@ import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import * as Y from 'yjs';
 import { applyAwarenessUpdate } from 'y-protocols/awareness';
 import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
-import { useSupabase } from '@/lib/supabase/provider';
+import { supabase } from '@/lib/supabase/client';
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -147,7 +147,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     // Y.js collaboration state
     const ydocRef = useRef<Y.Doc | null>(null);
     const providerRef = useRef<YSupabaseProvider | null>(null);
-    const { supabase } = useSupabase();
 
     // Internal send message that doesn't check isReady (for use in ready handler)
     const sendMessageInternal = useCallback((message: any) => {

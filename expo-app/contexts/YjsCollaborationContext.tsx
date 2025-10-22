@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Y from 'yjs';
 import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
-import { useSupabase } from '@/lib/supabase/provider';
+import { supabase } from '@/lib/supabase/client';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 
 interface CollaborationUser {
@@ -42,7 +42,6 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
   const [collaborationStatus, setCollaborationStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [collaborationUsers, setCollaborationUsers] = useState<CollaborationUser[]>([]);
 
-  const { supabase } = useSupabase();
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<YSupabaseProvider | null>(null);
   const editorRef = useRef<React.RefObject<ProseMirrorWebViewRef> | null>(null);
