@@ -2,8 +2,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import OpenAI from 'https://deno.land/x/openai@v4.28.0/mod.ts';
 import * as Y from 'npm:yjs@13.6.18';
+import { Parser } from 'npm:htmlparser2@9.0.0';
 import { YServerProvider } from '../_shared/yjs-server-provider.ts';
-import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs } from '../_shared/html-to-yjs.ts';
+import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs, appendProseMirrorNodesToYjs } from '../_shared/html-to-yjs.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -129,38 +130,164 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       stream: true,
     });
 
-    // Process stream and apply to Y.js document
-    let htmlBuffer = '';
-    let chunkCount = 0;
+    // Clear document first for streaming
+    const fragment = ydoc.getXmlFragment('prosemirror');
+    ydoc.transact(() => {
+      fragment.delete(0, fragment.length);
+    }, 'ai-assistant-clear');
 
+    // Track streaming state
+    let chunkCount = 0;
+    let completeBlocks: string[] = [];
+    let currentBlockHtml = '';
+    let currentTag = '';
+    let tagStack: string[] = [];
+    let insideItinerary = false;
+    let textBuffer = '';
+
+    // Create HTML parser for incremental parsing
+    const parser = new Parser({
+      onopentag(name, attributes) {
+        // Skip itinerary wrapper
+        if (name === 'itinerary') {
+          insideItinerary = true;
+          return;
+        }
+
+        if (!insideItinerary) return;
+
+        // Track tag stack
+        tagStack.push(name);
+
+        // Build opening tag with attributes
+        let tag = `<${name}`;
+        for (const [key, value] of Object.entries(attributes)) {
+          tag += ` ${key}="${value}"`;
+        }
+        tag += '>';
+
+        currentBlockHtml += tag;
+
+        // Track block-level elements
+        if (['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'blockquote'].includes(name)) {
+          if (currentTag === '') {
+            currentTag = name;
+          }
+        }
+      },
+
+      ontext(text) {
+        if (!insideItinerary) return;
+
+        // Accumulate text
+        textBuffer += text;
+        currentBlockHtml += text;
+      },
+
+      onclosetag(name) {
+        if (name === 'itinerary') {
+          insideItinerary = false;
+          return;
+        }
+
+        if (!insideItinerary) return;
+
+        // Remove from tag stack
+        tagStack.pop();
+
+        // Add closing tag
+        currentBlockHtml += `</${name}>`;
+
+        // Check if we completed a block-level element
+        if (name === currentTag && tagStack.length === 0) {
+          // We have a complete block!
+          completeBlocks.push(currentBlockHtml);
+
+          console.log(`[Generate Trip] Complete block detected: ${name} (length: ${currentBlockHtml.length})`);
+
+          // Process accumulated blocks periodically
+          if (completeBlocks.length >= 2) {
+            const blocksToProcess = [...completeBlocks];
+            completeBlocks = [];
+
+            console.log(`[Generate Trip] Processing ${blocksToProcess.length} complete blocks`);
+
+            // Convert to ProseMirror nodes
+            const nodes: any[] = [];
+            for (const block of blocksToProcess) {
+              const blockJSON = htmlToProseMirrorJSON(block);
+              if (blockJSON.content && blockJSON.content.length > 0) {
+                nodes.push(...blockJSON.content);
+              }
+            }
+
+            if (nodes.length > 0) {
+              // Append to Y.js document (broadcasts to clients)
+              appendProseMirrorNodesToYjs(ydoc, nodes);
+              console.log(`[Generate Trip] Streamed ${nodes.length} nodes to document`);
+            }
+          }
+
+          // Reset for next block
+          currentBlockHtml = '';
+          currentTag = '';
+          textBuffer = '';
+        }
+      },
+
+      onerror(error) {
+        console.error('[Generate Trip] Parser error:', error);
+      }
+    }, {
+      decodeEntities: true,
+      lowerCaseTags: true,
+      lowerCaseAttributeNames: true
+    });
+
+    // Process the stream
     for await (const chunk of streamResponse) {
       const delta = chunk.choices[0]?.delta?.content;
 
       if (delta) {
-        htmlBuffer += delta;
         chunkCount++;
 
-        // Log progress every 50 chunks
+        // Feed chunk to parser
+        parser.write(delta);
+
+        // Log progress
         if (chunkCount % 50 === 0) {
-          console.log(`[Generate Trip] Received ${chunkCount} chunks, buffer size: ${htmlBuffer.length}`);
+          console.log(`[Generate Trip] Received ${chunkCount} chunks, complete blocks: ${completeBlocks.length}`);
         }
       }
     }
 
+    // End parsing
+    parser.end();
+
     console.log('[Generate Trip] Stream complete, total chunks:', chunkCount);
-    console.log('[Generate Trip] Buffer length:', htmlBuffer.length);
 
-    // Extract content from itinerary tags
-    const finalMatch = htmlBuffer.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
-    const htmlContent = finalMatch ? finalMatch[1] : htmlBuffer;
+    // Process any remaining complete blocks
+    if (completeBlocks.length > 0) {
+      console.log(`[Generate Trip] Processing final ${completeBlocks.length} blocks`);
 
-    console.log('[Generate Trip] Parsing HTML to ProseMirror JSON');
-    const pmJSON = htmlToProseMirrorJSON(htmlContent);
-    console.log('[Generate Trip] ProseMirror JSON nodes:', pmJSON.content?.length || 0);
+      const nodes: any[] = [];
+      for (const block of completeBlocks) {
+        const blockJSON = htmlToProseMirrorJSON(block);
+        if (blockJSON.content && blockJSON.content.length > 0) {
+          nodes.push(...blockJSON.content);
+        }
+      }
 
-    // Apply to Y.js document (this broadcasts via Realtime to all clients)
-    console.log('[Generate Trip] Applying changes to Y.js document');
-    applyProseMirrorJSONToYjs(ydoc, pmJSON);
+      if (nodes.length > 0) {
+        appendProseMirrorNodesToYjs(ydoc, nodes);
+        console.log(`[Generate Trip] Applied final ${nodes.length} nodes`);
+      }
+    }
+
+    // Handle any incomplete block (shouldn't happen with well-formed HTML)
+    if (currentBlockHtml.trim()) {
+      console.log('[Generate Trip] Warning: Incomplete block at end of stream:', currentBlockHtml.substring(0, 100));
+    }
 
     // Persist to database
     console.log('[Generate Trip] Persisting to database');

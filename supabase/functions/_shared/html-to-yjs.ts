@@ -252,6 +252,28 @@ export function applyProseMirrorJSONToYjs(
 }
 
 /**
+ * Append ProseMirror nodes to Y.js XmlFragment incrementally
+ * Used for streaming - adds new nodes without clearing existing ones
+ */
+export function appendProseMirrorNodesToYjs(
+  ydoc: Y.Doc,
+  nodes: any[],
+  fragmentName: string = 'prosemirror'
+): void {
+  const fragment = ydoc.getXmlFragment(fragmentName);
+
+  // Start a transaction to add new nodes
+  ydoc.transact(() => {
+    nodes.forEach((node: any) => {
+      const xmlElement = convertNodeToXmlElement(node);
+      if (xmlElement) {
+        fragment.push([xmlElement]);
+      }
+    });
+  }, 'ai-assistant-stream');
+}
+
+/**
  * Convert ProseMirror node to Y.XmlElement
  */
 function convertNodeToXmlElement(node: any): Y.XmlElement | Y.XmlText | null {
