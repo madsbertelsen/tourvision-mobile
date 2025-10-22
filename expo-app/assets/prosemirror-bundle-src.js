@@ -71,7 +71,8 @@ const mySchema = new Schema({
         content: { default: '' },
         createdAt: { default: null },
         resolved: { default: false },
-        replies: { default: null }
+        replies: { default: null },
+        aiReply: { default: null }
       },
       inclusive: false,
       parseDOM: [{

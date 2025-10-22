@@ -177,42 +177,82 @@ export class AIUserService {
           for (const blockHTML of completeBlocks) {
             const isFirstBlock = blocksSent === 0;
 
-            // Generate a single step for this block at the current document position
-            const currentDocSize = editorState.doc.content.size;
-            const steps = await this.stepGenerator.generateStepForBlock(
-              documentId,
-              blockHTML,
-              currentDocSize,
-              isFirstBlock
-            );
+            let steps: any[];
+
+            // Check if we're in replacement mode
+            if (options.replaceRange && isFirstBlock) {
+              // REPLACEMENT MODE: First block replaces the selection
+              console.log(`[AIUserService] REPLACEMENT MODE: Replacing range (${options.replaceRange.from}, ${options.replaceRange.to})`);
+
+              steps = await this.stepGenerator.generateReplacementStep(
+                documentId,
+                blockHTML,
+                options.replaceRange.from,
+                options.replaceRange.to
+              );
+
+            } else if (options.replaceRange && !isFirstBlock) {
+              // REPLACEMENT MODE: Subsequent blocks append after replacement
+              const currentDocSize = editorState.doc.content.size;
+              steps = await this.stepGenerator.generateStepForBlock(
+                documentId,
+                blockHTML,
+                currentDocSize,
+                false // not first block
+              );
+
+            } else {
+              // APPEND MODE: Current behavior (no replaceRange)
+              const currentDocSize = editorState.doc.content.size;
+              steps = await this.stepGenerator.generateStepForBlock(
+                documentId,
+                blockHTML,
+                currentDocSize,
+                isFirstBlock
+              );
+            }
 
             if (steps.length > 0) {
-              // Get current document state
-              const docState = this.collabManager.getDocument(documentId);
-              currentVersion = docState?.version || currentVersion;
+              // VALIDATE step by applying to our server-side EditorState FIRST
+              try {
+                const step = ReplaceStep.fromJSON(schema, steps[0]);
 
-              // Send steps immediately
-              const result = this.sendSteps(documentId, steps, currentVersion);
+                // Try to apply the step directly to get result
+                const stepResult = step.apply(editorState.doc);
 
-              if (result.status === 'accepted') {
-                stepsSent += steps.length;
-                blocksSent++;
-                currentVersion = result.version ?? currentVersion;
+                // Check if step application failed
+                if (stepResult.failed) {
+                  console.error(`[AIUserService] Step validation FAILED: ${stepResult.failed}`);
+                  console.error(`[AIUserService] Invalid step:`, JSON.stringify(steps[0]));
+                  console.error(`[AIUserService] Skipping invalid block`);
+                  continue; // Skip this block and continue with next
+                }
 
-                // Apply the step to our server-side EditorState to track positions
-                try {
-                  const step = ReplaceStep.fromJSON(schema, steps[0]);
-                  const tr = editorState.tr;
-                  tr.step(step);
-                  editorState = editorState.apply(tr);
+                // Now apply to EditorState via transaction
+                const tr = editorState.tr;
+                tr.step(step);
+                editorState = editorState.apply(tr);
+
+                // Now send the validated step to clients
+                const docState = this.collabManager.getDocument(documentId);
+                currentVersion = docState?.version || currentVersion;
+
+                const result = this.sendSteps(documentId, steps, currentVersion);
+
+                if (result.status === 'accepted') {
+                  stepsSent += steps.length;
+                  blocksSent++;
+                  currentVersion = result.version ?? currentVersion;
 
                   console.log(`[AIUserService] Sent block ${blocksSent} (${steps.length} steps, total: ${stepsSent}), version: ${currentVersion}, docSize: ${editorState.doc.content.size}`);
-                } catch (error: any) {
-                  console.error(`[AIUserService] Error applying step to EditorState:`, error);
-                  console.log(`[AIUserService] Sent ${steps.length} steps (total: ${stepsSent}), new version: ${currentVersion}`);
+                } else {
+                  console.warn(`[AIUserService] Steps rejected by CollaborationManager:`, result);
                 }
-              } else {
-                console.warn(`[AIUserService] Steps rejected:`, result);
+              } catch (error: any) {
+                console.error(`[AIUserService] Error validating step:`, error.message);
+                console.error(`[AIUserService] Invalid step JSON:`, JSON.stringify(steps[0]));
+                console.error(`[AIUserService] Skipping invalid block`);
+                // Continue to next block
               }
             }
           }
@@ -424,11 +464,229 @@ Current document context:
 - Document has ${docState.version} revisions
 - ${docState.clients.size} users currently editing`;
 
+    // If we're in replacement mode, add context about what's being replaced
+    if (options.replaceRange) {
+      const documentHTML = this.convertDocToHTML(docState.doc);
+
+      return `${basePrompt}
+
+REPLACEMENT MODE:
+You are replacing a specific section of the document. The user has selected content they want to change.
+Please provide ONLY the replacement HTML for that selected section.
+
+Current full document (for context):
+${documentHTML}
+
+The section being replaced is at positions ${options.replaceRange.from} to ${options.replaceRange.to}.
+
+${options.context ? `User instruction: ${options.context}` : ''}
+
+Generate replacement content that addresses the user's request while fitting naturally with the rest of the document.`;
+    }
+
     if (options.context) {
       return `${basePrompt}\n\nAdditional context:\n${options.context}`;
     }
 
     return basePrompt;
+  }
+
+  /**
+   * Convert ProseMirror document to HTML for context
+   * Renders comment marks as special <span> tags for LLM
+   */
+  private convertDocToHTML(doc: any): string {
+    if (!doc || !doc.content) {
+      return '<p></p>';
+    }
+
+    try {
+      let html = '';
+
+      const traverse = (node: any): string => {
+        if (node.type === 'text') {
+          let text = node.text || '';
+
+          // Apply marks (bold, italic, comments, etc.)
+          if (node.marks && Array.isArray(node.marks)) {
+            for (const mark of node.marks) {
+              if (mark.type === 'strong') {
+                text = `<strong>${text}</strong>`;
+              } else if (mark.type === 'em') {
+                text = `<em>${text}</em>`;
+              } else if (mark.type === 'comment') {
+                // Render comment as special span for LLM context
+                const commentId = mark.attrs?.commentId || 'unknown';
+                const content = mark.attrs?.content || '';
+                const userId = mark.attrs?.userId || '';
+                text = `<span class="ai-comment" data-comment-id="${commentId}" data-user-id="${userId}" data-content="${this.escapeHtml(content)}">${text}</span>`;
+              }
+            }
+          }
+
+          return text;
+        }
+
+        if (node.content && Array.isArray(node.content)) {
+          const content = node.content.map(traverse).join('');
+
+          switch (node.type) {
+            case 'heading':
+              const level = node.attrs?.level || 1;
+              return `<h${level}>${content}</h${level}>`;
+            case 'paragraph':
+              return `<p>${content}</p>`;
+            case 'bullet_list':
+              return `<ul>${content}</ul>`;
+            case 'ordered_list':
+              return `<ol>${content}</ol>`;
+            case 'list_item':
+              return `<li>${content}</li>`;
+            default:
+              return content;
+          }
+        }
+
+        return '';
+      };
+
+      if (doc.content && Array.isArray(doc.content)) {
+        html = doc.content.map(traverse).join('\n');
+      }
+
+      return html || '<p></p>';
+    } catch (error) {
+      console.error('[AIUserService] Error converting doc to HTML:', error);
+      return '<p></p>';
+    }
+  }
+
+  /**
+   * Escape HTML special characters
+   */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Generate AI reply for a comment
+   * Stores the generated document in the comment's aiReply attribute
+   * @param documentId - Document ID
+   * @param commentId - Comment ID to reply to
+   * @param from - Start position of commented text
+   * @param to - End position of commented text
+   * @param instruction - User's instruction from comment content
+   * @param options - Generation options
+   * @returns Generation ID
+   */
+  async generateCommentReply(
+    documentId: string,
+    commentId: string,
+    from: number,
+    to: number,
+    instruction: string,
+    options: GenerationOptions = {}
+  ): Promise<string> {
+    const generationId = uuidv4();
+
+    console.log(`[AIUserService] Starting comment reply generation ${generationId} for comment ${commentId}`);
+
+    // Get current document state
+    const docState = this.collabManager.getDocument(documentId);
+    if (!docState) {
+      throw new Error('Document not found');
+    }
+
+    // Convert document to HTML with comment annotations
+    const documentHTML = this.convertDocToHTML(docState.doc);
+
+    // Build prompt for LLM
+    const systemPrompt = `You are an AI assistant helping to write a travel itinerary document.
+
+IMPORTANT: You must respond with valid HTML using only these tags:
+- <h1>, <h2>, <h3> for headings
+- <p> for paragraphs
+- <ul> and <li> for bullet lists
+- <strong> for bold text
+- <em> for italic text
+
+Do NOT use:
+- Markdown syntax (no ** or * or #)
+- Any other HTML tags
+- Code blocks or formatting
+
+The user has commented on a specific section of their document and requested a change.
+You should generate a REPLACEMENT for that commented section that addresses their request.
+
+Current document context:
+${documentHTML}
+
+The user's comment is on the text from position ${from} to ${to}.
+User's instruction: ${instruction}
+
+Please provide ONLY the replacement HTML for the commented section.
+Make sure your response fits naturally with the rest of the document.`;
+
+    const userPrompt = `Generate a replacement for the commented section that addresses this request: ${instruction}`;
+
+    try {
+      // Generate AI response
+      const model = this.selectModel(options.model || process.env.DEFAULT_AI_MODEL);
+      const abortController = new AbortController();
+
+      this.activeGenerations.set(generationId, {
+        documentId,
+        startTime: Date.now(),
+        abortController
+      });
+
+      const result = await streamText({
+        model,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: options.temperature || 0.7,
+        abortSignal: abortController.signal
+      });
+
+      // Collect the full HTML response
+      let fullHTML = '';
+      for await (const chunk of result.textStream) {
+        fullHTML += chunk;
+      }
+
+      console.log(`[AIUserService] Generated reply HTML (${fullHTML.length} chars)`);
+
+      // Parse HTML to ProseMirror document
+      const aiReplyDoc = this.stepGenerator.parseHTMLToDoc(fullHTML);
+
+      console.log(`[AIUserService] Parsed AI reply document:`, JSON.stringify(aiReplyDoc, null, 2));
+
+      // Now we need to update the comment mark's aiReply attribute
+      // This requires finding the comment mark and creating a step to update it
+      // For now, emit an event with the reply data
+      if (this.io) {
+        this.io.to(documentId).emit('ai-comment-reply-ready', {
+          generationId,
+          commentId,
+          aiReplyDoc,
+          from,
+          to
+        });
+      }
+
+      this.completeGeneration(generationId);
+
+      return generationId;
+    } catch (error: any) {
+      console.error(`[AIUserService] Error generating comment reply:`, error);
+      this.completeGeneration(generationId);
+      throw error;
+    }
   }
 
   /**

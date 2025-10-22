@@ -59,7 +59,8 @@ export class AIStepGenerator {
         content: { default: '' },
         createdAt: { default: null },
         resolved: { default: false },
-        replies: { default: null }
+        replies: { default: null },
+        aiReply: { default: null } // AI-generated replacement document (ProseMirror doc JSON)
       },
       inclusive: false
     });
@@ -182,6 +183,51 @@ export class AIStepGenerator {
   }
 
   /**
+   * Generate a step that replaces a section with new content
+   * @param documentId - Document ID
+   * @param blockHTML - HTML for the replacement block
+   * @param from - Start position of section to replace
+   * @param to - End position of section to replace
+   * @returns ReplaceStep that deletes old content and inserts new
+   */
+  async generateReplacementStep(
+    documentId: string,
+    blockHTML: string,
+    from: number,
+    to: number
+  ): Promise<any[]> {
+    try {
+      console.log(`[AIStepGenerator] Generating replacement step for range (${from}, ${to}), blockHTML: ${blockHTML.length} chars`);
+
+      // Parse HTML block
+      const dom = new JSDOM(blockHTML);
+      const parser = DOMParser.fromSchema(this.schema);
+      const parsedDoc = parser.parse(dom.window.document.body);
+
+      if (parsedDoc.content.childCount === 0) {
+        console.error('[AIStepGenerator] No content in parsed block');
+        return [];
+      }
+
+      // Get the block
+      const block = parsedDoc.content.child(0);
+      console.log(`[AIStepGenerator] Parsed block type: ${block.type.name}, size: ${block.nodeSize}`);
+
+      // Create replacement step: delete (from, to) and insert new block
+      const fragment = Fragment.from(block);
+      const slice = new Slice(fragment, 0, 0);
+      const step = new ReplaceStep(from, to, slice);
+
+      console.log(`[AIStepGenerator] Replace (${from}, ${to}) with ${block.type.name}`);
+
+      return [step.toJSON()];
+    } catch (error) {
+      console.error('[AIStepGenerator] Error generating replacement step:', error);
+      return [];
+    }
+  }
+
+  /**
    * Validate multiple steps by applying them sequentially to an empty document
    * @param stepsJSON - Array of steps in JSON format
    * @returns true if all steps can be applied successfully
@@ -213,7 +259,9 @@ export class AIStepGenerator {
         }
 
         // Update current document for next step
-        currentDoc = result.doc;
+        if (result.doc) {
+          currentDoc = result.doc;
+        }
         console.log(`[AIStepGenerator] Step ${i + 1} validated, doc now has ${currentDoc.content.childCount} blocks`);
       }
 
@@ -383,6 +431,25 @@ export class AIStepGenerator {
     }
 
     return blocks;
+  }
+
+  /**
+   * Parse HTML to ProseMirror document JSON
+   * Used for converting AI-generated HTML into document structure
+   */
+  parseHTMLToDoc(html: string): any {
+    try {
+      console.log('[AIStepGenerator] Parsing HTML to document:', html.substring(0, 200));
+
+      const dom = new JSDOM(html);
+      const parser = DOMParser.fromSchema(this.schema);
+      const parsedDoc = parser.parse(dom.window.document.body);
+
+      return parsedDoc.toJSON();
+    } catch (error) {
+      console.error('[AIStepGenerator] Error parsing HTML to doc:', error);
+      throw error;
+    }
   }
 
   /**

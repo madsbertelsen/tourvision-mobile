@@ -184,6 +184,15 @@ function setupEventForwarding() {
   socket.on('selection', (data) => {
     triggerCallbacks('selection', data);
   });
+
+  // AI comment reply events
+  socket.on('ai-comment-reply-started', (data) => {
+    triggerCallbacks('ai-comment-reply-started', data);
+  });
+
+  socket.on('ai-comment-reply-ready', (data) => {
+    triggerCallbacks('ai-comment-reply-ready', data);
+  });
 }
 
 /**

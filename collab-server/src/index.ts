@@ -271,6 +271,56 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  // Request AI reply for a comment
+  socket.on('request-ai-comment-reply', async ({ documentId, commentId, from, to, instruction, options = {} }: {
+    documentId: string;
+    commentId: string;
+    from: number;
+    to: number;
+    instruction: string;
+    options?: any;
+  }) => {
+    console.log(`AI comment reply requested for document ${documentId}, comment ${commentId}`);
+
+    if (!documentId || !currentDocumentId || documentId !== currentDocumentId) {
+      socket.emit('ai-error', {
+        message: 'Must be connected to the document to request AI comment reply'
+      });
+      return;
+    }
+
+    try {
+      // Generate AI reply for the comment
+      const generationId = await aiService.generateCommentReply(
+        documentId,
+        commentId,
+        from,
+        to,
+        instruction,
+        {
+          requesterId: socket.id,
+          requesterName: clientInfo.name || undefined,
+          model: options.model || process.env.DEFAULT_AI_MODEL
+        }
+      );
+
+      // Notify clients that AI is generating a reply
+      io.to(documentId).emit('ai-comment-reply-started', {
+        generationId,
+        commentId,
+        requesterId: socket.id,
+        requesterName: clientInfo.name || undefined
+      });
+
+    } catch (error: any) {
+      console.error('AI comment reply error:', error);
+      socket.emit('ai-error', {
+        message: 'Failed to generate AI comment reply',
+        error: error.message
+      });
+    }
+  });
+
   // Request inline AI edit (for @ai comments)
   socket.on('request-ai-inline-edit', async ({ documentId, from, to, selectedText, instruction, options = {} }: {
     documentId: string;

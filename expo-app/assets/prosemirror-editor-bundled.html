@@ -951,6 +951,56 @@
                   }
                   break;
 
+                case 'updateCommentAIReply':
+                  // Update a comment mark's aiReply attribute
+                  console.log('[WebView] Updating comment AI reply:', data.commentId);
+                  if (data.commentId && data.aiReplyDoc && schema.marks.comment) {
+                    let commentFound = false;
+                    const updateTr = state.tr;
+
+                    // Find all comment marks in the document
+                    state.doc.descendants((node, pos) => {
+                      if (!node.isText) return;
+
+                      // Check if this text node has a comment mark with matching ID
+                      const commentMark = node.marks.find(
+                        mark => mark.type.name === 'comment' && mark.attrs.commentId === data.commentId
+                      );
+
+                      if (commentMark) {
+                        commentFound = true;
+                        const nodeStart = pos;
+                        const nodeEnd = pos + node.nodeSize;
+
+                        console.log('[WebView] Found comment mark at', nodeStart, '-', nodeEnd);
+
+                        // Create updated comment mark with aiReply
+                        const updatedCommentMark = schema.marks.comment.create({
+                          ...commentMark.attrs,
+                          aiReply: data.aiReplyDoc
+                        });
+
+                        // Remove old mark and add updated one
+                        updateTr.removeMark(nodeStart, nodeEnd, commentMark);
+                        updateTr.addMark(nodeStart, nodeEnd, updatedCommentMark);
+
+                        console.log('[WebView] Updated comment with AI reply');
+                      }
+                    });
+
+                    if (commentFound) {
+                      dispatch(updateTr);
+                      console.log('[WebView] Comment AI reply updated successfully');
+                      sendMessageToNative({
+                        type: 'info',
+                        message: 'AI reply received'
+                      });
+                    } else {
+                      console.warn('[WebView] Comment not found:', data.commentId);
+                    }
+                  }
+                  break;
+
                 case 'focusEditor':
                   console.log('[WebView] Focusing editor');
                   // Focus the editor
@@ -1186,14 +1236,7 @@
                   // Apply each step to the transaction
                   for (const stepJSON of data.steps) {
                     const step = Step.fromJSON(schema, stepJSON);
-                    const result = step.apply(tr.doc);
-
-                    if (result.failed) {
-                      console.error('[WebView] Step application failed:', result.failed);
-                      break;
-                    }
-
-                    tr = editorView.state.tr.setDoc(result.doc);
+                    tr.step(step);
                   }
 
                   // Apply the transaction to update the editor
