@@ -3,6 +3,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import * as Y from 'yjs';
+import { applyAwarenessUpdate } from 'y-protocols/awareness';
 import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
 import { useSupabase } from '@/lib/supabase/provider';
 
@@ -336,7 +337,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                 console.log('[ProseMirrorWebView] Received awareness update from WebView, size:', data.update.length);
                 try {
                   const update = new Uint8Array(data.update);
-                  const { applyAwarenessUpdate } = await import('y-protocols/awareness');
                   applyAwarenessUpdate(providerRef.current.awareness, update, 'webview');
                   console.log('[ProseMirrorWebView] Applied awareness update');
                 } catch (error) {
