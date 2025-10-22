@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import OpenAI from 'https://deno.land/x/openai@v4.28.0/mod.ts';
 import * as Y from 'npm:yjs@13.6.18';
-import { Parser } from 'npm:htmlparser2@9.0.0';
+import * as htmlparser2 from 'npm:htmlparser2@9.0.0';
 import { YServerProvider } from '../_shared/yjs-server-provider.ts';
 import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs, appendProseMirrorNodesToYjs } from '../_shared/html-to-yjs.ts';
 
@@ -146,8 +146,8 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     let textBuffer = '';
 
     // Create HTML parser for incremental parsing
-    const parser = new Parser({
-      onopentag(name, attributes) {
+    const parser = new htmlparser2.Parser({
+      onopentag(name: string, attributes: {[key: string]: string}) {
         // Skip itinerary wrapper
         if (name === 'itinerary') {
           insideItinerary = true;
@@ -176,7 +176,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
         }
       },
 
-      ontext(text) {
+      ontext(text: string) {
         if (!insideItinerary) return;
 
         // Accumulate text
@@ -184,7 +184,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
         currentBlockHtml += text;
       },
 
-      onclosetag(name) {
+      onclosetag(name: string) {
         if (name === 'itinerary') {
           insideItinerary = false;
           return;
@@ -235,7 +235,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
         }
       },
 
-      onerror(error) {
+      onerror(error: Error) {
         console.error('[Generate Trip] Parser error:', error);
       }
     }, {
