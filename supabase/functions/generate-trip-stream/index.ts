@@ -60,28 +60,22 @@ serve(async (req) => {
 
     console.log('[Generate Trip] Using:', useGateway ? `AI Gateway (${baseURL})` : 'Direct OpenAI API');
 
-    // Get Hocuspocus URL
-    // TEST: Use Edge Function instead of standalone server
-    // Standalone: ws://host.docker.internal:1234/collaboration (for Docker)
-    // Edge Function: ws://127.0.0.1:54321/functions/v1/hocuspocus-ws (same runtime)
-    const hocuspocusUrl = Deno.env.get('HOCUSPOCUS_URL') || 'ws://127.0.0.1:54321/functions/v1/hocuspocus-ws';
+    // Get Hocuspocus URL - standalone server
+    const hocuspocusUrl = Deno.env.get('HOCUSPOCUS_URL') || 'ws://host.docker.internal:1234/collaboration';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // For server-side, we use the service role key as the token
-    // Append to URL for Edge Function (WebSocket can't send custom headers)
     const authToken = supabaseServiceKey;
-    const urlWithToken = `${hocuspocusUrl}?token=${encodeURIComponent(authToken)}`;
 
     // Initialize Y.js document and Hocuspocus provider
     console.log('[Generate Trip] Initializing Hocuspocus collaboration');
-    console.log('[Generate Trip] Connecting to Edge Function:', hocuspocusUrl);
+    console.log('[Generate Trip] Connecting to standalone server:', hocuspocusUrl);
     const ydoc = new Y.Doc();
 
     const provider = new HocuspocusProvider({
-      url: urlWithToken,
+      url: hocuspocusUrl,
       name: tripId,
       document: ydoc,
-      // Pass token both in URL (for Edge Function) and as parameter (for Hocuspocus protocol)
       token: authToken,
       // WebSocket polyfill for Deno
       WebSocketPolyfill: WebSocket as any,
