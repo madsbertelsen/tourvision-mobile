@@ -1,6 +1,6 @@
 import TripsSidebar from '@/components/TripsSidebar';
 import { MockProvider } from '@/contexts/MockContext';
-import { CollaborationProvider } from '@/contexts/CollaborationContext';
+import { YjsCollaborationProvider } from '@/contexts/YjsCollaborationContext';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React from 'react';
@@ -138,9 +138,9 @@ function MockLayoutContent() {
 export default function MockLayout() {
   return (
     <MockProvider>
-      <CollaborationProvider>
+      <YjsCollaborationProvider>
         <MockLayoutContent />
-      </CollaborationProvider>
+      </YjsCollaborationProvider>
     </MockProvider>
   );
 }

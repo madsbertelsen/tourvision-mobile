@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useCollaboration } from '@/contexts/CollaborationContext';
+import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
 
 interface CollaborationBarProps {
   tripId: string;
@@ -13,7 +13,7 @@ export const CollaborationBar: React.FC<CollaborationBarProps> = ({ tripId }) =>
     collaborationUsers,
     startCollaboration,
     stopCollaboration,
-  } = useCollaboration();
+  } = useYjsCollaboration();
 
   const handleToggleCollaboration = async () => {
     if (isCollaborating) {

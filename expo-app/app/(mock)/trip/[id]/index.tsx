@@ -8,11 +8,11 @@ import CommentModal from '@/components/CommentModal';
 import AIAssistantModal from '@/components/AIAssistantModal';
 import CollaborationBar from '@/components/CollaborationBar';
 import ShareTripModal from '@/components/ShareTripModal';
-import { useCollaboration } from '@/contexts/CollaborationContext';
+import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
 import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
-import { getSocket, subscribe } from '@/lib/collab-socket';
+import { getSocket, subscribe } from '@/lib/collab-socket'; // Still used for AI comment features
 
 export default function TripDocumentView() {
   console.log('[TripDocumentView] Component mounted');
@@ -75,28 +75,17 @@ export default function TripDocumentView() {
   const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
-  // Set up collaboration
-  const { setEditorRef, isCollaborating, startCollaboration } = useCollaboration();
+  // Set up Y.js collaboration
+  const { setEditorRef, isCollaborating, startCollaboration } = useYjsCollaboration();
   useEffect(() => {
     setEditorRef(documentRef);
-  }, [setEditorRef]);
+  }, [setEditorRef, documentRef]);
 
-  // Subscribe to collaboration steps and forward to WebView
+  // Note: Y.js collaboration handles sync automatically through YSupabaseProvider
+  // No need for manual step subscription like with Socket.IO
+
+  // Set up event listeners
   useEffect(() => {
-    const unsubscribeSteps = subscribe('steps', (data: any) => {
-      console.log('[TripDocumentView] Received collab steps:', {
-        clientID: data.clientID,
-        version: data.version,
-        stepsCount: data.steps?.length,
-        isAI: data.isAI
-      });
-
-      // Forward steps to the WebView for application
-      if (documentRef.current && data.steps && data.steps.length > 0) {
-        documentRef.current.applySteps(data.steps, data.version, data.clientID);
-      }
-    });
-
     // Subscribe to AI comment reply events
     const unsubscribeReplyStarted = subscribe('ai-comment-reply-started', (data: any) => {
       console.log('[TripDocumentView] AI comment reply started:', data);
@@ -122,7 +111,6 @@ export default function TripDocumentView() {
     });
 
     return () => {
-      unsubscribeSteps();
       unsubscribeReplyStarted();
       unsubscribeReplyReady();
     };
