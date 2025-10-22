@@ -13,7 +13,6 @@ import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useS
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-service';
-import { subscribe } from '@/lib/collab-socket'; // Only for legacy events if needed
 
 export default function TripDocumentView() {
   console.log('[TripDocumentView] Component mounted');
