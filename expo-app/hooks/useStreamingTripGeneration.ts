@@ -242,31 +242,38 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
             channelRef.current = null;
           }
         })
-        .subscribe();
+        .subscribe(async (status) => {
+          console.log('[StreamingHook] Channel subscription status:', status);
 
-      // Call Edge Function to start generation
-      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-trip-stream`;
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt,
-          sessionId,
-          model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
-          temperature: 0.7,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
+          // Only call Edge Function once channel is subscribed
+          if (status === 'SUBSCRIBED') {
+            console.log('[StreamingHook] Channel subscribed, calling Edge Function');
 
-      if (!response.ok) {
-        throw new Error(`Edge Function error: ${response.status}`);
-      }
+            // Call Edge Function to start generation
+            const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-trip-stream`;
+            const response = await fetch(edgeFunctionUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                prompt,
+                sessionId,
+                model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
+                temperature: 0.7,
+              }),
+              signal: abortControllerRef.current.signal,
+            });
 
-      const result = await response.json();
-      console.log('[StreamingHook] Edge Function result:', result);
+            if (!response.ok) {
+              throw new Error(`Edge Function error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('[StreamingHook] Edge Function result:', result);
+          }
+        });
 
     } catch (error: any) {
       console.error('[StreamingHook] Error:', error);
