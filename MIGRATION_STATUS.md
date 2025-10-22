@@ -55,13 +55,23 @@ All Socket.IO features have been successfully migrated to Supabase Edge Function
 - Edge Function streams from Mistral AI using async iteration
 - Each content delta is broadcast via Supabase Realtime
 - Frontend accumulates HTML and updates ProseMirror document incrementally
+- Generated document is saved to trip when streaming completes
 - Channel cleanup on completion or error
 
 **Files Modified:**
 - `/supabase/functions/generate-trip-stream/index.ts` (created)
 - `/expo-app/hooks/useStreamingTripGeneration.ts` (updated)
+- `/expo-app/app/(mock)/trip/[id]/index.tsx` (updated to save generated document)
+
+**Fixes Applied:**
+- Added channel subscription in Edge Function before broadcasting
+- Fixed abort controller null reference in async callback
+- Saved generated document to trip storage on completion
+- Prevented infinite loop with ref-based tracking
 
 **Edge Function URL:** `http://127.0.0.1:54321/functions/v1/generate-trip-stream`
+
+**Testing:** ✅ Verified working - content appears in editor after generation
 
 ## 📊 Summary
 
