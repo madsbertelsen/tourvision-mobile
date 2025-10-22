@@ -45,10 +45,17 @@ All Socket.IO features have been successfully migrated to Supabase Edge Function
 **Status:** ✅ Complete
 
 - Migrated from Socket.IO to Supabase Edge Functions
-- Created `generate-trip-stream` Edge Function using Mistral AI
-- Streams HTML content directly to frontend
-- Updated `useStreamingTripGeneration` hook
+- Created `generate-trip-stream` Edge Function using Mistral SDK (@mistralai/mistralai)
+- Uses Supabase Realtime to broadcast streaming deltas (not HTTP streaming)
+- Frontend subscribes to Realtime channel for incremental updates
+- Updated `useStreamingTripGeneration` hook to use Realtime subscriptions
 - Removed Socket.IO event listeners
+
+**Architecture:**
+- Edge Function streams from Mistral AI using async iteration
+- Each content delta is broadcast via Supabase Realtime
+- Frontend accumulates HTML and updates ProseMirror document incrementally
+- Channel cleanup on completion or error
 
 **Files Modified:**
 - `/supabase/functions/generate-trip-stream/index.ts` (created)
@@ -83,14 +90,27 @@ All Socket.IO features have been successfully migrated to Supabase Edge Function
 # Start Edge Functions
 npx supabase functions serve --env-file ./supabase/.env.local
 
-# Test endpoint with streaming
-curl -N -X POST http://127.0.0.1:54321/functions/v1/generate-trip-stream \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <anon_key>" \
-  -d '{"prompt": "Plan a 2-day trip to Copenhagen"}'
+# Test via the Expo app (recommended)
+npx expo start --web --port 8082
+# Then trigger trip generation from the UI
 ```
 
-Expected response: Streaming HTML wrapped in `<itinerary>` tags with headings, paragraphs, and lists.
+**Note:** The Edge Function uses Supabase Realtime for streaming, so testing via curl will only show the final JSON response, not the streaming deltas. To see the streaming in action:
+
+1. Subscribe to the Realtime channel from the frontend
+2. Call the Edge Function with a unique `sessionId`
+3. Watch deltas arrive via `generation-delta` events
+4. Final content arrives via `generation-complete` event
+
+**Alternative Testing with curl:**
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/generate-trip-stream \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <anon_key>" \
+  -d '{"prompt": "Plan a 2-day trip to Copenhagen", "sessionId": "test-123"}'
+```
+
+Expected response: JSON with `{success: true, sessionId, contentLength, chunkCount}`. Streaming deltas are broadcast via Realtime, not HTTP.
 
 ### AI Comment Reply Testing
 ```bash
