@@ -144,6 +144,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     let tagStack: string[] = [];
     let insideItinerary = false;
     let textBuffer = '';
+    let totalNodesApplied = 0;
 
     // Create HTML parser for incremental parsing
     const parser = new htmlparser2.Parser({
@@ -224,6 +225,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
             if (nodes.length > 0) {
               // Append to Y.js document (broadcasts to clients)
               appendProseMirrorNodesToYjs(ydoc, nodes);
+              totalNodesApplied += nodes.length;
               console.log(`[Generate Trip] Streamed ${nodes.length} nodes to document`);
             }
           }
@@ -280,6 +282,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
 
       if (nodes.length > 0) {
         appendProseMirrorNodesToYjs(ydoc, nodes);
+        totalNodesApplied += nodes.length;
         console.log(`[Generate Trip] Applied final ${nodes.length} nodes`);
       }
     }
@@ -302,10 +305,10 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       JSON.stringify({
         success: true,
         tripId,
-        contentLength: htmlBuffer.length,
         chunkCount,
-        nodeCount: pmJSON.content?.length || 0,
-        note: 'AI changes applied via Y.js collaboration. All connected clients receive updates automatically.',
+        blocksProcessed: completeBlocks.length,
+        totalNodesApplied,
+        note: 'AI changes streamed incrementally via Y.js collaboration. All connected clients received real-time updates.',
       }, null, 2),
       {
         headers: {
