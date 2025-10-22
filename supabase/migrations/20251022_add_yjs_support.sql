@@ -4,7 +4,7 @@
 -- Add Y.js state columns
 ALTER TABLE public.trips
 ADD COLUMN IF NOT EXISTS yjs_state BYTEA,
-ADD COLUMN IF NOT EXISTS yjs_clock INTEGER DEFAULT 0;
+ADD COLUMN IF NOT EXISTS yjs_clock BIGINT DEFAULT 0;
 
 -- Drop old itinerary_document column (no backward compatibility needed)
 ALTER TABLE public.trips
