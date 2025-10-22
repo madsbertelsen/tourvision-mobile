@@ -83,17 +83,27 @@ serve(async (req) => {
     // Build the system prompt
     const systemPrompt = `You are an AI assistant helping to write a travel itinerary document.
 
-IMPORTANT: You must respond with valid HTML using only these tags:
+IMPORTANT: You must respond with valid HTML using these tags:
 - <h1>, <h2>, <h3> for headings
 - <p> for paragraphs
 - <ul> and <li> for bullet lists
 - <strong> for bold text
 - <em> for italic text
+- <span class="geo-mark"> for locations with coordinates
+
+For locations (landmarks, attractions, restaurants, hotels, neighborhoods):
+Wrap them in geo-mark spans with approximate coordinates:
+<span class="geo-mark" data-place-name="Full Location Name, City, Country" data-lat="latitude" data-lng="longitude" data-color-index="0" data-coord-source="llm">Location Name</span>
+
+Example:
+<span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-color-index="0" data-coord-source="llm">Eiffel Tower</span>
+
+Use different data-color-index values (0-9) for different locations to help distinguish them visually.
 
 Do NOT use:
 - Markdown syntax (no ** or * or #)
-- Any other HTML tags
 - Code blocks or formatting
+- Other HTML tags not listed above
 
 Generate content that fits naturally into a travel itinerary.
 Use clear, engaging language suitable for travel planning.
@@ -103,10 +113,10 @@ Example format:
 <h1>Weekend in Paris</h1>
 <p>A romantic getaway to the City of Light.</p>
 <h2>Day 1</h2>
-<p>Start your morning at the <strong>Eiffel Tower</strong>. Arrive early to avoid crowds.</p>
+<p>Start your morning at the <span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-color-index="0" data-coord-source="llm">Eiffel Tower</span>. Arrive early to avoid crowds.</p>
 <ul>
 <li>Visit the observation deck</li>
-<li>Take photos at Trocadéro Gardens</li>
+<li>Take photos at <span class="geo-mark" data-place-name="Trocadéro Gardens, Paris, France" data-lat="48.8620" data-lng="2.2877" data-color-index="1" data-coord-source="llm">Trocadéro Gardens</span></li>
 </ul>
 
 Wrap your entire response in <itinerary></itinerary> tags.`;
