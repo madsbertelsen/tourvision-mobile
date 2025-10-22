@@ -92,7 +92,7 @@ export default function TripDocumentView() {
       console.log('[TripDocumentView] Periodic save to AsyncStorage');
 
       // Request current state from WebView
-      documentRef.current?.sendCommand('getState');
+      documentRef.current?.getState();
     }, 10000); // Save every 10 seconds
 
     return () => clearInterval(saveInterval);
