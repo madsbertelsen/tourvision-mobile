@@ -18,6 +18,9 @@ import * as Y from 'yjs';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import * as awarenessProtocol from 'y-protocols/awareness';
 
+// Import Hocuspocus provider for WebSocket collaboration
+import { HocuspocusProvider } from '@hocuspocus/provider';
+
 // Import old collaboration plugin (will be deprecated)
 import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
 
@@ -144,7 +147,9 @@ window.PM = {
   Y: Y,
   yProsemirror: { ySyncPlugin, yCursorPlugin, yUndoPlugin },
   Awareness: awarenessProtocol.Awareness,
-  awarenessProtocol: awarenessProtocol
+  awarenessProtocol: awarenessProtocol,
+  // Hocuspocus provider for WebSocket collaboration
+  HocuspocusProvider: HocuspocusProvider
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully with Y.js and Supabase support');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js and Hocuspocus support');

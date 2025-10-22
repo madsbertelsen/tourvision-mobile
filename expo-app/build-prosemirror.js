@@ -21,7 +21,7 @@ console.log('[Build] Starting ProseMirror bundle build...');
 console.log('[Build] Bundling ProseMirror with esbuild...');
 try {
   execSync(
-    `npx esbuild ${sourcePath} --bundle --format=iife --global-name=PMBundle --outfile=${tempBundlePath}`,
+    `npx esbuild ${sourcePath} --bundle --format=iife --global-name=PMBundle --outfile=${tempBundlePath} --external:react --external:react-dom --external:react-native`,
     { stdio: 'inherit' }
   );
   console.log('[Build] ✓ esbuild bundle created');

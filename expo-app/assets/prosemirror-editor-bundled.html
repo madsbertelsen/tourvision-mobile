@@ -250,6 +250,22 @@
   <script>
     console.log('[WebView] Script starting...');
 
+    // Polyfill Web Locks API for sandboxed iframes
+    if (!navigator.locks) {
+      console.log('[WebView] Polyfilling Web Locks API');
+      navigator.locks = {
+        request: async function(name, options, callback) {
+          if (typeof options === 'function') {
+            callback = options;
+            options = {};
+          }
+          // Simple polyfill - just run the callback immediately
+          // This doesn't provide actual locking, but Supabase should handle it
+          return await callback({ name, mode: options.mode || 'exclusive' });
+        }
+      };
+    }
+
     // Set up message handler
     function sendMessageToNative(message) {
       try {
@@ -982,6 +998,21 @@
           const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
 
           switch (data.type) {
+            case 'evalScript':
+              console.log('[WebView] Executing script via postMessage');
+              try {
+                eval(data.script);
+              } catch (evalError) {
+                console.error('[WebView] Error executing script:', evalError);
+              }
+              break;
+
+            case 'supabaseConfig':
+              console.log('[WebView] Received Supabase config via postMessage');
+              // Store config globally for use during collaboration
+              window.__supabaseConfig = data.config;
+              break;
+
             case 'setContent':
               console.log('[WebView] Setting content:', JSON.stringify(data.content));
               if (data.content && editorView) {
@@ -1435,29 +1466,21 @@
 
               (async () => {
                 try {
-                  const { documentId, userId, userName } = data;
-                  console.log('[WebView] Creating Y.js collaboration for document:', documentId);
+                  const { documentId, userId, userName, token, hocuspocusUrl = 'ws://127.0.0.1:1234/collaboration' } = data;
+                  console.log('[WebView] Creating Hocuspocus collaboration for document:', documentId);
+                  console.log('[WebView] Hocuspocus URL:', hocuspocusUrl);
+                  console.log('[WebView] Auth token:', token ? 'present' : 'missing');
 
-                  // Get Supabase config from parent window
-                  const supabaseConfig = window.__supabaseConfig;
-
-                  if (!supabaseConfig) {
-                    throw new Error('Supabase config not injected from parent');
+                  if (!token) {
+                    throw new Error('Authentication required - no token provided');
                   }
 
-                  console.log('[WebView] Creating Supabase client with injected config');
-
-                  // Create a new Supabase client with the session
-                  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-                  const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
-
-                  // Set the session if available
-                  if (supabaseConfig.session) {
-                    await supabase.auth.setSession(supabaseConfig.session);
-                    console.log('[WebView] Session set in Supabase client');
-                  } else {
-                    console.warn('[WebView] No session available - collaboration may fail');
+                  // Get HocuspocusProvider from bundled modules
+                  if (!window.PM.HocuspocusProvider) {
+                    throw new Error('HocuspocusProvider not available in bundle');
                   }
+                  const HocuspocusProvider = window.PM.HocuspocusProvider;
+                  console.log('[WebView] Using bundled HocuspocusProvider');
 
                   // Create Y.Doc and fragment
                   ydoc = new window.PM.Y.Doc();
@@ -1473,18 +1496,28 @@
 
                   console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
 
-                  // Create and connect Y.js provider
-                  yProvider = new YWebViewProvider(ydoc, {
-                    supabase,
-                    documentId,
-                    userId,
-                    userName,
-                    debug: true
+                  // Create Hocuspocus provider
+                  yProvider = new HocuspocusProvider({
+                    url: hocuspocusUrl,
+                    name: documentId,
+                    document: ydoc,
+                    token: token,
+                    awareness: awareness,
+                    onConnect: () => {
+                      console.log('[WebView] Hocuspocus connected');
+                    },
+                    onDisconnect: ({ event }) => {
+                      console.log('[WebView] Hocuspocus disconnected:', event);
+                    },
+                    onStatus: ({ status }) => {
+                      console.log('[WebView] Hocuspocus status:', status);
+                    },
+                    onSynced: ({ state }) => {
+                      console.log('[WebView] Hocuspocus synced:', state);
+                    }
                   });
 
-                  console.log('[WebView] Y.js provider created, connecting...');
-                  await yProvider.connect();
-                  console.log('[WebView] Y.js provider connected and synced');
+                  console.log('[WebView] Hocuspocus provider created and connecting...');
 
                   // Debug: Check what's in the YXmlFragment
                   console.log('[WebView] YXmlFragment length before editor creation:', yXmlFragment.length);
@@ -1547,11 +1580,11 @@
 
               (async () => {
                 try {
-                  // Destroy Y.js provider
+                  // Destroy Hocuspocus provider
                   if (yProvider) {
-                    await yProvider.destroy();
+                    yProvider.destroy();
                     yProvider = null;
-                    console.log('[WebView] Y.js provider destroyed');
+                    console.log('[WebView] Hocuspocus provider destroyed');
                   }
 
                   // Clean up Y.js resources

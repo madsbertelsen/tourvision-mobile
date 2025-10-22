@@ -39,7 +39,7 @@ interface YjsCollaborationProviderProps {
 }
 
 export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isCollaborating, setIsCollaborating] = useState(false);
   const [collaborationStatus, setCollaborationStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [collaborationUsers, setCollaborationUsers] = useState<CollaborationUser[]>([]);
@@ -55,6 +55,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
 
   const startCollaboration = useCallback(async (tripId: string) => {
     console.log('[YjsCollaboration] Starting collaboration for trip:', tripId);
+    console.log('[YjsCollaboration] User:', user);
 
     if (!user) {
       console.error('[YjsCollaboration] User not authenticated');
@@ -86,13 +87,20 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
 
       console.log('[YjsCollaboration] Starting with user:', { userId, userName });
 
+      // Get auth token from session
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
       // The WebView's startCollaboration will create its own Y.Doc and provider
-      // We just need to tell it to start
+      // Pass the token for Hocuspocus authentication
       await editorRef.current.current.startCollaboration(
-        '', // serverUrl not needed for Y.js
+        '', // serverUrl not needed (using default Hocuspocus URL)
         tripId, // Use trip ID as document ID
         userId,
-        userName
+        userName,
+        token // Supabase JWT token for Hocuspocus auth
       );
 
       console.log('[YjsCollaboration] Collaboration started successfully');

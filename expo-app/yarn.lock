@@ -1408,6 +1408,23 @@
   resolved "https://registry.npmjs.org/@heroicons/react/-/react-2.2.0.tgz"
   integrity sha512-LMcepvRaS9LYHJGsF0zzmgKCUim/X3N/DQKc4jepAXJ7l8QxJ1PmxJzqplF2Z3FE4PqBAIGyJAQ/w4B5dsqbtQ==
 
+"@hocuspocus/common@^3.3.0":
+  version "3.3.0"
+  resolved "https://registry.npmjs.org/@hocuspocus/common/-/common-3.3.0.tgz"
+  integrity sha512-BzLFs0Wbwt0RV1kBrtIAf7xludxKMcPBpLGAGX/5TZazx8kW1fmJpjRM3QgRmqO7R6QVyfi6h8MQUw/P43tafw==
+  dependencies:
+    lib0 "^0.2.87"
+
+"@hocuspocus/provider@^3.3.0":
+  version "3.3.0"
+  resolved "https://registry.npmjs.org/@hocuspocus/provider/-/provider-3.3.0.tgz"
+  integrity sha512-gxwWAZ8E55VxwdbFwhpjYxFBOxg96+fxkvkguqSJ59chkieDtrZca/0G9ZO4ct/BBq+FNxxYIdAxwwSaM/EOFg==
+  dependencies:
+    "@hocuspocus/common" "^3.3.0"
+    "@lifeomic/attempt" "^3.0.2"
+    lib0 "^0.2.87"
+    ws "^8.17.1"
+
 "@isaacs/cliui@^8.0.2":
   version "8.0.2"
   resolved "https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz"
@@ -1558,6 +1575,11 @@
   dependencies:
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
+
+"@lifeomic/attempt@^3.0.2":
+  version "3.1.0"
+  resolved "https://registry.npmjs.org/@lifeomic/attempt/-/attempt-3.1.0.tgz"
+  integrity sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw==
 
 "@loaders.gl/3d-tiles@^4.2.0":
   version "4.3.4"
@@ -5436,7 +5458,7 @@ leven@^3.1.0:
   resolved "https://registry.npmjs.org/leven/-/leven-3.1.0.tgz"
   integrity sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==
 
-lib0@^0.2.109, lib0@^0.2.114, lib0@^0.2.74, lib0@^0.2.85, lib0@^0.2.99:
+lib0@^0.2.109, lib0@^0.2.114, lib0@^0.2.74, lib0@^0.2.85, lib0@^0.2.87, lib0@^0.2.99:
   version "0.2.114"
   resolved "https://registry.npmjs.org/lib0/-/lib0-0.2.114.tgz"
   integrity sha512-gcxmNFzA4hv8UYi8j43uPlQ7CGcyMJ2KQb5kZASw6SnAKAf10hK12i2fjrS3Cl/ugZa5Ui6WwIu1/6MIXiHttQ==
@@ -8295,6 +8317,11 @@ ws@^7, ws@^7.5.10:
   integrity sha512-+dbF1tHwZpXcbOJdVOkzLDxZP1ailvSxM6ZweXTegylPny803bFhA+vqBYw4s31NSAk4S2Qz+AKXK9a4wkdjcQ==
 
 ws@^8.12.1:
+  version "8.18.3"
+  resolved "https://registry.npmjs.org/ws/-/ws-8.18.3.tgz"
+  integrity sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==
+
+ws@^8.17.1:
   version "8.18.3"
   resolved "https://registry.npmjs.org/ws/-/ws-8.18.3.tgz"
   integrity sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==

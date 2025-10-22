@@ -1,0 +1,22 @@
+{
+  "name": "tourvision-hocuspocus-server",
+  "version": "1.0.0",
+  "description": "Hocuspocus Y.js collaboration server with Supabase persistence",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^2.13.5",
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-ws": "^5.0.2",
+    "yjs": "^13.6.20"
+  },
+  "keywords": ["yjs", "collaboration", "hocuspocus", "supabase"],
+  "author": "",
+  "license": "MIT"
+}

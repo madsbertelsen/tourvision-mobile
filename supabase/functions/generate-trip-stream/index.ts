@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import OpenAI from 'https://deno.land/x/openai@v4.28.0/mod.ts';
 import * as Y from 'npm:yjs@13.6.18';
 import * as htmlparser2 from 'npm:htmlparser2@9.0.0';
-import { YServerProvider } from '../_shared/yjs-server-provider.ts';
+import { HocuspocusProvider } from 'npm:@hocuspocus/provider@2.13.5';
 import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs, appendProseMirrorNodesToYjs } from '../_shared/html-to-yjs.ts';
 
 // CORS headers for browser requests
@@ -60,25 +60,44 @@ serve(async (req) => {
 
     console.log('[Generate Trip] Using:', useGateway ? `AI Gateway (${baseURL})` : 'Direct OpenAI API');
 
-    // Create Supabase client for Y.js provider
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Get Hocuspocus URL and create service role token for server-side access
+    const hocuspocusUrl = Deno.env.get('HOCUSPOCUS_URL') || 'ws://127.0.0.1:1234/collaboration';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Initialize Y.js document and provider
-    console.log('[Generate Trip] Initializing Y.js collaboration');
+    // For server-side, we use the service role key as the token
+    // The Hocuspocus server will validate it
+    const authToken = supabaseServiceKey;
+
+    // Initialize Y.js document and Hocuspocus provider
+    console.log('[Generate Trip] Initializing Hocuspocus collaboration');
+    console.log('[Generate Trip] Connecting to:', hocuspocusUrl);
     const ydoc = new Y.Doc();
-    const provider = new YServerProvider(ydoc, {
-      supabase,
-      documentId: tripId,
-      userId: 'ai-assistant',
-      userName: 'AI Assistant',
-      debug: true,
+
+    const provider = new HocuspocusProvider({
+      url: hocuspocusUrl,
+      name: tripId,
+      document: ydoc,
+      token: authToken,
+      // WebSocket polyfill for Deno
+      WebSocketPolyfill: WebSocket as any,
     });
 
-    // Connect and sync with existing document
-    await provider.connect();
-    console.log('[Generate Trip] Y.js provider connected and synced');
+    // Wait for provider to sync
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Hocuspocus sync timeout')), 10000);
+
+      provider.on('synced', () => {
+        clearTimeout(timeout);
+        console.log('[Generate Trip] Hocuspocus provider synced');
+        resolve(null);
+      });
+
+      provider.on('error', (error: any) => {
+        clearTimeout(timeout);
+        console.error('[Generate Trip] Hocuspocus error:', error);
+        reject(error);
+      });
+    });
 
     // Build the system prompt
     const systemPrompt = `You are an AI assistant helping to write a travel itinerary document.

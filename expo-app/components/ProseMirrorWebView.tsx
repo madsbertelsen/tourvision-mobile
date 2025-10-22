@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
@@ -11,9 +11,13 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
     injectJavaScript: (script: string) => {
       if (iframeRef.current?.contentWindow) {
         try {
-          // Remove 'true;' at the end if it exists
+          // With sandboxed iframe, we can't use eval() directly
+          // Send the script via postMessage for the iframe to execute
           const cleanScript = script.replace(/\s*true;\s*$/, '');
-          iframeRef.current.contentWindow.eval(cleanScript);
+          iframeRef.current.contentWindow.postMessage({
+            type: 'evalScript',
+            script: cleanScript
+          }, '*');
         } catch (error) {
           console.error('[IframeWebView] Error injecting JS:', error);
         }
@@ -78,7 +82,7 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
         border: 'none',
         backgroundColor: '#ffffff',
       }}
-      sandbox="allow-scripts allow-same-origin"
+      sandbox="allow-scripts"
     />
   );
 });
@@ -95,7 +99,7 @@ export interface ProseMirrorWebViewRef {
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
   triggerCreateLocation: () => void;
-  startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string) => void;
+  startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string, token?: string) => void;
   stopCollaboration: () => void;
   applySteps: (steps: any[], version: number, clientID: string) => void;
 }
@@ -198,35 +202,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               // Reset hash to force content update
               lastContentHashRef.current = null;
               setIsReady(true);
-
-              // Inject Supabase client and session into iframe (web only)
-              if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                const { supabase } = require('@/lib/supabase/client');
-                const contentWindow = (webViewRef.current as any)?.getContentWindow?.();
-                if (contentWindow) {
-                  // Get the current session
-                  supabase.auth.getSession().then(({ data: { session } }: any) => {
-                    if (session) {
-                      // Pass both client config and session
-                      contentWindow.__supabaseConfig = {
-                        url: process.env.EXPO_PUBLIC_SUPABASE_URL,
-                        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-                        session: session
-                      };
-                      console.log('[ProseMirrorWebView] Injected Supabase config with session into iframe');
-                    } else {
-                      console.error('[ProseMirrorWebView] No session available to inject');
-                      contentWindow.__supabaseConfig = {
-                        url: process.env.EXPO_PUBLIC_SUPABASE_URL,
-                        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-                        session: null
-                      };
-                    }
-                  });
-                } else {
-                  console.error('[ProseMirrorWebView] Could not access iframe contentWindow');
-                }
-              }
 
               // Notify parent that WebView is ready
               if (onReady) {
@@ -525,17 +500,17 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             `);
           }
         },
-        startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string) => {
-          console.log('[ProseMirrorWebView] Starting Y.js collaboration:', { documentId, userId, userName });
+        startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string, token?: string) => {
+          console.log('[ProseMirrorWebView] Starting Hocuspocus collaboration:', { documentId, userId, userName, hasToken: !!token });
 
           try {
-            // Tell WebView to initialize Y.js with Supabase connection
-            // The Supabase client was already injected during the 'ready' event
+            // Tell WebView to initialize Y.js with Hocuspocus connection
             sendMessage({
               type: 'startCollaboration',
               documentId,
               userId,
-              userName
+              userName,
+              token: token || null
             });
 
             console.log('[ProseMirrorWebView] Y.js collaboration request sent to WebView');
@@ -577,7 +552,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     // Try loading the esbuild-bundled ProseMirror editor
     try {
       htmlContent = require('../assets/prosemirror-editor-bundled-final.js').default;
-      console.log('[ProseMirrorWebView] HTML content loaded (with visitDocument!), length:', htmlContent?.length);
+      console.log('[ProseMirrorWebView] HTML content loaded (with bundled Hocuspocus!), length:', htmlContent?.length);
     } catch (error) {
       console.error('[ProseMirrorWebView] Failed to load esbuild bundle:', error);
 
@@ -613,6 +588,17 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       default: undefined
     });
 
+    // Memoize source object to prevent iframe reloads on every render
+    // Add cache buster to prevent browser from caching iframe content across page reloads
+    const source = useMemo(() => {
+      // Add timestamp to force fresh load on each app load (not on every render)
+      const cacheBuster = `<!-- Cache buster: ${Date.now()} -->`;
+      return {
+        html: htmlContent + cacheBuster,
+        baseUrl: baseUrl
+      };
+    }, [htmlContent, baseUrl]);
+
     // Use platform-specific component
     const WebViewComponent = Platform.OS === 'web' ? IframeWebView : WebView;
 
@@ -620,10 +606,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       <View style={styles.container}>
         <WebViewComponent
           ref={webViewRef}
-          source={{
-            html: htmlContent,
-            baseUrl: baseUrl
-          }}
+          source={source}
           originWhitelist={['*']}
           onMessage={handleMessage}
           style={styles.webview}

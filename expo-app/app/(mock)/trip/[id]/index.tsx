@@ -13,10 +13,12 @@ import { useStreamingTripGeneration } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-service';
+import { useAuth } from '@/lib/supabase/auth-context';
 
 export default function TripDocumentView() {
   console.log('[TripDocumentView] Component mounted');
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
   const {
     tripId,
     currentTrip,
@@ -117,7 +119,7 @@ export default function TripDocumentView() {
   }, []);
 
   useEffect(() => {
-    if (!tripId || !isWebViewReady || isCollaborating) return;
+    if (!tripId || !isWebViewReady || isCollaborating || !session) return;
 
     const autoStartCollaboration = async () => {
       try {
@@ -129,7 +131,7 @@ export default function TripDocumentView() {
     };
 
     autoStartCollaboration();
-  }, [tripId, isWebViewReady, isCollaborating, startCollaboration]);
+  }, [tripId, isWebViewReady, isCollaborating, startCollaboration, session]);
 
   // Note: Y.js collaboration handles sync automatically through YSupabaseProvider
   // No need for manual step subscription like with Socket.IO
@@ -550,6 +552,7 @@ Please generate replacement content that addresses the user's request. Only retu
             onCommentClick={handleCommentClick}
             geoMarkDataToCreate={geoMarkDataToCreate}
             onReady={handleWebViewReady}
+            session={session}
           />
         </View>
 
