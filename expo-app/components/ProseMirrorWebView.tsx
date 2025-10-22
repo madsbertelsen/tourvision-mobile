@@ -333,7 +333,17 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               break;
 
             case 'stateResponse':
-              console.log('[ProseMirrorWebView] State response:', data.state);
+              console.log('[ProseMirrorWebView] State response received');
+              if (onChange) {
+                // Save to AsyncStorage via onChange callback
+                isInternalChangeRef.current = true;
+                const docHash = JSON.stringify(data.state);
+                lastContentHashRef.current = docHash;
+                onChange(data.state);
+                setTimeout(() => {
+                  isInternalChangeRef.current = false;
+                }, 100);
+              }
               break;
 
             // Collaboration message handlers

@@ -82,6 +82,22 @@ export default function TripDocumentView() {
     setEditorRef(documentRef);
   }, [setEditorRef, documentRef]);
 
+  // Periodic save to AsyncStorage (local-first persistence)
+  // During Y.js collaboration, documentChange events are suppressed to avoid circular updates
+  // So we need to periodically save the document state to local storage
+  useEffect(() => {
+    if (!isCollaborating || !documentRef.current || !currentTrip) return;
+
+    const saveInterval = setInterval(async () => {
+      console.log('[TripDocumentView] Periodic save to AsyncStorage');
+
+      // Request current state from WebView
+      documentRef.current?.sendCommand('getState');
+    }, 10000); // Save every 10 seconds
+
+    return () => clearInterval(saveInterval);
+  }, [isCollaborating, documentRef, currentTrip]);
+
   // Auto-start collaboration when WebView is ready to sync Y.js state from database
   const [isWebViewReady, setIsWebViewReady] = React.useState(false);
 
