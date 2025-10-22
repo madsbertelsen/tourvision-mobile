@@ -1,6 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Mistral } from 'npm:@mistralai/mistralai@1.3.0';
+import OpenAI from 'https://deno.land/x/openai@v4.28.0/mod.ts';
+import * as Y from 'npm:yjs@13.6.18';
+import { YServerProvider } from '../_shared/yjs-server-provider.ts';
+import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs } from '../_shared/html-to-yjs.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -10,7 +13,7 @@ const corsHeaders = {
 
 interface TripGenerationRequest {
   prompt: string;
-  sessionId: string; // Client provides session ID for Realtime channel
+  tripId: string; // The trip document to collaborate on
   model?: string;
   temperature?: number;
 }
@@ -25,31 +28,56 @@ serve(async (req) => {
     // Parse request body
     const {
       prompt,
-      sessionId,
+      tripId,
       model = 'mistral-small-latest',
       temperature = 0.7
     }: TripGenerationRequest = await req.json();
 
-    if (!sessionId) {
-      throw new Error('sessionId is required');
+    if (!tripId) {
+      throw new Error('tripId is required');
     }
 
     console.log('[Generate Trip] Processing request:', {
-      sessionId,
+      tripId,
       prompt: prompt.substring(0, 100) + '...',
       model,
     });
 
-    // Get Mistral API key from environment
-    const mistralApiKey = Deno.env.get('MISTRAL_API_KEY');
-    if (!mistralApiKey) {
-      throw new Error('MISTRAL_API_KEY not configured');
+    // Get AI Gateway configuration (falls back to direct OpenAI if not configured)
+    const aiGatewayBaseUrl = Deno.env.get('AI_GATEWAY_BASE_URL');
+    const aiGatewayApiKey = Deno.env.get('AI_GATEWAY_API_KEY');
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+
+    // Use AI Gateway if configured, otherwise direct OpenAI
+    const useGateway = aiGatewayBaseUrl && aiGatewayApiKey;
+    const apiKey = useGateway ? aiGatewayApiKey : openaiApiKey;
+    const baseURL = useGateway ? aiGatewayBaseUrl : undefined;
+
+    if (!apiKey) {
+      throw new Error('AI_GATEWAY_API_KEY or OPENAI_API_KEY must be configured');
     }
 
-    // Create Supabase client for Realtime
+    console.log('[Generate Trip] Using:', useGateway ? `AI Gateway (${baseURL})` : 'Direct OpenAI API');
+
+    // Create Supabase client for Y.js provider
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Initialize Y.js document and provider
+    console.log('[Generate Trip] Initializing Y.js collaboration');
+    const ydoc = new Y.Doc();
+    const provider = new YServerProvider(ydoc, {
+      supabase,
+      documentId: tripId,
+      userId: 'ai-assistant',
+      userName: 'AI Assistant',
+      debug: true,
+    });
+
+    // Connect and sync with existing document
+    await provider.connect();
+    console.log('[Generate Trip] Y.js provider connected and synced');
 
     // Build the system prompt
     const systemPrompt = `You are an AI assistant helping to write a travel itinerary document.
@@ -82,112 +110,75 @@ Example format:
 
 Wrap your entire response in <itinerary></itinerary> tags.`;
 
-    // Initialize Mistral client
-    const mistralClient = new Mistral({ apiKey: mistralApiKey });
-
-    // Subscribe to Realtime channel for broadcasting
-    const channel = supabase.channel(`trip-generation:${sessionId}`);
-    await channel.subscribe();
-
-    // Broadcast start event
-    await channel.send({
-      type: 'broadcast',
-      event: 'generation-start',
-      payload: { sessionId, timestamp: new Date().toISOString() },
+    // Initialize OpenAI client (with AI Gateway if configured)
+    const openai = new OpenAI({
+      apiKey,
+      baseURL,
     });
 
-    // Stream completion with Mistral SDK
-    const streamResponse = await mistralClient.chat.stream({
-      model,
+    // Stream completion with OpenAI
+    console.log('[Generate Trip] Starting OpenAI stream');
+    const streamResponse = await openai.chat.completions.create({
+      model: model === 'mistral-small-latest' ? 'gpt-4o-mini' : model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       temperature,
-      maxTokens: 4000,
+      max_tokens: 4000,
+      stream: true,
     });
 
-    // Process stream and broadcast deltas via Realtime
-    let fullContent = '';
+    // Process stream and apply to Y.js document
+    let htmlBuffer = '';
     let chunkCount = 0;
-    const eventLog: Array<{ event: string; timestamp: string; data?: any }> = [];
-
-    // Log start event
-    eventLog.push({
-      event: 'generation-start',
-      timestamp: new Date().toISOString(),
-    });
 
     for await (const chunk of streamResponse) {
-      const delta = chunk.data.choices[0]?.delta?.content;
+      const delta = chunk.choices[0]?.delta?.content;
 
       if (delta) {
-        fullContent += delta;
+        htmlBuffer += delta;
         chunkCount++;
 
-        // Broadcast delta via Realtime
-        await channel.send({
-          type: 'broadcast',
-          event: 'generation-delta',
-          payload: {
-            sessionId,
-            delta,
-            chunkNumber: chunkCount,
-            timestamp: new Date().toISOString(),
-          },
-        });
-
-        // Log delta (first 50 chars only for brevity)
-        eventLog.push({
-          event: 'generation-delta',
-          timestamp: new Date().toISOString(),
-          data: {
-            chunkNumber: chunkCount,
-            deltaPreview: delta.substring(0, 50) + (delta.length > 50 ? '...' : ''),
-          },
-        });
+        // Log progress every 50 chunks
+        if (chunkCount % 50 === 0) {
+          console.log(`[Generate Trip] Received ${chunkCount} chunks, buffer size: ${htmlBuffer.length}`);
+        }
       }
     }
 
-    // Broadcast completion event
-    await channel.send({
-      type: 'broadcast',
-      event: 'generation-complete',
-      payload: {
-        sessionId,
-        fullContent,
-        chunkCount,
-        timestamp: new Date().toISOString(),
-      },
-    });
+    console.log('[Generate Trip] Stream complete, total chunks:', chunkCount);
+    console.log('[Generate Trip] Buffer length:', htmlBuffer.length);
 
-    // Log completion event
-    eventLog.push({
-      event: 'generation-complete',
-      timestamp: new Date().toISOString(),
-      data: { contentLength: fullContent.length, chunkCount },
-    });
+    // Extract content from itinerary tags
+    const finalMatch = htmlBuffer.match(/<itinerary[^>]*>(.*?)<\/itinerary>/is);
+    const htmlContent = finalMatch ? finalMatch[1] : htmlBuffer;
 
-    console.log('[Generate Trip] Generation complete:', {
-      sessionId,
-      contentLength: fullContent.length,
-      chunkCount,
-    });
+    console.log('[Generate Trip] Parsing HTML to ProseMirror JSON');
+    const pmJSON = htmlToProseMirrorJSON(htmlContent);
+    console.log('[Generate Trip] ProseMirror JSON nodes:', pmJSON.content?.length || 0);
 
-    // Cleanup: unsubscribe from channel
-    await supabase.removeChannel(channel);
+    // Apply to Y.js document (this broadcasts via Realtime to all clients)
+    console.log('[Generate Trip] Applying changes to Y.js document');
+    applyProseMirrorJSONToYjs(ydoc, pmJSON);
 
-    // Return success response with full content and event log
+    // Persist to database
+    console.log('[Generate Trip] Persisting to database');
+    await provider.persist();
+
+    // Cleanup
+    await provider.destroy();
+    console.log('[Generate Trip] Generation complete');
+
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        sessionId,
-        contentLength: fullContent.length,
+        tripId,
+        contentLength: htmlBuffer.length,
         chunkCount,
-        fullContent, // Include the generated content for testing
-        eventLog, // Include log of Realtime events broadcast
-        realtimeChannel: `trip-generation:${sessionId}`,
-        note: 'This response includes the full generated content for testing. In production, clients subscribe to the Realtime channel to receive deltas.',
+        nodeCount: pmJSON.content?.length || 0,
+        note: 'AI changes applied via Y.js collaboration. All connected clients receive updates automatically.',
       }, null, 2),
       {
         headers: {
@@ -202,6 +193,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       JSON.stringify({
         success: false,
         error: error.message,
+        stack: error.stack,
       }),
       {
         status: 500,

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase/client';
 
 const TRIPS_KEY = '@tourvision_trips';
 
@@ -65,14 +66,28 @@ export async function getTrip(tripId: string): Promise<SavedTrip | null> {
 }
 
 /**
- * Create a new trip
+ * Generate a UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
+ * Create a new trip (local-first, syncs to Supabase when online)
  */
 export async function createTrip(title: string): Promise<SavedTrip> {
   try {
     const trips = await getTrips();
 
+    // Generate a proper UUID for local trip
+    const tripId = generateUUID();
+
     const newTrip: SavedTrip = {
-      id: `trip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: tripId,
       title,
       description: '',
       messages: [],
@@ -81,12 +96,68 @@ export async function createTrip(title: string): Promise<SavedTrip> {
       updatedAt: Date.now(),
     };
 
+    // Save locally first (local-first approach)
     const updatedTrips = [...trips, newTrip];
     await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(updatedTrips));
+
+    // Try to sync to Supabase if online (non-blocking)
+    syncTripToSupabase(newTrip).catch(err => {
+      console.log('[createTrip] Offline or sync failed (will retry later):', err.message);
+    });
 
     return newTrip;
   } catch (error) {
     console.error('Error creating trip:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync a trip to Supabase database (non-blocking)
+ */
+async function syncTripToSupabase(trip: SavedTrip): Promise<void> {
+  try {
+    // Check if user is authenticated
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('[syncTripToSupabase] User not authenticated, skipping sync');
+      return;
+    }
+
+    // Check if trip already exists in database
+    const { data: existingTrip } = await supabase
+      .from('trips')
+      .select('id')
+      .eq('id', trip.id)
+      .maybeSingle();
+
+    if (existingTrip) {
+      console.log('[syncTripToSupabase] Trip already exists in database:', trip.id);
+      return;
+    }
+
+    // Insert trip into database
+    const { error: dbError } = await supabase
+      .from('trips')
+      .insert({
+        id: trip.id, // Use the same UUID
+        title: trip.title,
+        description: trip.description || '',
+        created_by: user.id,
+        status: 'planning',
+        is_public: false,
+        created_at: new Date(trip.createdAt).toISOString(),
+        updated_at: new Date(trip.updatedAt).toISOString(),
+      });
+
+    if (dbError) {
+      throw dbError;
+    }
+
+    console.log('[syncTripToSupabase] Successfully synced trip to database:', trip.id);
+  } catch (error: any) {
+    // Don't throw - this is non-blocking background sync
+    console.error('[syncTripToSupabase] Failed to sync trip:', error.message);
     throw error;
   }
 }

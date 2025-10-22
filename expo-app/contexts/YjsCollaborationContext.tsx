@@ -5,6 +5,7 @@ import * as Y from 'yjs';
 import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
 import { supabase } from '@/lib/supabase/client';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
+import { useAuth } from '@/lib/supabase/auth-context';
 
 interface CollaborationUser {
   id: string;
@@ -38,6 +39,7 @@ interface YjsCollaborationProviderProps {
 }
 
 export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> = ({ children }) => {
+  const { user } = useAuth();
   const [isCollaborating, setIsCollaborating] = useState(false);
   const [collaborationStatus, setCollaborationStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [collaborationUsers, setCollaborationUsers] = useState<CollaborationUser[]>([]);
@@ -51,37 +53,18 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
     editorRef.current = ref;
   }, []);
 
-  const generateUserId = useCallback(async () => {
-    // Try to get stored user ID, or generate a new one
-    const storedUserId = await AsyncStorage.getItem('collaboration_user_id');
-    if (storedUserId) {
-      return storedUserId;
-    }
-
-    const newUserId = `user_${Math.random().toString(36).substr(2, 9)}`;
-    await AsyncStorage.setItem('collaboration_user_id', newUserId);
-    return newUserId;
-  }, []);
-
-  const generateUserName = useCallback(async () => {
-    // Try to get stored user name, or generate a default one
-    const storedUserName = await AsyncStorage.getItem('collaboration_user_name');
-    if (storedUserName) {
-      return storedUserName;
-    }
-
-    const adjectives = ['Swift', 'Bright', 'Calm', 'Bold', 'Wise', 'Quick', 'Noble', 'Clever'];
-    const nouns = ['Explorer', 'Traveler', 'Navigator', 'Adventurer', 'Wanderer', 'Pioneer', 'Scout', 'Voyager'];
-    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-    const newUserName = `${randomAdj} ${randomNoun}`;
-
-    await AsyncStorage.setItem('collaboration_user_name', newUserName);
-    return newUserName;
-  }, []);
-
   const startCollaboration = useCallback(async (tripId: string) => {
     console.log('[YjsCollaboration] Starting collaboration for trip:', tripId);
+
+    if (!user) {
+      console.error('[YjsCollaboration] User not authenticated');
+      if (Platform.OS === 'web') {
+        window.alert('You must be logged in to collaborate');
+      } else {
+        Alert.alert('Error', 'You must be logged in to collaborate');
+      }
+      return;
+    }
 
     if (!editorRef.current?.current) {
       console.error('[YjsCollaboration] Editor ref not available');
@@ -97,9 +80,9 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
       setCollaborationStatus('connecting');
       setIsCollaborating(true);
 
-      // Generate user ID and name
-      const userId = await generateUserId();
-      const userName = await generateUserName();
+      // Use authenticated user's ID and email
+      const userId = user.id;
+      const userName = user.email?.split('@')[0] || 'Unknown User';
 
       console.log('[YjsCollaboration] Starting with user:', { userId, userName });
 
@@ -124,7 +107,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
         Alert.alert('Connection Error', 'Failed to start collaboration. Please check your network connection.');
       }
     }
-  }, [generateUserId, generateUserName]);
+  }, [user]);
 
   const stopCollaboration = useCallback(async () => {
     console.log('[YjsCollaboration] Stopping collaboration');

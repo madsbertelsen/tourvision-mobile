@@ -9,7 +9,7 @@ import AIAssistantModal from '@/components/AIAssistantModal';
 import CollaborationBar from '@/components/CollaborationBar';
 import ShareTripModal from '@/components/ShareTripModal';
 import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
-import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
+import { useStreamingTripGeneration } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-service';
@@ -50,8 +50,6 @@ export default function TripDocumentView() {
 
   // AI Assistant state
   const [showAIModal, setShowAIModal] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const typingAbortRef = useRef<AbortController | null>(null);
 
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
@@ -72,40 +70,40 @@ export default function TripDocumentView() {
       keyboardDidHide.remove();
     };
   }, []);
-  const hasProcessedTypingRef = useRef<boolean>(false); // Track if we've processed the current generation
-  const hasSavedGeneratedDocRef = useRef<boolean>(false); // Track if we've saved the generated document
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
-  // Debug: Log when streamState changes
-  useEffect(() => {
-    console.log('[TripDocumentView] streamState changed:', {
-      isStreaming: streamState.isStreaming,
-      isComplete: streamState.isComplete,
-      hasDocument: !!streamState.document,
-      documentContentLength: JSON.stringify(streamState.document).length,
-    });
-  }, [streamState.isStreaming, streamState.isComplete, streamState.document]);
-
-  // Update document as streaming progresses and when complete
-  useEffect(() => {
-    if (streamState.document) {
-      if (streamState.isStreaming) {
-        // During streaming: update the document (this will show incremental updates)
-        handleDocumentChange(streamState.document);
-      } else if (streamState.isComplete && !hasSavedGeneratedDocRef.current) {
-        // On completion: final save (only once)
-        console.log('[TripDocumentView] Saving final generated document to trip');
-        hasSavedGeneratedDocRef.current = true;
-        handleDocumentChange(streamState.document);
-      }
-    }
-  }, [streamState.isStreaming, streamState.isComplete, streamState.document, handleDocumentChange]);
+  // NOTE: AI generation now uses Y.js collaboration. The Edge Function participates
+  // as a regular Y.js client, applying changes directly to the shared document.
+  // All clients receive updates automatically through the existing Y.js infrastructure.
 
   // Set up Y.js collaboration
   const { setEditorRef, isCollaborating, startCollaboration } = useYjsCollaboration();
   useEffect(() => {
     setEditorRef(documentRef);
   }, [setEditorRef, documentRef]);
+
+  // Auto-start collaboration when WebView is ready to sync Y.js state from database
+  const [isWebViewReady, setIsWebViewReady] = React.useState(false);
+
+  const handleWebViewReady = React.useCallback(() => {
+    console.log('[TripDocumentView] WebView is ready');
+    setIsWebViewReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tripId || !isWebViewReady || isCollaborating) return;
+
+    const autoStartCollaboration = async () => {
+      try {
+        console.log('[TripDocumentView] Auto-starting collaboration to load Y.js state');
+        await startCollaboration(tripId);
+      } catch (error) {
+        console.error('[TripDocumentView] Failed to auto-start collaboration:', error);
+      }
+    };
+
+    autoStartCollaboration();
+  }, [tripId, isWebViewReady, isCollaborating, startCollaboration]);
 
   // Note: Y.js collaboration handles sync automatically through YSupabaseProvider
   // No need for manual step subscription like with Socket.IO
@@ -309,7 +307,6 @@ export default function TripDocumentView() {
   // AI Assistant handlers
   const handleAIPrompt = useCallback(async (prompt: string) => {
     console.log('[TripDocumentView] Starting AI generation with prompt:', prompt);
-    console.log('[TripDocumentView] Resetting hasProcessedTypingRef and hasSavedGeneratedDocRef to false');
 
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
@@ -319,14 +316,13 @@ export default function TripDocumentView() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Reset flags for new generation
-    hasProcessedTypingRef.current = false;
-    hasSavedGeneratedDocRef.current = false;
-    // Use the trip ID for AI generation (not a temporary document ID)
+    // Start generation - Edge Function will participate as Y.js collaborator
     await startGeneration(prompt, tripId);
   }, [startGeneration, isCollaborating, startCollaboration, tripId]);
 
   // Inline AI edit handler (triggered by @ai comments)
+  // NOTE: This feature needs to be redesigned for Y.js collaboration
+  // For now, inline edits will replace the entire document
   const handleInlineAIEdit = useCallback(async (
     instruction: string,
     selectedText: string,
@@ -334,7 +330,7 @@ export default function TripDocumentView() {
     to: number
   ) => {
     console.log('[TripDocumentView] Starting inline AI edit');
-    console.log('[TripDocumentView] Resetting hasProcessedTypingRef to false for inline edit');
+    console.log('[TripDocumentView] WARNING: Inline edits not yet supported with Y.js collaboration');
 
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
@@ -343,9 +339,6 @@ export default function TripDocumentView() {
       // Give collaboration a moment to establish connection
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-
-    // Reset flag so new content can be typed
-    hasProcessedTypingRef.current = false;
 
     // Build prompt with context
     const prompt = `The user selected this text from their trip document:
@@ -358,178 +351,13 @@ Please generate replacement content that addresses the user's request. Only retu
 
     console.log('[TripDocumentView] Inline edit prompt:', prompt);
 
-    // Store the range to delete
-    (window as any).__inlineEditRange = { from, to };
-
-    // Start generation with trip ID
+    // TODO: Implement proper inline edit with Y.js transactions
+    // For now, just generate content (will replace entire document)
     await startGeneration(prompt, tripId);
   }, [startGeneration, isCollaborating, startCollaboration, tripId]);
 
-  // Helper function for delays
-  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Process typing instructions when they become available
-  useEffect(() => {
-    const processTypingInstructions = async () => {
-      console.log('[TripDocumentView] useEffect triggered:', {
-        useTypingMode: streamState.useTypingMode,
-        instructionsLength: streamState.typingInstructions.length,
-        isTyping,
-        hasProcessed: hasProcessedTypingRef.current
-      });
-
-      // Don't process if no instructions, already typing, or already processed this generation
-      if (
-        !streamState.useTypingMode ||
-        streamState.typingInstructions.length === 0 ||
-        isTyping ||
-        hasProcessedTypingRef.current
-      ) {
-        console.log('[TripDocumentView] Skipping typing simulation - guard condition failed');
-        return;
-      }
-
-      console.log('[TripDocumentView] Starting typing simulation...');
-
-      // Close AI modal immediately so user can see typing
-      setShowAIModal(false);
-
-      setIsTyping(true);
-      hasProcessedTypingRef.current = true; // Mark as processed
-
-      // Create abort controller for cancellation
-      typingAbortRef.current = new AbortController();
-
-      try {
-        // Focus editor and show typing cursor
-        if (documentRef.current) {
-          documentRef.current.focusEditor();
-          await sleep(500);
-          documentRef.current.sendCommand('showTypingCursor');
-        }
-
-        // Check if this is an inline edit (with stored range to delete)
-        const inlineEditRange = (window as any).__inlineEditRange;
-        let instructions = [...streamState.typingInstructions];
-
-        if (inlineEditRange) {
-          console.log('[TripDocumentView] Inline edit detected, prepending delete instructions');
-          // Prepend instructions to select and delete the original content
-          instructions = [
-            { type: 'selectRange', from: inlineEditRange.from, to: inlineEditRange.to } as TypingInstruction,
-            { type: 'deleteSelection' } as TypingInstruction,
-            ...instructions
-          ];
-          // Clear the stored range
-          delete (window as any).__inlineEditRange;
-        }
-
-        console.log(`[TripDocumentView] Processing ${instructions.length} instructions`);
-
-        for (let i = 0; i < instructions.length; i++) {
-          if (typingAbortRef.current.signal.aborted) {
-            console.log('[TripDocumentView] Typing aborted');
-            break;
-          }
-
-          const instruction = instructions[i];
-
-          if (instruction.type === 'selectRange') {
-            // Select a specific range in the document
-            console.log('[TripDocumentView] Selecting range:', instruction.from, 'to', instruction.to);
-            if (documentRef.current) {
-              documentRef.current.sendCommand('selectRange', {
-                from: instruction.from,
-                to: instruction.to
-              });
-            }
-            await sleep(300);
-          } else if (instruction.type === 'deleteSelection') {
-            // Delete the current selection
-            console.log('[TripDocumentView] Deleting selection');
-            if (documentRef.current) {
-              documentRef.current.sendCommand('deleteSelection');
-            }
-            await sleep(300);
-          } else if (instruction.type === 'setHeading') {
-            // Send heading command
-            if (documentRef.current) {
-              documentRef.current.sendCommand('setHeading', { level: instruction.level });
-            }
-            await sleep(100);
-          } else if (instruction.type === 'typeText') {
-            // Type character by character
-            const text = instruction.text;
-            for (let j = 0; j < text.length; j++) {
-              if (typingAbortRef.current.signal.aborted) break;
-
-              const char = text[j];
-              if (documentRef.current) {
-                documentRef.current.typeCharacter(char);
-              }
-
-              await sleep(100);
-            }
-          } else if (instruction.type === 'insertParagraph') {
-            // Insert paragraph break
-            if (documentRef.current) {
-              documentRef.current.insertParagraph();
-            }
-            await sleep(500);
-          } else if (instruction.type === 'insertGeoMark') {
-            // Type the text character by character
-            const text = instruction.text;
-            for (let j = 0; j < text.length; j++) {
-              if (typingAbortRef.current.signal.aborted) break;
-
-              const char = text[j];
-              if (documentRef.current) {
-                documentRef.current.typeCharacter(char);
-              }
-
-              await sleep(50);
-            }
-
-            // Select and convert to geo-mark
-            if (documentRef.current) {
-              const textLength = text.length;
-              documentRef.current.sendCommand('selectBackward', { length: textLength });
-              await sleep(300);
-
-              const geoMarkData = {
-                geoId: instruction.attrs.geoId || `loc-${Date.now()}`,
-                placeName: instruction.attrs.placeName || text,
-                lat: instruction.attrs.lat,
-                lng: instruction.attrs.lng,
-                colorIndex: parseInt(instruction.attrs.colorIndex || '0'),
-                coordSource: instruction.attrs.coordSource || 'llm-fallback',
-              };
-
-              documentRef.current.createGeoMarkWithData(geoMarkData);
-              await sleep(200);
-            }
-          }
-        }
-
-        console.log('[TripDocumentView] Typing complete!');
-
-        // Wait a bit for the last onChange to fire
-        await sleep(200);
-      } catch (error) {
-        console.error('[TripDocumentView] Typing error:', error);
-      } finally {
-        // Hide the typing cursor indicator
-        if (documentRef.current) {
-          documentRef.current.sendCommand('hideTypingCursor');
-        }
-        setIsTyping(false);
-        typingAbortRef.current = null;
-        // Keep hasProcessedTypingRef.current = true to prevent re-processing
-      }
-    };
-
-    processTypingInstructions();
-  }, [streamState.typingInstructions, streamState.useTypingMode]); // Removed isTyping and documentRef from dependencies
+  // NOTE: Typing simulation has been removed. AI generation now uses Y.js collaboration,
+  // so updates appear automatically through the existing collaboration infrastructure.
 
   return (
     <View style={styles.container}>
@@ -695,6 +523,7 @@ Please generate replacement content that addresses the user's request. Only retu
             onShowCommentEditor={handleShowCommentEditor}
             onCommentClick={handleCommentClick}
             geoMarkDataToCreate={geoMarkDataToCreate}
+            onReady={handleWebViewReady}
           />
         </View>
 
@@ -707,21 +536,11 @@ Please generate replacement content that addresses the user's request. Only retu
       </View>
 
       {/* AI Assistant Modal */}
-      {console.log('[TripDocumentView] Rendering AIAssistantModal:', {
-        showAIModal,
-        isStreaming: streamState.isStreaming,
-        isTyping,
-        isGenerating: streamState.isStreaming || isTyping,
-      })}
       <AIAssistantModal
         visible={showAIModal}
-        onClose={() => {
-          if (!isTyping) {
-            setShowAIModal(false);
-          }
-        }}
+        onClose={() => setShowAIModal(false)}
         onSubmit={handleAIPrompt}
-        isGenerating={streamState.isStreaming || isTyping}
+        isGenerating={streamState.isGenerating}
       />
 
       {/* Share Modal */}

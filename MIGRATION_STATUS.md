@@ -51,23 +51,37 @@ All Socket.IO features have been successfully migrated to Supabase Edge Function
 - Updated `useStreamingTripGeneration` hook to use Realtime subscriptions
 - Removed Socket.IO event listeners
 
-**Architecture:**
-- Edge Function streams from Mistral AI using async iteration
-- Each content delta is broadcast via Supabase Realtime
-- Frontend accumulates HTML and updates ProseMirror document incrementally
-- Generated document is saved to trip when streaming completes
-- Channel cleanup on completion or error
+**Architecture (Y.js-Based Collaboration):**
+- Edge Function participates as a regular Y.js collaborator on the document
+- Streams from Mistral AI, buffering HTML until completion
+- Parses complete HTML into ProseMirror JSON structure
+- Applies changes directly to Y.js document via transactions
+- All changes sync automatically via existing Y.js/Supabase Realtime infrastructure
+- Multiple clients see AI typing in real-time through CRDT sync
+- Channel cleanup and database persistence on completion
+
+**AI as Collaborator:**
+1. Edge Function connects to same Y.js document as frontend clients
+2. Uses `YServerProvider` to sync via Supabase Realtime channel
+3. Streams AI response → Buffers HTML → Converts to ProseMirror JSON
+4. Applies to Y.js XmlFragment as atomic transaction
+5. Y.js broadcasts changes to all connected clients automatically
+6. Frontend receives updates through existing collaboration infrastructure
+7. No custom streaming logic needed - Y.js handles everything
 
 **Files Modified:**
-- `/supabase/functions/generate-trip-stream/index.ts` (created)
-- `/expo-app/hooks/useStreamingTripGeneration.ts` (updated)
-- `/expo-app/app/(mock)/trip/[id]/index.tsx` (updated to save generated document)
+- `/supabase/functions/generate-trip-stream/index.ts` (rewritten to use Y.js)
+- `/supabase/functions/_shared/yjs-server-provider.ts` (created - Y.js provider for Deno)
+- `/supabase/functions/_shared/html-to-yjs.ts` (created - HTML to ProseMirror converter)
+- `/expo-app/hooks/useStreamingTripGeneration.ts` (simplified - just calls Edge Function)
+- `/expo-app/app/(mock)/trip/[id]/index.tsx` (removed typing simulation code)
 
-**Fixes Applied:**
-- Added channel subscription in Edge Function before broadcasting
-- Fixed abort controller null reference in async callback
-- Saved generated document to trip storage on completion
-- Prevented infinite loop with ref-based tracking
+**Key Changes:**
+- **Removed custom streaming**: No more HTML buffering or typing instructions on frontend
+- **Removed typing simulation**: No character-by-character animation needed
+- **AI as Y.js peer**: Edge Function connects as regular collaborator
+- **Automatic sync**: Changes appear via existing Y.js collaboration infrastructure
+- **Simpler architecture**: Reuses collaboration code, no duplicate logic
 
 **Edge Function URL:** `http://127.0.0.1:54321/functions/v1/generate-trip-stream`
 

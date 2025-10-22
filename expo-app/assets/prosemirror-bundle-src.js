@@ -147,4 +147,4 @@ window.PM = {
   awarenessProtocol: awarenessProtocol
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully with Y.js support');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js and Supabase support');

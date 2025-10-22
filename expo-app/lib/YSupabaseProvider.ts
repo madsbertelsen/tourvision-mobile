@@ -108,7 +108,29 @@ export class YSupabaseProvider {
     this.channel.on('broadcast', { event: 'yjs-update' }, (payload: any) => {
       this.log('Received yjs-update from remote');
       try {
-        const update = new Uint8Array(payload.update);
+        let update: Uint8Array;
+
+        // Supabase Realtime wraps the payload in a nested structure
+        // The actual data is in payload.payload.update
+        const updateData = payload.payload?.update || payload.update;
+
+        if (!updateData) {
+          console.error('[YSupabaseProvider] No update in payload:', payload);
+          return;
+        }
+
+        // Handle both base64 (new) and array (old) formats for backward compatibility
+        if (typeof updateData === 'string') {
+          // New format: base64 string
+          update = this.base64ToUint8Array(updateData);
+        } else if (Array.isArray(updateData)) {
+          // Old format: array (backward compatibility)
+          update = new Uint8Array(updateData);
+        } else {
+          console.error('[YSupabaseProvider] Unknown update format:', typeof updateData);
+          return;
+        }
+
         Y.applyUpdate(this.ydoc, update, 'remote');
       } catch (error) {
         console.error('[YSupabaseProvider] Error applying update:', error);
@@ -119,7 +141,28 @@ export class YSupabaseProvider {
     this.channel.on('broadcast', { event: 'awareness' }, (payload: any) => {
       this.log('Received awareness update');
       try {
-        const update = new Uint8Array(payload.update);
+        let update: Uint8Array;
+
+        // Supabase Realtime wraps the payload in a nested structure
+        const updateData = payload.payload?.update || payload.update;
+
+        if (!updateData) {
+          console.error('[YSupabaseProvider] No awareness update in payload');
+          return;
+        }
+
+        // Handle both base64 (new) and array (old) formats for backward compatibility
+        if (typeof updateData === 'string') {
+          // New format: base64 string
+          update = this.base64ToUint8Array(updateData);
+        } else if (Array.isArray(updateData)) {
+          // Old format: array (backward compatibility)
+          update = new Uint8Array(updateData);
+        } else {
+          console.error('[YSupabaseProvider] Unknown awareness format:', typeof updateData);
+          return;
+        }
+
         awarenessProtocol.applyAwarenessUpdate(
           this.awareness,
           update,
@@ -174,7 +217,7 @@ export class YSupabaseProvider {
         type: 'broadcast',
         event: 'yjs-update',
         payload: {
-          update: Array.from(update),
+          update: this.uint8ArrayToBase64(update),
         },
       });
     }
@@ -197,7 +240,7 @@ export class YSupabaseProvider {
         type: 'broadcast',
         event: 'awareness',
         payload: {
-          update: Array.from(update),
+          update: this.uint8ArrayToBase64(update),
         },
       });
     }
@@ -223,7 +266,32 @@ export class YSupabaseProvider {
 
       if (data?.yjs_state) {
         this.log('Applying initial state, clock:', data.yjs_clock);
-        const state = new Uint8Array(data.yjs_state);
+
+        // Handle different formats from Supabase client
+        let state: Uint8Array;
+
+        if (typeof data.yjs_state === 'string') {
+          // Base64 encoded string
+          this.log('Y.js state is base64 string, decoding...');
+          state = this.base64ToUint8Array(data.yjs_state);
+        } else if (data.yjs_state instanceof Uint8Array) {
+          // Already a Uint8Array
+          this.log('Y.js state is already Uint8Array');
+          state = data.yjs_state;
+        } else if (Array.isArray(data.yjs_state)) {
+          // Array of bytes
+          this.log('Y.js state is array, converting...');
+          state = new Uint8Array(data.yjs_state);
+        } else if (data.yjs_state instanceof ArrayBuffer) {
+          // ArrayBuffer
+          this.log('Y.js state is ArrayBuffer, converting...');
+          state = new Uint8Array(data.yjs_state);
+        } else {
+          console.error('[YSupabaseProvider] Unknown yjs_state format:', typeof data.yjs_state);
+          return;
+        }
+
+        this.log('Applying Y.js state, size:', state.length);
         Y.applyUpdate(this.ydoc, state, 'remote');
       } else {
         this.log('No initial state found, document is empty');
@@ -313,18 +381,23 @@ export class YSupabaseProvider {
     // Stop auto-save
     this.stopAutoSave();
 
-    // Remove event listeners
-    this.ydoc.off('update', this.handleLocalUpdate);
-    this.awareness.off('change', this.handleAwarenessChange);
-
-    // Unsubscribe from channel
+    // Unsubscribe from channel first
     if (this.channel) {
       await this.supabase.removeChannel(this.channel);
       this.channel = null;
     }
 
-    // Destroy awareness
-    this.awareness.destroy();
+    // Remove event listeners before destroying awareness
+    this.ydoc.off('update', this.handleLocalUpdate);
+    this.awareness.off('change', this.handleAwarenessChange);
+
+    // Destroy awareness (this may trigger final events)
+    try {
+      this.awareness.destroy();
+    } catch (error) {
+      // Ignore errors during awareness destruction
+      console.warn('[YSupabaseProvider] Error destroying awareness:', error);
+    }
 
     this.synced = false;
     this.emit('destroyed', {});
@@ -383,5 +456,29 @@ export class YSupabaseProvider {
       }
     });
     return users;
+  }
+
+  /**
+   * Convert Uint8Array to base64 string
+   */
+  private uint8ArrayToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Convert base64 string to Uint8Array
+   */
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
   }
 }

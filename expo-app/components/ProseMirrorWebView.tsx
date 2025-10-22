@@ -2,10 +2,6 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef,
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-import * as Y from 'yjs';
-import { applyAwarenessUpdate } from 'y-protocols/awareness';
-import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
-import { supabase } from '@/lib/supabase/client';
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -29,6 +25,9 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
         const messageData = typeof message === 'string' ? message : JSON.stringify(message);
         iframeRef.current.contentWindow.postMessage(messageData, '*');
       }
+    },
+    getContentWindow: () => {
+      return iframeRef.current?.contentWindow;
     }
   }));
 
@@ -114,6 +113,7 @@ interface ProseMirrorWebViewProps {
   onToolbarStateChange?: (state: any) => void;
   onShowCommentEditor?: (data: { selectedText: string; from: number; to: number }) => void;
   onCommentClick?: (commentAttrs: any) => void;
+  onReady?: () => void;
 }
 
 // We'll load the HTML from the assets folder
@@ -134,6 +134,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       onToolbarStateChange,
       onShowCommentEditor,
       onCommentClick,
+      onReady,
     },
     ref
   ) => {
@@ -145,8 +146,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     const isInternalChangeRef = useRef(false);
 
     // Y.js collaboration state
-    const ydocRef = useRef<Y.Doc | null>(null);
-    const providerRef = useRef<YSupabaseProvider | null>(null);
 
     // Internal send message that doesn't check isReady (for use in ready handler)
     const sendMessageInternal = useCallback((message: any) => {
@@ -199,6 +198,40 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               // Reset hash to force content update
               lastContentHashRef.current = null;
               setIsReady(true);
+
+              // Inject Supabase client and session into iframe (web only)
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                const { supabase } = require('@/lib/supabase/client');
+                const contentWindow = (webViewRef.current as any)?.getContentWindow?.();
+                if (contentWindow) {
+                  // Get the current session
+                  supabase.auth.getSession().then(({ data: { session } }: any) => {
+                    if (session) {
+                      // Pass both client config and session
+                      contentWindow.__supabaseConfig = {
+                        url: process.env.EXPO_PUBLIC_SUPABASE_URL,
+                        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+                        session: session
+                      };
+                      console.log('[ProseMirrorWebView] Injected Supabase config with session into iframe');
+                    } else {
+                      console.error('[ProseMirrorWebView] No session available to inject');
+                      contentWindow.__supabaseConfig = {
+                        url: process.env.EXPO_PUBLIC_SUPABASE_URL,
+                        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+                        session: null
+                      };
+                    }
+                  });
+                } else {
+                  console.error('[ProseMirrorWebView] Could not access iframe contentWindow');
+                }
+              }
+
+              // Notify parent that WebView is ready
+              if (onReady) {
+                onReady();
+              }
 
               // Inject shared CSS styles with consistent padding
               const sharedCSS = toCSS(PROSE_STYLES);
@@ -316,34 +349,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               break;
 
             // Y.js message handlers
-            case 'yjsUpdate':
-              // Handle Y.js updates from WebView
-              if (ydocRef.current && data.update) {
-                console.log('[ProseMirrorWebView] Received Y.js update from WebView, size:', data.update.length);
-                try {
-                  const update = new Uint8Array(data.update);
-                  Y.applyUpdate(ydocRef.current, update);
-                  console.log('[ProseMirrorWebView] Applied Y.js update to local ydoc');
-                } catch (error) {
-                  console.error('[ProseMirrorWebView] Error applying Y.js update:', error);
-                }
-              }
-              break;
-
-            case 'awarenessUpdate':
-              // Handle awareness updates from WebView
-              if (providerRef.current && data.update) {
-                console.log('[ProseMirrorWebView] Received awareness update from WebView, size:', data.update.length);
-                try {
-                  const update = new Uint8Array(data.update);
-                  applyAwarenessUpdate(providerRef.current.awareness, update, 'webview');
-                  console.log('[ProseMirrorWebView] Applied awareness update');
-                } catch (error) {
-                  console.error('[ProseMirrorWebView] Error applying awareness update:', error);
-                }
-              }
-              break;
-
             default:
               console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
           }
@@ -388,20 +393,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     useEffect(() => {
       return () => {
         // Cleanup on unmount
-        console.log('[ProseMirrorWebView] Component unmounting - resetting all refs and cleaning up Y.js');
-
-        // Clean up Y.js resources
-        if (providerRef.current) {
-          providerRef.current.destroy().catch(err =>
-            console.error('[ProseMirrorWebView] Error destroying provider on unmount:', err)
-          );
-          providerRef.current = null;
-        }
-
-        if (ydocRef.current) {
-          ydocRef.current.destroy();
-          ydocRef.current = null;
-        }
+        console.log('[ProseMirrorWebView] Component unmounting - resetting refs');
 
         setIsReady(false);
         isInternalChangeRef.current = false;
@@ -527,47 +519,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.log('[ProseMirrorWebView] Starting Y.js collaboration:', { documentId, userId, userName });
 
           try {
-            // Create Y.Doc
-            ydocRef.current = new Y.Doc();
-            console.log('[ProseMirrorWebView] Created Y.Doc with clientID:', ydocRef.current.clientID);
-
-            // Create Supabase provider
-            providerRef.current = new YSupabaseProvider(ydocRef.current, {
-              supabase,
-              documentId,
-              userId,
-              userName,
-              debug: true
-            });
-
-            console.log('[ProseMirrorWebView] Created YSupabaseProvider');
-
-            // Listen for Y.js updates to forward to WebView
-            ydocRef.current.on('update', (update: Uint8Array, origin: any) => {
-              if (origin === 'remote') {
-                console.log('[ProseMirrorWebView] Y.js remote update, forwarding to WebView, size:', update.length);
-                sendMessage({
-                  type: 'yjsUpdate',
-                  data: { update: Array.from(update) }
-                });
-              }
-            });
-
-            // Listen for awareness updates
-            providerRef.current.awareness.on('change', () => {
-              // Get the awareness update for all clients
-              const { encodeAwarenessUpdate } = require('y-protocols/awareness');
-              const states = Array.from(providerRef.current!.awareness.getStates().keys());
-              const update = encodeAwarenessUpdate(providerRef.current!.awareness, states);
-
-              console.log('[ProseMirrorWebView] Awareness changed, forwarding to WebView');
-              sendMessage({
-                type: 'awarenessUpdate',
-                data: { update: Array.from(update) }
-              });
-            });
-
-            // Tell WebView to initialize Y.js
+            // Tell WebView to initialize Y.js with Supabase connection
+            // The Supabase client was already injected during the 'ready' event
             sendMessage({
               type: 'startCollaboration',
               documentId,
@@ -575,7 +528,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               userName
             });
 
-            console.log('[ProseMirrorWebView] Y.js collaboration started successfully');
+            console.log('[ProseMirrorWebView] Y.js collaboration request sent to WebView');
           } catch (error) {
             console.error('[ProseMirrorWebView] Failed to start Y.js collaboration:', error);
             throw error;
@@ -585,24 +538,10 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.log('[ProseMirrorWebView] Stopping Y.js collaboration');
 
           try {
-            // Cleanup provider
-            if (providerRef.current) {
-              await providerRef.current.destroy();
-              providerRef.current = null;
-              console.log('[ProseMirrorWebView] Provider destroyed');
-            }
-
-            // Cleanup ydoc
-            if (ydocRef.current) {
-              ydocRef.current.destroy();
-              ydocRef.current = null;
-              console.log('[ProseMirrorWebView] Y.Doc destroyed');
-            }
-
-            // Tell WebView to stop
+            // Tell WebView to stop (it will handle provider cleanup)
             sendMessage({ type: 'stopCollaboration' });
 
-            console.log('[ProseMirrorWebView] Y.js collaboration stopped successfully');
+            console.log('[ProseMirrorWebView] Y.js collaboration stop request sent to WebView');
           } catch (error) {
             console.error('[ProseMirrorWebView] Error stopping Y.js collaboration:', error);
           }

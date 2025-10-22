@@ -331,6 +331,242 @@
       let ydoc = null;
       let yXmlFragment = null;
       let awareness = null;
+      let yProvider = null; // Supabase Y.js provider
+
+      // Buffer for Y.js updates received before collaboration is initialized
+      let pendingYjsUpdates = [];
+
+      // WebView Y.js Provider for Supabase Realtime
+      class YWebViewProvider {
+        constructor(ydoc, { supabase, documentId, userId, userName, debug = false }) {
+          this.ydoc = ydoc;
+          this.supabase = supabase;
+          this.documentId = documentId;
+          this.userId = userId;
+          this.userName = userName;
+          this.debug = debug;
+          this.channel = null;
+          this.synced = false;
+
+          this.log('YWebViewProvider initialized for document:', this.documentId);
+        }
+
+        log(...args) {
+          if (this.debug) {
+            console.log('[YWebViewProvider]', ...args);
+          }
+        }
+
+        async connect() {
+          this.log('Connecting to channel:', `doc:${this.documentId}`);
+
+          // Create trip-specific channel using injected Supabase client
+          this.channel = this.supabase.channel(`doc:${this.documentId}`, {
+            config: {
+              broadcast: { self: false }, // Don't receive our own broadcasts
+            },
+          });
+
+          // Listen for Y.js updates from other clients
+          this.channel.on('broadcast', { event: 'yjs-update' }, (payload) => {
+            this.log('Received yjs-update from remote');
+            try {
+              let update;
+
+              // Handle both base64 (new) and array (old) formats
+              const updateData = payload.payload?.update || payload.update;
+
+              if (!updateData) {
+                console.error('[YWebViewProvider] No update in payload:', payload);
+                return;
+              }
+
+              if (typeof updateData === 'string') {
+                // Base64 format
+                update = this.base64ToUint8Array(updateData);
+              } else if (Array.isArray(updateData)) {
+                // Array format (backward compatibility)
+                update = new Uint8Array(updateData);
+              } else {
+                console.error('[YWebViewProvider] Unknown update format:', typeof updateData);
+                return;
+              }
+
+              window.PM.Y.applyUpdate(this.ydoc, update, 'remote');
+              this.log('Applied remote update, size:', update.length);
+            } catch (error) {
+              console.error('[YWebViewProvider] Error applying update:', error);
+            }
+          });
+
+          // Subscribe to channel with timeout
+          await new Promise((resolve, reject) => {
+            // Add timeout to detect hanging
+            const timeout = setTimeout(() => {
+              console.error('[YWebViewProvider] Channel subscription timeout after 10 seconds');
+              reject(new Error('Channel subscription timeout'));
+            }, 10000);
+
+            try {
+              const subscription = this.channel.subscribe(async (status) => {
+                this.log('Channel status:', status);
+
+                if (status === 'SUBSCRIBED') {
+                  clearTimeout(timeout);
+                  this.log('Channel subscribed, loading initial state...');
+                  try {
+                    await this.loadInitialState();
+                    this.synced = true;
+                    this.log('Sync complete, provider ready');
+                    resolve();
+                  } catch (error) {
+                    reject(error);
+                  }
+                }
+
+                if (status === 'CLOSED') {
+                  this.log('Channel closed');
+                  this.synced = false;
+                }
+
+                if (status === 'CHANNEL_ERROR') {
+                  clearTimeout(timeout);
+                  reject(new Error('Channel subscription failed'));
+                }
+              });
+
+              this.log('Subscribe method returned:', subscription);
+
+              // Check if subscription returned an error
+              if (subscription && subscription.error) {
+                clearTimeout(timeout);
+                console.error('[YWebViewProvider] Subscribe error:', subscription.error);
+                reject(subscription.error);
+              }
+            } catch (error) {
+              clearTimeout(timeout);
+              console.error('[YWebViewProvider] Error calling subscribe:', error);
+              reject(error);
+            }
+          });
+
+          // Broadcast local Y.js updates
+          this.ydoc.on('update', this.handleLocalUpdate);
+
+          this.log('Connected and synced');
+        }
+
+        handleLocalUpdate = (update, origin) => {
+          // Don't broadcast updates that came from remote
+          if (origin === 'remote') return;
+
+          this.log('Broadcasting local update, size:', update.length);
+
+          if (this.channel) {
+            this.channel.send({
+              type: 'broadcast',
+              event: 'yjs-update',
+              payload: {
+                update: this.uint8ArrayToBase64(update),
+              },
+            });
+          }
+        };
+
+        async loadInitialState() {
+          this.log('Loading initial state from database');
+
+          try {
+            this.log('Querying trips table for document:', this.documentId);
+
+            // Use injected Supabase client to load initial state
+            const { data, error } = await this.supabase
+              .from('trips')
+              .select('yjs_state, yjs_clock')
+              .eq('id', this.documentId)
+              .single();
+
+            this.log('Query result:', { hasData: !!data, hasError: !!error });
+
+            if (error) {
+              console.error('[YWebViewProvider] Error loading state:', error);
+              // Don't throw - just continue with empty state
+              this.log('Continuing with empty state');
+              return;
+            }
+
+            if (data?.yjs_state) {
+              this.log('Applying initial state, clock:', data.yjs_clock);
+
+              let state;
+
+              if (data.yjs_state instanceof Uint8Array) {
+                state = data.yjs_state;
+              } else if (Array.isArray(data.yjs_state)) {
+                state = new Uint8Array(data.yjs_state);
+              } else if (typeof data.yjs_state === 'string') {
+                // Handle hex or base64
+                if (data.yjs_state.startsWith('\\x')) {
+                  // PostgreSQL bytea format
+                  const hex = data.yjs_state.substring(2);
+                  const bytes = new Uint8Array(hex.length / 2);
+                  for (let i = 0; i < hex.length; i += 2) {
+                    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+                  }
+                  state = bytes;
+                } else {
+                  // Base64
+                  state = this.base64ToUint8Array(data.yjs_state);
+                }
+              } else {
+                console.error('[YWebViewProvider] Unknown yjs_state format:', typeof data.yjs_state);
+                throw new Error('Unknown yjs_state format');
+              }
+
+              this.log('Applying Y.js state, size:', state.length);
+              window.PM.Y.applyUpdate(this.ydoc, state, 'remote');
+            } else {
+              this.log('No initial state found, document is empty');
+            }
+          } catch (error) {
+            console.error('[YWebViewProvider] Error in loadInitialState:', error);
+            throw error;
+          }
+        }
+
+        async destroy() {
+          this.log('Destroying provider');
+
+          // Remove event listeners
+          this.ydoc.off('update', this.handleLocalUpdate);
+
+          // Unsubscribe from channel
+          if (this.channel) {
+            await this.supabase.removeChannel(this.channel);
+            this.channel = null;
+          }
+
+          this.synced = false;
+          this.log('Provider destroyed');
+        }
+
+        uint8ArrayToBase64(bytes) {
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          return btoa(binary);
+        }
+
+        base64ToUint8Array(base64) {
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return bytes;
+        }
+      }
 
       // Create initial document - empty, content will be sent from React Native
       const { DOMParser: PMDOMParser } = window.PM.model;
@@ -521,13 +757,16 @@
           }
 
           // Send document changes to native
-          if (transaction.docChanged) {
+          // NOTE: Skip during Y.js collaboration - sync happens via Y.js, not local storage
+          if (transaction.docChanged && !yProvider) {
             const docJSON = newState.doc.toJSON();
             console.log('[WebView] Document changed, sending to native:', JSON.stringify(docJSON));
             sendMessageToNative({
               type: 'documentChange',
               doc: docJSON
             });
+          } else if (transaction.docChanged && yProvider) {
+            console.log('[WebView] Document changed via Y.js, skipping native sync');
           }
 
           // Send selection changes to native
@@ -1194,99 +1433,174 @@
                 break;
               }
 
-              try {
-                const { documentId, userId, userName } = data;
-                console.log('[WebView] Creating Y.Doc for document:', documentId);
+              (async () => {
+                try {
+                  const { documentId, userId, userName } = data;
+                  console.log('[WebView] Creating Y.js collaboration for document:', documentId);
 
-                // Create Y.Doc and fragment
-                ydoc = new window.PM.Y.Doc();
-                yXmlFragment = ydoc.getXmlFragment('prosemirror');
-                awareness = new window.PM.Awareness(ydoc);
+                  // Get Supabase config from parent window
+                  const supabaseConfig = window.__supabaseConfig;
 
-                // Set local awareness state
-                awareness.setLocalStateField('user', {
-                  id: userId,
-                  name: userName,
-                  color: getRandomColor()
-                });
+                  if (!supabaseConfig) {
+                    throw new Error('Supabase config not injected from parent');
+                  }
 
-                console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
+                  console.log('[WebView] Creating Supabase client with injected config');
 
-                // Get current document content
-                const currentDoc = editorView.state.doc;
+                  // Create a new Supabase client with the session
+                  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+                  const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey);
 
-                // Recreate editor with Y.js plugins
-                const newState = EditorState.create({
-                  schema: schema,
-                  doc: currentDoc,
-                  plugins: [
-                    window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
-                    window.PM.yProsemirror.yCursorPlugin(awareness),
-                    window.PM.yProsemirror.yUndoPlugin(),
-                    keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                    keymap(baseKeymap)
-                  ]
-                });
+                  // Set the session if available
+                  if (supabaseConfig.session) {
+                    await supabase.auth.setSession(supabaseConfig.session);
+                    console.log('[WebView] Session set in Supabase client');
+                  } else {
+                    console.warn('[WebView] No session available - collaboration may fail');
+                  }
 
-                editorView.updateState(newState);
-                console.log('[WebView] Editor state updated with Y.js plugins');
+                  // Create Y.Doc and fragment
+                  ydoc = new window.PM.Y.Doc();
+                  yXmlFragment = ydoc.getXmlFragment('prosemirror');
+                  awareness = new window.PM.Awareness(ydoc);
 
-                // Set up listeners
-                setupYjsListeners();
+                  // Set local awareness state
+                  awareness.setLocalStateField('user', {
+                    id: userId,
+                    name: userName,
+                    color: getRandomColor()
+                  });
 
-                // Update UI
-                const statusEl = document.getElementById('collab-status');
-                if (statusEl) {
-                  statusEl.textContent = 'Connected (Y.js)';
-                  statusEl.className = 'connected';
+                  console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
+
+                  // Create and connect Y.js provider
+                  yProvider = new YWebViewProvider(ydoc, {
+                    supabase,
+                    documentId,
+                    userId,
+                    userName,
+                    debug: true
+                  });
+
+                  console.log('[WebView] Y.js provider created, connecting...');
+                  await yProvider.connect();
+                  console.log('[WebView] Y.js provider connected and synced');
+
+                  // Debug: Check what's in the YXmlFragment
+                  console.log('[WebView] YXmlFragment length before editor creation:', yXmlFragment.length);
+                  console.log('[WebView] YXmlFragment first child:', yXmlFragment.length > 0 ? yXmlFragment.get(0) : 'empty');
+
+                  // Debug: Try to manually convert fragment to see what's there
+                  try {
+                    const debugDoc = yXmlFragment.toDOM();
+                    console.log('[WebView] YXmlFragment DOM content:', debugDoc);
+                  } catch (e) {
+                    console.log('[WebView] Could not convert YXmlFragment to DOM:', e.message);
+                  }
+
+                  // Recreate editor with Y.js plugins
+                  // NOTE: Do NOT pass a doc parameter - ySyncPlugin will create the doc from YXmlFragment
+                  const newState = EditorState.create({
+                    schema: schema,
+                    plugins: [
+                      window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
+                      window.PM.yProsemirror.yCursorPlugin(awareness),
+                      window.PM.yProsemirror.yUndoPlugin(),
+                      keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                      keymap(baseKeymap)
+                    ]
+                  });
+
+                  editorView.updateState(newState);
+                  console.log('[WebView] Editor state updated with Y.js plugins');
+                  console.log('[WebView] Editor doc after Y.js sync:', editorView.state.doc.toString());
+                  console.log('[WebView] Editor doc content:', editorView.state.doc.content.toString());
+
+                  // Update UI
+                  const statusEl = document.getElementById('collab-status');
+                  if (statusEl) {
+                    statusEl.textContent = 'Connected (Y.js)';
+                    statusEl.className = 'connected';
+                  }
+
+                  // Notify React Native
+                  sendMessageToNative({
+                    type: 'collaborationStarted',
+                    success: true,
+                    clientId: ydoc.clientID
+                  });
+
+                  console.log('[WebView] Y.js collaboration started successfully');
+                } catch (error) {
+                  console.error('[WebView] Failed to start Y.js collaboration:', error);
+                  sendMessageToNative({
+                    type: 'collaborationStarted',
+                    success: false,
+                    error: error.message
+                  });
                 }
-
-                // Notify React Native
-                sendMessageToNative({
-                  type: 'collaborationStarted',
-                  success: true,
-                  clientId: ydoc.clientID
-                });
-
-                console.log('[WebView] Y.js collaboration started successfully');
-              } catch (error) {
-                console.error('[WebView] Failed to start Y.js collaboration:', error);
-                sendMessageToNative({
-                  type: 'collaborationStarted',
-                  success: false,
-                  error: error.message
-                });
-              }
+              })();
               break;
 
             case 'stopCollaboration':
-              console.log('[WebView] Stopping collaboration');
-              if (socket) {
-                socket.disconnect();
-                socket = null;
-              }
-              if (collabConnection) {
-                collabConnection.disconnect();
-                collabConnection = null;
-              }
+              console.log('[WebView] Stopping Y.js collaboration');
 
-              // Remove collaboration plugin
-              if (editorView && collabPlugin) {
-                const plugins = editorView.state.plugins.filter(p => p !== collabPlugin);
-                const newState = editorView.state.reconfigure({ plugins });
-                editorView.updateState(newState);
-                collabPlugin = null;
-              }
+              (async () => {
+                try {
+                  // Destroy Y.js provider
+                  if (yProvider) {
+                    await yProvider.destroy();
+                    yProvider = null;
+                    console.log('[WebView] Y.js provider destroyed');
+                  }
 
-              // Update UI
-              const statusEl = document.getElementById('collab-status');
-              statusEl.textContent = 'Disconnected';
-              statusEl.className = 'disconnected';
-              document.getElementById('collab-users').innerHTML = '';
+                  // Clean up Y.js resources
+                  if (ydoc) {
+                    ydoc.destroy();
+                    ydoc = null;
+                    yXmlFragment = null;
+                    awareness = null;
+                    console.log('[WebView] Y.js resources cleaned up');
+                  }
 
-              sendMessageToNative({
-                type: 'collaborationStopped'
-              });
+                  // Remove Y.js plugins and restore editor with basic plugins
+                  if (editorView) {
+                    const currentDoc = editorView.state.doc;
+                    const newState = EditorState.create({
+                      schema: schema,
+                      doc: currentDoc,
+                      plugins: [
+                        history(),
+                        keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                        keymap(baseKeymap)
+                      ]
+                    });
+                    editorView.updateState(newState);
+                    console.log('[WebView] Editor restored with basic plugins');
+                  }
+
+                  // Update UI
+                  const statusEl = document.getElementById('collab-status');
+                  if (statusEl) {
+                    statusEl.textContent = 'Disconnected';
+                    statusEl.className = 'disconnected';
+                  }
+
+                  sendMessageToNative({
+                    type: 'collaborationStopped',
+                    success: true
+                  });
+
+                  console.log('[WebView] Y.js collaboration stopped successfully');
+                } catch (error) {
+                  console.error('[WebView] Error stopping Y.js collaboration:', error);
+                  sendMessageToNative({
+                    type: 'collaborationStopped',
+                    success: false,
+                    error: error.message
+                  });
+                }
+              })();
               break;
 
             case 'applySteps':
@@ -1319,18 +1633,39 @@
               break;
 
             case 'yjsUpdate':
-              // Handle incoming Y.js update from React Native
-              if (ydoc && data.update) {
+              // Handle incoming Y.js update from React Native (base64 encoded)
+              console.log('[WebView] yjsUpdate message received, data:', {
+                hasUpdateBase64: !!data.updateBase64,
+                updateBase64Type: typeof data.updateBase64,
+                updateBase64Length: data.updateBase64 ? data.updateBase64.length : 0,
+                ydocReady: !!ydoc
+              });
+
+              if (data.updateBase64) {
                 try {
-                  const update = new Uint8Array(data.update);
-                  console.log('[WebView] Applying Y.js update from native, size:', update.length);
-                  window.PM.Y.applyUpdate(ydoc, update, 'remote');
-                  console.log('[WebView] Y.js update applied successfully');
+                  // Decode base64 to Uint8Array
+                  const binary = atob(data.updateBase64);
+                  const bytes = new Uint8Array(binary.length);
+                  for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                  }
+                  console.log('[WebView] Decoded base64 update, byte size:', bytes.length);
+
+                  if (ydoc) {
+                    // Y.js is initialized, apply update immediately
+                    console.log('[WebView] Applying Y.js update from native, size:', bytes.length);
+                    window.PM.Y.applyUpdate(ydoc, bytes, 'remote');
+                    console.log('[WebView] Y.js update applied successfully');
+                  } else {
+                    // Buffer the update until Y.js is initialized
+                    console.log('[WebView] Buffering Y.js update (ydoc not ready yet)');
+                    pendingYjsUpdates.push(bytes);
+                  }
                 } catch (error) {
-                  console.error('[WebView] Error applying Y.js update:', error);
+                  console.error('[WebView] Error decoding/applying Y.js update:', error);
                 }
               } else {
-                console.warn('[WebView] Received yjsUpdate but ydoc not initialized or no update data');
+                console.warn('[WebView] Received yjsUpdate but no updateBase64 data');
               }
               break;
 

@@ -11,7 +11,8 @@ import 'react-native-reanimated';
 import '../global.css';
 
 import { useColorScheme } from '@/components/useColorScheme';
-// Authentication disabled - removed AuthProvider and useAuth imports
+import { AuthProvider, useAuth } from '@/lib/supabase/auth-context';
+import { useRouter, useSegments } from 'expo-router';
 
 const queryClient = new QueryClient();
 
@@ -58,19 +59,34 @@ function RootLayoutNav() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <ProtectedLayout />
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <ProtectedLayout />
+          </ThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
 
 function ProtectedLayout() {
-  // Authentication disabled - app is now public
-  // const { isAuthenticated, isLoading } = useAuth();
-  // const segments = useSegments();
-  // const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      // Redirect to login if not authenticated and not in auth group
+      router.replace('/(auth)/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      // Redirect to home if authenticated and in auth group
+      router.replace('/(mock)');
+    }
+  }, [isAuthenticated, isLoading, segments]);
 
   return (
     <Stack>
