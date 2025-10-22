@@ -178,7 +178,8 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     });
 
     // Create abort controller for cancellation
-    abortControllerRef.current = new AbortController();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       console.log('[StreamingHook] Starting generation with sessionId:', sessionId);
@@ -271,7 +272,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
                 model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
                 temperature: 0.7,
               }),
-              signal: abortControllerRef.current.signal,
+              signal: abortController.signal,
             });
 
             if (!response.ok) {
