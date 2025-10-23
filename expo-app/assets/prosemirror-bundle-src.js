@@ -15,7 +15,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 
 // Import Y.js for CRDT-based collaboration
 import * as Y from 'yjs';
-import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
+import { ySyncPlugin, yCursorPlugin, yUndoPlugin, prosemirrorToYXmlFragment } from 'y-prosemirror';
 import * as awarenessProtocol from 'y-protocols/awareness';
 
 // Import Hocuspocus provider for WebSocket collaboration
@@ -145,7 +145,7 @@ window.PM = {
   collab: { CollabConnection, createCollabPlugin, initializeCollaboration },
   // Y.js exports for CRDT collaboration
   Y: Y,
-  yProsemirror: { ySyncPlugin, yCursorPlugin, yUndoPlugin },
+  yProsemirror: { ySyncPlugin, yCursorPlugin, yUndoPlugin, prosemirrorToYXmlFragment },
   Awareness: awarenessProtocol.Awareness,
   awarenessProtocol: awarenessProtocol,
   // Hocuspocus provider for WebSocket collaboration

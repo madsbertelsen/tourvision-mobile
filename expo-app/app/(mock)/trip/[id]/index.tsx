@@ -541,7 +541,7 @@ Please generate replacement content that addresses the user's request. Only retu
           <ProseMirrorWebView
             key={tripId} // Force remount when trip changes
             ref={documentRef}
-            content={null} // Don't send initial content - Y.js sync will load from database
+            content={currentDoc} // LOCAL-FIRST: Load from AsyncStorage, then sync to server
             editable={isEditMode}
             onChange={handleDocumentChange}
             onSelectionChange={handleSelectionChange}
