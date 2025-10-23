@@ -115,11 +115,11 @@ const hocuspocus = new Hocuspocus({
       console.log('[Hocuspocus] Encoded document size:', binary.length, 'bytes');
 
       // Update the trips table with Y.js state
+      // Note: yjs_clock is not needed with Hocuspocus - Y.js state binary contains all version info
       const { error } = await supabase
         .from('trips')
         .update({
           yjs_state: binary,
-          yjs_clock: Date.now(), // Update clock for versioning
           updated_at: new Date().toISOString()
         })
         .eq('id', documentName);
