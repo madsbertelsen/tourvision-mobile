@@ -1518,6 +1518,18 @@
                     },
                     onSynced: ({ state }) => {
                       console.log('[WebView] Hocuspocus synced:', state);
+
+                      // Send the current document state to React Native after sync
+                      // This ensures React has the latest content from the database
+                      setTimeout(() => {
+                        if (editorView) {
+                          console.log('[WebView] Sending document state after Hocuspocus sync');
+                          sendMessageToNative({
+                            type: 'stateResponse',
+                            state: editorView.state.doc.toJSON()
+                          });
+                        }
+                      }, 500); // Small delay to ensure editor is ready
                     }
                   });
 
