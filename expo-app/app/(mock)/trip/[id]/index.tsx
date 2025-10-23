@@ -60,6 +60,11 @@ export default function TripDocumentView() {
   // Track keyboard visibility
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  // Track window width for responsive layout
+  const [windowWidth, setWindowWidth] = useState(
+    Platform.OS === 'web' && typeof window !== 'undefined' ? window.innerWidth : 0
+  );
+
   useEffect(() => {
     const keyboardDidShow = Keyboard.addListener('keyboardWillShow', () => {
       setKeyboardVisible(true);
@@ -72,6 +77,18 @@ export default function TripDocumentView() {
       keyboardDidShow.remove();
       keyboardDidHide.remove();
     };
+  }, []);
+
+  // Listen for window resize on web
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
   const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
 
@@ -390,51 +407,47 @@ Please generate replacement content that addresses the user's request. Only retu
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title} numberOfLines={1}>
-          {currentTrip?.title || 'Trip'}
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          onPress={() => setShowShareModal(true)}
-          style={styles.shareButton}
-        >
-          <Ionicons name="share-outline" size={20} color="#3B82F6" />
-          <Text style={styles.shareButtonText}>Share</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={toggleEditMode}
-          style={[styles.button, isEditMode && styles.buttonActive]}
-        >
-          <Text style={[styles.buttonText, isEditMode && styles.buttonTextActive]}>
-            {isEditMode ? 'Read Mode' : 'Edit Mode'}
-          </Text>
-        </TouchableOpacity>
-
-        {isEditMode && (
-          <TouchableOpacity
-            onPress={createGeoMark}
-            style={[styles.button, selectionEmpty && styles.buttonDisabled]}
-            disabled={selectionEmpty}
-          >
-            <Text style={[styles.buttonText, selectionEmpty && styles.buttonTextDisabled]}>
-              Create Location
-            </Text>
+      {/* Compact Header with Controls */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#3B82F6" />
           </TouchableOpacity>
-        )}
-      </View>
 
-      {/* Collaboration Bar */}
-      {tripId && <CollaborationBar tripId={tripId} />}
+          <Text style={styles.title} numberOfLines={1}>
+            {currentTrip?.title || 'Trip'}
+          </Text>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => setShowShareModal(true)}
+              style={styles.iconButton}
+            >
+              <Ionicons name="share-outline" size={22} color="#6B7280" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={toggleEditMode}
+              style={[styles.iconButton, isEditMode && styles.iconButtonActive]}
+            >
+              <Ionicons name={isEditMode ? "book" : "create-outline"} size={22} color={isEditMode ? "#fff" : "#6B7280"} />
+            </TouchableOpacity>
+
+            {isEditMode && (
+              <TouchableOpacity
+                onPress={createGeoMark}
+                style={[styles.iconButton, selectionEmpty && styles.iconButtonDisabled]}
+                disabled={selectionEmpty}
+              >
+                <Ionicons name="location-outline" size={22} color={selectionEmpty ? "#D1D5DB" : "#6B7280"} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Collaboration Bar - Inline */}
+        {tripId && <CollaborationBar tripId={tripId} />}
+      </View>
 
       {/* Toolbar - Only in edit mode, above editor */}
       {isEditMode && (
@@ -535,32 +548,46 @@ Please generate replacement content that addresses the user's request. Only retu
         </ScrollView>
       )}
 
-      {/* Editor - Keep WebView mounted but hidden in read mode */}
-      <View style={styles.editorWrapper}>
-        {/* WebView - Always mounted, hidden in read mode */}
-        <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
-          <ProseMirrorWebView
-            key={tripId} // Force remount when trip changes
-            ref={documentRef}
-            content={null} // Y.js will load from Hocuspocus server
-            editable={isEditMode}
-            onChange={handleDocumentChange}
-            onSelectionChange={handleSelectionChange}
-            onToolbarStateChange={handleToolbarStateChange}
-            onGeoMarkNavigate={handleGeoMarkNavigate}
-            onShowGeoMarkEditor={handleShowGeoMarkEditor}
-            onShowCommentEditor={handleShowCommentEditor}
-            onCommentClick={handleCommentClick}
-            geoMarkDataToCreate={geoMarkDataToCreate}
-            onReady={handleWebViewReady}
-            session={session}
-          />
+      {/* Main Content Area - Split view on large screens */}
+      <View style={styles.contentWrapper}>
+        {/* Editor - Keep WebView mounted but hidden in read mode */}
+        <View style={styles.editorWrapper}>
+          {/* WebView - Always mounted, hidden in read mode */}
+          <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
+            <ProseMirrorWebView
+              key={tripId} // Force remount when trip changes
+              ref={documentRef}
+              content={null} // Y.js will load from Hocuspocus server
+              editable={isEditMode}
+              onChange={handleDocumentChange}
+              onSelectionChange={handleSelectionChange}
+              onToolbarStateChange={handleToolbarStateChange}
+              onGeoMarkNavigate={handleGeoMarkNavigate}
+              onShowGeoMarkEditor={handleShowGeoMarkEditor}
+              onShowCommentEditor={handleShowCommentEditor}
+              onCommentClick={handleCommentClick}
+              geoMarkDataToCreate={geoMarkDataToCreate}
+              onReady={handleWebViewReady}
+              session={session}
+            />
+          </View>
+
+          {/* Native Renderer - Only visible in read mode */}
+          {!isEditMode && (
+            <View style={styles.nativeRendererContainer}>
+              <ProseMirrorNativeRenderer content={currentDoc} tripId={tripId} />
+            </View>
+          )}
         </View>
 
-        {/* Native Renderer - Only visible in read mode */}
-        {!isEditMode && (
-          <View style={styles.nativeRendererContainer}>
-            <ProseMirrorNativeRenderer content={currentDoc} tripId={tripId} />
+        {/* Map Placeholder - Shows on large screens only (>= 1280px) */}
+        {Platform.OS === 'web' && windowWidth >= 1280 && (
+          <View style={styles.mapPlaceholder}>
+            <View style={styles.mapPlaceholderContent}>
+              <Ionicons name="map-outline" size={48} color="#9CA3AF" />
+              <Text style={styles.mapPlaceholderText}>Map View</Text>
+              <Text style={styles.mapPlaceholderSubtext}>Coming soon</Text>
+            </View>
           </View>
         )}
       </View>
@@ -604,82 +631,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3B82F6',
-    fontWeight: '500',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    flex: 1,
-    textAlign: 'center',
-  },
-  controls: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
     backgroundColor: '#ffffff',
   },
-  button: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  shareButton: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#EBF5FF',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
   },
-  shareButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#3B82F6',
+  backButton: {
+    padding: 4,
   },
-  buttonActive: {
+  title: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+    marginHorizontal: 16,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonActive: {
     backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
   },
-  buttonDisabled: {
-    opacity: 0.5,
+  iconButtonDisabled: {
+    opacity: 0.4,
   },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  buttonTextActive: {
-    color: '#ffffff',
-  },
-  buttonTextDisabled: {
-    color: '#9ca3af',
+  contentWrapper: {
+    flex: 1,
+    flexDirection: 'row',
   },
   editorWrapper: {
     flex: 1,
+    maxWidth: 800, // Max width for document area on large screens
+    minWidth: 0, // Allow shrinking on narrow screens
   },
   editorContainer: {
     flex: 1,
@@ -746,5 +746,27 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#e5e7eb',
     marginHorizontal: 4,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    minWidth: 400,
+    backgroundColor: '#f9fafb',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapPlaceholderContent: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapPlaceholderText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  mapPlaceholderSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
   },
 });
