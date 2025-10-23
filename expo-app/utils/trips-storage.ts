@@ -8,7 +8,8 @@ export interface SavedTrip {
   title: string;
   description?: string;
   messages: any[]; // AI SDK message format
-  document?: any; // Main trip ProseMirror document
+  document?: any; // Main trip ProseMirror document (deprecated - use yjsState)
+  yjsState?: string; // Y.js binary state encoded as base64 (local-first CRDT state)
   locations: Array<{
     id: string;
     name: string;

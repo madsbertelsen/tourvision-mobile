@@ -9,6 +9,8 @@ interface TripContextType {
   setCurrentTrip: (trip: SavedTrip | null) => void;
   currentDoc: any;
   setCurrentDoc: (doc: any) => void;
+  yjsState: string | null;
+  setYjsState: (state: string | null) => void;
   isEditMode: boolean;
   setIsEditMode: (mode: boolean) => void;
   selectionEmpty: boolean;
@@ -40,6 +42,7 @@ export default function TripLayout() {
 
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [yjsState, setYjsState] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(true);
   const [selectionEmpty, setSelectionEmpty] = useState(true);
   const [geoMarkDataToCreate, setGeoMarkDataToCreate] = useState<any>(null);
@@ -54,6 +57,7 @@ export default function TripLayout() {
     // Reset state when trip changes
     setCurrentTrip(null);
     setCurrentDoc(null);
+    setYjsState(null);
     lastLoadedTripIdRef.current = null; // Force reload
   }, [tripId]);
 
@@ -122,10 +126,20 @@ export default function TripLayout() {
           return;
         }
 
-        console.log('[TripLayout] Trip loaded:', trip.title, 'Document exists:', !!trip.document);
+        console.log('[TripLayout] Trip loaded:', trip.title, 'Y.js state exists:', !!trip.yjsState);
         setCurrentTrip(trip);
 
-        // Load document from trip
+        // Load Y.js state from trip (preferred)
+        if (trip.yjsState) {
+          console.log('[TripLayout] Loading Y.js state from trip:', tripId);
+          console.log('[TripLayout] Y.js state length:', trip.yjsState.length);
+          setYjsState(trip.yjsState);
+        } else {
+          console.log('[TripLayout] No Y.js state found for trip:', tripId);
+          setYjsState(null);
+        }
+
+        // Load document from trip (deprecated, for backward compatibility)
         if (trip.document) {
           console.log('[TripLayout] Loading document from trip:', tripId);
           console.log('[TripLayout] Document content length:', JSON.stringify(trip.document).length);
@@ -188,12 +202,42 @@ export default function TripLayout() {
     });
   }, [router, tripId]);
 
+  // Global handler for Y.js state saves from WebView
+  useEffect(() => {
+    (global as any).handleSaveYjsState = async (state: string) => {
+      console.log('[TripLayout] Saving Y.js state to AsyncStorage (from WebView)');
+
+      setYjsState(state);
+
+      if (!currentTrip) {
+        console.error('[TripLayout] No currentTrip, cannot save Y.js state');
+        return;
+      }
+
+      const updatedTrip = {
+        ...currentTrip,
+        yjsState: state,
+        updatedAt: Date.now(),
+      };
+
+      await saveTrip(updatedTrip);
+      setCurrentTrip(updatedTrip);
+      console.log('[TripLayout] Y.js state saved to local storage');
+    };
+
+    return () => {
+      delete (global as any).handleSaveYjsState;
+    };
+  }, [currentTrip]);
+
   const contextValue: TripContextType = {
     tripId,
     currentTrip,
     setCurrentTrip,
     currentDoc,
     setCurrentDoc,
+    yjsState,
+    setYjsState,
     isEditMode,
     setIsEditMode,
     selectionEmpty,

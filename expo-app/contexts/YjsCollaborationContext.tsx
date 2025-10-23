@@ -17,7 +17,7 @@ interface YjsCollaborationContextType {
   isCollaborating: boolean;
   collaborationStatus: 'disconnected' | 'connecting' | 'connected';
   collaborationUsers: CollaborationUser[];
-  startCollaboration: (tripId: string) => Promise<void>;
+  startCollaboration: (tripId: string, yjsState?: string | null) => Promise<void>;
   stopCollaboration: () => void;
   setEditorRef: (ref: React.RefObject<ProseMirrorWebViewRef>) => void;
   ydoc: Y.Doc | null;
@@ -53,8 +53,8 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
     editorRef.current = ref;
   }, []);
 
-  const startCollaboration = useCallback(async (tripId: string) => {
-    console.log('[YjsCollaboration] Starting collaboration for trip:', tripId);
+  const startCollaboration = useCallback(async (tripId: string, yjsState?: string | null) => {
+    console.log('[YjsCollaboration] Starting collaboration for trip:', tripId, 'with Y.js state:', !!yjsState);
     console.log('[YjsCollaboration] User:', user);
 
     if (!user) {
@@ -94,13 +94,14 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
       }
 
       // The WebView's startCollaboration will create its own Y.Doc and provider
-      // Pass the token for Hocuspocus authentication
+      // Pass the token for Hocuspocus authentication and Y.js state for local-first
       await editorRef.current.current.startCollaboration(
         '', // serverUrl not needed (using default Hocuspocus URL)
         tripId, // Use trip ID as document ID
         userId,
         userName,
-        token // Supabase JWT token for Hocuspocus auth
+        token, // Supabase JWT token for Hocuspocus auth
+        yjsState || undefined // Y.js binary state (base64) for local-first initialization
       );
 
       console.log('[YjsCollaboration] Collaboration started successfully');
@@ -115,7 +116,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
         Alert.alert('Connection Error', 'Failed to start collaboration. Please check your network connection.');
       }
     }
-  }, [user]);
+  }, [user, session]);
 
   const stopCollaboration = useCallback(async () => {
     console.log('[YjsCollaboration] Stopping collaboration');

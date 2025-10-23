@@ -23,6 +23,7 @@ export default function TripDocumentView() {
     tripId,
     currentTrip,
     currentDoc,
+    yjsState,
     isEditMode,
     setIsEditMode,
     selectionEmpty,
@@ -124,14 +125,14 @@ export default function TripDocumentView() {
     const autoStartCollaboration = async () => {
       try {
         console.log('[TripDocumentView] Auto-starting collaboration to load Y.js state');
-        await startCollaboration(tripId);
+        await startCollaboration(tripId, yjsState);
       } catch (error) {
         console.error('[TripDocumentView] Failed to auto-start collaboration:', error);
       }
     };
 
     autoStartCollaboration();
-  }, [tripId, isWebViewReady, isCollaborating, startCollaboration, session]);
+  }, [tripId, isWebViewReady, isCollaborating, startCollaboration, session, yjsState]);
 
   // Note: Y.js collaboration handles sync automatically through YSupabaseProvider
   // No need for manual step subscription like with Socket.IO
@@ -266,7 +267,7 @@ export default function TripDocumentView() {
         if (!isCollaborating) {
           console.log('[TripDocumentView] Auto-enabling collaboration for AI comment reply');
           try {
-            await startCollaboration(tripId);
+            await startCollaboration(tripId, yjsState);
             // Give collaboration a moment to establish connection
             await new Promise(resolve => setTimeout(resolve, 1000));
             console.log('[TripDocumentView] Collaboration enabled successfully');
@@ -339,14 +340,14 @@ export default function TripDocumentView() {
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
       console.log('[TripDocumentView] Auto-enabling collaboration for AI generation');
-      await startCollaboration(tripId);
+      await startCollaboration(tripId, yjsState);
       // Give collaboration a moment to establish connection
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     // Start generation - Edge Function will participate as Y.js collaborator
     await startGeneration(prompt, tripId);
-  }, [startGeneration, isCollaborating, startCollaboration, tripId]);
+  }, [startGeneration, isCollaborating, startCollaboration, tripId, yjsState]);
 
   // Inline AI edit handler (triggered by @ai comments)
   // NOTE: This feature needs to be redesigned for Y.js collaboration
@@ -363,7 +364,7 @@ export default function TripDocumentView() {
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
       console.log('[TripDocumentView] Auto-enabling collaboration for inline AI edit');
-      await startCollaboration(tripId);
+      await startCollaboration(tripId, yjsState);
       // Give collaboration a moment to establish connection
       await new Promise(resolve => setTimeout(resolve, 500));
     }
@@ -382,7 +383,7 @@ Please generate replacement content that addresses the user's request. Only retu
     // TODO: Implement proper inline edit with Y.js transactions
     // For now, just generate content (will replace entire document)
     await startGeneration(prompt, tripId);
-  }, [startGeneration, isCollaborating, startCollaboration, tripId]);
+  }, [startGeneration, isCollaborating, startCollaboration, tripId, yjsState]);
 
   // NOTE: Typing simulation has been removed. AI generation now uses Y.js collaboration,
   // so updates appear automatically through the existing collaboration infrastructure.
@@ -541,7 +542,7 @@ Please generate replacement content that addresses the user's request. Only retu
           <ProseMirrorWebView
             key={tripId} // Force remount when trip changes
             ref={documentRef}
-            content={currentDoc} // LOCAL-FIRST: Load from AsyncStorage, then sync to server
+            content={null} // Y.js will load from Hocuspocus server
             editable={isEditMode}
             onChange={handleDocumentChange}
             onSelectionChange={handleSelectionChange}

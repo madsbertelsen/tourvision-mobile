@@ -99,7 +99,7 @@ export interface ProseMirrorWebViewRef {
   getState: () => void;
   createGeoMarkWithData: (geoMarkData: any) => void;
   triggerCreateLocation: () => void;
-  startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string, token?: string) => void;
+  startCollaboration: (serverUrl: string, documentId: string, userId: string, userName: string, token?: string, yjsState?: string) => void;
   stopCollaboration: () => void;
   applySteps: (steps: any[], version: number, clientID: string) => void;
 }
@@ -144,7 +144,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
   ) => {
     const webViewRef = useRef<WebView>(null);
     const [isReady, setIsReady] = useState(false);
-    // Force Metro reload after bundle rebuild - v3 (empty initial content)
+    // Force Metro reload after bundle rebuild - v5 (reduced logging)
     const lastProcessedGeoMarkRef = useRef<string | null>(null);
     const lastContentHashRef = useRef<string | null>(null);
     const isInternalChangeRef = useRef(false);
@@ -318,6 +318,14 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                 setTimeout(() => {
                   isInternalChangeRef.current = false;
                 }, 100);
+              }
+              break;
+
+            case 'saveYjsState':
+              console.log('[ProseMirrorWebView] Save Y.js state request received');
+              // Forward to global handler to save to AsyncStorage
+              if ((global as any).handleSaveYjsState) {
+                (global as any).handleSaveYjsState(data.state);
               }
               break;
 
@@ -500,8 +508,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             `);
           }
         },
-        startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string, token?: string) => {
-          console.log('[ProseMirrorWebView] Starting Hocuspocus collaboration:', { documentId, userId, userName, hasToken: !!token });
+        startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string, token?: string, yjsState?: string) => {
+          console.log('[ProseMirrorWebView] Starting Hocuspocus collaboration:', { documentId, userId, userName, hasToken: !!token, hasYjsState: !!yjsState });
 
           try {
             // Tell WebView to initialize Y.js with Hocuspocus connection
@@ -510,7 +518,8 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               documentId,
               userId,
               userName,
-              token: token || null
+              token: token || null,
+              yjsState: yjsState || null
             });
 
             console.log('[ProseMirrorWebView] Y.js collaboration request sent to WebView');

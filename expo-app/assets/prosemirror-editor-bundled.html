@@ -1497,23 +1497,48 @@
 
                   console.log('[WebView] Y.Doc created with clientID:', ydoc.clientID);
 
-                  // DEBUG: Monitor Y.Doc updates to track when changes occur
-                  ydoc.on('update', (update, origin, doc, tr) => {
-                    console.log('[WebView] ⚡ Y.Doc UPDATE EVENT FIRED!');
-                    console.log('[WebView]   - Update size:', update.byteLength, 'bytes');
-                    console.log('[WebView]   - Origin:', origin);
-                    console.log('[WebView]   - Transaction:', tr);
-                    console.log('[WebView]   - YXmlFragment length:', yXmlFragment.length);
-                  });
+                  // LOCAL-FIRST: Load initial state from AsyncStorage if provided
+                  // BUT: Only apply if we have local state AND we're not about to sync from server
+                  // The Hocuspocus provider will merge any server state automatically via CRDT
+                  if (data.yjsState) {
+                    console.log('[WebView] 📥 Loading Y.js state from AsyncStorage');
+                    try {
+                      // Decode base64 to Uint8Array
+                      const binaryString = atob(data.yjsState);
+                      const bytes = new Uint8Array(binaryString.length);
+                      for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                      }
 
-                  // DEBUG: Monitor YXmlFragment changes specifically
-                  yXmlFragment.observeDeep((events, transaction) => {
-                    console.log('[WebView] ⚡ YXmlFragment DEEP OBSERVE EVENT!');
-                    console.log('[WebView]   - Events count:', events.length);
-                    console.log('[WebView]   - Transaction origin:', transaction.origin);
-                    events.forEach((event, idx) => {
-                      console.log(`[WebView]   - Event ${idx}:`, event);
-                    });
+                      // Apply the state to our Y.Doc BEFORE connecting to Hocuspocus
+                      // This ensures local edits are preserved when merging with server state
+                      window.PM.Y.applyUpdate(ydoc, bytes);
+                      console.log('[WebView] ✅ Y.js state loaded successfully. YXmlFragment length:', yXmlFragment.length);
+                    } catch (error) {
+                      console.error('[WebView] ❌ Failed to load Y.js state:', error);
+                    }
+                  } else {
+                    console.log('[WebView] No local Y.js state to load - will sync from server');
+                  }
+
+                  // LOCAL-FIRST: Monitor Y.Doc updates and persist to AsyncStorage (debounced)
+                  let saveTimeout = null;
+                  ydoc.on('update', (update, origin) => {
+                    // Debounce saves to AsyncStorage (every 2 seconds)
+                    if (saveTimeout) clearTimeout(saveTimeout);
+                    saveTimeout = setTimeout(() => {
+                      // Check if document has content
+                      const docSize = yXmlFragment.length;
+                      if (docSize === 0) return;
+
+                      const state = window.PM.Y.encodeStateAsUpdate(ydoc);
+                      const base64State = btoa(String.fromCharCode(...new Uint8Array(state)));
+                      console.log('[WebView] Saving Y.js state:', state.byteLength, 'bytes');
+                      sendMessageToNative({
+                        type: 'saveYjsState',
+                        state: base64State
+                      });
+                    }, 2000);
                   });
 
                   // Create Hocuspocus provider for standalone server
@@ -1537,70 +1562,12 @@
                     },
                     onSynced: ({ state }) => {
                       console.log('[WebView] Hocuspocus synced:', state);
-
-                      // Send the current document state to React Native after sync
-                      // This ensures React has the latest content from the database
-                      setTimeout(() => {
-                        if (editorView) {
-                          console.log('[WebView] Sending document state after Hocuspocus sync');
-                          sendMessageToNative({
-                            type: 'stateResponse',
-                            state: editorView.state.doc.toJSON()
-                          });
-                        }
-                      }, 500); // Small delay to ensure editor is ready
+                      // NOTE: We don't send stateResponse here anymore
+                      // The Y.Doc update observer will handle persistence to AsyncStorage
                     }
                   });
 
                   console.log('[WebView] Hocuspocus provider created and connecting...');
-
-                  // Debug: Check what's in the YXmlFragment from server
-                  console.log('[WebView] YXmlFragment length from server:', yXmlFragment.length);
-                  console.log('[WebView] YXmlFragment first child:', yXmlFragment.length > 0 ? yXmlFragment.get(0) : 'empty');
-
-                  // LOCAL-FIRST: If we have local content in the editor and Y.js is empty, populate Y.js with local content
-                  const hasLocalContent = editorView.state.doc.content.size > 2; // > 2 means more than empty doc
-                  const yDocIsEmpty = yXmlFragment.length === 0;
-
-                  if (hasLocalContent && yDocIsEmpty) {
-                    console.log('[WebView] LOCAL-FIRST: Editor has content but Y.js is empty. Populating Y.js from local editor...');
-                    console.log('[WebView] Current editor doc:', editorView.state.doc.toJSON());
-
-                    // Convert ProseMirror doc to Y.js format
-                    // This will populate the yXmlFragment with the current document content
-                    const prosemirrorJSON = editorView.state.doc.toJSON();
-                    const tempDoc = schema.nodeFromJSON(prosemirrorJSON);
-
-                    // Create a temporary sync to populate Y.js
-                    // We'll create the fragment manually from the ProseMirror doc
-                    window.PM.yProsemirror.prosemirrorToYXmlFragment(tempDoc, yXmlFragment);
-
-                    console.log('[WebView] LOCAL-FIRST: Y.js populated from local content. Length:', yXmlFragment.length);
-                  } else if (!hasLocalContent && !yDocIsEmpty) {
-                    console.log('[WebView] SYNC-FIRST: Y.js has content from server, will sync to editor');
-                  } else if (!hasLocalContent && yDocIsEmpty) {
-                    console.log('[WebView] EMPTY: Both editor and Y.js are empty');
-                  } else {
-                    console.log('[WebView] CONFLICT: Both have content. Y.js will override (server wins)');
-                  }
-
-                  // DEBUG: Create a plugin to monitor ALL transactions
-                  const transactionMonitorPlugin = new window.PM.state.Plugin({
-                    key: new window.PM.state.PluginKey('transactionMonitor'),
-                    state: {
-                      init() { return null; },
-                      apply(tr, value, oldState, newState) {
-                        if (tr.docChanged) {
-                          console.log('[WebView] 🔄 PROSEMIRROR TRANSACTION with doc changes!');
-                          console.log('[WebView]   - Steps count:', tr.steps.length);
-                          console.log('[WebView]   - Meta keys:', Object.keys(tr.meta || {}));
-                          console.log('[WebView]   - Old doc size:', oldState.doc.content.size);
-                          console.log('[WebView]   - New doc size:', newState.doc.content.size);
-                        }
-                        return value;
-                      }
-                    }
-                  });
 
                   // Recreate editor with Y.js plugins
                   // NOTE: Do NOT pass a doc parameter - ySyncPlugin will create the doc from YXmlFragment
@@ -1610,16 +1577,13 @@
                       window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
                       window.PM.yProsemirror.yCursorPlugin(awareness),
                       window.PM.yProsemirror.yUndoPlugin(),
-                      transactionMonitorPlugin, // DEBUG plugin
                       keymap({ 'Mod-z': undo, 'Mod-y': redo }),
                       keymap(baseKeymap)
                     ]
                   });
 
                   editorView.updateState(newState);
-                  console.log('[WebView] Editor state updated with Y.js plugins');
-                  console.log('[WebView] Editor doc after Y.js sync:', editorView.state.doc.toString());
-                  console.log('[WebView] Editor doc content:', editorView.state.doc.content.toString());
+                  console.log('[WebView] Y.js collaboration started');
 
                   // Update UI
                   const statusEl = document.getElementById('collab-status');
