@@ -1,16 +1,64 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import OpenAI from 'https://deno.land/x/openai@v4.28.0/mod.ts';
+import { streamText } from 'npm:ai@latest';
 import * as Y from 'npm:yjs@13.6.18';
 import * as htmlparser2 from 'npm:htmlparser2@9.0.0';
 import { HocuspocusProvider } from 'npm:@hocuspocus/provider@2.13.5';
-import { htmlToProseMirrorJSON, applyProseMirrorJSONToYjs, appendProseMirrorNodesToYjs } from '../_shared/html-to-yjs.ts';
+import { htmlToProseMirrorJSON, appendProseMirrorNodesToYjs } from '../_shared/html-to-yjs.ts';
+import { encode } from 'https://deno.land/std@0.168.0/encoding/base64url.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/**
+ * Generate JWT token for Tiptap Cloud authentication
+ */
+async function generateTiptapJWT(
+  appSecret: string,
+  appId: string,
+  documentName: string,
+  userId: string,
+  userName: string
+): Promise<string> {
+  const header = {
+    alg: 'HS256',
+    typ: 'JWT'
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iat: now,
+    nbf: now,  // Not before timestamp
+    exp: now + (24 * 60 * 60), // 24 hours
+    iss: 'https://cloud.tiptap.dev',  // Issuer
+    aud: appId,  // Audience (App ID)
+    sub: userId,  // Subject
+    allowedDocumentNames: [documentName],
+  };
+
+  const encodedHeader = encode(JSON.stringify(header));
+  const encodedPayload = encode(JSON.stringify(payload));
+  const message = `${encodedHeader}.${encodedPayload}`;
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(appSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(message)
+  );
+
+  const encodedSignature = encode(new Uint8Array(signature));
+  return `${message}.${encodedSignature}`;
+}
 
 interface TripGenerationRequest {
   prompt: string;
@@ -44,56 +92,75 @@ serve(async (req) => {
       model,
     });
 
-    // Get AI Gateway configuration (falls back to direct OpenAI if not configured)
-    const aiGatewayBaseUrl = Deno.env.get('AI_GATEWAY_BASE_URL');
+    // Get AI configuration - AI SDK automatically uses AI_GATEWAY_API_KEY if set
     const aiGatewayApiKey = Deno.env.get('AI_GATEWAY_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
 
-    // Use AI Gateway if configured, otherwise direct OpenAI
-    const useGateway = aiGatewayBaseUrl && aiGatewayApiKey;
-    const apiKey = useGateway ? aiGatewayApiKey : openaiApiKey;
-    const baseURL = useGateway ? aiGatewayBaseUrl : undefined;
+    // The AI SDK will automatically use the AI Gateway if AI_GATEWAY_API_KEY is set
+    // Otherwise it falls back to OpenAI
+    const apiKey = aiGatewayApiKey || openaiApiKey;
 
     if (!apiKey) {
       throw new Error('AI_GATEWAY_API_KEY or OPENAI_API_KEY must be configured');
     }
 
-    console.log('[Generate Trip] Using:', useGateway ? `AI Gateway (${baseURL})` : 'Direct OpenAI API');
+    // Get Tiptap Cloud configuration
+    const tiptapAppId = 'yko82w79';
+    const tiptapAppSecret = Deno.env.get('TIPTAP_APP_SECRET');
 
-    // Get Hocuspocus URL - standalone server
-    const hocuspocusUrl = Deno.env.get('HOCUSPOCUS_URL') || 'ws://host.docker.internal:1234/collaboration';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!tiptapAppSecret) {
+      throw new Error('TIPTAP_APP_SECRET not configured');
+    }
 
-    // For server-side, we use the service role key as the token
-    const authToken = supabaseServiceKey;
+    // Generate JWT token for Tiptap Cloud authentication
+    console.log('[Generate Trip] Generating Tiptap Cloud token');
+    const tiptapToken = await generateTiptapJWT(tiptapAppSecret, tiptapAppId, tripId, 'ai-agent', 'AI Assistant');
+
+    // Tiptap Cloud URL - use HTTPS (HocuspocusProvider handles WebSocket upgrade)
+    const tiptapUrl = `https://${tiptapAppId}.collab.tiptap.cloud`;
 
     // Initialize Y.js document and Hocuspocus provider
-    console.log('[Generate Trip] Initializing Hocuspocus collaboration');
-    console.log('[Generate Trip] Connecting to standalone server:', hocuspocusUrl);
+    console.log('[Generate Trip] Initializing Tiptap Cloud collaboration');
+    console.log('[Generate Trip] Connecting to Tiptap Cloud:', tiptapUrl);
     const ydoc = new Y.Doc();
 
-    const provider = new HocuspocusProvider({
-      url: hocuspocusUrl,
+    const tiptapProvider = new HocuspocusProvider({
+      url: tiptapUrl,
       name: tripId,
       document: ydoc,
-      token: authToken,
+      token: tiptapToken,
       // WebSocket polyfill for Deno
       WebSocketPolyfill: WebSocket as any,
     });
 
     // Wait for provider to sync
     await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Hocuspocus sync timeout')), 10000);
+      const timeout = setTimeout(() => {
+        console.error('[Generate Trip] Tiptap Cloud sync timeout after 30s');
+        reject(new Error('Tiptap Cloud sync timeout'));
+      }, 30000); // Increased to 30 seconds
 
-      provider.on('synced', () => {
+      tiptapProvider.on('connect', () => {
+        console.log('[Generate Trip] Tiptap Cloud WebSocket connected');
+      });
+
+      tiptapProvider.on('synced', () => {
         clearTimeout(timeout);
-        console.log('[Generate Trip] Hocuspocus provider synced');
+        console.log('[Generate Trip] Tiptap Cloud provider synced');
         resolve(null);
       });
 
-      provider.on('error', (error: any) => {
+      tiptapProvider.on('disconnect', ({ event }: any) => {
+        console.log('[Generate Trip] Tiptap Cloud disconnected:', event);
+      });
+
+      tiptapProvider.on('status', ({ status }: any) => {
+        console.log('[Generate Trip] Tiptap Cloud status:', status);
+      });
+
+      tiptapProvider.on('error', (error: any) => {
         clearTimeout(timeout);
-        console.error('[Generate Trip] Hocuspocus error:', error);
+        console.error('[Generate Trip] Tiptap Cloud error:', error);
         reject(error);
       });
     });
@@ -139,24 +206,32 @@ Example format:
 
 Wrap your entire response in <itinerary></itinerary> tags.`;
 
-    // Initialize OpenAI client (with AI Gateway if configured)
-    const openai = new OpenAI({
-      apiKey,
-      baseURL,
-    });
+    // Map model names - AI Gateway expects format "provider/model-name"
+    const modelToUse = model === 'mistral-small-latest' ? 'gpt-4o-mini' : model;
+    // Always use openai/ prefix - the AI SDK will use AI_GATEWAY_API_KEY if set
+    const modelString = `openai/${modelToUse}`;
 
-    // Stream completion with OpenAI
-    console.log('[Generate Trip] Starting OpenAI stream');
-    const streamResponse = await openai.chat.completions.create({
-      model: model === 'mistral-small-latest' ? 'gpt-4o-mini' : model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      temperature,
-      max_tokens: 4000,
-      stream: true,
-    });
+    console.log('[Generate Trip] Using:', aiGatewayApiKey ? 'Vercel AI Gateway' : 'Direct OpenAI API');
+    console.log('[Generate Trip] Starting AI stream with model:', modelString);
+
+    // Use Vercel AI SDK streamText for streaming
+    // The AI SDK automatically uses AI_GATEWAY_API_KEY env var if available
+    let result;
+    try {
+      result = await streamText({
+        model: modelString,
+        system: systemPrompt,
+        prompt: prompt,
+        temperature,
+        maxTokens: 4000,
+      });
+    } catch (error: any) {
+      console.error('[Generate Trip] Error creating stream:', error);
+      if (error.message?.includes('quota') || error.message?.includes('429')) {
+        throw new Error('AI API quota exceeded. Please ensure AI Gateway is properly configured or try again later.');
+      }
+      throw error;
+    }
 
     // Clear document first for streaming
     const fragment = ydoc.getXmlFragment('prosemirror');
@@ -277,15 +352,13 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       lowerCaseAttributeNames: true
     });
 
-    // Process the stream
-    for await (const chunk of streamResponse) {
-      const delta = chunk.choices[0]?.delta?.content;
-
-      if (delta) {
+    // Process the stream using AI SDK's text stream
+    for await (const textPart of result.textStream) {
+      if (textPart) {
         chunkCount++;
 
         // Feed chunk to parser
-        parser.write(delta);
+        parser.write(textPart);
 
         // Log progress
         if (chunkCount % 50 === 0) {
@@ -323,13 +396,13 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       console.log('[Generate Trip] Warning: Incomplete block at end of stream:', currentBlockHtml.substring(0, 100));
     }
 
-    // Hocuspocus automatically persists via onStoreDocument hook
-    // Just wait a moment for final save, then cleanup
-    console.log('[Generate Trip] Waiting for Hocuspocus to persist...');
+    // Tiptap Cloud automatically persists changes
+    // Wait a moment for final sync, then cleanup
+    console.log('[Generate Trip] Waiting for Tiptap Cloud to persist...');
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Cleanup
-    provider.destroy();
+    tiptapProvider.destroy();
     console.log('[Generate Trip] Generation complete');
 
     // Return success response

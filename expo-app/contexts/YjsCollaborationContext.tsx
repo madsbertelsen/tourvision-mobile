@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Y from 'yjs';
-import { YSupabaseProvider } from '@/lib/YSupabaseProvider';
+import { YWebRTCProvider } from '@/lib/YWebRTCProvider';
 import { supabase } from '@/lib/supabase/client';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { useAuth } from '@/lib/supabase/auth-context';
@@ -21,7 +21,7 @@ interface YjsCollaborationContextType {
   stopCollaboration: () => void;
   setEditorRef: (ref: React.RefObject<ProseMirrorWebViewRef>) => void;
   ydoc: Y.Doc | null;
-  provider: YSupabaseProvider | null;
+  provider: YWebRTCProvider | null;
 }
 
 const YjsCollaborationContext = createContext<YjsCollaborationContextType | undefined>(undefined);
@@ -45,7 +45,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
   const [collaborationUsers, setCollaborationUsers] = useState<CollaborationUser[]>([]);
 
   const ydocRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<YSupabaseProvider | null>(null);
+  const providerRef = useRef<YWebRTCProvider | null>(null);
   const editorRef = useRef<React.RefObject<ProseMirrorWebViewRef> | null>(null);
 
   const setEditorRef = useCallback((ref: React.RefObject<ProseMirrorWebViewRef>) => {
@@ -88,19 +88,37 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
       console.log('[YjsCollaboration] Starting with user:', { userId, userName });
 
       // Get auth token from session
-      const token = session?.access_token;
-      if (!token) {
+      const supabaseToken = session?.access_token;
+      if (!supabaseToken) {
         throw new Error('No authentication token available');
       }
 
+      // Get Tiptap Cloud token from Edge Function
+      console.log('[YjsCollaboration] Requesting Tiptap token from Edge Function...');
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('generate-tiptap-token', {
+        body: { documentName: tripId }
+      });
+
+      if (tokenError || !tokenData?.token) {
+        console.error('[YjsCollaboration] Error getting Tiptap token:', tokenError);
+        throw new Error('Failed to get Tiptap authentication token');
+      }
+
+      const tiptapToken = tokenData.token;
+      console.log('[YjsCollaboration] Tiptap token obtained');
+
       // The WebView's startCollaboration will create its own Y.Doc and provider
-      // Pass the token for Hocuspocus authentication and Y.js state for local-first
+      // Pass the Tiptap token and Cloud URL for Tiptap Cloud authentication
+      const tiptapAppId = process.env.EXPO_PUBLIC_TIPTAP_APP_ID || 'yko82w79';
+      // Correct URL format: https://APP_ID.collab.tiptap.cloud (HocuspocusProvider handles WebSocket upgrade)
+      const tiptapUrl = `https://${tiptapAppId}.collab.tiptap.cloud`;
+
       await editorRef.current.current.startCollaboration(
-        '', // serverUrl not needed (using default Hocuspocus URL)
+        tiptapUrl, // Tiptap Cloud WebSocket URL
         tripId, // Use trip ID as document ID
         userId,
         userName,
-        token, // Supabase JWT token for Hocuspocus auth
+        tiptapToken, // Tiptap JWT token for authentication
         yjsState || undefined // Y.js binary state (base64) for local-first initialization
       );
 
