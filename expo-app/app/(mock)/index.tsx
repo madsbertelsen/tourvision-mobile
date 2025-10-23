@@ -116,17 +116,79 @@ export default function TripListScreen() {
     return date.toLocaleDateString();
   };
 
-  const getPreviewText = (trip: SavedTrip) => {
-    if (trip.messages.length === 0) return 'No messages yet';
+  const getTripTitle = (trip: SavedTrip): string => {
+    // Try to find first heading in document
+    if (trip.document && trip.document.content) {
+      const findHeading = (node: any): string | null => {
+        if (!node) return null;
 
-    const lastMessage = trip.messages[trip.messages.length - 1];
-    if (typeof lastMessage.content === 'string') {
-      // Strip HTML tags for preview
-      const text = lastMessage.content.replace(/<[^>]*>/g, '');
-      return text.length > 100 ? text.substring(0, 100) + '...' : text;
+        // Check if this node is a heading
+        if (node.type === 'heading' && node.content) {
+          const headingText = node.content
+            .map((child: any) => child.text || '')
+            .join('');
+          if (headingText.trim()) return headingText.trim();
+        }
+
+        // Recursively search in content
+        if (Array.isArray(node.content)) {
+          for (const child of node.content) {
+            const result = findHeading(child);
+            if (result) return result;
+          }
+        }
+
+        return null;
+      };
+
+      const heading = findHeading(trip.document);
+      if (heading) return heading;
     }
 
-    return 'Tap to continue conversation';
+    // Fallback to trip title
+    return trip.title || 'Untitled Trip';
+  };
+
+  const getPreviewText = (trip: SavedTrip) => {
+    // Helper to extract text from ProseMirror document recursively
+    const extractText = (node: any, skipHeadings: boolean = false): string => {
+      if (!node) return '';
+
+      // Skip headings if requested (we use them as title)
+      if (skipHeadings && node.type === 'heading') return '';
+
+      // If node has text, return it
+      if (node.text) return node.text;
+
+      // If node has content array, recursively extract text
+      if (Array.isArray(node.content)) {
+        return node.content.map((child: any) => extractText(child, skipHeadings)).join(' ');
+      }
+
+      return '';
+    };
+
+    // Try to extract text from document first (skip first heading since we use it as title)
+    if (trip.document && trip.document.content) {
+      const text = extractText(trip.document, true).trim();
+      if (text) {
+        // Remove extra whitespace
+        const cleanText = text.replace(/\s+/g, ' ');
+        return cleanText.length > 100 ? cleanText.substring(0, 100) + '...' : cleanText;
+      }
+    }
+
+    // Fallback to messages
+    if (trip.messages.length > 0) {
+      const lastMessage = trip.messages[trip.messages.length - 1];
+      if (typeof lastMessage.content === 'string') {
+        // Strip HTML tags for preview
+        const text = lastMessage.content.replace(/<[^>]*>/g, '');
+        return text.length > 100 ? text.substring(0, 100) + '...' : text;
+      }
+    }
+
+    return 'Empty trip - tap to start editing';
   };
 
   if (isLoading) {
@@ -214,7 +276,7 @@ export default function TripListScreen() {
             >
               <View style={styles.tripCardContent}>
                 <View style={styles.tripCardHeader}>
-                  <Text style={styles.tripTitle}>{trip.title}</Text>
+                  <Text style={styles.tripTitle}>{getTripTitle(trip)}</Text>
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={(e) => {
