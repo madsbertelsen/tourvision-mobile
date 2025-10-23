@@ -37,8 +37,7 @@ export default function TripLayout() {
   const params = useGlobalSearchParams();
   const tripId = params.id as string;
 
-  console.log('[TripLayout] Component rendering with tripId:', tripId);
-  console.log('[TripLayout] Using useGlobalSearchParams - params:', params);
+  // Verbose rendering logging removed - component renders frequently
 
   const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
@@ -165,8 +164,7 @@ export default function TripLayout() {
 
   const handleDocumentChange = useCallback(
     async (doc: any) => {
-      console.log('[TripLayout] Document changed, saving...');
-      console.log('[TripLayout] Document structure:', JSON.stringify(doc));
+      // Verbose logging removed - document changes frequently
       setCurrentDoc(doc);
 
       if (!currentTrip) {
@@ -182,8 +180,6 @@ export default function TripLayout() {
 
       await saveTrip(updatedTrip);
       setCurrentTrip(updatedTrip);
-      console.log('[TripLayout] Document saved to local storage');
-      console.log('[TripLayout] Saved document structure:', JSON.stringify(doc));
     },
     [currentTrip]
   );

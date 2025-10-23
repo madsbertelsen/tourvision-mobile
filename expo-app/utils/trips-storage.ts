@@ -168,11 +168,7 @@ async function syncTripToSupabase(trip: SavedTrip): Promise<void> {
  */
 export async function saveTrip(trip: SavedTrip): Promise<void> {
   try {
-    console.log('[saveTrip] Saving trip with ID:', trip.id);
-    console.log('[saveTrip] Trip has modifications:', trip.modifications?.length || 0);
-    console.log('[saveTrip] Trip has itineraries:', trip.itineraries?.length || 0);
-    console.log('[saveTrip] Trip has messages:', trip.messages?.length || 0);
-
+    // Verbose logging removed - saves happen frequently during collaboration
     const trips = await getTrips();
     const existingIndex = trips.findIndex(t => t.id === trip.id);
 
@@ -183,26 +179,14 @@ export async function saveTrip(trip: SavedTrip): Promise<void> {
 
     let updatedTrips: SavedTrip[];
     if (existingIndex >= 0) {
-      // Update existing trip
-      console.log('[saveTrip] Updating existing trip at index:', existingIndex);
       updatedTrips = [...trips];
       updatedTrips[existingIndex] = updatedTrip;
     } else {
-      // Add new trip
-      console.log('[saveTrip] Adding new trip');
       updatedTrips = [...trips, updatedTrip];
     }
 
     const jsonString = JSON.stringify(updatedTrips);
-    console.log('[saveTrip] Saving JSON length:', jsonString.length);
-
     await AsyncStorage.setItem(TRIPS_KEY, jsonString);
-
-    // Verify the save
-    const verification = await AsyncStorage.getItem(TRIPS_KEY);
-    const verifiedTrips = JSON.parse(verification || '[]');
-    const verifiedTrip = verifiedTrips.find((t: SavedTrip) => t.id === trip.id);
-    console.log('[saveTrip] Verification - trip saved with modifications:', verifiedTrip?.modifications?.length || 0);
 
   } catch (error) {
     console.error('Error saving trip:', error);

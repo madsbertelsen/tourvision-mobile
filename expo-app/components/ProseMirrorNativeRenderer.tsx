@@ -125,7 +125,9 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
       // Handle geo-mark nodes (inline nodes, not marks)
       if (node.type === 'geoMark') {
         const text = node.content?.map((child: any) => child.text || '').join('') || node.attrs?.placeName || '';
-        return renderGeoMark(text, node.attrs, index);
+        // Use geoId as key for uniqueness (fallback to geomark-index if missing)
+        const key = node.attrs?.geoId || `geomark-${index}`;
+        return renderGeoMark(text, node.attrs, key);
       }
 
       if (node.type === 'text') {
@@ -141,9 +143,12 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
           // Don't override fontSize in headings
           const baseStyle = inHeading ? [] : [styles.inlineText];
 
+          // Use commentId as key for uniqueness (fallback to comment-index if missing)
+          const key = commentMark.attrs?.commentId || `comment-${index}`;
+
           return (
             <Text
-              key={index}
+              key={key}
               style={[...baseStyle, commentStyle]}
               onPress={() => handleCommentClick(commentMark.attrs)}
             >
@@ -167,21 +172,21 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
 
         console.log('textStyle', textStyle, 'inHeading', inHeading);
         return (
-          <Text key={index} style={textStyle}>
+          <Text key={`text-${index}`} style={textStyle}>
             {node.text}
           </Text>
         );
       }
 
       if (node.type === 'hardBreak') {
-        return <Text key={index}>{'\n'}</Text>;
+        return <Text key={`break-${index}`}>{'\n'}</Text>;
       }
 
       return null;
     });
   };
 
-  const renderGeoMark = (text: string, attrs: any, index: number) => {
+  const renderGeoMark = (text: string, attrs: any, key: string) => {
     const { geoId, placeName, lat, lng, description, colorIndex, visitDocument } = attrs || {};
 
     const locationId = geoId || 'unknown';
@@ -211,7 +216,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
     return (
       <Link
         push
-        key={index}
+        key={key}
         href={{
           pathname,
           params,

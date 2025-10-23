@@ -25,6 +25,28 @@
       background: white;
       display: flex;
       justify-content: center;
+      /* Thin, auto-hiding scrollbar for WebKit browsers (Chrome, Safari, Edge) */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    }
+
+    /* Custom scrollbar styling for WebKit browsers */
+    #editor-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #editor-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #editor-container::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+      transition: background-color 0.2s;
+    }
+
+    #editor-container::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(0, 0, 0, 0.3);
     }
 
     .ProseMirror {
@@ -1004,7 +1026,7 @@
 
       // Listen for messages from React Native and native iOS menu
       window.addEventListener('message', function(event) {
-        console.log('[WebView] Received message:', event.data);
+        // Verbose logging removed - messages are frequent
 
         // Handle native iOS menu actions
         if (event.data && event.data.source === 'nativeMenu') {
@@ -1097,7 +1119,7 @@
               break;
 
             case 'getState':
-              console.log('[WebView] Getting state');
+              // Verbose logging removed - state requests are frequent
               if (editorView) {
                 sendMessageToNative({
                   type: 'stateResponse',

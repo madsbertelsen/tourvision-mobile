@@ -8,6 +8,7 @@ import CommentModal from '@/components/CommentModal';
 import AIAssistantModal from '@/components/AIAssistantModal';
 import CollaborationBar from '@/components/CollaborationBar';
 import ShareTripModal from '@/components/ShareTripModal';
+import TripDocumentMap from '@/components/TripDocumentMap';
 import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
 import { useStreamingTripGeneration } from '@/hooks/useStreamingTripGeneration';
 import { router } from 'expo-router';
@@ -16,7 +17,7 @@ import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-se
 import { useAuth } from '@/lib/supabase/auth-context';
 
 export default function TripDocumentView() {
-  console.log('[TripDocumentView] Component mounted');
+  // Verbose component mount logging removed
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const {
@@ -409,17 +410,18 @@ Please generate replacement content that addresses the user's request. Only retu
     <View style={styles.container}>
       {/* Compact Header with Controls */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <View key="header-row" style={styles.headerRow}>
+          <TouchableOpacity key="back-button" onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#3B82F6" />
           </TouchableOpacity>
 
-          <Text style={styles.title} numberOfLines={1}>
+          <Text key="title" style={styles.title} numberOfLines={1}>
             {currentTrip?.title || 'Trip'}
           </Text>
 
-          <View style={styles.headerActions}>
+          <View key="header-actions" style={styles.headerActions}>
             <TouchableOpacity
+              key="share-button"
               onPress={() => setShowShareModal(true)}
               style={styles.iconButton}
             >
@@ -427,6 +429,7 @@ Please generate replacement content that addresses the user's request. Only retu
             </TouchableOpacity>
 
             <TouchableOpacity
+              key="edit-mode-button"
               onPress={toggleEditMode}
               style={[styles.iconButton, isEditMode && styles.iconButtonActive]}
             >
@@ -435,6 +438,7 @@ Please generate replacement content that addresses the user's request. Only retu
 
             {isEditMode && (
               <TouchableOpacity
+                key="create-geomark-button"
                 onPress={createGeoMark}
                 style={[styles.iconButton, selectionEmpty && styles.iconButtonDisabled]}
                 disabled={selectionEmpty}
@@ -446,7 +450,7 @@ Please generate replacement content that addresses the user's request. Only retu
         </View>
 
         {/* Collaboration Bar - Inline */}
-        {tripId && <CollaborationBar tripId={tripId} />}
+        {tripId && <CollaborationBar key="collaboration-bar" tripId={tripId} />}
       </View>
 
       {/* Toolbar - Only in edit mode, above editor */}
@@ -580,14 +584,10 @@ Please generate replacement content that addresses the user's request. Only retu
           )}
         </View>
 
-        {/* Map Placeholder - Shows on large screens only (>= 1280px) */}
+        {/* Map View - Shows on large screens only (>= 1280px) */}
         {Platform.OS === 'web' && windowWidth >= 1280 && (
-          <View style={styles.mapPlaceholder}>
-            <View style={styles.mapPlaceholderContent}>
-              <Ionicons name="map-outline" size={48} color="#9CA3AF" />
-              <Text style={styles.mapPlaceholderText}>Map View</Text>
-              <Text style={styles.mapPlaceholderSubtext}>Coming soon</Text>
-            </View>
+          <View style={styles.mapContainer}>
+            <TripDocumentMap document={currentDoc} />
           </View>
         )}
       </View>
@@ -747,26 +747,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     marginHorizontal: 4,
   },
-  mapPlaceholder: {
+  mapContainer: {
     flex: 1,
     minWidth: 400,
     backgroundColor: '#f9fafb',
     borderLeftWidth: 1,
     borderLeftColor: '#e5e7eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapPlaceholderContent: {
-    alignItems: 'center',
-    gap: 12,
-  },
-  mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  mapPlaceholderSubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
   },
 });

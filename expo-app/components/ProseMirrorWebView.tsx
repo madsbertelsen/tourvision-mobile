@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v6 - Reduced content max-width to 700px and increased map space
+// v8 - Removed verbose logging from WebView
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -42,7 +42,7 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
       if (event.source === iframeRef.current?.contentWindow) {
         // Ensure data is in the right format
         const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
-        console.log('[IframeWebView] Received message from iframe:', data);
+        // Verbose logging removed - messages are frequent
         onMessage?.({ nativeEvent: { data } });
       }
     };
@@ -160,7 +160,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       }
 
       const jsonMessage = JSON.stringify(message);
-      console.log('[ProseMirrorWebView] Sending message to WebView:', message.type);
+      // Verbose logging removed for frequent messages
 
       if (Platform.OS === 'web') {
         // On web, use postMessage (handled by IframeWebView)
@@ -187,14 +187,15 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     // Handle messages from WebView
     const handleMessage = useCallback(
       (event: any) => {
-        console.log('[ProseMirrorWebView] RAW message received:', event.nativeEvent.data);
+        // Verbose logging removed - RAW messages are very large and frequent
         try {
           const data =
             typeof event.nativeEvent.data === 'string'
               ? JSON.parse(event.nativeEvent.data)
               : event.nativeEvent.data;
 
-          console.log('[ProseMirrorWebView] Parsed message type:', data.type);
+          // Verbose logging removed for frequent events
+          // console.log('[ProseMirrorWebView] Parsed message type:', data.type);
 
           switch (data.type) {
             case 'ready':
@@ -309,7 +310,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               break;
 
             case 'stateResponse':
-              console.log('[ProseMirrorWebView] State response received');
+              // Verbose logging removed - happens frequently during collaboration
               if (onChange) {
                 // Save to AsyncStorage via onChange callback
                 isInternalChangeRef.current = true;
@@ -487,7 +488,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           sendMessage({ type: 'command', command: 'insertParagraph' });
         },
         getState: () => {
-          console.log('[ProseMirrorWebView] Requesting state');
+          // Verbose logging removed - state requests are frequent
           sendMessage({ type: 'getState' });
         },
         createGeoMarkWithData: (geoMarkData: any) => {
