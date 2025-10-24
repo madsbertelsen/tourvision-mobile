@@ -35,5 +35,17 @@ if (envContent) {
   console.log('✅ Created .env file with Cloudflare environment variables');
   console.log(`   Variables set: ${envContent.split('\n').map(line => line.split('=')[0]).join(', ')}`);
 } else {
-  console.log('⚠️  No Cloudflare environment variables found');
+  console.log('⚠️  No Cloudflare environment variables found - using .env.production if available');
+
+  // Check if .env.production exists and copy it to .env
+  const envProdPath = path.join(__dirname, '..', '.env.production');
+  const envPath = path.join(__dirname, '..', '.env');
+
+  if (fs.existsSync(envProdPath)) {
+    const prodContent = fs.readFileSync(envProdPath, 'utf8');
+    fs.writeFileSync(envPath, prodContent);
+    console.log('✅ Copied .env.production to .env for build');
+  } else {
+    console.log('ℹ️  No .env.production file found, continuing with existing .env');
+  }
 }
