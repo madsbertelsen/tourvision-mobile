@@ -28,9 +28,12 @@ export default function InviteScreen() {
       setLoading(true);
       setError(null);
 
+      console.log('[InviteScreen] Processing invitation code:', code);
+
       // Check if user is authenticated
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log('[InviteScreen] User not authenticated, redirecting to login');
         // Redirect to login with return URL
         router.replace({
           pathname: '/(auth)/login',
@@ -39,12 +42,16 @@ export default function InviteScreen() {
         return;
       }
 
+      console.log('[InviteScreen] User authenticated:', user.id);
+
       // Use the share link
       const { data, error } = await supabase.rpc('use_share_link', {
         p_share_code: code
       });
 
       if (error) throw error;
+
+      console.log('[InviteScreen] Share link response:', data);
 
       if (data?.success) {
         setTripInfo({
@@ -53,17 +60,17 @@ export default function InviteScreen() {
           permission: data.permission
         });
 
-        if (data.already_had_access) {
-          // User already had access, just navigate
-          setTimeout(() => {
-            navigateToTrip(data.trip_id);
-          }, 1500);
-        }
+        console.log('[InviteScreen] Navigating to trip:', data.trip_id);
+
+        // Always navigate to trip after successful invitation acceptance
+        setTimeout(() => {
+          navigateToTrip(data.trip_id);
+        }, 1500);
       } else {
         setError(data?.error || 'Invalid or expired invitation link');
       }
     } catch (err: any) {
-      console.error('Error accepting invite:', err);
+      console.error('[InviteScreen] Error accepting invite:', err);
       setError(err.message || 'Failed to accept invitation');
     } finally {
       setLoading(false);
@@ -71,8 +78,11 @@ export default function InviteScreen() {
   };
 
   const navigateToTrip = (tripId: string) => {
+    console.log('[InviteScreen] navigateToTrip called with tripId:', tripId);
+    const targetPath = `/(mock)/trip/${tripId}`;
+    console.log('[InviteScreen] Navigating to:', targetPath);
     router.replace({
-      pathname: `/(mock)/trip/${tripId}` as any
+      pathname: targetPath as any
     });
   };
 
