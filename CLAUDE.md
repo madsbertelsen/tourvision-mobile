@@ -938,6 +938,72 @@ npx supabase functions deploy generate-tiptap-token --project-ref unocjfiipormna
 npx supabase secrets set TIPTAP_APP_SECRET=<secret> --project-ref unocjfiipormnaujsuhk
 ```
 
+## Cloudflare Pages Deployment
+
+### Overview
+The Expo web app is deployed to Cloudflare Pages. A critical fix is implemented to ensure @expo/vector-icons fonts load correctly.
+
+### The Problem
+Wrangler (Cloudflare's deployment tool) has default ignore patterns that skip `node_modules` directories, even in build output. Expo exports font files to deeply nested paths like:
+```
+dist/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*.ttf
+```
+
+This caused only 42 of 82 files to upload, resulting in missing icons on the deployed site.
+
+### The Solution
+A post-build script (`scripts/fix-cloudflare-assets.js`) automatically:
+1. Moves all font files from `assets/node_modules/.../Fonts/` to `assets/fonts/`
+2. Removes the problematic `assets/node_modules` directory entirely
+3. Updates font path references in the bundled JavaScript files
+
+This ensures all 61+ files upload correctly to Cloudflare Pages.
+
+### Build & Deploy Commands
+
+**Build for web with Cloudflare fix:**
+```bash
+cd expo-app
+npm run build:web
+```
+
+This runs:
+1. `npx expo export -p web` - Exports static site to `dist/`
+2. `node scripts/fix-cloudflare-assets.js` - Moves fonts and updates references
+3. `node scripts/prepare-cloudflare-deploy.js` - Creates `_worker.js` and `_headers`
+
+**Deploy to production:**
+```bash
+npm run deploy
+```
+
+**Deploy to preview:**
+```bash
+npm run deploy:preview
+```
+
+### Manual Deployment
+```bash
+# Build first
+npm run build:web
+
+# Then deploy
+wrangler pages deploy dist --project-name tourvision
+```
+
+### Verifying the Fix
+After building, verify fonts are in the correct location:
+```bash
+ls -la dist/assets/fonts/
+# Should show 19 .ttf files (AntDesign, Ionicons, MaterialIcons, etc.)
+
+find dist/assets -name "node_modules"
+# Should return nothing (directory removed)
+
+find dist -type f | wc -l
+# Should show 61+ files (not just 42)
+```
+
 ### Testing Collaboration
 
 1. **Start Expo app:**
