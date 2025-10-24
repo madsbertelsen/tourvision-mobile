@@ -8,7 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:prosemirror": "node build-prosemirror.js",
-    "build:web": "npx expo export -p web && node scripts/fix-cloudflare-assets.js && node scripts/prepare-cloudflare-deploy.js",
+    "build:web": "node scripts/create-env-from-cloudflare.js && npx expo export -p web && node scripts/fix-cloudflare-assets.js && node scripts/prepare-cloudflare-deploy.js",
     "deploy": "npm run build:web && wrangler pages deploy dist --project-name tourvision",
     "deploy:preview": "npm run build:web && wrangler pages deploy dist --project-name tourvision --branch preview"
   },
