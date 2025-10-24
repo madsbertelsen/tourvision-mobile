@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Configure Google Sign-In
     if (Platform.OS !== 'web') {
       GoogleSignin.configure({
-        iosClientId: '413818437166-0olqavgvmima7avkks72ab5d122or8fc.apps.googleusercontent.com', // Replace with your iOS Client ID
+        iosClientId: '413818437166-0olqavgvmima7avkks72ab5d122or8fc.apps.googleusercontent.com', // iOS Client ID
         // androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com', // Not needed - auto-detected from google-services.json
       })
     }
