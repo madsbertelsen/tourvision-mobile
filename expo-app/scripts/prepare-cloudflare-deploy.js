@@ -36,7 +36,17 @@ fs.writeFileSync(path.join(distPath, '_worker.js'), workerContent);
 console.log('✅ Created _worker.js');
 
 // Create _headers for proper MIME types
-const headersContent = `/assets/*.ttf
+const headersContent = `/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600
+
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600
+
+/assets/*.ttf
   Content-Type: font/ttf
   Cache-Control: public, max-age=31536000, immutable
 
@@ -58,6 +68,6 @@ const headersContent = `/assets/*.ttf
 `;
 
 fs.writeFileSync(path.join(distPath, '_headers'), headersContent);
-console.log('✅ Created _headers');
+console.log('✅ Created _headers with AASA configuration');
 
 console.log('✅ Cloudflare deployment files prepared');
