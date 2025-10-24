@@ -80,9 +80,9 @@ SET full_name = EXCLUDED.full_name,
     avatar_url = EXCLUDED.avatar_url,
     username = EXCLUDED.username;
 
--- Create one sample trip for testing
+-- Create one sample document for testing
 -- Note: yjs_state will be null initially, will be populated when user first edits
-INSERT INTO public.trips (id, title, description, created_by, is_public)
+INSERT INTO public.documents (id, title, description, created_by, is_public)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'Barcelona Adventure',
@@ -92,14 +92,14 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Add test user as owner of the trip
-INSERT INTO public.trip_members (trip_id, user_id, role)
+-- Add test user as owner of the document
+INSERT INTO public.document_members (document_id, user_id, role)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'cc9ae3cd-a7ee-4de4-9603-fa396c32e20e',
     'owner'
 )
-ON CONFLICT (trip_id, user_id) DO NOTHING;
+ON CONFLICT (document_id, user_id) DO NOTHING;
 
 -- Output information
 DO $$
