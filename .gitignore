@@ -40,3 +40,9 @@ yarn-error.*
 /ios
 /android
 .env.local
+
+# Secrets - never commit
+client_secret_*.json
+**/client_secret_*.json
+**/.env
+local-ai-agent/.env
