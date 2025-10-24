@@ -55,11 +55,58 @@ export async function getTrips(): Promise<SavedTrip[]> {
 
 /**
  * Get a specific trip by id
+ * First checks AsyncStorage, then falls back to Supabase if not found locally
  */
 export async function getTrip(tripId: string): Promise<SavedTrip | null> {
   try {
+    // Check local storage first
     const trips = await getTrips();
-    return trips.find(trip => trip.id === tripId) || null;
+    const localTrip = trips.find(trip => trip.id === tripId);
+    if (localTrip) {
+      return localTrip;
+    }
+
+    // If not found locally, try fetching from Supabase
+    console.log('[getTrip] Trip not found in AsyncStorage, fetching from Supabase:', tripId);
+    const { data: dbTrip, error } = await supabase
+      .from('trips')
+      .select('*')
+      .eq('id', tripId)
+      .maybeSingle();
+
+    if (error || !dbTrip) {
+      console.log('[getTrip] Trip not found in Supabase either:', error?.message);
+      return null;
+    }
+
+    // Convert database trip to SavedTrip format
+    const savedTrip: SavedTrip = {
+      id: dbTrip.id,
+      title: dbTrip.title,
+      description: dbTrip.description || '',
+      messages: [], // Not stored in database
+      locations: [], // Could be fetched from trip_places table if needed
+      createdAt: new Date(dbTrip.created_at).getTime(),
+      updatedAt: new Date(dbTrip.updated_at).getTime(),
+    };
+
+    // Include Y.js state if available (base64 encoded binary)
+    if (dbTrip.yjs_state) {
+      // Convert Buffer/Uint8Array to base64 string
+      if (typeof dbTrip.yjs_state === 'string') {
+        savedTrip.yjsState = dbTrip.yjs_state;
+      } else {
+        // Convert binary to base64
+        const bytes = new Uint8Array(dbTrip.yjs_state);
+        savedTrip.yjsState = btoa(String.fromCharCode(...bytes));
+      }
+      console.log('[getTrip] Loaded Y.js state from database:', savedTrip.yjsState.length, 'characters');
+    }
+
+    // Save to AsyncStorage for future access
+    await saveTrip(savedTrip);
+
+    return savedTrip;
   } catch (error) {
     console.error('Error loading trip:', error);
     return null;

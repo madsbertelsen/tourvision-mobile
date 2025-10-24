@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { router } from 'expo-router';
 
 interface ShareTripModalProps {
   visible: boolean;
@@ -44,7 +46,8 @@ interface ShareLink {
 }
 
 export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: ShareTripModalProps) {
-  const [activeTab, setActiveTab] = useState<'people' | 'link'>('people');
+  const { signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<'people' | 'link' | 'account'>('people');
   const [email, setEmail] = useState('');
   const [permission, setPermission] = useState<'view' | 'edit'>('view');
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -180,7 +183,7 @@ export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: 
   const copyShareLink = async (shareCode: string) => {
     const baseUrl = Platform.select({
       web: window.location.origin,
-      default: 'https://tourvision.app', // Replace with your production URL
+      default: 'https://tourvision.com',
     });
     const shareUrl = `${baseUrl}/invite/${shareCode}`;
 
@@ -196,7 +199,7 @@ export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: 
   const shareLink = async (shareCode: string) => {
     const baseUrl = Platform.select({
       web: window.location.origin,
-      default: 'https://tourvision.app',
+      default: 'https://tourvision.com',
     });
     const shareUrl = `${baseUrl}/invite/${shareCode}`;
 
@@ -255,6 +258,33 @@ export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: 
     }
   };
 
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[ShareTripModal] Logging out...');
+              await signOut();
+              console.log('[ShareTripModal] Sign out successful, navigating to login...');
+              onClose();
+              // Use push instead of replace to ensure navigation works
+              router.push('/(auth)/login');
+            } catch (error: any) {
+              console.error('[ShareTripModal] Logout error:', error);
+              Alert.alert('Error', error.message || 'Failed to log out');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -290,10 +320,30 @@ export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: 
                 Share Link
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'account' && styles.activeTab]}
+              onPress={() => setActiveTab('account')}
+            >
+              <Ionicons name="person" size={20} color={activeTab === 'account' ? '#3B82F6' : '#9CA3AF'} />
+              <Text style={[styles.tabText, activeTab === 'account' && styles.activeTabText]}>
+                Account
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.content}>
-            {activeTab === 'people' ? (
+            {activeTab === 'account' ? (
+              <View>
+                <Text style={styles.sectionTitle}>Account Settings</Text>
+                <TouchableOpacity
+                  style={styles.logoutButton}
+                  onPress={handleLogout}
+                >
+                  <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+                  <Text style={styles.logoutButtonText}>Log Out</Text>
+                </TouchableOpacity>
+              </View>
+            ) : activeTab === 'people' ? (
               <View>
                 <Text style={styles.sectionTitle}>Invite by Email</Text>
                 <View style={styles.inviteSection}>
@@ -707,5 +757,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 20,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+    marginTop: 8,
+  },
+  logoutButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });

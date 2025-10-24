@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v8 - Removed verbose logging from WebView
+// v10 - Fixed JWT format with aud, iss, nbf claims for Tiptap Cloud
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -511,12 +511,13 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           }
         },
         startCollaboration: async (serverUrl: string, documentId: string, userId: string, userName: string, token?: string, yjsState?: string) => {
-          console.log('[ProseMirrorWebView] Starting Hocuspocus collaboration:', { documentId, userId, userName, hasToken: !!token, hasYjsState: !!yjsState });
+          console.log('[ProseMirrorWebView] Starting collaboration:', { serverUrl, documentId, userId, userName, hasToken: !!token, hasYjsState: !!yjsState });
 
           try {
-            // Tell WebView to initialize Y.js with Hocuspocus connection
+            // Tell WebView to initialize Y.js with Tiptap Cloud connection
             sendMessage({
               type: 'startCollaboration',
+              serverUrl, // Pass the Tiptap Cloud URL
               documentId,
               userId,
               userName,
@@ -524,9 +525,9 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               yjsState: yjsState || null
             });
 
-            console.log('[ProseMirrorWebView] Y.js collaboration request sent to WebView');
+            console.log('[ProseMirrorWebView] Collaboration request sent to WebView');
           } catch (error) {
-            console.error('[ProseMirrorWebView] Failed to start Y.js collaboration:', error);
+            console.error('[ProseMirrorWebView] Failed to start collaboration:', error);
             throw error;
           }
         },

@@ -88,6 +88,11 @@ function ProtectedLayout() {
     }
   }, [isAuthenticated, isLoading, segments]);
 
+  // Keep splash screen visible and don't render anything while checking auth
+  if (isLoading) {
+    return null;
+  }
+
   return (
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />

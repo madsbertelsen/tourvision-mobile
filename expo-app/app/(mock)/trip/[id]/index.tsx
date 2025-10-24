@@ -355,6 +355,9 @@ export default function TripDocumentView() {
   const handleAIPrompt = useCallback(async (prompt: string) => {
     console.log('[TripDocumentView] Starting AI generation with prompt:', prompt);
 
+    // Close the AI modal immediately to show the document being generated
+    setShowAIModal(false);
+
     // Auto-enable collaboration if not already active
     if (!isCollaborating) {
       console.log('[TripDocumentView] Auto-enabling collaboration for AI generation');

@@ -842,6 +842,145 @@ useEffect(() => {
 - Distance/duration calculations
 - Integration with TipTap document editor
 
+## Tiptap Cloud Collaboration
+
+### Overview
+The app uses **Tiptap Cloud** (managed Hocuspocus) for real-time document collaboration via Y.js CRDT. This replaces the previous self-hosted Hocuspocus server.
+
+### Architecture
+
+**Components:**
+1. **Tiptap Cloud** - Managed WebSocket server at `wss://cloud.tiptap.dev/yko82w79`
+2. **JWT Authentication** - Supabase Edge Function generates signed tokens
+3. **HocuspocusProvider** - Y.js provider connecting to Tiptap Cloud
+4. **ProseMirror WebView** - Editor with Y.js sync plugins
+
+**Flow:**
+```
+User opens document
+    ↓
+Frontend requests token from Edge Function (/generate-tiptap-token)
+    ↓
+Edge Function signs JWT with TIPTAP_APP_SECRET
+    ↓
+Frontend passes token + wss://cloud.tiptap.dev/yko82w79 to WebView
+    ↓
+WebView creates HocuspocusProvider with token
+    ↓
+Provider connects to Tiptap Cloud
+    ↓
+Y.js syncs document state via WebSocket + WebRTC
+```
+
+### JWT Token Generation
+
+**Edge Function:** `/supabase/functions/generate-tiptap-token/index.ts`
+
+Generates JWT with:
+- **Algorithm:** HS256
+- **Claims:**
+  - `iat` - Issued at timestamp
+  - `exp` - Expiration (24 hours)
+  - `allowedDocumentNames` - Array of document IDs this token can access
+  - `userId` - Supabase user ID
+  - `userName` - User's display name
+
+**Token Request:**
+```typescript
+const { data: tokenData } = await supabase.functions.invoke('generate-tiptap-token', {
+  body: { documentName: tripId }
+});
+
+const tiptapToken = tokenData.token;
+```
+
+### WebView Integration
+
+**File:** `/expo-app/assets/prosemirror-editor-bundled.html`
+
+```javascript
+// Receives startCollaboration message with token
+const { documentId, userId, userName, token, serverUrl } = data;
+
+// Create HocuspocusProvider
+yProvider = new HocuspocusProvider({
+  url: serverUrl, // wss://cloud.tiptap.dev/yko82w79
+  name: documentId,
+  document: ydoc,
+  token: token,
+  awareness: awareness,
+  onConnect: () => console.log('Connected to Tiptap Cloud'),
+  onSynced: ({ state }) => console.log('Document synced')
+});
+```
+
+### Environment Variables
+
+**Frontend** (`/expo-app/.env.local`):
+```bash
+EXPO_PUBLIC_TIPTAP_APP_ID=yko82w79
+```
+
+**Backend** (`/supabase/.env.local`):
+```bash
+TIPTAP_APP_SECRET=f6d9a7d903b990ce6b707be28ae19bf6941dcdc29a0137cd6233cd015a64fffe
+```
+
+### Deployment
+
+**Deploy Edge Function:**
+```bash
+npx supabase functions deploy generate-tiptap-token --project-ref unocjfiipormnaujsuhk
+```
+
+**Set Secret:**
+```bash
+npx supabase secrets set TIPTAP_APP_SECRET=<secret> --project-ref unocjfiipormnaujsuhk
+```
+
+### Testing Collaboration
+
+1. **Start Expo app:**
+   ```bash
+   npx expo start --web --port 8082
+   ```
+
+2. **Open a trip document** and click "Enable Collaboration"
+
+3. **Open the same trip in another browser tab**
+
+4. **Make edits** - Changes should sync instantly via Tiptap Cloud
+
+5. **Check browser console** for connection logs:
+   - `[WebView] Connected to Tiptap Cloud`
+   - `[WebView] Document synced`
+
+### Benefits
+
+- ✅ **No server management** - Tiptap handles all infrastructure
+- ✅ **Automatic scaling** - Handles any number of collaborators
+- ✅ **JWT authentication** - Secure, document-level access control
+- ✅ **WebRTC + WebSocket** - Optimal P2P sync with server fallback
+- ✅ **Production-ready** - Managed service with SLA and monitoring
+- ✅ **Global CDN** - Low-latency connections worldwide
+
+### Troubleshooting
+
+**Token generation fails:**
+- Check that `TIPTAP_APP_SECRET` is set in Supabase secrets
+- Verify user is authenticated (session available)
+- Check Edge Function logs for errors
+
+**WebSocket connection fails:**
+- Verify `EXPO_PUBLIC_TIPTAP_APP_ID` is correct
+- Check browser console for connection errors
+- Ensure token is being passed correctly to WebView
+
+**Document doesn't sync:**
+- Check that Y.js state is being initialized correctly
+- Verify `ySyncPlugin` is included in ProseMirror plugins
+- Look for errors in WebView console logs
+
 ## ProseMirror Editor Architecture
 
 ### IMPORTANT: HTML-Based ProseMirror (Not React DOM Components!)

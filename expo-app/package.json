@@ -7,7 +7,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build:prosemirror": "node build-prosemirror.js"
+    "build:prosemirror": "node build-prosemirror.js",
+    "build:web": "npx expo export -p web",
+    "deploy": "npm run build:web && wrangler pages deploy dist --project-name tourvision",
+    "deploy:preview": "npm run build:web && wrangler pages deploy dist --project-name tourvision --branch preview"
   },
   "dependencies": {
     "@ai-sdk/mistral": "^2.0.16",

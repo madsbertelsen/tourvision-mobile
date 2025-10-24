@@ -8,9 +8,12 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/trips-storage';
+import { useAuth } from '@/lib/supabase/auth-context';
+import { router } from 'expo-router';
 
 interface TripsSidebarProps {
   selectedTripId?: string | null;
@@ -20,6 +23,7 @@ interface TripsSidebarProps {
 }
 
 export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationSelect, onTripsChange }: TripsSidebarProps) {
+  const { signOut } = useAuth();
   const [trips, setTrips] = useState<SavedTrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -197,6 +201,58 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
     });
   };
 
+  const handleLogout = async () => {
+    console.log('[TripsSidebar] handleLogout called');
+
+    // On web, use window.confirm instead of Alert.alert
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to log out?');
+      console.log('[TripsSidebar] Web confirm result:', confirmed);
+      if (!confirmed) {
+        console.log('[TripsSidebar] Logout cancelled');
+        return;
+      }
+
+      try {
+        console.log('[TripsSidebar] User confirmed logout');
+        await signOut();
+        console.log('[TripsSidebar] Sign out successful, navigating to login...');
+        router.push('/(auth)/login');
+      } catch (error: any) {
+        console.error('[TripsSidebar] Logout error:', error);
+        window.alert('Failed to log out: ' + (error.message || 'Unknown error'));
+      }
+    } else {
+      // Native Alert.alert for mobile
+      Alert.alert(
+        'Log Out',
+        'Are you sure you want to log out?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => console.log('[TripsSidebar] Logout cancelled')
+          },
+          {
+            text: 'Log Out',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                console.log('[TripsSidebar] User confirmed logout');
+                await signOut();
+                console.log('[TripsSidebar] Sign out successful, navigating to login...');
+                router.push('/(auth)/login');
+              } catch (error: any) {
+                console.error('[TripsSidebar] Logout error:', error);
+                Alert.alert('Error', error.message || 'Failed to log out');
+              }
+            },
+          },
+        ]
+      );
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -358,6 +414,17 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
           })
         )}
       </ScrollView>
+
+      {/* Logout Button at Bottom */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={styles.logoutButtonText}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -577,5 +644,29 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#374151',
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  logoutButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });

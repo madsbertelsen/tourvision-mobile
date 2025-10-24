@@ -14,15 +14,18 @@ import {
 import { Link, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '@/lib/supabase/auth-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
   const [email, setEmail] = useState('test@example.com');
   const [password, setPassword] = useState('TestPassword123!');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,6 +41,32 @@ export default function LoginScreen() {
       Alert.alert('Login Failed', error.message || 'An error occurred during login');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      // OAuth will handle redirect
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      Alert.alert('Sign In Failed', error.message || 'Failed to sign in with Google');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setIsAppleLoading(true);
+    try {
+      await signInWithApple();
+      // OAuth will handle redirect
+    } catch (error: any) {
+      console.error('Apple sign-in error:', error);
+      Alert.alert('Sign In Failed', error.message || 'Failed to sign in with Apple');
+    } finally {
+      setIsAppleLoading(false);
     }
   };
 
@@ -130,10 +159,45 @@ export default function LoginScreen() {
             <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity style={styles.googleButton}>
-            <View style={styles.googleIcon} />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          <TouchableOpacity
+            style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
+            onPress={handleGoogleSignIn}
+            disabled={isGoogleLoading || isAppleLoading}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator color="#374151" />
+            ) : (
+              <>
+                <View style={{ width: 20, height: 20, backgroundColor: '#DB4437', borderRadius: 10 }} />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
           </TouchableOpacity>
+
+          {Platform.OS === 'ios' ? (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          ) : (
+            <TouchableOpacity
+              style={[styles.appleButton, isAppleLoading && styles.buttonDisabled]}
+              onPress={handleAppleSignIn}
+              disabled={isAppleLoading || isGoogleLoading}
+            >
+              {isAppleLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <Feather name="apple" size={20} color="white" />
+                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>Don't have an account? </Text>
@@ -290,19 +354,31 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingVertical: 16,
-    marginBottom: 32,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#D1D5DB',
-    borderRadius: 10,
-    marginRight: 12,
+    marginBottom: 16,
+    gap: 12,
   },
   googleButtonText: {
     color: '#374151',
     fontSize: 16,
     fontWeight: '500',
+  },
+  appleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 32,
+    gap: 12,
+  },
+  appleButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   signUpContainer: {
     flexDirection: 'row',

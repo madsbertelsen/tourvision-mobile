@@ -1,0 +1,19 @@
+name = "tourvision"
+compatibility_date = "2024-10-24"
+
+[site]
+bucket = "./dist"
+
+[[headers]]
+for = "/.well-known/apple-app-site-association"
+  [headers.values]
+  "Content-Type" = "application/json"
+  "Access-Control-Allow-Origin" = "*"
+  "Cache-Control" = "public, max-age=3600"
+
+[[headers]]
+for = "/.well-known/assetlinks.json"
+  [headers.values]
+  "Content-Type" = "application/json"
+  "Access-Control-Allow-Origin" = "*"
+  "Cache-Control" = "public, max-age=3600"

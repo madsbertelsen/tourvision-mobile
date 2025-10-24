@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "589242RZ8A.io.mapstory.tourvision",
+        "paths": ["*"]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["589242RZ8A.io.mapstory.tourvision"]
+  }
+}

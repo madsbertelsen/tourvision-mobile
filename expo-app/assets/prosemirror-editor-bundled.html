@@ -1520,10 +1520,14 @@
 
               (async () => {
                 try {
-                  // Use standalone Hocuspocus server
-                  const { documentId, userId, userName, token, hocuspocusUrl = 'ws://127.0.0.1:1234/collaboration' } = data;
+                  // Connect to Tiptap Cloud or standalone Hocuspocus server
+                  const { documentId, userId, userName, token, serverUrl, hocuspocusUrl } = data;
+
+                  // Determine which URL to use (serverUrl takes priority for Tiptap Cloud)
+                  const wsUrl = serverUrl || hocuspocusUrl || 'ws://127.0.0.1:1234/collaboration';
+
                   console.log('[WebView] Creating Hocuspocus collaboration for document:', documentId);
-                  console.log('[WebView] Hocuspocus URL:', hocuspocusUrl);
+                  console.log('[WebView] WebSocket URL:', wsUrl);
                   console.log('[WebView] Auth token:', token ? 'present' : 'missing');
 
                   if (!token) {
@@ -1595,29 +1599,38 @@
                     }, 2000);
                   });
 
-                  // Create Hocuspocus provider for standalone server
-                  console.log('[WebView] Connecting to standalone Hocuspocus server');
+                  // Create Hocuspocus provider for Tiptap Cloud or standalone server
+                  console.log('[WebView] Connecting to Hocuspocus server...');
 
                   // Create Hocuspocus provider
                   yProvider = new HocuspocusProvider({
-                    url: hocuspocusUrl,
+                    url: wsUrl,
                     name: documentId,
                     document: ydoc,
                     token: token,
                     awareness: awareness,
                     onConnect: () => {
-                      console.log('[WebView] Hocuspocus connected');
+                      console.log('[WebView] ✅ Hocuspocus connected successfully');
                     },
                     onDisconnect: ({ event }) => {
-                      console.log('[WebView] Hocuspocus disconnected:', event);
+                      console.log('[WebView] ❌ Hocuspocus disconnected:', event);
                     },
                     onStatus: ({ status }) => {
-                      console.log('[WebView] Hocuspocus status:', status);
+                      console.log('[WebView] 📡 Hocuspocus status:', status);
                     },
                     onSynced: ({ state }) => {
-                      console.log('[WebView] Hocuspocus synced:', state);
+                      console.log('[WebView] ✅ Hocuspocus synced:', state);
                       // NOTE: We don't send stateResponse here anymore
                       // The Y.Doc update observer will handle persistence to AsyncStorage
+                    },
+                    onAuthenticationFailed: ({ reason }) => {
+                      console.error('[WebView] ❌ Hocuspocus authentication failed:', reason);
+                      console.error('[WebView] Token was:', token ? `${token.substring(0, 50)}...` : 'missing');
+                      console.error('[WebView] Document ID:', documentId);
+                      console.error('[WebView] URL:', wsUrl);
+                    },
+                    onClose: ({ event }) => {
+                      console.error('[WebView] ❌ Hocuspocus connection closed:', event);
                     }
                   });
 

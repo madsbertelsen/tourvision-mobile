@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@hocuspocus/provider": "^3.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.18.3",
+    "yjs": "^13.6.27"
+  }
+}

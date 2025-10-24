@@ -7,9 +7,12 @@ This guide explains how to set up native Apple Authentication using `expo-apple-
 ## Status
 
 - ✅ `expo-apple-authentication` package installed
+- ✅ `expo-crypto` package installed (for secure nonce generation)
 - ✅ `app.json` configured with plugin and iOS capability
-- ⏳ Auth context needs update for platform-specific implementation
-- ⏳ Apple Developer Account configuration needed
+- ✅ Auth context updated with platform-specific implementation
+- ✅ Login screen using native Apple button on iOS
+- ✅ Bundle identifier updated to `io.mapstory.tourvision`
+- ⏳ Apple Developer Account configuration needed (Sign in with Apple capability)
 - ⏳ Supabase OAuth provider configuration needed
 
 ## Why Native Authentication?
@@ -229,15 +232,50 @@ If native authentication complexity is too high for current phase:
 - May not pass App Store review
 - Slower authentication
 
+## Troubleshooting
+
+### Bundle Identifier Mismatch Error
+
+**Error Code -7026**: "The operation couldn't be completed. (com.apple.AuthenticationServices.AuthorizationError error 1000.)"
+
+**Cause**: The iOS native project is using a different bundle identifier than configured in `app.json`.
+
+**Solution**: Update the bundle identifier without wiping Swift files:
+
+```bash
+# Update Xcode project file
+cd expo-app/ios
+sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com\.oldid\.app;/PRODUCT_BUNDLE_IDENTIFIER = io.mapstory.tourvision;/g' tourvisionmobile.xcodeproj/project.pbxproj
+
+# Update Info.plist if needed
+sed -i '' 's/com\.oldid\.app/io.mapstory.tourvision/g' tourvisionmobile/Info.plist
+
+# Verify changes
+grep -r "PRODUCT_BUNDLE_IDENTIFIER" tourvisionmobile.xcodeproj/project.pbxproj
+```
+
+Then rebuild the app:
+```bash
+cd expo-app
+npx expo run:ios
+```
+
+### Icon Name Error
+
+**Error**: "'google' is not a valid icon name for family 'feather'"
+
+**Solution**: Feather icon set doesn't include a Google icon. Replace with a simple placeholder or use a different icon library.
+
 ## Next Steps
 
-1. ⏳ Decide: Native Auth vs Web OAuth for MVP
-2. ⏳ If Native: Complete Apple Developer setup
-3. ⏳ Configure Supabase Apple provider
-4. ⏳ Implement platform-specific auth logic
-5. ⏳ Test on physical iOS device
-6. ⏳ Add Google native authentication
-7. ⏳ Document testing procedures
+1. ✅ ~~Implement platform-specific auth logic~~ **COMPLETE**
+2. ⏳ Complete Apple Developer setup:
+   - Enable "Sign in with Apple" for App ID `io.mapstory.tourvision`
+   - Create Service ID and Private Key
+3. ⏳ Configure Supabase Apple provider with Apple credentials
+4. ⏳ Test on physical iOS device (must be signed in to iCloud)
+5. ⏳ Add Google native authentication
+6. ⏳ Document testing procedures
 
 ## References
 
