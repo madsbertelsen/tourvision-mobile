@@ -209,8 +209,8 @@ export default function TripDocumentView() {
     // Navigate to location screen (Stack-nested for slide transition)
     // Use absolute path to match read mode behavior
     const pathname = tripId
-      ? `/(mock)/trip/${tripId}/location/[locationId]` as any
-      : '/(mock)/location/[id]' as any;
+      ? `/(app)/trip/${tripId}/location/[locationId]` as any
+      : '/(app)/location/[id]' as any;
 
     const params: any = {
       locationId: attrs.geoId || 'unknown',
@@ -541,7 +541,7 @@ Please generate replacement content that addresses the user's request. Only retu
             onPress={() => {
               // Navigate to video playback route
               router.push({
-                pathname: `/(mock)/trip/${tripId}/video`,
+                pathname: `/(app)/trip/${tripId}/video`,
                 params: {
                   tripId: tripId,
                   documentContent: JSON.stringify(currentDoc),

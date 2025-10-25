@@ -23,7 +23,7 @@ export {
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(mock)',
+  initialRouteName: '(app)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -84,7 +84,7 @@ function ProtectedLayout() {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       // Redirect to home if authenticated and in auth group
-      router.replace('/(mock)');
+      router.replace('/(app)');
     }
   }, [isAuthenticated, isLoading, segments]);
 
@@ -97,7 +97,7 @@ function ProtectedLayout() {
     <Stack>
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
-      <Stack.Screen name="(mock)" options={{ headerShown: false }} />
+      <Stack.Screen name="(app)" options={{ headerShown: false }} />
       <Stack.Screen name="test-prosemirror" options={{ headerShown: false }} />
       <Stack.Screen name="test-transparency" options={{ headerShown: false }} />
       <Stack.Screen name="simple-map-test" options={{ headerShown: false }} />

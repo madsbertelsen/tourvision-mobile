@@ -1,5 +1,5 @@
 import DocumentsSidebar from '@/components/DocumentsSidebar';
-import { MockProvider } from '@/contexts/MockContext';
+import { AppProvider } from '@/contexts/AppContext';
 import { YjsCollaborationProvider } from '@/contexts/YjsCollaborationContext';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
@@ -16,7 +16,7 @@ function CustomDrawerContent(props: any) {
   const handleTripSelect = (tripId: string, initialMessage?: string) => {
     // Navigate to document detail page using proper dynamic route syntax
     router.push({
-      pathname: '/(mock)/document/[id]' as any,
+      pathname: '/(app)/document/[id]' as any,
       params: {
         id: tripId,
         ...(initialMessage ? { initialMessage } : {})
@@ -29,7 +29,7 @@ function CustomDrawerContent(props: any) {
   const handleLocationSelect = (tripId: string, locationId: string, location: any) => {
     // Navigate to location detail page using proper dynamic route syntax
     router.push({
-      pathname: '/(mock)/document/[id]/location/[locationId]' as any,
+      pathname: '/(app)/document/[id]/location/[locationId]' as any,
       params: {
         id: tripId,
         locationId: locationId,
@@ -137,11 +137,11 @@ function MockLayoutContent() {
 
 export default function MockLayout() {
   return (
-    <MockProvider>
+    <AppProvider>
       <YjsCollaborationProvider>
         <MockLayoutContent />
       </YjsCollaborationProvider>
-    </MockProvider>
+    </AppProvider>
   );
 }
 

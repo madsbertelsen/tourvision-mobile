@@ -189,14 +189,14 @@ export default function CreateLocationScreen() {
     if (params.tripId) {
       if (params.tripId === 'prosemirror-test') {
         router.navigate({
-          pathname: '/(mock)/prosemirror-test',
+          pathname: '/(app)/prosemirror-test',
           params: {
             savedLocation: JSON.stringify(geoMarkData)
           }
         });
       } else {
         router.navigate({
-          pathname: `/(mock)/trip/${params.tripId}`,
+          pathname: `/(app)/trip/${params.tripId}`,
           params: {
             savedLocation: JSON.stringify(geoMarkData)
           }

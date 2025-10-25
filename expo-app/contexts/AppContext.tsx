@@ -20,7 +20,7 @@ export interface RouteWithMetadata extends RouteDetails {
   waypoints?: Array<{ lat: number; lng: number }>; // Custom waypoints for route
 }
 
-interface MockContextType {
+interface AppContextType {
   visibleLocations: Location[];
   updateVisibleLocations: (locations: Location[]) => void;
   selectedLocation: Location | null;
@@ -42,9 +42,9 @@ interface MockContextType {
   setMapZoom: (zoom: number) => void;
 }
 
-const MockContext = createContext<MockContextType | undefined>(undefined);
+const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function MockProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children }: { children: ReactNode }) {
   const [visibleLocations, setVisibleLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [focusedLocation, setFocusedLocation] = useState<Location | null>(null);
@@ -57,7 +57,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
   const [mapZoom, setMapZoom] = useState<number>(2);
 
   return (
-    <MockContext.Provider
+    <AppContext.Provider
       value={{
         visibleLocations,
         updateVisibleLocations: setVisibleLocations,
@@ -81,14 +81,14 @@ export function MockProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </MockContext.Provider>
+    </AppContext.Provider>
   );
 }
 
-export function useMockContext() {
-  const context = useContext(MockContext);
+export function useAppContext() {
+  const context = useContext(AppContext);
   if (!context) {
-    throw new Error('useMockContext must be used within a MockProvider');
+    throw new Error('useAppContext must be used within an AppProvider');
   }
   return context;
 }

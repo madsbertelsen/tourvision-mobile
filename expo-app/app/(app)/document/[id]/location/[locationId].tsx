@@ -632,7 +632,7 @@ export default function LocationDetailScreen() {
                   {tripId && (
                     <TouchableOpacity
                       onPress={() => {
-                        const path = `/(mock)/trip/${tripId}/location/${locationId || id}/edit-visit` as any;
+                        const path = `/(app)/trip/${tripId}/location/${locationId || id}/edit-visit` as any;
                         router.push({
                           pathname: path,
                           params: {

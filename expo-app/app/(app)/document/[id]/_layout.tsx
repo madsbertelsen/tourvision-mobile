@@ -188,7 +188,7 @@ export default function TripLayout() {
     console.log('[TripLayout] Opening geo-mark editor with data:', data);
 
     router.push({
-      pathname: '/(mock)/create-location',
+      pathname: '/(app)/create-location',
       params: {
         tripId: tripId,
         placeName: data?.placeName || '',

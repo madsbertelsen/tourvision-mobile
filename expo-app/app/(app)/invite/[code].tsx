@@ -79,7 +79,7 @@ export default function InviteScreen() {
 
   const navigateToTrip = (tripId: string) => {
     console.log('[InviteScreen] navigateToTrip called with tripId:', tripId);
-    const targetPath = `/(mock)/trip/${tripId}`;
+    const targetPath = `/(app)/trip/${tripId}`;
     console.log('[InviteScreen] Navigating to:', targetPath);
     router.replace({
       pathname: targetPath as any

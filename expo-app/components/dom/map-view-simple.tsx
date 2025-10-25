@@ -1,6 +1,6 @@
 'use dom';
 
-import type { RouteWithMetadata } from '@/contexts/MockContext';
+import type { RouteWithMetadata } from '@/contexts/AppContext';
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import 'maplibre-gl/dist/maplibre-gl.css';

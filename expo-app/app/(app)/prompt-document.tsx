@@ -22,7 +22,7 @@ export default function PromptTripScreen() {
 
     // Navigate to generate-trip screen with the prompt
     router.push({
-      pathname: '/(mock)/generate-trip',
+      pathname: '/(app)/generate-trip',
       params: { prompt: prompt.trim() }
     });
   };

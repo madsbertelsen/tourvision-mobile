@@ -350,7 +350,7 @@ export default function GenerateTripScreen() {
             style={[styles.actionButton, styles.primaryButton]}
             onPress={() => {
               if (savedTripId) {
-                router.replace(`/(mock)/document/${savedTripId}`);
+                router.replace(`/(app)/document/${savedTripId}`);
               }
             }}
           >

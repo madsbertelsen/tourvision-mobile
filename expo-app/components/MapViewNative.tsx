@@ -1,4 +1,4 @@
-import type { RouteWithMetadata } from '@/contexts/MockContext';
+import type { RouteWithMetadata } from '@/contexts/AppContext';
 import Mapbox from '@rnmapbox/maps';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';

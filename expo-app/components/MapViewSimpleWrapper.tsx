@@ -1,5 +1,5 @@
-import type { RouteWithMetadata } from '@/contexts/MockContext';
-import { useMockContext } from '@/contexts/MockContext';
+import type { RouteWithMetadata } from '@/contexts/AppContext';
+import { useAppContext } from '@/contexts/AppContext';
 import React from 'react';
 import { StyleSheet, View, Text, Platform } from 'react-native';
 
@@ -55,7 +55,7 @@ export function MapViewSimpleWrapper({
   let selectedLocationModal = null;
   let setSelectedLocationModal: ((location: Location | null) => void) | null = null;
   try {
-    const context = useMockContext();
+    const context = useAppContext();
     // Only use context focusedLocation if no prop was provided
     if (propFocusedLocation === undefined) {
       focusedLocation = context.focusedLocation;
