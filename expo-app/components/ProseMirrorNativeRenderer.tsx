@@ -194,7 +194,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
     // Construct full path for Stack-nested route (slide transition)
     // If no tripId, fall back to Drawer-level route
     const pathname = tripId
-      ? `/(app)/trip/${tripId}/location/[locationId]` as any
+      ? `/(app)/document/${tripId}/location/[locationId]` as any
       : '/(app)/location/[id]' as any;
 
     const params: any = {

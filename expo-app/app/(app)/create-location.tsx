@@ -196,7 +196,7 @@ export default function CreateLocationScreen() {
         });
       } else {
         router.navigate({
-          pathname: `/(app)/trip/${params.tripId}`,
+          pathname: `/(app)/document/${params.tripId}`,
           params: {
             savedLocation: JSON.stringify(geoMarkData)
           }
