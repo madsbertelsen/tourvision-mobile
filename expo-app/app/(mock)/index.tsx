@@ -16,25 +16,25 @@ import { getDocuments, createDocument, deleteDocument, type SavedDocument } from
 
 export default function TripListScreen() {
   const router = useRouter();
-  const [trips, setTrips] = useState<SavedTrip[]>([]);
+  const [documents, setDocuments] = useState<SavedDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [urlInput, setUrlInput] = useState('');
 
-  // Load trips on mount
+  // Load documents on mount
   useEffect(() => {
-    loadTrips();
+    loadDocuments();
   }, []);
 
-  const loadTrips = async () => {
+  const loadDocuments = async () => {
     try {
       setIsLoading(true);
-      const loadedTrips = await getDocuments();
+      const loadedDocuments = await getDocuments();
       // Sort by updatedAt descending (most recent first)
-      loadedTrips.sort((a, b) => b.updatedAt - a.updatedAt);
-      setTrips(loadedTrips);
+      loadedDocuments.sort((a, b) => b.updatedAt - a.updatedAt);
+      setDocuments(loadedDocuments);
     } catch (error) {
-      console.error('Error loading trips:', error);
+      console.error('Error loading documents:', error);
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +118,7 @@ export default function TripListScreen() {
 
   const getDocumentTitle = (document: SavedDocument): string => {
     // Try to find first heading in document
-    if (trip.document && trip.document.content) {
+    if (document.document && document.document.content) {
       const findHeading = (node: any): string | null => {
         if (!node) return null;
 
@@ -141,12 +141,12 @@ export default function TripListScreen() {
         return null;
       };
 
-      const heading = findHeading(trip.document);
+      const heading = findHeading(document.document);
       if (heading) return heading;
     }
 
     // Fallback to document title
-    return trip.title || 'Untitled Document';
+    return document.title || 'Untitled Document';
   };
 
   const getPreviewText = (document: SavedDocument) => {
@@ -169,8 +169,8 @@ export default function TripListScreen() {
     };
 
     // Try to extract text from document first (skip first heading since we use it as title)
-    if (trip.document && trip.document.content) {
-      const text = extractText(trip.document, true).trim();
+    if (document.document && document.document.content) {
+      const text = extractText(document.document, true).trim();
       if (text) {
         // Remove extra whitespace
         const cleanText = text.replace(/\s+/g, ' ');
@@ -179,8 +179,8 @@ export default function TripListScreen() {
     }
 
     // Fallback to messages
-    if (trip.messages.length > 0) {
-      const lastMessage = trip.messages[trip.messages.length - 1];
+    if (document.messages.length > 0) {
+      const lastMessage = document.messages[document.messages.length - 1];
       if (typeof lastMessage.content === 'string') {
         // Strip HTML tags for preview
         const text = lastMessage.content.replace(/<[^>]*>/g, '');
@@ -196,7 +196,7 @@ export default function TripListScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading trips...</Text>
+          <Text style={styles.loadingText}>Loading documents...</Text>
         </View>
       </SafeAreaView>
     );
@@ -256,9 +256,9 @@ export default function TripListScreen() {
         </View>
       </View>
 
-      {/* Trip List */}
+      {/* Document List */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {trips.length === 0 ? (
+        {documents.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="link-outline" size={64} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No documents yet</Text>
@@ -267,21 +267,21 @@ export default function TripListScreen() {
             </Text>
           </View>
         ) : (
-          trips.map((trip) => (
+          documents.map((document) => (
             <TouchableOpacity
-              key={trip.id}
+              key={document.id}
               style={styles.tripCard}
-              onPress={() => router.push(`/(mock)/trip/${trip.id}`)}
+              onPress={() => router.push(`/(mock)/document/${document.id}`)}
               activeOpacity={0.7}
             >
               <View style={styles.tripCardContent}>
                 <View style={styles.tripCardHeader}>
-                  <Text style={styles.tripTitle}>{getDocumentTitle(trip)}</Text>
+                  <Text style={styles.tripTitle}>{getDocumentTitle(document)}</Text>
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={(e) => {
                       e.stopPropagation();
-                      handleDeleteTrip(trip.id);
+                      handleDeleteTrip(document.id);
                     }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
@@ -289,17 +289,17 @@ export default function TripListScreen() {
                 </View>
 
                 <Text style={styles.tripPreview} numberOfLines={2}>
-                  {getPreviewText(trip)}
+                  {getPreviewText(document)}
                 </Text>
 
                 <View style={styles.tripFooter}>
                   <View style={styles.tripStats}>
                     <Ionicons name="chatbubble-outline" size={14} color="#6B7280" />
-                    <Text style={styles.tripStatsText}>{trip.messages.length}</Text>
+                    <Text style={styles.tripStatsText}>{document.messages.length}</Text>
                     <Ionicons name="location-outline" size={14} color="#6B7280" style={{ marginLeft: 12 }} />
-                    <Text style={styles.tripStatsText}>{trip.locations.length}</Text>
+                    <Text style={styles.tripStatsText}>{document.locations.length}</Text>
                   </View>
-                  <Text style={styles.tripDate}>{formatDate(trip.updatedAt)}</Text>
+                  <Text style={styles.tripDate}>{formatDate(document.updatedAt)}</Text>
                 </View>
               </View>
             </TouchableOpacity>
