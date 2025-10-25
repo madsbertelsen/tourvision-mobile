@@ -24,24 +24,24 @@ interface DocumentsSidebarProps {
 
 export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocationSelect, onTripsChange }: DocumentsSidebarProps) {
   const { signOut } = useAuth();
-  const [trips, setTrips] = useState<SavedTrip[]>([]);
+  const [documents, setDocuments] = useState<SavedDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [expandedTrips, setExpandedTrips] = useState<Set<string>>(new Set());
 
-  // Load trips on mount
+  // Load documents on mount
   useEffect(() => {
-    loadTrips();
+    loadDocuments();
   }, []);
 
-  const loadTrips = async () => {
+  const loadDocuments = async () => {
     try {
       setIsLoading(true);
-      const loadedTrips = await getDocuments();
+      const loadedDocuments = await getDocuments();
       // Sort by updatedAt descending (most recent first)
-      loadedTrips.sort((a, b) => b.updatedAt - a.updatedAt);
-      setTrips(loadedTrips);
+      loadedDocuments.sort((a, b) => b.updatedAt - a.updatedAt);
+      setDocuments(loadedDocuments);
       onTripsChange?.();
     } catch (error) {
       console.error('Error loading trips:', error);
@@ -60,9 +60,9 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
       setIsCreating(true);
       const newDocument = await createDocument('New Document');
       // Select the new document with the URL as initial message
-      onTripSelect(newTrip.id, urlInput.trim());
+      onTripSelect(newDocument.id, urlInput.trim());
       setUrlInput(''); // Clear input
-      await loadTrips();
+      await loadDocuments();
     } catch (error) {
       console.error('Error creating document:', error);
       Alert.alert('Error', 'Failed to create document');
@@ -76,8 +76,8 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
       setIsCreating(true);
       const newDocument = await createDocument('New Document');
       // Select the new document without initial message
-      onTripSelect(newTrip.id);
-      await loadTrips();
+      onTripSelect(newDocument.id);
+      await loadDocuments();
     } catch (error) {
       console.error('Error creating document:', error);
       Alert.alert('Error', 'Failed to create document');
@@ -91,7 +91,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
 
     Alert.alert(
       'Delete Document',
-      'Are you sure you want to delete this trip?',
+      'Are you sure you want to delete this document?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -100,7 +100,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
           onPress: async () => {
             try {
               await deleteDocument(tripId);
-              await loadTrips();
+              await loadDocuments();
             } catch (error) {
               console.error('Error deleting document:', error);
               Alert.alert('Error', 'Failed to delete document');
@@ -128,9 +128,9 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
   };
 
   const getPreviewText = (document: SavedDocument) => {
-    if (trip.messages.length === 0) return 'No messages yet';
+    if (document.messages.length === 0) return 'No messages yet';
 
-    const lastMessage = trip.messages[trip.messages.length - 1];
+    const lastMessage = document.messages[document.messages.length - 1];
     if (typeof lastMessage.content === 'string') {
       // Strip HTML tags for preview
       const text = lastMessage.content.replace(/<[^>]*>/g, '');
@@ -142,11 +142,11 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
 
   // Extract locations from the latest itinerary document
   const extractLocationsFromTrip = (document: SavedDocument) => {
-    if (!trip.itineraries || trip.itineraries.length === 0) {
+    if (!document.itineraries || document.itineraries.length === 0) {
       return [];
     }
 
-    const latestItinerary = trip.itineraries[trip.itineraries.length - 1];
+    const latestItinerary = document.itineraries[document.itineraries.length - 1];
     if (!latestItinerary.document || !latestItinerary.document.content) {
       return [];
     }
@@ -258,7 +258,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
       <View style={styles.container}>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Loading trips...</Text>
+          <Text style={styles.loadingText}>Loading documents...</Text>
         </View>
       </View>
     );
@@ -268,10 +268,10 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Trips</Text>
+        <Text style={styles.title}>My Documents</Text>
       </View>
 
-      {/* New Trip Button */}
+      {/* New Document Button */}
       <View style={styles.newTripSection}>
         <TouchableOpacity
           style={styles.newTripButton}
@@ -283,7 +283,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
           ) : (
             <>
               <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
-              <Text style={styles.newTripButtonText}>New Trip</Text>
+              <Text style={styles.newTripButtonText}>New Document</Text>
             </>
           )}
         </TouchableOpacity>
@@ -323,29 +323,29 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
         </TouchableOpacity>
       </View>
 
-      {/* Trip List */}
+      {/* Document List */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {trips.length === 0 ? (
+        {documents.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="link-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No trips yet</Text>
+            <Text style={styles.emptyTitle}>No documents yet</Text>
             <Text style={styles.emptyDescription}>
               Paste a travel guide URL above to get started
             </Text>
           </View>
         ) : (
-          trips.map((trip) => {
-            const locations = extractLocationsFromTrip(trip);
-            const isExpanded = expandedTrips.has(trip.id);
+          documents.map((document) => {
+            const locations = extractLocationsFromTrip(document);
+            const isExpanded = expandedTrips.has(document.id);
 
             return (
-              <View key={trip.id} style={styles.tripCardContainer}>
+              <View key={document.id} style={styles.tripCardContainer}>
                 <TouchableOpacity
                   style={[
                     styles.tripCard,
-                    selectedTripId === trip.id && styles.tripCardSelected
+                    selectedTripId === document.id && styles.tripCardSelected
                   ]}
-                  onPress={() => onTripSelect(trip.id)}
+                  onPress={() => onTripSelect(document.id)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.tripCardContent}>
@@ -356,7 +356,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
                             style={styles.expandButton}
                             onPress={(e) => {
                               e.stopPropagation();
-                              toggleTripExpanded(trip.id);
+                              toggleTripExpanded(document.id);
                             }}
                           >
                             <Ionicons
@@ -366,28 +366,28 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
                             />
                           </TouchableOpacity>
                         )}
-                        <Text style={styles.tripTitle} numberOfLines={1}>{trip.title}</Text>
+                        <Text style={styles.tripTitle} numberOfLines={1}>{document.title}</Text>
                       </View>
                       <TouchableOpacity
                         style={styles.deleteButton}
-                        onPress={(e) => handleDeleteTrip(trip.id, e)}
+                        onPress={(e) => handleDeleteTrip(document.id, e)}
                       >
                         <Ionicons name="trash-outline" size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
 
                     <Text style={styles.tripPreview} numberOfLines={2}>
-                      {getPreviewText(trip)}
+                      {getPreviewText(document)}
                     </Text>
 
                     <View style={styles.tripFooter}>
                       <View style={styles.tripStats}>
                         <Ionicons name="chatbubble-outline" size={12} color="#6B7280" />
-                        <Text style={styles.tripStatsText}>{trip.messages.length}</Text>
+                        <Text style={styles.tripStatsText}>{document.messages.length}</Text>
                         <Ionicons name="location-outline" size={12} color="#6B7280" style={{ marginLeft: 8 }} />
                         <Text style={styles.tripStatsText}>{locations.length}</Text>
                       </View>
-                      <Text style={styles.tripDate}>{formatDate(trip.updatedAt)}</Text>
+                      <Text style={styles.tripDate}>{formatDate(document.updatedAt)}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -399,7 +399,7 @@ export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocat
                       <TouchableOpacity
                         key={location.id}
                         style={styles.locationItem}
-                        onPress={() => onLocationSelect?.(trip.id, location.id, location)}
+                        onPress={() => onLocationSelect?.(document.id, location.id, location)}
                         activeOpacity={0.7}
                       >
                         <View style={styles.locationDot} />

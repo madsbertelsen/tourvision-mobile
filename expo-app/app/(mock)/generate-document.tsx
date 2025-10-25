@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { useStreamingDocumentGeneration, type TypingInstruction } from '@/hooks/useStreamingDocumentGeneration';
-import { createDocument, saveTrip } from '@/utils/documents-storage';
+import { createDocument, saveDocument } from '@/utils/documents-storage';
 
 export default function GenerateTripScreen() {
   const router = useRouter();
@@ -192,16 +192,16 @@ export default function GenerateTripScreen() {
               title = firstHeading.content[0].text;
             }
 
-            // Create and save trip
+            // Create and save document
             const newDocument = await createDocument(title);
             await saveDocument({
-              ...newTrip,
+              ...newDocument,
               document: localDoc,
             });
-            console.log('[GenerateTrip] Trip saved:', newDocument.id);
+            console.log('[GenerateTrip] Document saved:', newDocument.id);
 
             // Store document ID and show bottom bar
-            setSavedTripId(newTrip.id);
+            setSavedTripId(newDocument.id);
 
             // Animate bottom bar sliding up
             Animated.spring(bottomBarAnim, {
@@ -212,7 +212,7 @@ export default function GenerateTripScreen() {
             }).start();
           } catch (error) {
             console.error('[GenerateTrip] Failed to save document:', error);
-            Alert.alert('Error', 'Failed to save trip');
+            Alert.alert('Error', 'Failed to save document');
           }
         }
       } catch (error) {
@@ -350,12 +350,12 @@ export default function GenerateTripScreen() {
             style={[styles.actionButton, styles.primaryButton]}
             onPress={() => {
               if (savedTripId) {
-                router.replace(`/(mock)/trip/${savedTripId}`);
+                router.replace(`/(mock)/document/${savedTripId}`);
               }
             }}
           >
             <Ionicons name="checkmark-circle" size={24} color="#fff" />
-            <Text style={styles.primaryButtonText}>Open Trip</Text>
+            <Text style={styles.primaryButtonText}>Open Document</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

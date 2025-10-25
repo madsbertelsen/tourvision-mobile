@@ -44,8 +44,8 @@ export default function TripListScreen() {
     try {
       setIsCreating(true);
       const newDocument = await createDocument('New Document');
-      // Navigate to the new trip
-      router.push(`/(mock)/trip/${newTrip.id}`);
+      // Navigate to the new document
+      router.push(`/(mock)/document/${newDocument.id}`);
     } catch (error) {
       console.error('Error creating document:', error);
       Alert.alert('Error', 'Failed to create document');
@@ -65,7 +65,7 @@ export default function TripListScreen() {
       const newDocument = await createDocument('New Document');
       // Navigate to the new document with the URL as initial message
       router.push({
-        pathname: `/(mock)/trip/${newTrip.id}`,
+        pathname: `/(mock)/document/${newDocument.id}`,
         params: { initialMessage: urlInput.trim() }
       });
       setUrlInput(''); // Clear input
@@ -89,7 +89,7 @@ export default function TripListScreen() {
           onPress: async () => {
             try {
               await deleteDocument(tripId);
-              await loadTrips();
+              await loadDocuments();
             } catch (error) {
               console.error('Error deleting document:', error);
               Alert.alert('Error', 'Failed to delete document');
