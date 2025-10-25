@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
-import { getTrip, saveTrip } from '@/utils/documents-storage';
+import { getDocument, saveTrip } from '@/utils/documents-storage';
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 import { Platform } from 'react-native';
 

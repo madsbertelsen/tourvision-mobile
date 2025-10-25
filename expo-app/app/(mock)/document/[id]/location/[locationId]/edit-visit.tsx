@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingVie
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { router, useLocalSearchParams } from 'expo-router';
-import { getTrip, saveTrip } from '@/utils/documents-storage';
+import { getDocument, saveTrip } from '@/utils/documents-storage';
 
 export default function EditVisitNotesScreen() {
   const insets = useSafeAreaInsets();

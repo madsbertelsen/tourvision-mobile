@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { useStreamingDocumentGeneration, type TypingInstruction } from '@/hooks/useStreamingDocumentGeneration';
-import { createTrip, saveTrip } from '@/utils/documents-storage';
+import { createDocument, saveTrip } from '@/utils/documents-storage';
 
 export default function GenerateTripScreen() {
   const router = useRouter();

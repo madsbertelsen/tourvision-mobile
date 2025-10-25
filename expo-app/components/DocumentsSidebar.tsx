@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/documents-storage';
+import { getDocuments, createDocument, deleteDocument, type SavedDocument } from '@/utils/documents-storage';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { router } from 'expo-router';
 

@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/documents-storage';
+import { getDocuments, createDocument, deleteDocument, type SavedDocument } from '@/utils/documents-storage';
 
 export default function TripListScreen() {
   const router = useRouter();

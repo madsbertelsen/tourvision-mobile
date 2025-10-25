@@ -1,4 +1,4 @@
-import { getTrip, saveTrip, type SavedTrip } from '@/utils/documents-storage';
+import { getDocument, saveDocument, type SavedDocument } from '@/utils/documents-storage';
 import { useRouter, useLocalSearchParams, useGlobalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState, createContext, useContext } from 'react';
 
