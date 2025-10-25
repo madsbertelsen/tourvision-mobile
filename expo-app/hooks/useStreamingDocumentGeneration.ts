@@ -8,20 +8,20 @@ export interface StreamingState {
   error: string | null;
 }
 
-export interface UseStreamingTripGenerationReturn {
+export interface UseStreamingDocumentGenerationReturn {
   state: StreamingState;
-  startGeneration: (prompt: string, tripId: string) => Promise<void>;
+  startGeneration: (prompt: string, documentId: string) => Promise<void>;
   cancel: () => void;
 }
 
 /**
- * Simplified hook for AI trip generation using Y.js collaboration
+ * Simplified hook for AI document generation using Y.js collaboration
  *
  * The Edge Function now participates as a Y.js collaborator, so we don't need
  * to handle streaming or document updates here. The existing Y.js collaboration
  * infrastructure handles all updates automatically.
  */
-export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
+export function useStreamingDocumentGeneration(): UseStreamingDocumentGenerationReturn {
   const [state, setState] = useState<StreamingState>({
     isGenerating: false,
     error: null,
@@ -40,7 +40,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     });
   }, []);
 
-  const startGeneration = useCallback(async (prompt: string, tripId: string) => {
+  const startGeneration = useCallback(async (prompt: string, documentId: string) => {
     setState({
       isGenerating: true,
       error: null,
@@ -51,10 +51,10 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
     abortControllerRef.current = abortController;
 
     try {
-      console.log('[useStreamingTripGeneration] Starting AI generation for trip:', tripId);
+      console.log('[useStreamingDocumentGeneration] Starting AI generation for document:', documentId);
 
       // Call Edge Function - it will handle Y.js collaboration
-      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-trip-stream`;
+      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/generate-document-stream`;
       const response = await fetch(edgeFunctionUrl, {
         method: 'POST',
         headers: {
@@ -63,7 +63,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
         },
         body: JSON.stringify({
           prompt,
-          tripId,
+          documentId,
           model: process.env.EXPO_PUBLIC_AI_MODEL || 'mistral-small-latest',
           temperature: 0.7,
         }),
@@ -75,7 +75,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
       }
 
       const result = await response.json();
-      console.log('[useStreamingTripGeneration] Generation complete:', result);
+      console.log('[useStreamingDocumentGeneration] Generation complete:', result);
 
       setState({
         isGenerating: false,
@@ -83,7 +83,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
       });
 
     } catch (error: any) {
-      console.error('[useStreamingTripGeneration] Error:', error);
+      console.error('[useStreamingDocumentGeneration] Error:', error);
 
       if (error.name === 'AbortError') {
         // Already handled in cancel()
@@ -92,7 +92,7 @@ export function useStreamingTripGeneration(): UseStreamingTripGenerationReturn {
 
       setState({
         isGenerating: false,
-        error: error.message || 'Failed to generate trip',
+        error: error.message || 'Failed to generate document',
       });
     } finally {
       abortControllerRef.current = null;

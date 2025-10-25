@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 
-export interface SharedTrip {
+export interface SharedDocument {
   id: string;
   title: string;
   description?: string;
@@ -15,47 +15,47 @@ export interface SharedTrip {
 }
 
 /**
- * Get all trips (owned and shared) from Supabase
+ * Get all documents (owned and shared) from Supabase
  */
-export async function getAllTrips(): Promise<SharedTrip[]> {
+export async function getAllDocuments(): Promise<SharedDocument[]> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    // Get owned trips
-    const { data: ownedTrips, error: ownedError } = await supabase
-      .from('trips')
+    // Get owned documents
+    const { data: ownedDocuments, error: ownedError } = await supabase
+      .from('documents')
       .select('*')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
 
     if (ownedError) {
-      console.error('Error loading owned trips:', ownedError);
+      console.error('Error loading owned documents:', ownedError);
     }
 
-    // Get shared trips
-    const { data: sharedTrips, error: sharedError } = await supabase
-      .from('trip_shares')
+    // Get shared documents
+    const { data: sharedDocuments, error: sharedError } = await supabase
+      .from('document_shares')
       .select(`
         *,
-        trip:trips(*),
-        owner:profiles!trip_shares_owner_id_fkey(full_name, email)
+        document:documents(*),
+        owner:profiles!document_shares_owner_id_fkey(full_name, email)
       `)
       .eq('shared_with_user_id', user.id)
       .not('accepted_at', 'is', null)
       .order('created_at', { ascending: false });
 
     if (sharedError) {
-      console.error('Error loading shared trips:', sharedError);
+      console.error('Error loading shared documents:', sharedError);
     }
 
     // Combine and format results
-    const allTrips: SharedTrip[] = [];
+    const allDocuments: SharedDocument[] = [];
 
-    // Add owned trips
-    if (ownedTrips) {
-      ownedTrips.forEach(trip => {
-        allTrips.push({
+    // Add owned documents
+    if (ownedDocuments) {
+      ownedDocuments.forEach(trip => {
+        allDocuments.push({
           ...trip,
           is_owner: true,
           permission: 'admin' as const,
@@ -63,12 +63,12 @@ export async function getAllTrips(): Promise<SharedTrip[]> {
       });
     }
 
-    // Add shared trips
-    if (sharedTrips) {
-      sharedTrips.forEach(share => {
-        if (share.trip) {
-          allTrips.push({
-            ...share.trip,
+    // Add shared documents
+    if (sharedDocuments) {
+      sharedDocuments.forEach(share => {
+        if (share.document) {
+          allDocuments.push({
+            ...share.document,
             is_owner: false,
             permission: share.permission,
             shared_by: share.owner_id,
@@ -79,35 +79,35 @@ export async function getAllTrips(): Promise<SharedTrip[]> {
     }
 
     // Sort by updated_at descending
-    allTrips.sort((a, b) => {
+    allDocuments.sort((a, b) => {
       const dateA = new Date(a.updated_at || a.created_at).getTime();
       const dateB = new Date(b.updated_at || b.created_at).getTime();
       return dateB - dateA;
     });
 
-    return allTrips;
+    return allDocuments;
   } catch (error) {
-    console.error('Error loading trips:', error);
+    console.error('Error loading documents:', error);
     return [];
   }
 }
 
 /**
- * Check if user has permission to edit a trip
+ * Check if user has permission to edit a document
  */
-export function canEditTrip(trip: SharedTrip): boolean {
-  return trip.is_owner || trip.permission === 'edit' || trip.permission === 'admin';
+export function canEditDocument(document: SharedDocument): boolean {
+  return document.is_owner || document.permission === 'edit' || document.permission === 'admin';
 }
 
 /**
- * Check if user has permission to share a trip
+ * Check if user has permission to share a document
  */
-export function canShareTrip(trip: SharedTrip): boolean {
-  return trip.is_owner || trip.permission === 'admin';
+export function canShareDocument(document: SharedDocument): boolean {
+  return document.is_owner || document.permission === 'admin';
 }
 
 /**
- * Accept a trip share invitation via share code
+ * Accept a document share invitation via share code
  */
 export async function acceptShareInvite(shareCode: string) {
   try {

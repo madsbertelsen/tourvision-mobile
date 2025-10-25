@@ -205,7 +205,7 @@ export default function ProseMirrorNativeRenderer({ content, tripId }: ProseMirr
       lng: lng || '0',
       description: description || '',
       colorIndex: colorIndex?.toString() || '0',
-      tripId: tripId, // Pass tripId so location screen can load trip data
+      tripId: tripId, // Pass tripId so location screen can load document data
     };
 
     // Pass visitDocument if it exists (contextDocument is legacy name kept for backward compatibility)

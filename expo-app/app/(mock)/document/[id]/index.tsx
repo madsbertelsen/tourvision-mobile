@@ -7,10 +7,10 @@ import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 import CommentModal from '@/components/CommentModal';
 import AIAssistantModal from '@/components/AIAssistantModal';
 import CollaborationBar from '@/components/CollaborationBar';
-import ShareTripModal from '@/components/ShareTripModal';
-import TripDocumentMap from '@/components/TripDocumentMap';
+import ShareDocumentModal from '@/components/ShareDocumentModal';
+import DocumentMap from '@/components/DocumentMap';
 import { useYjsCollaboration } from '@/contexts/YjsCollaborationContext';
-import { useStreamingTripGeneration } from '@/hooks/useStreamingTripGeneration';
+import { useStreamingDocumentGeneration } from '@/hooks/useStreamingDocumentGeneration';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import { requestAICommentReply, subscribeToAIReplies } from '@/lib/ai-comment-service';
@@ -91,7 +91,7 @@ export default function TripDocumentView() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
+  const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingDocumentGeneration();
 
   // NOTE: AI generation now uses Y.js collaboration. The Edge Function participates
   // as a regular Y.js client, applying changes directly to the shared document.
@@ -159,7 +159,7 @@ export default function TripDocumentView() {
   useEffect(() => {
     if (!tripId) return;
 
-    console.log('[TripDocumentView] Setting up AI reply subscription for trip:', tripId);
+    console.log('[TripDocumentView] Setting up AI reply subscription for document:', tripId);
 
     const unsubscribe = subscribeToAIReplies(tripId, (data) => {
       console.log('[TripDocumentView] AI comment reply received:', {
@@ -220,7 +220,7 @@ export default function TripDocumentView() {
       lng: attrs.lng || '0',
       description: attrs.description || '',
       colorIndex: attrs.colorIndex?.toString() || '0',
-      tripId: tripId, // Pass tripId so location screen can load trip data
+      tripId: tripId, // Pass tripId so location screen can load document data
     };
 
     // Pass contextDocument/visitDocument if it exists
@@ -391,7 +391,7 @@ export default function TripDocumentView() {
     }
 
     // Build prompt with context
-    const prompt = `The user selected this text from their trip document:
+    const prompt = `The user selected this text from their document document:
 
 "${selectedText}"
 
@@ -562,7 +562,7 @@ Please generate replacement content that addresses the user's request. Only retu
           {/* WebView - Always mounted, hidden in read mode */}
           <View style={[styles.editorContainer, !isEditMode && styles.hidden]}>
             <ProseMirrorWebView
-              key={tripId} // Force remount when trip changes
+              key={tripId} // Force remount when document changes
               ref={documentRef}
               content={null} // Y.js will load from Hocuspocus server
               editable={isEditMode}
@@ -590,7 +590,7 @@ Please generate replacement content that addresses the user's request. Only retu
         {/* Map View - Shows on large screens only (>= 1280px) */}
         {Platform.OS === 'web' && windowWidth >= 1280 && (
           <View style={styles.mapContainer}>
-            <TripDocumentMap document={currentDoc} />
+            <DocumentMap document={currentDoc} />
           </View>
         )}
       </View>
@@ -605,11 +605,11 @@ Please generate replacement content that addresses the user's request. Only retu
 
       {/* Share Modal */}
       {tripId && currentTrip && (
-        <ShareTripModal
+        <ShareDocumentModal
           visible={showShareModal}
           onClose={() => setShowShareModal(false)}
           tripId={tripId}
-          tripTitle={currentTrip.title || 'Untitled Trip'}
+          tripTitle={currentTrip.title || 'Untitled Document'}
         />
       )}
 

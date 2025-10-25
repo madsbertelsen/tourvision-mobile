@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { router } from 'expo-router';
 
-interface ShareTripModalProps {
+interface ShareDocumentModalProps {
   visible: boolean;
   onClose: () => void;
   tripId: string;
@@ -45,7 +45,7 @@ interface ShareLink {
   is_active: boolean;
 }
 
-export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: ShareTripModalProps) {
+export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle }: ShareDocumentModalProps) {
   const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'people' | 'link' | 'account'>('people');
   const [email, setEmail] = useState('');
@@ -269,14 +269,14 @@ export default function ShareTripModal({ visible, onClose, tripId, tripTitle }: 
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[ShareTripModal] Logging out...');
+              console.log('[ShareDocumentModal] Logging out...');
               await signOut();
-              console.log('[ShareTripModal] Sign out successful, navigating to login...');
+              console.log('[ShareDocumentModal] Sign out successful, navigating to login...');
               onClose();
               // Use push instead of replace to ensure navigation works
               router.push('/(auth)/login');
             } catch (error: any) {
-              console.error('[ShareTripModal] Logout error:', error);
+              console.error('[ShareDocumentModal] Logout error:', error);
               Alert.alert('Error', error.message || 'Failed to log out');
             }
           },

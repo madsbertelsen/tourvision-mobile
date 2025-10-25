@@ -96,7 +96,7 @@ export default function AIAssistantModal({
                 {[
                   'Plan a 5-day food tour of Tokyo',
                   'Create a romantic weekend in Paris',
-                  'Design a family trip to Orlando',
+                  'Design a family document to Orlando',
                 ].map((example, index) => (
                   <TouchableOpacity
                     key={index}

@@ -16,7 +16,7 @@ interface Location {
   colorIndex: number;
 }
 
-interface TripDocumentMapProps {
+interface DocumentMapProps {
   document: any; // ProseMirror document JSON
   style?: ViewStyle;
 }
@@ -54,7 +54,7 @@ function extractLocations(doc: any): Location[] {
     if (node.type === 'geoMark' && node.attrs) {
       totalGeoMarksFound++;
       const { geoId, placeName, lat, lng, colorIndex } = node.attrs;
-      console.log(`[TripDocumentMap] Found geoMark #${totalGeoMarksFound}:`, { geoId, placeName, lat, lng, colorIndex });
+      console.log(`[DocumentMap] Found geoMark #${totalGeoMarksFound}:`, { geoId, placeName, lat, lng, colorIndex });
 
       // Check if geoId is valid (not null, undefined, or string "null")
       const hasValidGeoId = geoId && geoId !== 'null';
@@ -70,9 +70,9 @@ function extractLocations(doc: any): Location[] {
             lng: parseFloat(lng),
             colorIndex: parseInt(colorIndex) || 0
           });
-          console.log(`[TripDocumentMap] ✓ Added location (unique geoId):`, geoId);
+          console.log(`[DocumentMap] ✓ Added location (unique geoId):`, geoId);
         } else {
-          console.log(`[TripDocumentMap] ✗ Skipped location (duplicate geoId):`, geoId);
+          console.log(`[DocumentMap] ✗ Skipped location (duplicate geoId):`, geoId);
         }
       } else if (lat != null && lng != null) {
         // Handle geo-marks without valid geoId - create unique ID based on coordinates
@@ -84,9 +84,9 @@ function extractLocations(doc: any): Location[] {
           lng: parseFloat(lng),
           colorIndex: parseInt(colorIndex) || 0
         });
-        console.log(`[TripDocumentMap] ✓ Added location (no valid geoId, using fallback):`, fallbackId);
+        console.log(`[DocumentMap] ✓ Added location (no valid geoId, using fallback):`, fallbackId);
       } else {
-        console.log(`[TripDocumentMap] ✗ Skipped location (missing coordinates):`, { geoId, lat, lng });
+        console.log(`[DocumentMap] ✗ Skipped location (missing coordinates):`, { geoId, lat, lng });
       }
     }
 
@@ -97,11 +97,11 @@ function extractLocations(doc: any): Location[] {
   }
 
   traverse(doc);
-  console.log(`[TripDocumentMap] Summary: Found ${totalGeoMarksFound} geo-marks, extracted ${locations.length} unique locations`);
+  console.log(`[DocumentMap] Summary: Found ${totalGeoMarksFound} geo-marks, extracted ${locations.length} unique locations`);
   return locations;
 }
 
-export default function TripDocumentMap({ document, style }: TripDocumentMapProps) {
+export default function DocumentMap({ document, style }: DocumentMapProps) {
   const mapRef = useRef<any>(null);
   const [mapStyle, setMapStyle] = useState(MAP_STYLES[0].url); // Default to light style
 
@@ -109,7 +109,7 @@ export default function TripDocumentMap({ document, style }: TripDocumentMapProp
   const locations = useMemo(() => {
     if (!document) return [];
     const locs = extractLocations(document);
-    console.log('[TripDocumentMap] Extracted locations:', locs.length, locs);
+    console.log('[DocumentMap] Extracted locations:', locs.length, locs);
     return locs;
   }, [document]);
 

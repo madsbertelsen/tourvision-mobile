@@ -54,7 +54,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
   }, []);
 
   const startCollaboration = useCallback(async (tripId: string, yjsState?: string | null) => {
-    console.log('[YjsCollaboration] Starting collaboration for trip:', tripId, 'with Y.js state:', !!yjsState);
+    console.log('[YjsCollaboration] Starting collaboration for document:', tripId, 'with Y.js state:', !!yjsState);
     console.log('[YjsCollaboration] User:', user);
 
     if (!user) {
@@ -115,7 +115,7 @@ export const YjsCollaborationProvider: React.FC<YjsCollaborationProviderProps> =
 
       await editorRef.current.current.startCollaboration(
         tiptapUrl, // Tiptap Cloud WebSocket URL
-        tripId, // Use trip ID as document ID
+        tripId, // Use document ID as document ID
         userId,
         userName,
         tiptapToken, // Tiptap JWT token for authentication

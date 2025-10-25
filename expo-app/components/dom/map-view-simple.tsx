@@ -1249,10 +1249,10 @@ export default function MapViewSimple({
   // Track previous bounds to prevent redundant animations
   const prevBoundsRef = useRef<string | null>(null);
 
-  // Track if we've done the initial focus on trip open
+  // Track if we've done the initial focus on document open
   const hasInitialFocusedRef = useRef(false);
 
-  // Track previous location IDs to detect when trip changes
+  // Track previous location IDs to detect when document changes
   const prevLocationIdsRef = useRef<string>('');
 
   // Follow mode: auto-fit bounds to visible locations

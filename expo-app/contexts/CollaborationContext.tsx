@@ -75,7 +75,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
   }, []);
 
   const startCollaboration = useCallback(async (tripId: string) => {
-    console.log('[CollaborationProvider] Starting collaboration for trip:', tripId);
+    console.log('[CollaborationProvider] Starting collaboration for document:', tripId);
 
     if (!editorRef.current?.current) {
       console.error('[CollaborationProvider] Editor ref not available');
@@ -94,7 +94,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
       // Start collaboration in the WebView
       editorRef.current.current.startCollaboration(
         COLLAB_SERVER_URL,
-        tripId, // Use trip ID as document ID
+        tripId, // Use document ID as document ID
         userId,
         userName
       );

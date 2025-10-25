@@ -60,9 +60,9 @@ async function generateTiptapJWT(
   return `${message}.${encodedSignature}`;
 }
 
-interface TripGenerationRequest {
+interface DocumentGenerationRequest {
   prompt: string;
-  tripId: string; // The trip document to collaborate on
+  documentId: string; // The trip document to collaborate on
   model?: string;
   temperature?: number;
 }
@@ -77,17 +77,17 @@ serve(async (req) => {
     // Parse request body
     const {
       prompt,
-      tripId,
+      documentId,
       model = 'mistral-small-latest',
       temperature = 0.7
-    }: TripGenerationRequest = await req.json();
+    }: DocumentGenerationRequest = await req.json();
 
-    if (!tripId) {
-      throw new Error('tripId is required');
+    if (!documentId) {
+      throw new Error('documentId is required');
     }
 
-    console.log('[Generate Trip] Processing request:', {
-      tripId,
+    console.log('[Generate Document] Processing request:', {
+      documentId,
       prompt: prompt.substring(0, 100) + '...',
       model,
     });
@@ -113,20 +113,20 @@ serve(async (req) => {
     }
 
     // Generate JWT token for Tiptap Cloud authentication
-    console.log('[Generate Trip] Generating Tiptap Cloud token');
-    const tiptapToken = await generateTiptapJWT(tiptapAppSecret, tiptapAppId, tripId, 'ai-agent', 'AI Assistant');
+    console.log('[Generate Document] Generating Tiptap Cloud token');
+    const tiptapToken = await generateTiptapJWT(tiptapAppSecret, tiptapAppId, documentId, 'ai-agent', 'AI Assistant');
 
     // Tiptap Cloud URL - use HTTPS (HocuspocusProvider handles WebSocket upgrade)
     const tiptapUrl = `https://${tiptapAppId}.collab.tiptap.cloud`;
 
     // Initialize Y.js document and Hocuspocus provider
-    console.log('[Generate Trip] Initializing Tiptap Cloud collaboration');
-    console.log('[Generate Trip] Connecting to Tiptap Cloud:', tiptapUrl);
+    console.log('[Generate Document] Initializing Tiptap Cloud collaboration');
+    console.log('[Generate Document] Connecting to Tiptap Cloud:', tiptapUrl);
     const ydoc = new Y.Doc();
 
     const tiptapProvider = new HocuspocusProvider({
       url: tiptapUrl,
-      name: tripId,
+      name: documentId,
       document: ydoc,
       token: tiptapToken,
       // WebSocket polyfill for Deno
@@ -136,31 +136,31 @@ serve(async (req) => {
     // Wait for provider to sync
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.error('[Generate Trip] Tiptap Cloud sync timeout after 30s');
+        console.error('[Generate Document] Tiptap Cloud sync timeout after 30s');
         reject(new Error('Tiptap Cloud sync timeout'));
       }, 30000); // Increased to 30 seconds
 
       tiptapProvider.on('connect', () => {
-        console.log('[Generate Trip] Tiptap Cloud WebSocket connected');
+        console.log('[Generate Document] Tiptap Cloud WebSocket connected');
       });
 
       tiptapProvider.on('synced', () => {
         clearTimeout(timeout);
-        console.log('[Generate Trip] Tiptap Cloud provider synced');
+        console.log('[Generate Document] Tiptap Cloud provider synced');
         resolve(null);
       });
 
       tiptapProvider.on('disconnect', ({ event }: any) => {
-        console.log('[Generate Trip] Tiptap Cloud disconnected:', event);
+        console.log('[Generate Document] Tiptap Cloud disconnected:', event);
       });
 
       tiptapProvider.on('status', ({ status }: any) => {
-        console.log('[Generate Trip] Tiptap Cloud status:', status);
+        console.log('[Generate Document] Tiptap Cloud status:', status);
       });
 
       tiptapProvider.on('error', (error: any) => {
         clearTimeout(timeout);
-        console.error('[Generate Trip] Tiptap Cloud error:', error);
+        console.error('[Generate Document] Tiptap Cloud error:', error);
         reject(error);
       });
     });
@@ -211,8 +211,8 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     // Always use openai/ prefix - the AI SDK will use AI_GATEWAY_API_KEY if set
     const modelString = `openai/${modelToUse}`;
 
-    console.log('[Generate Trip] Using:', aiGatewayApiKey ? 'Vercel AI Gateway' : 'Direct OpenAI API');
-    console.log('[Generate Trip] Starting AI stream with model:', modelString);
+    console.log('[Generate Document] Using:', aiGatewayApiKey ? 'Vercel AI Gateway' : 'Direct OpenAI API');
+    console.log('[Generate Document] Starting AI stream with model:', modelString);
 
     // Use Vercel AI SDK streamText for streaming
     // The AI SDK automatically uses AI_GATEWAY_API_KEY env var if available
@@ -226,7 +226,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
         maxTokens: 4000,
       });
     } catch (error: any) {
-      console.error('[Generate Trip] Error creating stream:', error);
+      console.error('[Generate Document] Error creating stream:', error);
       if (error.message?.includes('quota') || error.message?.includes('429')) {
         throw new Error('AI API quota exceeded. Please ensure AI Gateway is properly configured or try again later.');
       }
@@ -307,14 +307,14 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
           // We have a complete block!
           completeBlocks.push(currentBlockHtml);
 
-          console.log(`[Generate Trip] Complete block detected: ${name} (length: ${currentBlockHtml.length})`);
+          console.log(`[Generate Document] Complete block detected: ${name} (length: ${currentBlockHtml.length})`);
 
           // Process accumulated blocks periodically (batch of 3 for less frequent updates)
           if (completeBlocks.length >= 3) {
             const blocksToProcess = [...completeBlocks];
             completeBlocks = [];
 
-            console.log(`[Generate Trip] Processing ${blocksToProcess.length} complete blocks`);
+            console.log(`[Generate Document] Processing ${blocksToProcess.length} complete blocks`);
 
             // Convert to ProseMirror nodes
             const nodes: any[] = [];
@@ -332,7 +332,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
 
               // Get current document size for verification
               const fragment = ydoc.getXmlFragment('prosemirror');
-              console.log(`[Generate Trip] Streamed ${nodes.length} nodes to document (total in fragment: ${fragment.length})`);
+              console.log(`[Generate Document] Streamed ${nodes.length} nodes to document (total in fragment: ${fragment.length})`);
             }
           }
 
@@ -344,7 +344,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       },
 
       onerror(error: Error) {
-        console.error('[Generate Trip] Parser error:', error);
+        console.error('[Generate Document] Parser error:', error);
       }
     }, {
       decodeEntities: true,
@@ -362,7 +362,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
 
         // Log progress
         if (chunkCount % 50 === 0) {
-          console.log(`[Generate Trip] Received ${chunkCount} chunks, complete blocks: ${completeBlocks.length}`);
+          console.log(`[Generate Document] Received ${chunkCount} chunks, complete blocks: ${completeBlocks.length}`);
         }
       }
     }
@@ -370,11 +370,11 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
     // End parsing
     parser.end();
 
-    console.log('[Generate Trip] Stream complete, total chunks:', chunkCount);
+    console.log('[Generate Document] Stream complete, total chunks:', chunkCount);
 
     // Process any remaining complete blocks
     if (completeBlocks.length > 0) {
-      console.log(`[Generate Trip] Processing final ${completeBlocks.length} blocks`);
+      console.log(`[Generate Document] Processing final ${completeBlocks.length} blocks`);
 
       const nodes: any[] = [];
       for (const block of completeBlocks) {
@@ -387,29 +387,29 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       if (nodes.length > 0) {
         appendProseMirrorNodesToYjs(ydoc, nodes);
         totalNodesApplied += nodes.length;
-        console.log(`[Generate Trip] Applied final ${nodes.length} nodes`);
+        console.log(`[Generate Document] Applied final ${nodes.length} nodes`);
       }
     }
 
     // Handle any incomplete block (shouldn't happen with well-formed HTML)
     if (currentBlockHtml.trim()) {
-      console.log('[Generate Trip] Warning: Incomplete block at end of stream:', currentBlockHtml.substring(0, 100));
+      console.log('[Generate Document] Warning: Incomplete block at end of stream:', currentBlockHtml.substring(0, 100));
     }
 
     // Tiptap Cloud automatically persists changes
     // Wait a moment for final sync, then cleanup
-    console.log('[Generate Trip] Waiting for Tiptap Cloud to persist...');
+    console.log('[Generate Document] Waiting for Tiptap Cloud to persist...');
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Cleanup
     tiptapProvider.destroy();
-    console.log('[Generate Trip] Generation complete');
+    console.log('[Generate Document] Generation complete');
 
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        tripId,
+        documentId,
         chunkCount,
         blocksProcessed: completeBlocks.length,
         totalNodesApplied,
@@ -423,7 +423,7 @@ Wrap your entire response in <itinerary></itinerary> tags.`;
       }
     );
   } catch (error) {
-    console.error('[Generate Trip] Error:', error);
+    console.error('[Generate Document] Error:', error);
     return new Response(
       JSON.stringify({
         success: false,

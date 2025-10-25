@@ -14,14 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
-import { useStreamingTripGeneration, type TypingInstruction } from '@/hooks/useStreamingTripGeneration';
-import { createTrip, saveTrip } from '@/utils/trips-storage';
+import { useStreamingDocumentGeneration, type TypingInstruction } from '@/hooks/useStreamingDocumentGeneration';
+import { createTrip, saveTrip } from '@/utils/documents-storage';
 
 export default function GenerateTripScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ prompt: string }>();
   const documentRef = useRef<ProseMirrorWebViewRef>(null);
-  const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingTripGeneration();
+  const { state: streamState, startGeneration, cancel: cancelGeneration } = useStreamingDocumentGeneration();
 
   const [toolbarState, setToolbarState] = useState({
     paragraph: false,
@@ -193,14 +193,14 @@ export default function GenerateTripScreen() {
             }
 
             // Create and save trip
-            const newTrip = await createTrip(title);
-            await saveTrip({
+            const newDocument = await createDocument(title);
+            await saveDocument({
               ...newTrip,
               document: localDoc,
             });
-            console.log('[GenerateTrip] Trip saved:', newTrip.id);
+            console.log('[GenerateTrip] Trip saved:', newDocument.id);
 
-            // Store trip ID and show bottom bar
+            // Store document ID and show bottom bar
             setSavedTripId(newTrip.id);
 
             // Animate bottom bar sliding up
@@ -211,7 +211,7 @@ export default function GenerateTripScreen() {
               friction: 8,
             }).start();
           } catch (error) {
-            console.error('[GenerateTrip] Failed to save trip:', error);
+            console.error('[GenerateTrip] Failed to save document:', error);
             Alert.alert('Error', 'Failed to save trip');
           }
         }
@@ -279,7 +279,7 @@ export default function GenerateTripScreen() {
     if (isGenerating) {
       Alert.alert(
         'Cancel Generation?',
-        'Are you sure you want to cancel the trip generation?',
+        'Are you sure you want to cancel the document generation?',
         [
           { text: 'Keep Generating', style: 'cancel' },
           {

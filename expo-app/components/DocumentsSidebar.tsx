@@ -11,18 +11,18 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/trips-storage';
+import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/documents-storage';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { router } from 'expo-router';
 
-interface TripsSidebarProps {
+interface DocumentsSidebarProps {
   selectedTripId?: string | null;
   onTripSelect: (tripId: string, initialMessage?: string) => void;
   onLocationSelect?: (tripId: string, locationId: string, location: any) => void;
   onTripsChange?: () => void;
 }
 
-export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationSelect, onTripsChange }: TripsSidebarProps) {
+export default function DocumentsSidebar({ selectedTripId, onTripSelect, onLocationSelect, onTripsChange }: DocumentsSidebarProps) {
   const { signOut } = useAuth();
   const [trips, setTrips] = useState<SavedTrip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
   const loadTrips = async () => {
     try {
       setIsLoading(true);
-      const loadedTrips = await getTrips();
+      const loadedTrips = await getDocuments();
       // Sort by updatedAt descending (most recent first)
       loadedTrips.sort((a, b) => b.updatedAt - a.updatedAt);
       setTrips(loadedTrips);
@@ -58,14 +58,14 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
 
     try {
       setIsCreating(true);
-      const newTrip = await createTrip('New Trip');
-      // Select the new trip with the URL as initial message
+      const newDocument = await createDocument('New Document');
+      // Select the new document with the URL as initial message
       onTripSelect(newTrip.id, urlInput.trim());
       setUrlInput(''); // Clear input
       await loadTrips();
     } catch (error) {
-      console.error('Error creating trip:', error);
-      Alert.alert('Error', 'Failed to create trip');
+      console.error('Error creating document:', error);
+      Alert.alert('Error', 'Failed to create document');
     } finally {
       setIsCreating(false);
     }
@@ -74,13 +74,13 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
   const handleCreateBlankTrip = async () => {
     try {
       setIsCreating(true);
-      const newTrip = await createTrip('New Trip');
-      // Select the new trip without initial message
+      const newDocument = await createDocument('New Document');
+      // Select the new document without initial message
       onTripSelect(newTrip.id);
       await loadTrips();
     } catch (error) {
-      console.error('Error creating trip:', error);
-      Alert.alert('Error', 'Failed to create trip');
+      console.error('Error creating document:', error);
+      Alert.alert('Error', 'Failed to create document');
     } finally {
       setIsCreating(false);
     }
@@ -90,7 +90,7 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
     e?.stopPropagation();
 
     Alert.alert(
-      'Delete Trip',
+      'Delete Document',
       'Are you sure you want to delete this trip?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -99,11 +99,11 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteTrip(tripId);
+              await deleteDocument(tripId);
               await loadTrips();
             } catch (error) {
-              console.error('Error deleting trip:', error);
-              Alert.alert('Error', 'Failed to delete trip');
+              console.error('Error deleting document:', error);
+              Alert.alert('Error', 'Failed to delete document');
             }
           },
         },
@@ -127,7 +127,7 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
     return date.toLocaleDateString();
   };
 
-  const getPreviewText = (trip: SavedTrip) => {
+  const getPreviewText = (document: SavedDocument) => {
     if (trip.messages.length === 0) return 'No messages yet';
 
     const lastMessage = trip.messages[trip.messages.length - 1];
@@ -141,7 +141,7 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
   };
 
   // Extract locations from the latest itinerary document
-  const extractLocationsFromTrip = (trip: SavedTrip) => {
+  const extractLocationsFromTrip = (document: SavedDocument) => {
     if (!trip.itineraries || trip.itineraries.length === 0) {
       return [];
     }
@@ -202,24 +202,24 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
   };
 
   const handleLogout = async () => {
-    console.log('[TripsSidebar] handleLogout called');
+    console.log('[DocumentsSidebar] handleLogout called');
 
     // On web, use window.confirm instead of Alert.alert
     if (Platform.OS === 'web') {
       const confirmed = window.confirm('Are you sure you want to log out?');
-      console.log('[TripsSidebar] Web confirm result:', confirmed);
+      console.log('[DocumentsSidebar] Web confirm result:', confirmed);
       if (!confirmed) {
-        console.log('[TripsSidebar] Logout cancelled');
+        console.log('[DocumentsSidebar] Logout cancelled');
         return;
       }
 
       try {
-        console.log('[TripsSidebar] User confirmed logout');
+        console.log('[DocumentsSidebar] User confirmed logout');
         await signOut();
-        console.log('[TripsSidebar] Sign out successful, navigating to login...');
+        console.log('[DocumentsSidebar] Sign out successful, navigating to login...');
         router.push('/(auth)/login');
       } catch (error: any) {
-        console.error('[TripsSidebar] Logout error:', error);
+        console.error('[DocumentsSidebar] Logout error:', error);
         window.alert('Failed to log out: ' + (error.message || 'Unknown error'));
       }
     } else {
@@ -231,19 +231,19 @@ export default function TripsSidebar({ selectedTripId, onTripSelect, onLocationS
           {
             text: 'Cancel',
             style: 'cancel',
-            onPress: () => console.log('[TripsSidebar] Logout cancelled')
+            onPress: () => console.log('[DocumentsSidebar] Logout cancelled')
           },
           {
             text: 'Log Out',
             style: 'destructive',
             onPress: async () => {
               try {
-                console.log('[TripsSidebar] User confirmed logout');
+                console.log('[DocumentsSidebar] User confirmed logout');
                 await signOut();
-                console.log('[TripsSidebar] Sign out successful, navigating to login...');
+                console.log('[DocumentsSidebar] Sign out successful, navigating to login...');
                 router.push('/(auth)/login');
               } catch (error: any) {
-                console.error('[TripsSidebar] Logout error:', error);
+                console.error('[DocumentsSidebar] Logout error:', error);
                 Alert.alert('Error', error.message || 'Failed to log out');
               }
             },
@@ -459,14 +459,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
   },
-  newTripSection: {
+  newDocumentSection: {
     paddingHorizontal: 12,
     paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  newTripButton: {
+  newDocumentButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
     gap: 8,
   },
-  newTripButtonText: {
+  newDocumentButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#3B82F6',

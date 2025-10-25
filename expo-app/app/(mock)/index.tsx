@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/trips-storage';
+import { getTrips, createTrip, deleteTrip, type SavedTrip } from '@/utils/documents-storage';
 
 export default function TripListScreen() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function TripListScreen() {
   const loadTrips = async () => {
     try {
       setIsLoading(true);
-      const loadedTrips = await getTrips();
+      const loadedTrips = await getDocuments();
       // Sort by updatedAt descending (most recent first)
       loadedTrips.sort((a, b) => b.updatedAt - a.updatedAt);
       setTrips(loadedTrips);
@@ -43,12 +43,12 @@ export default function TripListScreen() {
   const handleCreateTrip = async () => {
     try {
       setIsCreating(true);
-      const newTrip = await createTrip('New Trip');
+      const newDocument = await createDocument('New Document');
       // Navigate to the new trip
       router.push(`/(mock)/trip/${newTrip.id}`);
     } catch (error) {
-      console.error('Error creating trip:', error);
-      Alert.alert('Error', 'Failed to create trip');
+      console.error('Error creating document:', error);
+      Alert.alert('Error', 'Failed to create document');
     } finally {
       setIsCreating(false);
     }
@@ -62,16 +62,16 @@ export default function TripListScreen() {
 
     try {
       setIsCreating(true);
-      const newTrip = await createTrip('New Trip');
-      // Navigate to the new trip with the URL as initial message
+      const newDocument = await createDocument('New Document');
+      // Navigate to the new document with the URL as initial message
       router.push({
         pathname: `/(mock)/trip/${newTrip.id}`,
         params: { initialMessage: urlInput.trim() }
       });
       setUrlInput(''); // Clear input
     } catch (error) {
-      console.error('Error creating trip:', error);
-      Alert.alert('Error', 'Failed to create trip');
+      console.error('Error creating document:', error);
+      Alert.alert('Error', 'Failed to create document');
     } finally {
       setIsCreating(false);
     }
@@ -79,7 +79,7 @@ export default function TripListScreen() {
 
   const handleDeleteTrip = async (tripId: string) => {
     Alert.alert(
-      'Delete Trip',
+      'Delete Document',
       'Are you sure you want to delete this trip?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -88,11 +88,11 @@ export default function TripListScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteTrip(tripId);
+              await deleteDocument(tripId);
               await loadTrips();
             } catch (error) {
-              console.error('Error deleting trip:', error);
-              Alert.alert('Error', 'Failed to delete trip');
+              console.error('Error deleting document:', error);
+              Alert.alert('Error', 'Failed to delete document');
             }
           },
         },
@@ -116,7 +116,7 @@ export default function TripListScreen() {
     return date.toLocaleDateString();
   };
 
-  const getTripTitle = (trip: SavedTrip): string => {
+  const getDocumentTitle = (document: SavedDocument): string => {
     // Try to find first heading in document
     if (trip.document && trip.document.content) {
       const findHeading = (node: any): string | null => {
@@ -145,11 +145,11 @@ export default function TripListScreen() {
       if (heading) return heading;
     }
 
-    // Fallback to trip title
-    return trip.title || 'Untitled Trip';
+    // Fallback to document title
+    return trip.title || 'Untitled Document';
   };
 
-  const getPreviewText = (trip: SavedTrip) => {
+  const getPreviewText = (document: SavedDocument) => {
     // Helper to extract text from ProseMirror document recursively
     const extractText = (node: any, skipHeadings: boolean = false): string => {
       if (!node) return '';
@@ -188,7 +188,7 @@ export default function TripListScreen() {
       }
     }
 
-    return 'Empty trip - tap to start editing';
+    return 'Empty document - tap to start editing';
   };
 
   if (isLoading) {
@@ -276,7 +276,7 @@ export default function TripListScreen() {
             >
               <View style={styles.tripCardContent}>
                 <View style={styles.tripCardHeader}>
-                  <Text style={styles.tripTitle}>{getTripTitle(trip)}</Text>
+                  <Text style={styles.tripTitle}>{getDocumentTitle(trip)}</Text>
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={(e) => {

@@ -1,4 +1,4 @@
-import TripsSidebar from '@/components/TripsSidebar';
+import DocumentsSidebar from '@/components/DocumentsSidebar';
 import { MockProvider } from '@/contexts/MockContext';
 import { YjsCollaborationProvider } from '@/contexts/YjsCollaborationContext';
 import { useRouter } from 'expo-router';
@@ -14,7 +14,7 @@ function CustomDrawerContent(props: any) {
   const router = useRouter();
 
   const handleTripSelect = (tripId: string, initialMessage?: string) => {
-    // Navigate to trip detail page using proper dynamic route syntax
+    // Navigate to document detail page using proper dynamic route syntax
     router.push({
       pathname: '/(mock)/trip/[id]' as any,
       params: {
@@ -47,7 +47,7 @@ function CustomDrawerContent(props: any) {
 
   return (
     <View style={{ flex: 1 }}>
-      <TripsSidebar
+      <DocumentsSidebar
         selectedTripId={null}
         onTripSelect={handleTripSelect}
         onLocationSelect={handleLocationSelect}
@@ -126,7 +126,7 @@ function MockLayoutContent() {
       <Drawer.Screen
         name="generate-trip"
         options={{
-          title: 'New Trip',
+          title: 'New Document',
           drawerLabel: () => null, // Hide from drawer menu
           headerShown: false, // Screen has its own header
         }}

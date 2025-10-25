@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, Platform, KeyboardAvoidingVie
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { router, useLocalSearchParams } from 'expo-router';
-import { getTrip, saveTrip } from '@/utils/trips-storage';
+import { getTrip, saveTrip } from '@/utils/documents-storage';
 
 export default function EditVisitNotesScreen() {
   const insets = useSafeAreaInsets();
@@ -55,7 +55,7 @@ export default function EditVisitNotesScreen() {
     setIsSaving(true);
     try {
       // Load the trip
-      const trip = await getTrip(tripId);
+      const document = await getDocument(tripId);
       if (!trip || !trip.document) {
         Alert.alert('Error', 'Trip document not found');
         return;
@@ -91,7 +91,7 @@ export default function EditVisitNotesScreen() {
       const updatedDocument = updateGeoMarks(trip.document);
 
       // Save the updated trip
-      await saveTrip({
+      await saveDocument({
         ...trip,
         document: updatedDocument,
       });

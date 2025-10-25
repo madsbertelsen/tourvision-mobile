@@ -60,9 +60,9 @@ export default function InviteScreen() {
           permission: data.permission
         });
 
-        console.log('[InviteScreen] Navigating to trip:', data.trip_id);
+        console.log('[InviteScreen] Navigating to document:', data.trip_id);
 
-        // Always navigate to trip after successful invitation acceptance
+        // Always navigate to document after successful invitation acceptance
         setTimeout(() => {
           navigateToTrip(data.trip_id);
         }, 1500);

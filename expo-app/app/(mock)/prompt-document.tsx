@@ -48,9 +48,9 @@ export default function PromptTripScreen() {
           <Ionicons name="sparkles" size={64} color="#3B82F6" />
         </View>
 
-        <Text style={styles.title}>What kind of trip do you want to plan?</Text>
+        <Text style={styles.title}>What kind of document do you want to plan?</Text>
         <Text style={styles.subtitle}>
-          Describe your ideal trip and our AI will create a personalized itinerary for you.
+          Describe your ideal document and our AI will create a personalized itinerary for you.
         </Text>
 
         <View style={styles.promptContainer}>
@@ -58,7 +58,7 @@ export default function PromptTripScreen() {
             style={styles.promptInput}
             value={prompt}
             onChangeText={setPrompt}
-            placeholder="e.g., Plan a 5-day trip to Tokyo for food lovers"
+            placeholder="e.g., Plan a 5-day document to Tokyo for food lovers"
             placeholderTextColor="#9ca3af"
             multiline
             maxLength={200}
@@ -84,7 +84,7 @@ export default function PromptTripScreen() {
           <Text style={styles.examplesTitle}>Try these examples:</Text>
           {[
             'Plan a 3-day romantic getaway to Paris',
-            'Create a week-long adventure trip in Iceland',
+            'Create a week-long adventure document in Iceland',
             'Design a family-friendly vacation in Orlando',
           ].map((example, index) => (
             <TouchableOpacity

@@ -1,12 +1,12 @@
-import { getTrip, saveTrip, type SavedTrip } from '@/utils/trips-storage';
+import { getTrip, saveTrip, type SavedTrip } from '@/utils/documents-storage';
 import { useRouter, useLocalSearchParams, useGlobalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState, createContext, useContext } from 'react';
 
-// Context for sharing trip state across nested routes
+// Context for sharing document state across nested routes
 interface TripContextType {
   tripId: string;
-  currentTrip: SavedTrip | null;
-  setCurrentTrip: (trip: SavedTrip | null) => void;
+  currentTrip: SavedDocument | null;
+  setCurrentTrip: (document: SavedDocument | null) => void;
   currentDoc: any;
   setCurrentDoc: (doc: any) => void;
   yjsState: string | null;
@@ -53,7 +53,7 @@ export default function TripLayout() {
   useEffect(() => {
     console.log('[TripLayout] tripId from params changed to:', tripId);
     console.log('[TripLayout] useEffect triggered - this proves params updated!');
-    // Reset state when trip changes
+    // Reset state when document changes
     setCurrentTrip(null);
     setCurrentDoc(null);
     setYjsState(null);
@@ -99,13 +99,13 @@ export default function TripLayout() {
     }, [params.savedLocation, router])
   );
 
-  // Load trip data whenever tripId changes
+  // Load document data whenever tripId changes
   useEffect(() => {
     if (!tripId) return;
 
     const loadTripData = async () => {
       try {
-        console.log('[TripLayout] Loading trip data for tripId:', tripId, 'prev:', lastLoadedTripIdRef.current);
+        console.log('[TripLayout] Loading document data for tripId:', tripId, 'prev:', lastLoadedTripIdRef.current);
 
         // Skip if we already loaded this trip
         if (lastLoadedTripIdRef.current === tripId && currentTrip?.id === tripId) {
@@ -115,11 +115,11 @@ export default function TripLayout() {
 
         lastLoadedTripIdRef.current = tripId;
 
-        const trip = await getTrip(tripId);
+        const document = await getDocument(tripId);
 
         if (!trip) {
           console.error('[TripLayout] Trip not found:', tripId);
-          // Reset state when trip not found
+          // Reset state when document not found
           setCurrentTrip(null);
           setCurrentDoc(null);
           return;
@@ -128,24 +128,24 @@ export default function TripLayout() {
         console.log('[TripLayout] Trip loaded:', trip.title, 'Y.js state exists:', !!trip.yjsState);
         setCurrentTrip(trip);
 
-        // Load Y.js state from trip (preferred)
+        // Load Y.js state from document (preferred)
         if (trip.yjsState) {
-          console.log('[TripLayout] Loading Y.js state from trip:', tripId);
+          console.log('[TripLayout] Loading Y.js state from document:', tripId);
           console.log('[TripLayout] Y.js state length:', trip.yjsState.length);
           setYjsState(trip.yjsState);
         } else {
-          console.log('[TripLayout] No Y.js state found for trip:', tripId);
+          console.log('[TripLayout] No Y.js state found for document:', tripId);
           setYjsState(null);
         }
 
-        // Load document from trip (deprecated, for backward compatibility)
+        // Load document from document (deprecated, for backward compatibility)
         if (trip.document) {
-          console.log('[TripLayout] Loading document from trip:', tripId);
+          console.log('[TripLayout] Loading document from document:', tripId);
           console.log('[TripLayout] Document content length:', JSON.stringify(trip.document).length);
           console.log('[TripLayout] Document preview:', JSON.stringify(trip.document).substring(0, 200));
           setCurrentDoc(trip.document);
         } else {
-          console.log('[TripLayout] No document found for trip:', tripId, '- creating blank');
+          console.log('[TripLayout] No document found for document:', tripId, '- creating blank');
           const blankDoc = {
             type: 'doc',
             content: [
@@ -155,7 +155,7 @@ export default function TripLayout() {
           setCurrentDoc(blankDoc);
         }
       } catch (error) {
-        console.error('[TripLayout] Error loading trip:', error);
+        console.error('[TripLayout] Error loading document:', error);
       }
     };
 
@@ -178,7 +178,7 @@ export default function TripLayout() {
         updatedAt: Date.now(),
       };
 
-      await saveTrip(updatedTrip);
+      await saveDocument(updatedTrip);
       setCurrentTrip(updatedTrip);
     },
     [currentTrip]
@@ -216,7 +216,7 @@ export default function TripLayout() {
         updatedAt: Date.now(),
       };
 
-      await saveTrip(updatedTrip);
+      await saveDocument(updatedTrip);
       setCurrentTrip(updatedTrip);
       console.log('[TripLayout] Y.js state saved to local storage');
     };

@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useBookmark } from '@/hooks/useBookmark';
-import { getTrip, saveTrip } from '@/utils/trips-storage';
+import { getTrip, saveTrip } from '@/utils/documents-storage';
 import ProseMirrorNativeRenderer from '@/components/ProseMirrorNativeRenderer';
 import { Platform } from 'react-native';
 
@@ -80,14 +80,14 @@ export default function LocationDetailScreen() {
     photoName,
   });
 
-  // Load trip data and extract documents - reload when screen comes into focus
+  // Load document data and extract documents - reload when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       const loadDocuments = async () => {
-        // Load from trip storage if tripId is available
+        // Load from document storage if tripId is available
         if (tripId) {
           try {
-            const trip = await getTrip(tripId);
+            const document = await getDocument(tripId);
             if (trip) {
               const geoId = locationId || id;
 
@@ -116,7 +116,7 @@ export default function LocationDetailScreen() {
               if (foundContext) {
                 setContextDocument(foundContext);
               } else if (contextDocParam) {
-                // Fallback to params if not found in trip document
+                // Fallback to params if not found in document document
                 try {
                   const parsed = JSON.parse(contextDocParam);
                   setContextDocument(parsed);
@@ -132,7 +132,7 @@ export default function LocationDetailScreen() {
               setTransportProfile(geoMarkAttrs?.transportProfile || null);
               setTransportFrom(geoMarkAttrs?.transportFrom || null);
 
-              // Extract all geo-marks from trip document to populate available locations
+              // Extract all geo-marks from document document to populate available locations
               const extractAllGeoMarks = (node: any): Array<{ id: string; name: string; lat: number; lng: number }> => {
                 const locations: Array<{ id: string; name: string; lat: number; lng: number }> = [];
 
@@ -269,7 +269,7 @@ export default function LocationDetailScreen() {
 
     setIsSavingTransport(true);
     try {
-      const trip = await getTrip(tripId);
+      const document = await getDocument(tripId);
       if (!trip || !trip.document) {
         Alert.alert('Error', 'Trip document not found');
         return;
@@ -306,7 +306,7 @@ export default function LocationDetailScreen() {
 
       const updatedDocument = updateGeoMarkTransport(trip.document);
 
-      await saveTrip({
+      await saveDocument({
         ...trip,
         document: updatedDocument,
       });
