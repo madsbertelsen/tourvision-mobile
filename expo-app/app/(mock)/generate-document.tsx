@@ -309,17 +309,17 @@ export default function GenerateTripScreen() {
           {isGenerating && !isTyping && (
             <>
               <ActivityIndicator size="small" color="#3B82F6" style={{ marginRight: 8 }} />
-              <Text style={styles.headerStatus}>AI is preparing your trip...</Text>
+              <Text style={styles.headerStatus}>AI is preparing your document...</Text>
             </>
           )}
           {isTyping && (
             <>
               <Text style={styles.headerEmoji}>⌨️</Text>
-              <Text style={styles.headerStatus}>AI is typing your trip...</Text>
+              <Text style={styles.headerStatus}>AI is typing your document...</Text>
             </>
           )}
           {!isGenerating && !isTyping && (
-            <Text style={styles.headerTitle}>New Trip</Text>
+            <Text style={styles.headerTitle}>New Document</Text>
           )}
         </View>
         <View style={{ width: 60 }} />

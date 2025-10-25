@@ -132,7 +132,7 @@ export default function InviteScreen() {
             </Text>
           </View>
           <Text style={styles.successMessage}>
-            You now have access to this trip. Redirecting...
+            You now have access to this document. Redirecting...
           </Text>
           <TouchableOpacity
             style={styles.primaryButton}

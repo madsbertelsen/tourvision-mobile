@@ -80,7 +80,7 @@ export default function TripListScreen() {
   const handleDeleteTrip = async (tripId: string) => {
     Alert.alert(
       'Delete Document',
-      'Are you sure you want to delete this trip?',
+      'Are you sure you want to delete this document?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -206,7 +206,7 @@ export default function TripListScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Trips</Text>
+        <Text style={styles.title}>My Documents</Text>
       </View>
 
       {/* URL Input Section */}
@@ -250,7 +250,7 @@ export default function TripListScreen() {
           <View style={styles.aiInfoText}>
             <Text style={styles.aiInfoTitle}>AI Assistant Available</Text>
             <Text style={styles.aiInfoDescription}>
-              Create a trip, then tap the ✨ icon in the editor to generate content with AI
+              Create a document, then tap the ✨ icon in the editor to generate content with AI
             </Text>
           </View>
         </View>
@@ -261,9 +261,9 @@ export default function TripListScreen() {
         {trips.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="link-outline" size={64} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No trips yet</Text>
+            <Text style={styles.emptyTitle}>No documents yet</Text>
             <Text style={styles.emptyDescription}>
-              Paste a travel guide URL above to extract locations and create your first trip
+              Paste a travel guide URL above to extract locations and create your first document
             </Text>
           </View>
         ) : (
