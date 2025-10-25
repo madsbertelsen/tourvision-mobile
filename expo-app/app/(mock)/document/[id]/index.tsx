@@ -419,7 +419,7 @@ Please generate replacement content that addresses the user's request. Only retu
           </TouchableOpacity>
 
           <Text key="title" style={styles.title} numberOfLines={1}>
-            {currentTrip?.title || 'Trip'}
+            {currentTrip?.title || 'Document'}
           </Text>
 
           <View key="header-actions" style={styles.headerActions}>

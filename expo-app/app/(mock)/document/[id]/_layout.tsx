@@ -39,7 +39,7 @@ export default function TripLayout() {
 
   // Verbose rendering logging removed - component renders frequently
 
-  const [currentTrip, setCurrentTrip] = useState<SavedTrip | null>(null);
+  const [currentTrip, setCurrentTrip] = useState<SavedDocument | null>(null);
   const [currentDoc, setCurrentDoc] = useState<any>(null);
   const [yjsState, setYjsState] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(true);
@@ -117,33 +117,33 @@ export default function TripLayout() {
 
         const document = await getDocument(tripId);
 
-        if (!trip) {
-          console.error('[TripLayout] Trip not found:', tripId);
+        if (!document) {
+          console.error('[TripLayout] Document not found:', tripId);
           // Reset state when document not found
           setCurrentTrip(null);
           setCurrentDoc(null);
           return;
         }
 
-        console.log('[TripLayout] Trip loaded:', trip.title, 'Y.js state exists:', !!trip.yjsState);
-        setCurrentTrip(trip);
+        console.log('[TripLayout] Document loaded:', document.title, 'Y.js state exists:', !!document.yjsState);
+        setCurrentTrip(document);
 
         // Load Y.js state from document (preferred)
-        if (trip.yjsState) {
+        if (document.yjsState) {
           console.log('[TripLayout] Loading Y.js state from document:', tripId);
-          console.log('[TripLayout] Y.js state length:', trip.yjsState.length);
-          setYjsState(trip.yjsState);
+          console.log('[TripLayout] Y.js state length:', document.yjsState.length);
+          setYjsState(document.yjsState);
         } else {
           console.log('[TripLayout] No Y.js state found for document:', tripId);
           setYjsState(null);
         }
 
         // Load document from document (deprecated, for backward compatibility)
-        if (trip.document) {
+        if (document.document) {
           console.log('[TripLayout] Loading document from document:', tripId);
-          console.log('[TripLayout] Document content length:', JSON.stringify(trip.document).length);
-          console.log('[TripLayout] Document preview:', JSON.stringify(trip.document).substring(0, 200));
-          setCurrentDoc(trip.document);
+          console.log('[TripLayout] Document content length:', JSON.stringify(document.document).length);
+          console.log('[TripLayout] Document preview:', JSON.stringify(document.document).substring(0, 200));
+          setCurrentDoc(document.document);
         } else {
           console.log('[TripLayout] No document found for document:', tripId, '- creating blank');
           const blankDoc = {
@@ -172,14 +172,14 @@ export default function TripLayout() {
         return;
       }
 
-      const updatedTrip = {
+      const updatedDocument = {
         ...currentTrip,
         document: doc,
         updatedAt: Date.now(),
       };
 
-      await saveDocument(updatedTrip);
-      setCurrentTrip(updatedTrip);
+      await saveDocument(updatedDocument);
+      setCurrentTrip(updatedDocument);
     },
     [currentTrip]
   );
@@ -210,14 +210,14 @@ export default function TripLayout() {
         return;
       }
 
-      const updatedTrip = {
+      const updatedDocument = {
         ...currentTrip,
         yjsState: state,
         updatedAt: Date.now(),
       };
 
-      await saveDocument(updatedTrip);
-      setCurrentTrip(updatedTrip);
+      await saveDocument(updatedDocument);
+      setCurrentTrip(updatedDocument);
       console.log('[TripLayout] Y.js state saved to local storage');
     };
 
