@@ -61,7 +61,7 @@ export async function getDocument(documentId: string): Promise<SavedDocument | n
   try {
     // Check local storage first
     const documents = await getDocuments();
-    const localDocument = trips.find(trip => document.id === documentId);
+    const localDocument = documents.find(doc => doc.id === documentId);
     if (localDocument) {
       return localDocument;
     }
@@ -145,7 +145,7 @@ export async function createDocument(title: string): Promise<SavedDocument> {
     };
 
     // Save locally first (local-first approach)
-    const updatedDocuments = [...trips, newDocument];
+    const updatedDocuments = [...documents, newDocument];
     await AsyncStorage.setItem(DOCUMENTS_KEY, JSON.stringify(updatedDocuments));
 
     // Try to sync to Supabase if online (non-blocking)
@@ -194,8 +194,8 @@ async function syncDocumentToSupabase(document: SavedDocument): Promise<void> {
         created_by: user.id,
         status: 'planning',
         is_public: false,
-        created_at: new Date(trip.createdAt).toISOString(),
-        updated_at: new Date(trip.updatedAt).toISOString(),
+        created_at: new Date(document.createdAt).toISOString(),
+        updated_at: new Date(document.updatedAt).toISOString(),
       });
 
     if (dbError) {
@@ -217,19 +217,19 @@ export async function saveDocument(document: SavedDocument): Promise<void> {
   try {
     // Verbose logging removed - saves happen frequently during collaboration
     const documents = await getDocuments();
-    const existingIndex = trips.findIndex(t => t.id === document.id);
+    const existingIndex = documents.findIndex(d => d.id === document.id);
 
     const updatedDocument = {
-      ...trip,
+      ...document,
       updatedAt: Date.now(),
     };
 
     let updatedDocuments: SavedDocument[];
     if (existingIndex >= 0) {
-      updatedDocuments = [...trips];
+      updatedDocuments = [...documents];
       updatedDocuments[existingIndex] = updatedDocument;
     } else {
-      updatedDocuments = [...trips, updatedDocument];
+      updatedDocuments = [...documents, updatedDocument];
     }
 
     const jsonString = JSON.stringify(updatedDocuments);
@@ -247,7 +247,7 @@ export async function saveDocument(document: SavedDocument): Promise<void> {
 export async function deleteDocument(documentId: string): Promise<void> {
   try {
     const documents = await getDocuments();
-    const updatedDocuments = trips.filter(t => t.id !== documentId);
+    const updatedDocuments = documents.filter(d => d.id !== documentId);
     await AsyncStorage.setItem(DOCUMENTS_KEY, JSON.stringify(updatedDocuments));
   } catch (error) {
     console.error('Error deleting document:', error);
@@ -261,10 +261,10 @@ export async function deleteDocument(documentId: string): Promise<void> {
 export async function updateDocumentTitle(documentId: string, title: string): Promise<void> {
   try {
     const document = await getDocument(documentId);
-    if (!trip) throw new Error('Document not found');
+    if (!document) throw new Error('Document not found');
 
     document.title = title;
-    await saveDocument(trip);
+    await saveDocument(document);
   } catch (error) {
     console.error('Error updating document title:', error);
     throw error;
