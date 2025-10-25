@@ -67,7 +67,7 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
   const loadCollaborators = async () => {
     try {
       const { data, error } = await supabase
-        .rpc('get_trip_collaborators', { p_trip_id: tripId });
+        .rpc('get_document_collaborators', { p_document_id: tripId });
 
       if (error) throw error;
       setCollaborators(data || []);
@@ -78,10 +78,10 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
 
   const loadShareLinks = async () => {
     try {
-      const { data, error } = await supabase
-        .from('trip_share_links')
+      const { data, error} = await supabase
+        .from('document_share_links')
         .select('*')
-        .eq('trip_id', tripId)
+        .eq('document_id', tripId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
@@ -111,9 +111,9 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
         .single();
 
       const { error } = await supabase
-        .from('trip_shares')
+        .from('document_shares')
         .insert({
-          trip_id: tripId,
+          document_id: tripId,
           owner_id: userData.user.id,
           shared_with_user_id: existingUser?.id || null,
           shared_with_email: existingUser ? null : email.toLowerCase(),
@@ -158,9 +158,9 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
       }
 
       const { data, error } = await supabase
-        .from('trip_share_links')
+        .from('document_share_links')
         .insert({
-          trip_id: tripId,
+          document_id: tripId,
           created_by: userData.user.id,
           permission: linkPermission,
           max_uses: maxUses ? parseInt(maxUses) : null,
@@ -226,9 +226,9 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
           onPress: async () => {
             try {
               const { error } = await supabase
-                .from('trip_shares')
+                .from('document_shares')
                 .delete()
-                .eq('trip_id', tripId)
+                .eq('document_id', tripId)
                 .eq('shared_with_user_id', userId);
 
               if (error) throw error;
@@ -246,7 +246,7 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
   const deactivateLink = async (linkId: string) => {
     try {
       const { error } = await supabase
-        .from('trip_share_links')
+        .from('document_share_links')
         .update({ is_active: false })
         .eq('id', linkId);
 
