@@ -79,11 +79,7 @@ export default function ShareDocumentModal({ visible, onClose, tripId, tripTitle
   const loadShareLinks = async () => {
     try {
       const { data, error} = await supabase
-        .from('document_share_links')
-        .select('*')
-        .eq('document_id', tripId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .rpc('get_document_share_links', { p_document_id: tripId });
 
       if (error) throw error;
       setShareLinks(data || []);
