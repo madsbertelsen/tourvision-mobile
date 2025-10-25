@@ -102,7 +102,7 @@ function ProtectedLayout() {
       <Stack.Screen name="test-transparency" options={{ headerShown: false }} />
       <Stack.Screen name="simple-map-test" options={{ headerShown: false }} />
       <Stack.Screen name="test-deckgl" options={{ headerShown: false }} />
-      <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="document/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
     </Stack>
   );

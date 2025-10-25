@@ -16,7 +16,7 @@ function CustomDrawerContent(props: any) {
   const handleTripSelect = (tripId: string, initialMessage?: string) => {
     // Navigate to document detail page using proper dynamic route syntax
     router.push({
-      pathname: '/(mock)/trip/[id]' as any,
+      pathname: '/(mock)/document/[id]' as any,
       params: {
         id: tripId,
         ...(initialMessage ? { initialMessage } : {})
@@ -29,7 +29,7 @@ function CustomDrawerContent(props: any) {
   const handleLocationSelect = (tripId: string, locationId: string, location: any) => {
     // Navigate to location detail page using proper dynamic route syntax
     router.push({
-      pathname: '/(mock)/trip/[id]/location/[locationId]' as any,
+      pathname: '/(mock)/document/[id]/location/[locationId]' as any,
       params: {
         id: tripId,
         locationId: locationId,
@@ -84,9 +84,9 @@ function MockLayoutContent() {
         }}
       />
       <Drawer.Screen
-        name="trip/[id]"
+        name="document/[id]"
         options={{
-          title: 'Trip Detail',
+          title: 'Document Detail',
           drawerLabel: () => null, // Hide from drawer menu
           headerShown: false, // Hide header for nested stack
         }}
