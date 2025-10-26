@@ -22,8 +22,8 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(app)',
+  // Default to public landing page
+  initialRouteName: '(public)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -78,13 +78,14 @@ function ProtectedLayout() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inPublicGroup = segments[0] === '(public)';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // Redirect to login if not authenticated and not in auth group
-      router.replace('/(auth)/login');
+    if (!isAuthenticated && !inAuthGroup && !inPublicGroup) {
+      // Redirect to landing page if not authenticated and not in auth or public group
+      router.replace('/(public)');
     } else if (isAuthenticated && inAuthGroup) {
-      // Redirect to home if authenticated and in auth group
-      router.replace('/(app)');
+      // Redirect to dashboard if authenticated and in auth group
+      router.replace('/(app)/dashboard');
     }
   }, [isAuthenticated, isLoading, segments]);
 
