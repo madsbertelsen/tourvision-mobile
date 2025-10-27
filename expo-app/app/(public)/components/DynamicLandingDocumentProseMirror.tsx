@@ -410,23 +410,26 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             // Update location button state based on selection
             // Only enable after animation is complete to avoid interfering with animation
             if (animationState?.isComplete) {
-              setHasTextSelection(!empty);
+              // Use setTimeout to avoid updating state during render
+              setTimeout(() => {
+                setHasTextSelection(!empty);
 
-              // Show/hide floating menu based on selection
-              if (!empty && Platform.OS === 'web' && selectedText && boundingRect) {
-                setSelectedText(selectedText);
+                // Show/hide floating menu based on selection
+                if (!empty && Platform.OS === 'web' && selectedText && boundingRect) {
+                  setSelectedText(selectedText);
 
-                // Position menu above the selection
-                setMenuPosition({
-                  x: boundingRect.left + (boundingRect.width / 2) - 75, // Center menu (150px width / 2)
-                  y: boundingRect.top - 50, // Above selection with padding
-                });
+                  // Position menu above the selection
+                  setMenuPosition({
+                    x: boundingRect.left + (boundingRect.width / 2) - 75, // Center menu (150px width / 2)
+                    y: boundingRect.top - 50, // Above selection with padding
+                  });
 
-                setShowFloatingMenu(true);
-              } else {
-                setShowFloatingMenu(false);
-                setSelectedText('');
-              }
+                  setShowFloatingMenu(true);
+                } else {
+                  setShowFloatingMenu(false);
+                  setSelectedText('');
+                }
+              }, 0);
             }
           }}
           editable={true} // Always editable (AI is "editing" during animation)
