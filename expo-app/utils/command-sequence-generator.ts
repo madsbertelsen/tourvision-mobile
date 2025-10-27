@@ -168,11 +168,13 @@ export function generateCommandSequence(
         });
       }
 
-      // Then select the text by moving cursor backwards
+      // Then select the text by moving cursor backwards with animation
+      // Selection animates at 80ms per character, so delay = (length * 80) + 300ms buffer
+      const selectionAnimationTime = geoMarkText.length * 80 + 300;
       commands.push({
         type: 'selectText',
         count: geoMarkText.length,
-        delay: 200, // Small pause before selection
+        delay: selectionAnimationTime, // Wait for selection animation to complete
       });
 
       // Then create the geo-mark from the selection

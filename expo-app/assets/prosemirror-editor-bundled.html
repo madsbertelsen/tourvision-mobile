@@ -1534,18 +1534,35 @@
                   break;
 
                 case 'selectText':
-                  console.log('[WebView] Selecting text backwards:', data.params?.count);
-                  // Select text backwards from cursor (like Shift+ArrowLeft)
+                  console.log('[WebView] Animating text selection backwards:', data.params?.count);
+                  // Animate selection backwards from cursor (like Shift+ArrowLeft held down)
                   try {
                     const count = data.params?.count || 0;
                     const currentPos = state.selection.to;
-                    const startPos = Math.max(0, currentPos - count);
+                    const finalStartPos = Math.max(0, currentPos - count);
 
-                    const selectTr = state.tr.setSelection(
-                      window.PM.state.TextSelection.create(state.doc, startPos, currentPos)
-                    );
-                    dispatch(selectTr);
-                    console.log('[WebView] Selected text from', startPos, 'to', currentPos);
+                    // Animate selection character by character
+                    let currentStep = 0;
+                    const animateSelection = () => {
+                      if (!editorView) return;
+
+                      currentStep++;
+                      const startPos = Math.max(finalStartPos, currentPos - currentStep);
+
+                      const selectTr = editorView.state.tr.setSelection(
+                        window.PM.state.TextSelection.create(editorView.state.doc, startPos, currentPos)
+                      );
+                      editorView.dispatch(selectTr);
+
+                      // Continue animation if not done
+                      if (currentStep < count) {
+                        setTimeout(animateSelection, 80); // 80ms per character for visible animation
+                      } else {
+                        console.log('[WebView] Selection animation complete from', finalStartPos, 'to', currentPos);
+                      }
+                    };
+
+                    animateSelection();
                   } catch (error) {
                     console.error('[WebView] Error selecting text:', error);
                   }
