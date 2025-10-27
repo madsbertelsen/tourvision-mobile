@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Platform, Modal, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
@@ -17,6 +17,9 @@ interface DynamicLandingDocumentProseMirrorProps {
   onLocationsChange?: (locations: Location[]) => void;
 }
 
+// Define initialContent outside component to prevent recreation on every render
+const INITIAL_CONTENT = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+
 export default function DynamicLandingDocumentProseMirror({ onLocationsChange }: DynamicLandingDocumentProseMirrorProps) {
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
@@ -34,6 +37,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
+  // Use ref instead of state to avoid callback recreation
+  const isAnimationCompleteRef = useRef(false);
 
   // Track text selection for geo-mark creation
   const pendingGeoMarkRef = useRef<{ start: number; end: number; data: any } | null>(null);
@@ -43,7 +48,16 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     const animator = new TypingAnimatorCommands(
       DEFAULT_TYPING_CONFIG,
       (state) => {
+        console.log('[Landing] Animation state update:', {
+          currentIndex: state.currentIndex,
+          isPaused: state.isPaused,
+          isComplete: state.isComplete
+        });
         setAnimationState(state);
+        // Update ref when animation completes
+        if (state.isComplete) {
+          isAnimationCompleteRef.current = true;
+        }
       },
       (command) => {
         handleCommand(command);
@@ -284,6 +298,81 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     }, 3000);
   };
 
+  // Memoize callbacks to prevent iframe recreation on every render
+  // Use refs instead of state in dependencies to keep callbacks stable
+  const handleContentChange = useCallback((doc: any) => {
+    // Handle user edits after animation completes
+    if (isAnimationCompleteRef.current) {
+      console.log('[Landing] User edited document');
+    }
+  }, []);
+
+  const handleSelectionChange = useCallback((empty: boolean, selectedText: string, boundingRect: any) => {
+    // NOTE: Floating menu is now handled entirely inside ProseMirror WebView
+    // This handler is kept for compatibility but doesn't show React Native menu anymore
+    console.log('[Landing] handleSelectionChange called (no-op, using ProseMirror tooltip):', { empty, selectedText });
+
+    // Still update hasTextSelection state for other features that might use it
+    if (isAnimationCompleteRef.current) {
+      setTimeout(() => {
+        setHasTextSelection(!empty);
+      }, 0);
+    }
+  }, []);
+
+  const handleReady = useCallback(() => {
+    console.log('[Landing] ===== EDITOR ONREADY CALLBACK FIRED =====');
+    console.log('[Landing] Setting editorReady to TRUE');
+    setEditorReady(true);
+    console.log('[Landing] editorReady state should now be true');
+  }, []);
+
+  const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
+    console.log('[Landing] handleShowGeoMarkEditor called with:', data);
+
+    // Get the search query from selected text
+    const searchQuery = data.selectedText || '';
+
+    if (!searchQuery.trim()) {
+      console.warn('[Landing] No text selected, cannot create location');
+      return;
+    }
+
+    // Show the modal immediately
+    setShowLocationModal(true);
+    setIsLoadingLocation(true);
+    setLocationSearchResults([]);
+
+    // Fetch location data from Nominatim
+    fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=jsonv2&limit=5&addressdetails=1`,
+      { headers: { 'User-Agent': 'TourVision-App' } }
+    )
+      .then(res => res.json())
+      .then(results => {
+        setLocationSearchResults(results || []);
+        setIsLoadingLocation(false);
+        // Set the first result as selected
+        if (results && results.length > 0) {
+          setLocationModalData({
+            placeName: results[0].display_name,
+            lat: parseFloat(results[0].lat),
+            lng: parseFloat(results[0].lon),
+          });
+        }
+      })
+      .catch(error => {
+        console.error('[Landing] Error fetching location:', error);
+        setIsLoadingLocation(false);
+        // Fallback with default coordinates
+        setLocationModalData({
+          placeName: searchQuery,
+          lat: 48.8566, // Paris default
+          lng: 2.3522,
+        });
+      });
+  }, []);
+
   return (
     <View style={styles.container}>
       {/* Animation Controls - Removed per user request */}
@@ -383,8 +472,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         </View>
       </Modal>
 
-      {/* Floating Context Menu */}
-      {showFloatingMenu && Platform.OS === 'web' && (
+      {/* Floating Context Menu - DISABLED: Now handled inside ProseMirror WebView */}
+      {/* {showFloatingMenu && Platform.OS === 'web' && (
         <View style={[styles.floatingMenu, { top: menuPosition.y, left: menuPosition.x }]}>
           <TouchableOpacity
             style={styles.floatingMenuItem}
@@ -394,53 +483,19 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             <Text style={styles.floatingMenuText}>Add Location</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
 
       {/* ProseMirror Editor */}
       <View ref={editorContainerRef} style={styles.editorContainer}>
         <ProseMirrorWebView
           ref={webViewRef}
-          initialContent={{ type: 'doc', content: [{ type: 'paragraph', content: [] }] }} // Start with empty paragraph
-          onContentChange={(doc) => {
-            // Handle user edits after animation completes
-            if (animationState?.isComplete) {
-              console.log('[Landing] User edited document');
-            }
-          }}
-          onSelectionChange={(empty, selectedText, boundingRect) => {
-            // Update location button state based on selection
-            // Only enable after animation is complete to avoid interfering with animation
-            if (animationState?.isComplete) {
-              // Use setTimeout to avoid updating state during render
-              setTimeout(() => {
-                setHasTextSelection(!empty);
-
-                // Show/hide floating menu based on selection
-                if (!empty && Platform.OS === 'web' && selectedText && boundingRect) {
-                  setSelectedText(selectedText);
-
-                  // Position menu above the selection
-                  setMenuPosition({
-                    x: boundingRect.left + (boundingRect.width / 2) - 75, // Center menu (150px width / 2)
-                    y: boundingRect.top - 50, // Above selection with padding
-                  });
-
-                  setShowFloatingMenu(true);
-                } else {
-                  setShowFloatingMenu(false);
-                  setSelectedText('');
-                }
-              }, 0);
-            }
-          }}
-          editable={true} // Always editable (AI is "editing" during animation)
-          showToolbar={false} // We render toolbar separately above
-          onReady={() => {
-            console.log('[Landing] ===== EDITOR ONREADY CALLBACK FIRED =====');
-            console.log('[Landing] Setting editorReady to TRUE');
-            setEditorReady(true);
-            console.log('[Landing] editorReady state should now be true');
-          }}
+          initialContent={INITIAL_CONTENT}
+          onContentChange={handleContentChange}
+          onSelectionChange={handleSelectionChange}
+          onShowGeoMarkEditor={handleShowGeoMarkEditor}
+          editable={true}
+          showToolbar={false}
+          onReady={handleReady}
         />
       </View>
     </View>

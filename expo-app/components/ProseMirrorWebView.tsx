@@ -343,6 +343,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               }
               break;
 
+            case 'createLocationFromSelection':
+              console.log('[ProseMirrorWebView] Create location from selection:', data.selectedText);
+              // Trigger the geo-mark editor with the selected text
+              if (onShowGeoMarkEditor) {
+                onShowGeoMarkEditor({
+                  selectedText: data.selectedText,
+                  from: data.from,
+                  to: data.to
+                }, []); // Pass empty locations array as second argument
+              }
+              break;
+
             // Y.js message handlers
             default:
               console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
@@ -654,7 +666,10 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
   }
 );
 
-ProseMirrorWebView.displayName = 'ProseMirrorWebView';
+// Memoize the component to prevent re-renders when parent state changes
+// This is critical for preventing the iframe from reloading and losing editor state
+const MemoizedProseMirrorWebView = React.memo(ProseMirrorWebView);
+MemoizedProseMirrorWebView.displayName = 'ProseMirrorWebView';
 
 const styles = StyleSheet.create({
   container: {
@@ -678,4 +693,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProseMirrorWebView;
+export default MemoizedProseMirrorWebView;

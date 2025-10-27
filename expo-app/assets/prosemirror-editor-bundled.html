@@ -304,6 +304,33 @@
       padding: 0;
       height: 100%;
       overflow-y: auto;
+      position: relative; /* Make editor container the positioning context */
+    }
+
+    /* Floating menu tooltip */
+    .selection-tooltip {
+      position: absolute;
+      display: none;
+      background: #3B82F6;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+      pointer-events: auto;
+      user-select: none;
+    }
+
+    .selection-tooltip:hover {
+      background: #2563EB;
+    }
+
+    .selection-tooltip::before {
+      content: '📍 ';
     }
   </style>
 </head>
@@ -660,13 +687,164 @@
       ]);
 
       // Create initial editor state
+      // Selection Tooltip Plugin (Medium-style floating menu)
+      class SelectionTooltip {
+        constructor(view) {
+          this.view = view;
+          this.tooltip = document.createElement('div');
+          this.tooltip.className = 'selection-tooltip';
+          this.tooltip.textContent = 'Add Location';
+          view.dom.parentNode.appendChild(this.tooltip);
+          this.isVisible = false;
+
+          // Store selection when showing tooltip
+          this.storedSelection = null;
+          this.storedText = '';
+
+          // Handle click on tooltip
+          this.tooltip.addEventListener('click', () => {
+            // Use stored text and selection
+            const selectedText = this.storedText;
+            const selection = this.storedSelection || this.view.state.selection;
+            const { from, to } = selection;
+            console.log('[WebView] Tooltip clicked, selected text:', selectedText);
+
+            // Send message to React Native to handle location creation
+            sendMessageToNative({
+              type: 'createLocationFromSelection',
+              selectedText: selectedText,
+              from: from,
+              to: to
+            });
+
+            // Hide tooltip after clicking
+            this.hideTooltip();
+          });
+
+          // Handle clicks on selected text to show tooltip
+          view.dom.addEventListener('mousedown', (e) => {
+            // Check selection BEFORE ProseMirror processes the click
+            const state = this.view.state;
+            if (!state.selection.empty) {
+              const { from, to } = state.selection;
+              const pos = this.view.posAtCoords({ left: e.clientX, top: e.clientY });
+
+              if (pos && pos.pos >= from && pos.pos <= to) {
+                console.log('[WebView] Clicked on selection, preventing default and showing tooltip');
+                // IMPORTANT: Store selection HERE, before any state changes
+                this.storedSelection = { from, to };
+                this.storedText = state.doc.textBetween(from, to, ' ');
+                console.log('[WebView] Stored selection in mousedown:', { from, to, text: this.storedText });
+
+                // Prevent ProseMirror from clearing the selection
+                e.preventDefault();
+                e.stopPropagation();
+                this.showTooltip();
+                return false;
+              }
+            }
+            // Click was outside selection or no selection, hide tooltip
+            this.hideTooltip();
+          });
+
+          this.update(view, null);
+        }
+
+        showTooltip() {
+          this.isVisible = true;
+          // Selection is already stored in mousedown handler
+          this.positionTooltip();
+        }
+
+        hideTooltip() {
+          this.isVisible = false;
+          this.tooltip.style.display = 'none';
+        }
+
+        positionTooltip() {
+          if (!this.isVisible) return;
+
+          const state = this.view.state;
+          if (state.selection.empty) {
+            this.hideTooltip();
+            return;
+          }
+
+          const { from, to } = state.selection;
+
+          // Get coordinates of selection start and end
+          const start = this.view.coordsAtPos(from);
+          const end = this.view.coordsAtPos(to);
+
+          // Calculate center position
+          const centerX = (start.left + end.left) / 2;
+
+          // Position above selection, but ensure it's not off-screen
+          // If selection is too close to top, show below instead
+          let topY = start.top - 50; // 50px above selection
+          let placementBelow = false;
+
+          if (topY < 10) {
+            // Too close to top, show below instead
+            topY = start.bottom + 10;
+            placementBelow = true;
+          }
+
+          // Position tooltip using absolute positioning
+          this.tooltip.style.left = centerX + 'px';
+          this.tooltip.style.top = topY + 'px';
+          this.tooltip.style.transform = 'translateX(-50%)'; // Center horizontally
+          this.tooltip.style.display = 'block';
+
+          console.log('[WebView] Tooltip positioned:', {
+            centerX,
+            topY,
+            placementBelow,
+            startTop: start.top,
+            startBottom: start.bottom,
+            startLeft: start.left,
+            endLeft: end.left
+          });
+        }
+
+        update(view, lastState) {
+          const state = view.state;
+
+          // Don't do anything if the document/selection didn't change
+          if (lastState && lastState.doc.eq(state.doc) &&
+              lastState.selection.eq(state.selection)) return;
+
+          // Hide tooltip if selection is empty
+          if (state.selection.empty) {
+            this.hideTooltip();
+            return;
+          }
+
+          // If tooltip is visible, update its position
+          if (this.isVisible) {
+            this.positionTooltip();
+          }
+        }
+
+        destroy() {
+          this.tooltip.remove();
+        }
+      }
+
+      const selectionTooltipPlugin = new Plugin({
+        view(editorView) {
+          return new SelectionTooltip(editorView);
+        }
+      });
+
       let editorState = EditorState.create({
         doc: doc,
         schema: schema,
         plugins: [
           history(),
           keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-          keymap(baseKeymap)
+          keymap(baseKeymap),
+          selectionTooltipPlugin
         ]
       });
 
