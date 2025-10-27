@@ -136,8 +136,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 
         setLocations(prev => {
           const updated = [...prev, newLocation];
-          // Notify parent component
-          onLocationsChange?.(updated);
+          // Notify parent component after state update completes
+          setTimeout(() => onLocationsChange?.(updated), 0);
           return updated;
         });
 
@@ -261,7 +261,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 
           setLocations(prev => {
             const updated = [...prev, newLocation];
-            onLocationsChange?.(updated);
+            // Notify parent component after state update completes
+            setTimeout(() => onLocationsChange?.(updated), 0);
             return updated;
           });
 
