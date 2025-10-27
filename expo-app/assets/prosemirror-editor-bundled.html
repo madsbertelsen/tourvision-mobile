@@ -75,10 +75,11 @@
       50%, 100% { opacity: 0; }
     }
 
-    /* Enhanced selection highlighting */
+    /* Enhanced selection highlighting - SUPER VISIBLE! */
     .ProseMirror ::selection {
-      background-color: #3b82f6; /* Bright blue */
-      color: white;
+      background-color: #3b82f6 !important; /* Bright blue */
+      color: white !important;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
     }
 
     /* Animated selection highlight for demo */
@@ -1547,7 +1548,8 @@
 
                 case 'selectText':
                   console.log('[WebView] Animating text selection backwards:', data.params?.count);
-                  // Animate selection backwards from cursor (like Shift+ArrowLeft held down)
+                  // Animate selection backwards from cursor by extending selection programmatically
+                  // This creates a visible selection that persists until the next command
                   try {
                     const count = data.params?.count || 0;
                     const currentPos = state.selection.to;
@@ -1561,29 +1563,20 @@
                       currentStep++;
                       const startPos = Math.max(finalStartPos, currentPos - currentStep);
 
+                      // Create selection and force DOM sync
                       const selectTr = editorView.state.tr.setSelection(
                         window.PM.state.TextSelection.create(editorView.state.doc, startPos, currentPos)
                       );
                       editorView.dispatch(selectTr);
 
-                      // Add visual highlight to selected text using DOM manipulation
-                      // This is more reliable than decorations for temporary highlights
-                      setTimeout(() => {
-                        const domSelection = window.getSelection();
-                        if (domSelection && domSelection.rangeCount > 0) {
-                          const range = domSelection.getRangeAt(0);
-                          // Force browser to show selection highlight
-                          if (range.toString().length > 0) {
-                            console.log('[WebView] Selection visible:', range.toString());
-                          }
-                        }
-                      }, 10);
+                      console.log('[WebView] Selection step', currentStep, ':', startPos, 'to', currentPos);
 
                       // Continue animation if not done
                       if (currentStep < count) {
                         setTimeout(animateSelection, 150); // 150ms per character for more visible animation
                       } else {
                         console.log('[WebView] Selection animation complete from', finalStartPos, 'to', currentPos);
+                        console.log('[WebView] Current selection:', editorView.state.selection.from, '-', editorView.state.selection.to);
                       }
                     };
 
