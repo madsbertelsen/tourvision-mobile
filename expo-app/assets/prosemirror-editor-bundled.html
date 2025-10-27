@@ -1524,12 +1524,16 @@
                   break;
 
                 case 'insertText':
-                  console.log('[WebView] Inserting text:', data.params?.text);
-                  // Insert text at current cursor position
+                  console.log('[WebView] Typing text via input:', data.params?.text);
+                  // Use direct insertion - ProseMirror handles this correctly
                   const text = data.params?.text || '';
-                  const insertTextTr = state.tr.insertText(text);
-                  dispatch(insertTextTr);
-                  console.log('[WebView] Text inserted at pos:', state.selection.$from.pos);
+
+                  if (editorView) {
+                    // Just insert the text directly - this is the most reliable method
+                    const insertTextTr = editorView.state.tr.insertText(text);
+                    editorView.dispatch(insertTextTr);
+                    console.log('[WebView] Inserted text:', text);
+                  }
                   break;
 
                 case 'insertParagraph':
@@ -1547,13 +1551,17 @@
                   break;
 
                 case 'selectText':
-                  console.log('[WebView] Animating text selection backwards:', data.params?.count);
-                  // Animate selection backwards from cursor by extending selection programmatically
-                  // This creates a visible selection that persists until the next command
+                  console.log('[WebView] Selecting text backwards:', data.params?.count);
+                  // Animate selection by updating both ProseMirror AND native DOM selection
                   try {
                     const count = data.params?.count || 0;
                     const currentPos = state.selection.to;
                     const finalStartPos = Math.max(0, currentPos - count);
+
+                    // Focus editor
+                    if (editorView && editorView.dom) {
+                      editorView.focus();
+                    }
 
                     // Animate selection character by character
                     let currentStep = 0;
@@ -1563,20 +1571,39 @@
                       currentStep++;
                       const startPos = Math.max(finalStartPos, currentPos - currentStep);
 
-                      // Create selection and force DOM sync
+                      // Update ProseMirror selection
                       const selectTr = editorView.state.tr.setSelection(
                         window.PM.state.TextSelection.create(editorView.state.doc, startPos, currentPos)
                       );
                       editorView.dispatch(selectTr);
 
+                      // ALSO update native DOM selection for visual feedback
+                      try {
+                        const domSelection = window.getSelection();
+                        if (domSelection) {
+                          const startDOM = editorView.domAtPos(startPos);
+                          const endDOM = editorView.domAtPos(currentPos);
+
+                          if (startDOM && endDOM) {
+                            const range = document.createRange();
+                            range.setStart(startDOM.node, startDOM.offset);
+                            range.setEnd(endDOM.node, endDOM.offset);
+                            domSelection.removeAllRanges();
+                            domSelection.addRange(range);
+                            console.log('[WebView] Updated DOM selection:', startPos, 'to', currentPos);
+                          }
+                        }
+                      } catch (domError) {
+                        console.warn('[WebView] Could not update DOM selection:', domError);
+                      }
+
                       console.log('[WebView] Selection step', currentStep, ':', startPos, 'to', currentPos);
 
                       // Continue animation if not done
                       if (currentStep < count) {
-                        setTimeout(animateSelection, 150); // 150ms per character for more visible animation
+                        setTimeout(animateSelection, 150); // 150ms per character
                       } else {
                         console.log('[WebView] Selection animation complete from', finalStartPos, 'to', currentPos);
-                        console.log('[WebView] Current selection:', editorView.state.selection.from, '-', editorView.state.selection.to);
                       }
                     };
 

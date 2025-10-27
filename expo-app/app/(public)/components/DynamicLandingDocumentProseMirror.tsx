@@ -131,30 +131,7 @@ export default function DynamicLandingDocumentProseMirror() {
 
   return (
     <View style={styles.container}>
-      {/* Animation Controls */}
-      {!animationState?.isComplete && (
-        <View style={styles.controls}>
-          <Pressable
-            onPress={handlePauseResume}
-            style={styles.controlButton}
-          >
-            <Text style={styles.controlButtonText}>
-              {animationState?.isPaused ? '▶️ Resume' : '⏸️ Pause'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleSkip}
-            style={styles.controlButton}
-          >
-            <Text style={styles.controlButtonText}>⏭️ Skip Animation</Text>
-          </Pressable>
-          <View style={styles.progressIndicator}>
-            <Text style={styles.progressText}>{progress}%</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Completion Message - Removed per user request */}
+      {/* Animation Controls - Removed per user request */}
 
       {/* Toolbar with Button Highlighting */}
       <View style={styles.toolbarContainer}>
