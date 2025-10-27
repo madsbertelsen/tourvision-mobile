@@ -1,15 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Platform } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Platform, Modal, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { TypingAnimatorCommands, AnimationState, DEFAULT_TYPING_CONFIG } from '@/utils/typing-animator-commands';
 import { EditorCommand } from '@/utils/command-sequence-generator';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function DynamicLandingDocumentProseMirror() {
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   const [animationStarted, setAnimationStarted] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationModalData, setLocationModalData] = useState<{ placeName: string; lat: number; lng: number } | null>(null);
+  const [hasTextSelection, setHasTextSelection] = useState(false);
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
 
@@ -80,6 +84,8 @@ export default function DynamicLandingDocumentProseMirror() {
 
       case 'selectText':
         console.log('[Landing] Selecting text, count:', command.count);
+        // Enable location button during selection
+        setHasTextSelection(true);
         // Select text by moving cursor backwards (Shift+ArrowLeft)
         webViewRef.current.sendCommand('selectText', { count: command.count });
         break;
@@ -92,10 +98,35 @@ export default function DynamicLandingDocumentProseMirror() {
           selectedText: command.geoMarkData.selectedText
         });
 
-        // Create geo-mark from the current selection
+        // Pause animation while modal is showing
+        if (animatorRef.current) {
+          animatorRef.current.pause();
+        }
+
+        // Create geo-mark IMMEDIATELY (this clears the selection)
         webViewRef.current.sendCommand('createGeoMark', {
           geoMarkData: command.geoMarkData,
         });
+
+        // Show the location creation modal with pre-filled data
+        // (the geo-mark is already created, modal is just for demonstration)
+        setLocationModalData({
+          placeName: command.geoMarkData.placeName || command.geoMarkData.selectedText,
+          lat: command.geoMarkData.lat || 48.8566,
+          lng: command.geoMarkData.lng || 2.3522,
+        });
+        setShowLocationModal(true);
+
+        // Auto-close modal and resume animation after 3 seconds
+        setTimeout(() => {
+          setShowLocationModal(false);
+          setHasTextSelection(false); // Disable location button after creation
+
+          // Resume animation
+          if (animatorRef.current) {
+            animatorRef.current.resume();
+          }
+        }, 3000);
         break;
 
       case 'wait':
@@ -137,6 +168,7 @@ export default function DynamicLandingDocumentProseMirror() {
       <View style={styles.toolbarContainer}>
         <ProseMirrorToolbar
           editable={true}
+          selectionEmpty={!hasTextSelection}
           highlightedButton={highlightedButton}
           onCommand={(command, params) => {
             webViewRef.current?.sendCommand(command, params);
@@ -154,6 +186,77 @@ export default function DynamicLandingDocumentProseMirror() {
           </View>
         )}
       </View>
+
+      {/* Location Creation Modal - Shows real UI for adding locations */}
+      <Modal
+        visible={showLocationModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLocationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Location</Text>
+              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Location Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={locationModalData?.placeName || ''}
+                  editable={false}
+                  placeholder="Enter location name"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Coordinates</Text>
+                <View style={styles.coordinatesRow}>
+                  <View style={styles.coordinateInput}>
+                    <Text style={styles.coordinateLabel}>Lat</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={locationModalData?.lat.toFixed(4) || ''}
+                      editable={false}
+                    />
+                  </View>
+                  <View style={styles.coordinateInput}>
+                    <Text style={styles.coordinateLabel}>Lng</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={locationModalData?.lng.toFixed(4) || ''}
+                      editable={false}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Add notes about this location..."
+                  multiline
+                  numberOfLines={3}
+                  editable={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.saveButton} disabled>
+                <Ionicons name="location" size={20} color="#fff" />
+                <Text style={styles.saveButtonText}>Add to Document</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ProseMirror Editor */}
       <View style={styles.editorContainer}>
@@ -268,5 +371,93 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     minHeight: 400,
     position: 'relative',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  coordinatesRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  coordinateInput: {
+    flex: 1,
+  },
+  coordinateLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    padding: 14,
+    borderRadius: 8,
+    gap: 8,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

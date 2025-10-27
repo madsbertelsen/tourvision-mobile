@@ -1555,8 +1555,11 @@
                   // Animate selection by updating both ProseMirror AND native DOM selection
                   try {
                     const count = data.params?.count || 0;
-                    const currentPos = state.selection.to;
+                    // Get CURRENT cursor position from the latest editor state
+                    const currentPos = editorView.state.selection.to;
                     const finalStartPos = Math.max(0, currentPos - count);
+
+                    console.log('[WebView] Selection positions - current:', currentPos, 'final start:', finalStartPos, 'count:', count);
 
                     // Focus editor
                     if (editorView && editorView.dom) {
