@@ -569,9 +569,36 @@
                   update: function(view, prevState) {
                     const state = view.state;
                     if (!prevState.selection.eq(state.selection)) {
+                      // Get selected text and position for floating menu
+                      let selectedText = '';
+                      let boundingRect = null;
+
+                      if (!state.selection.empty) {
+                        const { from, to } = state.selection;
+                        selectedText = state.doc.textBetween(from, to, ' ');
+
+                        // Get DOM coordinates for the selection
+                        try {
+                          const coords = view.coordsAtPos(from);
+                          const endCoords = view.coordsAtPos(to);
+                          boundingRect = {
+                            left: coords.left,
+                            top: coords.top,
+                            right: endCoords.right,
+                            bottom: endCoords.bottom,
+                            width: endCoords.right - coords.left,
+                            height: endCoords.bottom - coords.top
+                          };
+                        } catch (e) {
+                          console.error('[WebView] Error getting selection coordinates:', e);
+                        }
+                      }
+
                       sendMessage({
                         type: 'selectionChange',
-                        empty: state.selection.empty
+                        empty: state.selection.empty,
+                        selectedText: selectedText,
+                        boundingRect: boundingRect
                       });
                     }
                   }

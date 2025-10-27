@@ -113,7 +113,7 @@ interface ProseMirrorWebViewProps {
   onChange?: (doc: any) => void;
   onShowGeoMarkEditor?: (data: any, locations: any[]) => void;
   geoMarkDataToCreate?: any;
-  onSelectionChange?: (empty: boolean) => void;
+  onSelectionChange?: (empty: boolean, selectedText?: string, boundingRect?: { left: number; top: number; right: number; bottom: number; width: number; height: number }) => void;
   onGeoMarkNavigate?: (geoMarkAttrs: any) => void;
   onToolbarStateChange?: (state: any) => void;
   onShowCommentEditor?: (data: { selectedText: string; from: number; to: number }) => void;
@@ -275,7 +275,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             case 'selectionChange':
               if (onSelectionChange) {
-                onSelectionChange(data.empty);
+                onSelectionChange(data.empty, data.selectedText, data.boundingRect);
               }
               break;
 

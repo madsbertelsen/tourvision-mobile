@@ -28,8 +28,12 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [showFloatingMenu, setShowFloatingMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [selectedText, setSelectedText] = useState('');
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
+  const editorContainerRef = useRef<View>(null);
 
   // Track text selection for geo-mark creation
   const pendingGeoMarkRef = useRef<{ start: number; end: number; data: any } | null>(null);
@@ -214,6 +218,71 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 
   const progress = animatorRef.current?.getProgress() || 0;
 
+  // Handle creating geo-mark from floating menu
+  const handleCreateGeoMarkFromMenu = () => {
+    if (!selectedText || !webViewRef.current) return;
+
+    // Hide the floating menu
+    setShowFloatingMenu(false);
+
+    // Create the geo-mark
+    const geoMarkData = {
+      geoId: `manual-${Date.now()}`,
+      placeName: selectedText,
+      selectedText: selectedText,
+      lat: 0, // Will be filled by Nominatim
+      lng: 0,
+      colorIndex: locations.length % 10,
+      coordSource: 'manual',
+    };
+
+    webViewRef.current.sendCommand('createGeoMark', { geoMarkData });
+
+    // Fetch location from Nominatim
+    setIsLoadingLocation(true);
+    setLocationSearchResults([]);
+    setShowLocationModal(true);
+
+    fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(selectedText)}&format=jsonv2&limit=5&addressdetails=1`,
+      { headers: { 'User-Agent': 'TourVision-App' } }
+    )
+      .then(res => res.json())
+      .then(data => {
+        setLocationSearchResults(data || []);
+        setIsLoadingLocation(false);
+        if (data && data.length > 0) {
+          const newLocation: Location = {
+            geoId: geoMarkData.geoId,
+            placeName: data[0].display_name,
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+          };
+
+          setLocations(prev => {
+            const updated = [...prev, newLocation];
+            onLocationsChange?.(updated);
+            return updated;
+          });
+
+          setLocationModalData({
+            placeName: data[0].display_name,
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching location:', error);
+        setIsLoadingLocation(false);
+      });
+
+    // Auto-close modal after 3 seconds
+    setTimeout(() => {
+      setShowLocationModal(false);
+    }, 3000);
+  };
+
   return (
     <View style={styles.container}>
       {/* Animation Controls - Removed per user request */}
@@ -313,8 +382,21 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         </View>
       </Modal>
 
+      {/* Floating Context Menu */}
+      {showFloatingMenu && Platform.OS === 'web' && (
+        <View style={[styles.floatingMenu, { top: menuPosition.y, left: menuPosition.x }]}>
+          <TouchableOpacity
+            style={styles.floatingMenuItem}
+            onPress={handleCreateGeoMarkFromMenu}
+          >
+            <Ionicons name="location" size={18} color="#fff" />
+            <Text style={styles.floatingMenuText}>Add Location</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ProseMirror Editor */}
-      <View style={styles.editorContainer}>
+      <View ref={editorContainerRef} style={styles.editorContainer}>
         <ProseMirrorWebView
           ref={webViewRef}
           initialContent={{ type: 'doc', content: [{ type: 'paragraph', content: [] }] }} // Start with empty paragraph
@@ -324,11 +406,27 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
               console.log('[Landing] User edited document');
             }
           }}
-          onSelectionChange={(empty) => {
+          onSelectionChange={(empty, selectedText, boundingRect) => {
             // Update location button state based on selection
             // Only enable after animation is complete to avoid interfering with animation
             if (animationState?.isComplete) {
               setHasTextSelection(!empty);
+
+              // Show/hide floating menu based on selection
+              if (!empty && Platform.OS === 'web' && selectedText && boundingRect) {
+                setSelectedText(selectedText);
+
+                // Position menu above the selection
+                setMenuPosition({
+                  x: boundingRect.left + (boundingRect.width / 2) - 75, // Center menu (150px width / 2)
+                  y: boundingRect.top - 50, // Above selection with padding
+                });
+
+                setShowFloatingMenu(true);
+              } else {
+                setShowFloatingMenu(false);
+                setSelectedText('');
+              }
             }
           }}
           editable={true} // Always editable (AI is "editing" during animation)
@@ -553,5 +651,41 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '600',
     marginTop: 4,
+  },
+  floatingMenu: {
+    position: 'absolute',
+    backgroundColor: '#1f2937',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 12,
+    zIndex: 1000,
+    ...Platform.select({
+      web: {
+        pointerEvents: 'auto' as any,
+      },
+    }),
+  },
+  floatingMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  floatingMenuText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#ffffff',
   },
 });
