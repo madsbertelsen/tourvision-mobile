@@ -12,6 +12,15 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 
+// Dynamically import components only on web
+const HeroGlobe = Platform.OS === 'web'
+  ? require('./components/HeroGlobe').default
+  : null;
+
+const DynamicLandingDocumentProseMirror = Platform.OS === 'web'
+  ? require('./components/DynamicLandingDocumentProseMirror').default
+  : null;
+
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
@@ -50,98 +59,74 @@ export default function LandingPage() {
           </View>
         </View>
 
-        {/* Hero Section */}
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Plan Your Perfect Journey</Text>
-          <Text style={styles.heroSubtitle}>
-            Collaborative travel planning with AI-powered itineraries, interactive maps, and real-time editing
-          </Text>
+        {/* Dynamic Document Section with Split View */}
+        {Platform.OS === 'web' && DynamicLandingDocumentProseMirror ? (
+          <View style={styles.splitViewContainer}>
+            {/* Left: Editor */}
+            <View style={styles.editorSection}>
+              <DynamicLandingDocumentProseMirror />
+            </View>
 
-          <View style={styles.ctaButtons}>
-            {isAuthenticated ? (
-              <TouchableOpacity
-                style={styles.primaryCTA}
-                onPress={() => router.push('/(app)/dashboard')}
-              >
-                <Text style={styles.primaryCTAText}>Go to Dashboard</Text>
-                <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.primaryCTA}
-                  onPress={() => router.push('/(auth)/register')}
-                >
-                  <Text style={styles.primaryCTAText}>Get Started Free</Text>
-                  <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryCTA}
-                  onPress={() => router.push('/(auth)/login')}
-                >
-                  <Text style={styles.secondaryCTAText}>Login</Text>
-                </TouchableOpacity>
-              </>
+            {/* Right: Globe */}
+            {HeroGlobe && (
+              <View style={styles.globeSection}>
+                <HeroGlobe />
+              </View>
             )}
           </View>
-        </View>
+        ) : (
+          <>
+            {/* Fallback for non-web platforms */}
+            <View style={styles.hero}>
+              <View style={styles.heroContent}>
+                <View style={styles.heroText}>
+                  <Text style={styles.heroTitle}>Create Stunning Travel Presentations</Text>
+                  <Text style={styles.heroSubtitle}>
+                    Transform your journeys into immersive stories. Plan, collaborate, and share beautiful travel presentations with the world.
+                  </Text>
 
-        {/* Features Section */}
-        <View style={styles.features}>
-          <Text style={styles.sectionTitle}>Why TourVision?</Text>
-
-          <View style={styles.featureGrid}>
-            <View style={styles.featureCard}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="globe-outline" size={32} color="#3B82F6" />
+                  <View style={styles.ctaButtons}>
+                    {isAuthenticated ? (
+                      <TouchableOpacity
+                        style={styles.primaryCTA}
+                        onPress={() => router.push('/(app)/dashboard')}
+                      >
+                        <Text style={styles.primaryCTAText}>Go to Dashboard</Text>
+                        <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.primaryCTA}
+                          onPress={() => router.push('/(auth)/register')}
+                        >
+                          <Text style={styles.primaryCTAText}>Start Creating</Text>
+                          <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.secondaryCTA}
+                          onPress={() => router.push('/(auth)/login')}
+                        >
+                          <Text style={styles.secondaryCTAText}>Login</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
               </View>
-              <Text style={styles.featureTitle}>Interactive Maps</Text>
-              <Text style={styles.featureDescription}>
-                Visualize your journey with beautiful maps and location markers
-              </Text>
             </View>
-
-            <View style={styles.featureCard}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="sparkles-outline" size={32} color="#8B5CF6" />
-              </View>
-              <Text style={styles.featureTitle}>AI-Powered Planning</Text>
-              <Text style={styles.featureDescription}>
-                Get smart suggestions and auto-generated itineraries
-              </Text>
-            </View>
-
-            <View style={styles.featureCard}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="people-outline" size={32} color="#10B981" />
-              </View>
-              <Text style={styles.featureTitle}>Real-time Collaboration</Text>
-              <Text style={styles.featureDescription}>
-                Plan together with friends and family in real-time
-              </Text>
-            </View>
-
-            <View style={styles.featureCard}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="document-text-outline" size={32} color="#F59E0B" />
-              </View>
-              <Text style={styles.featureTitle}>Rich Documentation</Text>
-              <Text style={styles.featureDescription}>
-                Create detailed itineraries with notes, photos, and links
-              </Text>
-            </View>
-          </View>
-        </View>
+          </>
+        )}
 
         {/* Footer CTA */}
         <View style={styles.footerCTA}>
-          <Text style={styles.footerCTATitle}>Ready to start planning?</Text>
+          <Text style={styles.footerCTATitle}>Ready to create your first presentation?</Text>
           {!isAuthenticated && (
             <TouchableOpacity
               style={styles.footerCTAButton}
               onPress={() => router.push('/(auth)/register')}
             >
-              <Text style={styles.footerCTAButtonText}>Create Free Account</Text>
+              <Text style={styles.footerCTAButtonText}>Start Creating for Free</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -212,31 +197,72 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   hero: {
-    paddingHorizontal: 24,
-    paddingVertical: 64,
-    alignItems: 'center',
+    position: 'relative',
+    minHeight: Platform.OS === 'web' ? '100vh' : 500,
+    overflow: 'hidden',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  heroGlobeBackground: {
+    position: 'absolute',
+    right: Platform.OS === 'web' ? -150 : 0,
+    top: '50%',
+    transform: [{ translateY: -650 }],
+    width: 1500,
+    height: 1500,
+    opacity: 1,
+    pointerEvents: 'none',
+    ...(Platform.OS === 'web' ? {
+      '@media (max-width: 1400px)': {
+        right: -250,
+        width: 1300,
+        height: 1300,
+        transform: [{ translateY: -600 }],
+      },
+      '@media (max-width: 1024px)': {
+        opacity: 0.3,
+        right: -200,
+        width: 1000,
+        height: 1000,
+        transform: [{ translateY: -500 }],
+      },
+    } : {}),
+  },
+  heroContent: {
+    position: 'relative',
+    zIndex: 10,
+    width: '100%',
+    maxWidth: 1200,
+    paddingHorizontal: 48,
+    paddingVertical: 96,
+    marginLeft: Platform.OS === 'web' ? 'auto' : 0,
+    marginRight: Platform.OS === 'web' ? 'auto' : 0,
+  },
+  heroText: {
+    maxWidth: Platform.OS === 'web' ? 600 : '100%',
+    alignItems: Platform.OS === 'web' ? 'flex-start' : 'center',
   },
   heroTitle: {
-    fontSize: 48,
+    fontSize: 64,
     fontWeight: '800',
     color: '#111827',
-    textAlign: 'center',
+    textAlign: Platform.OS === 'web' ? 'left' : 'center',
     marginBottom: 16,
-    ...(Platform.OS === 'web' ? { maxWidth: 800 } : {}),
+    lineHeight: 72,
   },
   heroSubtitle: {
     fontSize: 20,
     color: '#6B7280',
-    textAlign: 'center',
+    textAlign: Platform.OS === 'web' ? 'left' : 'center',
     marginBottom: 32,
     lineHeight: 28,
-    ...(Platform.OS === 'web' ? { maxWidth: 600 } : {}),
   },
   ctaButtons: {
     flexDirection: 'row',
     gap: 16,
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: Platform.OS === 'web' ? 'flex-start' : 'center',
   },
   primaryCTA: {
     flexDirection: 'row',
@@ -263,6 +289,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#3B82F6',
+  },
+  splitViewContainer: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    minHeight: Platform.OS === 'web' ? '85vh' : 600,
+    backgroundColor: '#fff',
+    // Responsive breakpoints for web
+    ...(Platform.OS === 'web' && {
+      '@media (max-width: 768px)': {
+        flexDirection: 'column',
+      },
+    }),
+  },
+  editorSection: {
+    flex: Platform.OS === 'web' ? 0.6 : 1,
+    minWidth: Platform.OS === 'web' ? 500 : undefined,
+    backgroundColor: '#fff',
+    // Responsive: Full width on mobile
+    ...(Platform.OS === 'web' && {
+      '@media (max-width: 768px)': {
+        flex: 1,
+        minWidth: undefined,
+      },
+    }),
+  },
+  globeSection: {
+    flex: Platform.OS === 'web' ? 0.4 : 0,
+    minWidth: Platform.OS === 'web' ? 400 : undefined,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#f9fafb',
+    // Responsive: Hidden on mobile
+    ...(Platform.OS === 'web' && {
+      '@media (max-width: 768px)': {
+        display: 'none',
+      },
+      '@media (max-width: 1024px)': {
+        flex: 0.3,
+        minWidth: 300,
+      },
+    }),
   },
   features: {
     paddingHorizontal: 24,
@@ -310,10 +376,105 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
   },
+  howItWorks: {
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+    backgroundColor: '#fff',
+  },
+  stepsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 32,
+    justifyContent: 'center',
+    maxWidth: 1000,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
+  stepCard: {
+    width: Platform.OS === 'web' ? 280 : '100%',
+    alignItems: 'center',
+  },
+  stepNumber: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  stepNumberText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  stepTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  stepDescription: {
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  useCases: {
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+    backgroundColor: '#fff',
+  },
+  useCaseGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 32,
+    justifyContent: 'center',
+    maxWidth: 1100,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
+  useCaseCard: {
+    width: Platform.OS === 'web' ? 320 : '100%',
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: 16,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  useCaseIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  useCaseTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  useCaseDescription: {
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
   footerCTA: {
     paddingHorizontal: 24,
     paddingVertical: 64,
     alignItems: 'center',
+    backgroundColor: '#F9FAFB',
   },
   footerCTATitle: {
     fontSize: 32,

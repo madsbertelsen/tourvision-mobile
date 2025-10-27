@@ -4,13 +4,16 @@ import { View, TouchableOpacity, Text, StyleSheet, ScrollView } from 'react-nati
 interface ProseMirrorToolbarProps {
   editable: boolean;
   selectionEmpty?: boolean;
+  highlightedButton?: string | null;
   onCommand: (command: string, params?: any) => void;
 }
 
-export function ProseMirrorToolbar({ editable, selectionEmpty = true, onCommand }: ProseMirrorToolbarProps) {
+export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand }: ProseMirrorToolbarProps) {
   if (!editable) {
     return null;
   }
+
+  const isButtonHighlighted = (buttonId: string) => highlightedButton === buttonId;
 
   return (
     <View style={styles.container}>
@@ -40,10 +43,16 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, onCommand 
         {/* Text formatting */}
         <View style={styles.group}>
           <TouchableOpacity
-            style={styles.button}
+            style={[
+              styles.button,
+              isButtonHighlighted('bold') && styles.buttonHighlighted
+            ]}
             onPress={() => onCommand('toggleBold')}
           >
-            <Text style={styles.boldText}>B</Text>
+            <Text style={[
+              styles.boldText,
+              isButtonHighlighted('bold') && styles.buttonTextHighlighted
+            ]}>B</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}
@@ -94,11 +103,19 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, onCommand 
         {/* Geo-mark */}
         <View style={styles.group}>
           <TouchableOpacity
-            style={[styles.button, selectionEmpty && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              selectionEmpty && styles.buttonDisabled,
+              isButtonHighlighted('location') && styles.buttonHighlighted
+            ]}
             onPress={() => !selectionEmpty && onCommand('createGeoMark')}
             disabled={selectionEmpty}
           >
-            <Text style={[styles.buttonEmoji, selectionEmpty && styles.buttonTextDisabled]}>📍</Text>
+            <Text style={[
+              styles.buttonEmoji,
+              selectionEmpty && styles.buttonTextDisabled,
+              isButtonHighlighted('location') && styles.buttonTextHighlighted
+            ]}>📍</Text>
           </TouchableOpacity>
         </View>
 
@@ -152,6 +169,10 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.4,
   },
+  buttonHighlighted: {
+    backgroundColor: '#3b82f6',
+    transform: [{ scale: 1.1 }],
+  },
   buttonText: {
     fontSize: 14,
     color: '#374151',
@@ -159,6 +180,9 @@ const styles = StyleSheet.create({
   },
   buttonTextDisabled: {
     opacity: 0.4,
+  },
+  buttonTextHighlighted: {
+    color: '#ffffff',
   },
   buttonEmoji: {
     fontSize: 16,

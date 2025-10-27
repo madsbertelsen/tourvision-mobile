@@ -1128,6 +1128,53 @@
               }
               break;
 
+            case 'createGeoMarkFromRecent':
+              console.log('[WebView] Creating geo-mark from recent text:', data.geoMarkData);
+              if (editorView && data.geoMarkData && data.textLength) {
+                const { state, dispatch } = editorView;
+                // Select the recently typed text by going backwards from current position
+                const currentPos = state.selection.to;
+                const from = Math.max(0, currentPos - data.textLength);
+                const to = currentPos;
+
+                // Create selection
+                const newSelection = TextSelection.create(state.doc, from, to);
+                let tr = state.tr.setSelection(newSelection);
+                dispatch(tr);
+
+                // Now create the geo-mark with the selected text
+                const selectedText = state.doc.textBetween(from, to, ' ');
+                const geoMarkType = schema.nodes.geoMark;
+                if (!geoMarkType) {
+                  console.error('[WebView] geoMark node type not found in schema');
+                  break;
+                }
+
+                const geoMarkNode = geoMarkType.create(
+                  {
+                    geoId: data.geoMarkData.geoId,
+                    placeName: data.geoMarkData.placeName,
+                    lat: data.geoMarkData.lat,
+                    lng: data.geoMarkData.lng,
+                    colorIndex: data.geoMarkData.colorIndex || 0,
+                    coordSource: data.geoMarkData.coordSource || 'manual',
+                    description: data.geoMarkData.description || null,
+                    transportFrom: data.geoMarkData.transportFrom || null,
+                    transportProfile: data.geoMarkData.transportProfile || null,
+                    waypoints: data.geoMarkData.waypoints || null,
+                    visitDocument: data.geoMarkData.visitDocument || null,
+                    photoName: data.geoMarkData.photoName || null,
+                  },
+                  schema.text(selectedText)
+                );
+
+                // Replace the selection with the geo-mark node
+                const tr2 = editorView.state.tr.replaceSelectionWith(geoMarkNode);
+                dispatch(tr2);
+                console.log('[WebView] Geo-mark created from recent text');
+              }
+              break;
+
             case 'createGeoMark':
               console.log('[WebView] Creating geo-mark with data:', data.geoMarkData);
               sendMessageToNative({
