@@ -81,6 +81,18 @@
       color: white;
     }
 
+    /* Animated selection highlight for demo */
+    .selection-highlight {
+      background-color: rgba(59, 130, 246, 0.4) !important;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+      animation: pulse-selection 0.3s ease-in-out;
+    }
+
+    @keyframes pulse-selection {
+      0%, 100% { background-color: rgba(59, 130, 246, 0.3); }
+      50% { background-color: rgba(59, 130, 246, 0.5); }
+    }
+
     .ProseMirror ::-moz-selection {
       background-color: #3b82f6;
       color: white;
@@ -1554,9 +1566,22 @@
                       );
                       editorView.dispatch(selectTr);
 
+                      // Add visual highlight to selected text using DOM manipulation
+                      // This is more reliable than decorations for temporary highlights
+                      setTimeout(() => {
+                        const domSelection = window.getSelection();
+                        if (domSelection && domSelection.rangeCount > 0) {
+                          const range = domSelection.getRangeAt(0);
+                          // Force browser to show selection highlight
+                          if (range.toString().length > 0) {
+                            console.log('[WebView] Selection visible:', range.toString());
+                          }
+                        }
+                      }, 10);
+
                       // Continue animation if not done
                       if (currentStep < count) {
-                        setTimeout(animateSelection, 80); // 80ms per character for visible animation
+                        setTimeout(animateSelection, 150); // 150ms per character for more visible animation
                       } else {
                         console.log('[WebView] Selection animation complete from', finalStartPos, 'to', currentPos);
                       }

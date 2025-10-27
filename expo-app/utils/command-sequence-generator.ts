@@ -169,8 +169,8 @@ export function generateCommandSequence(
       }
 
       // Then select the text by moving cursor backwards with animation
-      // Selection animates at 80ms per character, so delay = (length * 80) + 300ms buffer
-      const selectionAnimationTime = geoMarkText.length * 80 + 300;
+      // Selection animates at 150ms per character (slower for visibility), so delay = (length * 150) + 300ms buffer
+      const selectionAnimationTime = geoMarkText.length * 150 + 300;
       commands.push({
         type: 'selectText',
         count: geoMarkText.length,
