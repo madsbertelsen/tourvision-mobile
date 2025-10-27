@@ -6,7 +6,18 @@ import { TypingAnimatorCommands, AnimationState, DEFAULT_TYPING_CONFIG } from '@
 import { EditorCommand } from '@/utils/command-sequence-generator';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function DynamicLandingDocumentProseMirror() {
+interface Location {
+  geoId: string;
+  placeName: string;
+  lat: number;
+  lng: number;
+}
+
+interface DynamicLandingDocumentProseMirrorProps {
+  onLocationsChange?: (locations: Location[]) => void;
+}
+
+export default function DynamicLandingDocumentProseMirror({ onLocationsChange }: DynamicLandingDocumentProseMirrorProps) {
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
@@ -14,6 +25,9 @@ export default function DynamicLandingDocumentProseMirror() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationModalData, setLocationModalData] = useState<{ placeName: string; lat: number; lng: number } | null>(null);
   const [hasTextSelection, setHasTextSelection] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
 
@@ -108,14 +122,54 @@ export default function DynamicLandingDocumentProseMirror() {
           geoMarkData: command.geoMarkData,
         });
 
-        // Show the location creation modal with pre-filled data
-        // (the geo-mark is already created, modal is just for demonstration)
-        setLocationModalData({
-          placeName: command.geoMarkData.placeName || command.geoMarkData.selectedText,
-          lat: command.geoMarkData.lat || 48.8566,
-          lng: command.geoMarkData.lng || 2.3522,
+        // Add location to tracking array
+        const newLocation: Location = {
+          geoId: command.geoMarkData.geoId,
+          placeName: command.geoMarkData.placeName,
+          lat: command.geoMarkData.lat,
+          lng: command.geoMarkData.lng,
+        };
+
+        setLocations(prev => {
+          const updated = [...prev, newLocation];
+          // Notify parent component
+          onLocationsChange?.(updated);
+          return updated;
         });
+
+        // Fetch location data from Nominatim
+        const searchQuery = command.geoMarkData.placeName || command.geoMarkData.selectedText;
+        setIsLoadingLocation(true);
+        setLocationSearchResults([]);
         setShowLocationModal(true);
+
+        fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=jsonv2&limit=5&addressdetails=1`,
+          { headers: { 'User-Agent': 'TourVision-App' } }
+        )
+          .then(res => res.json())
+          .then(data => {
+            setLocationSearchResults(data || []);
+            setIsLoadingLocation(false);
+            // Set the first result as selected
+            if (data && data.length > 0) {
+              setLocationModalData({
+                placeName: data[0].display_name,
+                lat: parseFloat(data[0].lat),
+                lng: parseFloat(data[0].lon),
+              });
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching location:', error);
+            setIsLoadingLocation(false);
+            // Fallback to provided coordinates
+            setLocationModalData({
+              placeName: searchQuery,
+              lat: command.geoMarkData.lat || 48.8566,
+              lng: command.geoMarkData.lng || 2.3522,
+            });
+          });
 
         // Auto-close modal and resume animation after 3 seconds
         setTimeout(() => {
@@ -204,48 +258,49 @@ export default function DynamicLandingDocumentProseMirror() {
             </View>
 
             <View style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Location Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={locationModalData?.placeName || ''}
-                  editable={false}
-                  placeholder="Enter location name"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Coordinates</Text>
-                <View style={styles.coordinatesRow}>
-                  <View style={styles.coordinateInput}>
-                    <Text style={styles.coordinateLabel}>Lat</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={locationModalData?.lat.toFixed(4) || ''}
-                      editable={false}
-                    />
-                  </View>
-                  <View style={styles.coordinateInput}>
-                    <Text style={styles.coordinateLabel}>Lng</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={locationModalData?.lng.toFixed(4) || ''}
-                      editable={false}
-                    />
-                  </View>
+              {isLoadingLocation ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>🔍 Searching for location...</Text>
                 </View>
-              </View>
+              ) : (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Location Found</Text>
+                    <View style={styles.locationResultBox}>
+                      <Ionicons name="location" size={20} color="#3b82f6" />
+                      <Text style={styles.locationResultText} numberOfLines={2}>
+                        {locationModalData?.placeName || 'Searching...'}
+                      </Text>
+                    </View>
+                  </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes (Optional)</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Add notes about this location..."
-                  multiline
-                  numberOfLines={3}
-                  editable={false}
-                />
-              </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Coordinates</Text>
+                    <View style={styles.coordinatesRow}>
+                      <View style={styles.coordinateInput}>
+                        <Text style={styles.coordinateLabel}>Latitude</Text>
+                        <Text style={styles.coordinateValue}>
+                          {locationModalData?.lat.toFixed(4) || '-'}
+                        </Text>
+                      </View>
+                      <View style={styles.coordinateInput}>
+                        <Text style={styles.coordinateLabel}>Longitude</Text>
+                        <Text style={styles.coordinateValue}>
+                          {locationModalData?.lng.toFixed(4) || '-'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {locationSearchResults.length > 1 && (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>
+                        {locationSearchResults.length} results found (showing first)
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
             </View>
 
             <View style={styles.modalFooter}>
@@ -267,6 +322,13 @@ export default function DynamicLandingDocumentProseMirror() {
             // Handle user edits after animation completes
             if (animationState?.isComplete) {
               console.log('[Landing] User edited document');
+            }
+          }}
+          onSelectionChange={(empty) => {
+            // Update location button state based on selection
+            // Only enable after animation is complete to avoid interfering with animation
+            if (animationState?.isComplete) {
+              setHasTextSelection(!empty);
             }
           }}
           editable={true} // Always editable (AI is "editing" during animation)
@@ -459,5 +521,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  locationResultBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  locationResultText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e40af',
+    fontWeight: '500',
+  },
+  coordinateValue: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

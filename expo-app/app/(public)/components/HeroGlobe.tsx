@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 // @ts-ignore - react-map-gl has module resolution issues with Metro
-import Map from 'react-map-gl/mapbox';
+import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 // Only render on web
@@ -17,7 +17,18 @@ const INITIAL_VIEW_STATE = {
   bearing: 0
 };
 
-export default function HeroGlobe() {
+interface Location {
+  geoId: string;
+  placeName: string;
+  lat: number;
+  lng: number;
+}
+
+interface HeroGlobeProps {
+  locations?: Location[];
+}
+
+export default function HeroGlobe({ locations = [] }: HeroGlobeProps) {
   const mapRef = useRef<any>(null);
 
   // Auto-rotation animation - rotate like a real globe spinning on its axis
@@ -105,7 +116,36 @@ export default function HeroGlobe() {
         touchZoomRotate={false}
         keyboard={false}
         attributionControl={false}
-      />
+      >
+        {/* Render location markers */}
+        {locations.map((location) => (
+          <Marker
+            key={location.geoId}
+            longitude={location.lng}
+            latitude={location.lat}
+            anchor="bottom"
+          >
+            <div style={{
+              width: 24,
+              height: 24,
+              backgroundColor: '#3B82F6',
+              borderRadius: '50%',
+              border: '3px solid white',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}>
+              <div style={{
+                fontSize: 12,
+                color: 'white',
+                fontWeight: 'bold',
+              }}>📍</div>
+            </div>
+          </Marker>
+        ))}
+      </Map>
     </View>
   );
 }

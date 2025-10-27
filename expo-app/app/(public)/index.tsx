@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,17 @@ const DynamicLandingDocumentProseMirror = Platform.OS === 'web'
   ? require('./components/DynamicLandingDocumentProseMirror').default
   : null;
 
+interface Location {
+  geoId: string;
+  placeName: string;
+  lat: number;
+  lng: number;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const [locations, setLocations] = useState<Location[]>([]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -64,13 +72,15 @@ export default function LandingPage() {
           <View style={styles.splitViewContainer}>
             {/* Left: Editor */}
             <View style={styles.editorSection}>
-              <DynamicLandingDocumentProseMirror />
+              <DynamicLandingDocumentProseMirror
+                onLocationsChange={(newLocations: Location[]) => setLocations(newLocations)}
+              />
             </View>
 
             {/* Right: Globe */}
             {HeroGlobe && (
               <View style={styles.globeSection}>
-                <HeroGlobe />
+                <HeroGlobe locations={locations} />
               </View>
             )}
           </View>
