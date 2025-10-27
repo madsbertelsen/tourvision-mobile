@@ -9,7 +9,28 @@ export const LANDING_DOCUMENT_CONTENT = {
     {
       type: 'paragraph',
       content: [
-        { type: 'text', text: 'Hello World - testing animation' }
+        { type: 'text', text: 'Plan your next trip to ' },
+        {
+          type: 'geoMark',
+          attrs: {
+            geoId: 'landing-paris',
+            placeName: 'Paris, France',
+            lat: 48.8566,
+            lng: 2.3522,
+            colorIndex: 0,
+            coordSource: 'manual',
+            description: 'The City of Light',
+            visitDocument: null,
+            transportFrom: null,
+            transportProfile: null,
+            waypoints: null,
+            photoName: null
+          },
+          content: [
+            { type: 'text', text: 'Paris' }
+          ]
+        },
+        { type: 'text', text: ' with TourVision!' }
       ]
     }
   ]

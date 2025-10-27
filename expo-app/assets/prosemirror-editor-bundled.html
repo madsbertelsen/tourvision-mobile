@@ -1182,10 +1182,21 @@
                 message: '[WebView DEBUG] Received createGeoMark message'
               });
 
-              if (editorView && data.geoMarkData) {
+              try {
+                if (!editorView) {
+                  throw new Error('editorView is null');
+                }
+                if (!data.geoMarkData) {
+                  throw new Error('geoMarkData is missing');
+                }
+                console.log('[WebView] Step 1: editorView and geoMarkData validated');
+
                 const { state, dispatch } = editorView;
+                console.log('[WebView] Step 2: Got state and dispatch from editorView');
+
                 const { selection } = state;
                 const { from, to } = selection;
+                console.log('[WebView] Step 3: Selection bounds:', { from, to });
 
                 sendMessageToNative({
                   type: 'debug',
@@ -1195,12 +1206,13 @@
                 // Create a geoMark NODE (not mark) with the location data
                 const geoMarkType = schema.nodes.geoMark;
                 if (!geoMarkType) {
-                  console.error('[WebView] geoMark node type not found in schema');
-                  break;
+                  throw new Error('geoMark node type not found in schema');
                 }
+                console.log('[WebView] Step 4: geoMarkType found in schema');
 
                 // Get the selected text
                 const selectedText = state.doc.textBetween(from, to, ' ');
+                console.log('[WebView] Step 5: Selected text:', selectedText);
 
                 // Create geoMark node with text content and all attributes
                 const geoMarkNode = geoMarkType.create(
@@ -1220,15 +1232,26 @@
                   },
                   schema.text(selectedText)
                 );
+                console.log('[WebView] Step 6: geoMarkNode created:', geoMarkNode);
 
                 // Replace the selected text with the geo-mark node
                 const tr = state.tr.replaceSelectionWith(geoMarkNode);
+                console.log('[WebView] Step 7: Transaction created');
+
                 dispatch(tr);
+                console.log('[WebView] Step 8: Transaction dispatched');
 
                 console.log('[WebView] Geo-mark NODE created successfully');
                 sendMessageToNative({
                   type: 'info',
                   message: 'Location created: ' + data.geoMarkData.placeName
+                });
+              } catch (error) {
+                console.error('[WebView] ERROR in createGeoMark:', error);
+                console.error('[WebView] Error stack:', error.stack);
+                sendMessageToNative({
+                  type: 'error',
+                  message: `Failed to create geo-mark: ${error.message}`
                 });
               }
               break;
@@ -1309,7 +1332,60 @@
                   const selectedText = state.doc.textBetween(from, to, ' ');
                   console.log('[WebView] Selected text:', selectedText);
 
-                  // Send request to show geo-mark editor with selected text
+                  // Check if geoMarkData is provided (for animation mode)
+                  if (data.params && data.params.geoMarkData) {
+                    console.log('[WebView] Animation mode: Creating geo-mark directly with data:', data.params.geoMarkData);
+                    try {
+                      const geoMarkType = schema.nodes.geoMark;
+                      if (!geoMarkType) {
+                        throw new Error('geoMark node type not found in schema');
+                      }
+                      console.log('[WebView] Step 1: geoMarkType found in schema');
+
+                      // Create geoMark node with text content and all attributes
+                      const geoMarkNode = geoMarkType.create(
+                        {
+                          geoId: data.params.geoMarkData.geoId,
+                          placeName: data.params.geoMarkData.placeName,
+                          lat: data.params.geoMarkData.lat,
+                          lng: data.params.geoMarkData.lng,
+                          colorIndex: data.params.geoMarkData.colorIndex || 0,
+                          coordSource: data.params.geoMarkData.coordSource || 'manual',
+                          description: data.params.geoMarkData.description || null,
+                          transportFrom: data.params.geoMarkData.transportFrom || null,
+                          transportProfile: data.params.geoMarkData.transportProfile || null,
+                          waypoints: data.params.geoMarkData.waypoints || null,
+                          visitDocument: data.params.geoMarkData.visitDocument || null,
+                          photoName: data.params.geoMarkData.photoName || null
+                        },
+                        schema.text(selectedText)
+                      );
+                      console.log('[WebView] Step 2: geoMarkNode created');
+
+                      // Replace the selected text with the geo-mark node
+                      const tr = state.tr.replaceSelectionWith(geoMarkNode);
+                      console.log('[WebView] Step 3: Transaction created');
+
+                      dispatch(tr);
+                      console.log('[WebView] Step 4: Transaction dispatched');
+
+                      console.log('[WebView] Geo-mark NODE created successfully!');
+                      sendMessageToNative({
+                        type: 'info',
+                        message: 'Location created: ' + data.params.geoMarkData.placeName
+                      });
+                    } catch (error) {
+                      console.error('[WebView] ERROR creating geo-mark:', error);
+                      console.error('[WebView] Error stack:', error.stack);
+                      sendMessageToNative({
+                        type: 'error',
+                        message: `Failed to create geo-mark: ${error.message}`
+                      });
+                    }
+                    break;
+                  }
+
+                  // Interactive mode: Send request to show geo-mark editor
                   sendMessageToNative({
                     type: 'showGeoMarkEditor',
                     data: {
@@ -1455,6 +1531,24 @@
                   paraTr = paraTr.setBlockType(newBlockStart, newBlockEnd, schema.nodes.paragraph);
                   dispatch(paraTr);
                   console.log('[WebView] Paragraph split/inserted and reset to paragraph type');
+                  break;
+
+                case 'selectText':
+                  console.log('[WebView] Selecting text backwards:', data.params?.count);
+                  // Select text backwards from cursor (like Shift+ArrowLeft)
+                  try {
+                    const count = data.params?.count || 0;
+                    const currentPos = state.selection.to;
+                    const startPos = Math.max(0, currentPos - count);
+
+                    const selectTr = state.tr.setSelection(
+                      window.PM.state.TextSelection.create(state.doc, startPos, currentPos)
+                    );
+                    dispatch(selectTr);
+                    console.log('[WebView] Selected text from', startPos, 'to', currentPos);
+                  } catch (error) {
+                    console.error('[WebView] Error selecting text:', error);
+                  }
                   break;
 
                 case 'selectBackward':

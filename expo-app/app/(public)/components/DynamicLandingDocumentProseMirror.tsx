@@ -78,16 +78,22 @@ export default function DynamicLandingDocumentProseMirror() {
         webViewRef.current.sendCommand('toggleBold');
         break;
 
+      case 'selectText':
+        console.log('[Landing] Selecting text, count:', command.count);
+        // Select text by moving cursor backwards (Shift+ArrowLeft)
+        webViewRef.current.sendCommand('selectText', { count: command.count });
+        break;
+
       case 'createGeoMark':
         flashButton('location');
-        // Select the recently typed text, then create geo-mark
-        // Note: ProseMirror command expects selected text
-        // We need to select backwards from current position
-        const textLength = command.geoMarkData.selectedText.length;
+        // Text should already be selected by the previous selectText command
+        console.log('[Landing] Creating geo-mark from selection:', {
+          placeName: command.geoMarkData.placeName,
+          selectedText: command.geoMarkData.selectedText
+        });
 
-        // Send command to select text and create geo-mark
-        webViewRef.current.sendCommand('createGeoMarkFromRecent', {
-          textLength,
+        // Create geo-mark from the current selection
+        webViewRef.current.sendCommand('createGeoMark', {
           geoMarkData: command.geoMarkData,
         });
         break;
@@ -148,14 +154,7 @@ export default function DynamicLandingDocumentProseMirror() {
         </View>
       )}
 
-      {/* Completion Message */}
-      {animationState?.isComplete && (
-        <View style={styles.completionBanner}>
-          <Text style={styles.completionText}>
-            👉 Try editing this document yourself! Click anywhere to add your own destinations, format text, or create your first travel story.
-          </Text>
-        </View>
-      )}
+      {/* Completion Message - Removed per user request */}
 
       {/* Toolbar with Button Highlighting */}
       <View style={styles.toolbarContainer}>

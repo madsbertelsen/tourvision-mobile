@@ -5,10 +5,11 @@
  */
 
 export interface EditorCommand {
-  type: 'insertText' | 'insertParagraph' | 'setHeading' | 'toggleBold' | 'createGeoMark' | 'wait';
+  type: 'insertText' | 'insertParagraph' | 'setHeading' | 'toggleBold' | 'selectText' | 'createGeoMark' | 'wait';
   text?: string;
   level?: number;
   geoMarkData?: any;
+  count?: number; // for selectText: how many characters to select
   delay?: number; // milliseconds to wait after this command
 }
 
@@ -157,7 +158,7 @@ export function generateCommandSequence(
         }
       }
 
-      // Type the text first (will be replaced by geo-mark)
+      // Type the text first
       for (let i = 0; i < geoMarkText.length; i++) {
         const char = geoMarkText[i];
         commands.push({
@@ -167,7 +168,14 @@ export function generateCommandSequence(
         });
       }
 
-      // Then create the geo-mark (this will select the just-typed text and replace it)
+      // Then select the text by moving cursor backwards
+      commands.push({
+        type: 'selectText',
+        count: geoMarkText.length,
+        delay: 200, // Small pause before selection
+      });
+
+      // Then create the geo-mark from the selection
       commands.push({
         type: 'createGeoMark',
         geoMarkData: {
