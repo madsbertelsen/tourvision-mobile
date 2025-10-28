@@ -7,6 +7,7 @@ import { EditorCommand } from '@/utils/command-sequence-generator';
 import { Ionicons } from '@expo/vector-icons';
 import { LANDING_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import LocationSearchMap from '@/components/LocationSearchMap';
+import LocationMapWeb from '@/components/LocationMapWeb';
 
 interface Location {
   geoId: string;
@@ -49,6 +50,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [viewMode, setViewMode] = useState<'document' | 'map'>('document');
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
@@ -592,14 +594,27 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       {/* Floating Toolbar - Shows on click or Tab key */}
       {showFloatingToolbar && (
         <View style={styles.floatingToolbarContainer}>
-          <ProseMirrorToolbar
-            editable={true}
-            selectionEmpty={!hasTextSelection}
-            highlightedButton={highlightedButton}
-            onCommand={(command, params) => {
-              webViewRef.current?.sendCommand(command, params);
-            }}
-          />
+          <View style={styles.toolbarWithViewToggle}>
+            <ProseMirrorToolbar
+              editable={true}
+              selectionEmpty={!hasTextSelection}
+              highlightedButton={highlightedButton}
+              onCommand={(command, params) => {
+                webViewRef.current?.sendCommand(command, params);
+              }}
+            />
+            <View style={styles.viewToggleDivider} />
+            <TouchableOpacity
+              style={[styles.viewToggleButton, viewMode === 'map' && styles.viewToggleButtonActive]}
+              onPress={() => setViewMode(viewMode === 'document' ? 'map' : 'document')}
+            >
+              <Ionicons
+                name={viewMode === 'document' ? 'map' : 'document-text'}
+                size={20}
+                color={viewMode === 'map' ? '#fff' : '#374151'}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -824,27 +839,70 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         </View>
       )} */}
 
-      {/* ProseMirror Editor */}
-      <View
-        ref={editorContainerRef}
-        style={styles.editorContainer}
-        onClick={() => {
-          if (Platform.OS === 'web') {
-            setShowFloatingToolbar(true);
-          }
-        }}
-      >
-        <ProseMirrorWebView
-          ref={webViewRef}
-          initialContent={INITIAL_CONTENT}
-          onContentChange={handleContentChange}
-          onSelectionChange={handleSelectionChange}
-          onShowGeoMarkEditor={handleShowGeoMarkEditor}
-          editable={true}
-          showToolbar={false}
-          onReady={handleReady}
-        />
-      </View>
+      {/* Map View - Full screen */}
+      {viewMode === 'map' && locations.length > 0 && (
+        <View style={styles.fullScreenMapContainer}>
+          <LocationMapWeb
+            latitude={locations[0].lat}
+            longitude={locations[0].lng}
+            name="TourVision Demo"
+            colorIndex={0}
+          />
+          {/* Close button to return to document mode */}
+          <TouchableOpacity
+            style={styles.closeMapButton}
+            onPress={() => setViewMode('document')}
+          >
+            <View style={styles.closeMapButtonBg}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Locations list overlay */}
+          <View style={styles.mapLocationsOverlay}>
+            <Text style={styles.mapOverlayTitle}>Locations</Text>
+            <ScrollView style={styles.locationsList} showsVerticalScrollIndicator={false}>
+              {locations.map((location, index) => (
+                <View key={location.geoId} style={styles.locationItem}>
+                  <View
+                    style={[
+                      styles.locationMarkerDot,
+                      { backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 5] }
+                    ]}
+                  />
+                  <Text style={styles.locationItemText} numberOfLines={1}>
+                    {location.placeName}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* ProseMirror Editor - Only visible in document mode */}
+      {viewMode === 'document' && (
+        <View
+          ref={editorContainerRef}
+          style={styles.editorContainer}
+          onClick={() => {
+            if (Platform.OS === 'web') {
+              setShowFloatingToolbar(true);
+            }
+          }}
+        >
+          <ProseMirrorWebView
+            ref={webViewRef}
+            initialContent={INITIAL_CONTENT}
+            onContentChange={handleContentChange}
+            onSelectionChange={handleSelectionChange}
+            onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            editable={true}
+            showToolbar={false}
+            onReady={handleReady}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -1360,5 +1418,101 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
+  },
+  // View toggle styles
+  toolbarWithViewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewToggleDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#d1d5db',
+    marginHorizontal: 8,
+  },
+  viewToggleButton: {
+    width: 40,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  // Full-screen map view styles
+  fullScreenMapContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
+    zIndex: 10,
+  },
+  closeMapButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 100,
+  },
+  closeMapButtonBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapLocationsOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    width: 280,
+    maxHeight: 300,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+  },
+  mapOverlayTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  locationsList: {
+    maxHeight: 220,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  locationMarkerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  locationItemText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
   },
 });
