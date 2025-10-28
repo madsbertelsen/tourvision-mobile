@@ -129,8 +129,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    maxWidth: 1200,
-    marginHorizontal: 'auto',
     width: '100%',
   },
   logo: {
