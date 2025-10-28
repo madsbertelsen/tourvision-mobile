@@ -212,6 +212,7 @@ export default function LocationSearchMap({
 
   // Waypoint state
   const [hoverPoint, setHoverPoint] = useState<{ lng: number; lat: number } | null>(null);
+  const [draggingWaypointIndex, setDraggingWaypointIndex] = useState<number | null>(null);
 
   // Core animation function
   const animateMapTo = (targetLat: number, targetLng: number, targetZoom: number, duration?: number) => {
@@ -446,6 +447,16 @@ export default function LocationSearchMap({
     }
   };
 
+  // Check if cursor is near any existing waypoint
+  const isNearWaypoint = (lng: number, lat: number, threshold: number = 0.005): boolean => {
+    return waypoints.some(waypoint => {
+      const distance = Math.sqrt(
+        Math.pow(lng - waypoint.lng, 2) + Math.pow(lat - waypoint.lat, 2)
+      );
+      return distance < threshold;
+    });
+  };
+
   // Handle mouse move to show hover point on route
   const handleMouseMove = (event: any) => {
     if (!showRoute || !routeGeometry || !routeGeometry.coordinates) {
@@ -454,6 +465,13 @@ export default function LocationSearchMap({
     }
 
     const { lngLat } = event;
+
+    // Don't show hover point if cursor is near an existing waypoint
+    if (isNearWaypoint(lngLat.lng, lngLat.lat)) {
+      setHoverPoint(null);
+      return;
+    }
+
     const closestPoint = findClosestPointOnRoute(lngLat.lng, lngLat.lat, routeGeometry.coordinates);
 
     // Only show hover point if cursor is close enough (within ~0.01 degrees, roughly 1km)
@@ -563,8 +581,21 @@ export default function LocationSearchMap({
             latitude={waypoint.lat}
             longitude={waypoint.lng}
             anchor="center"
+            draggable={true}
+            onDragStart={() => setDraggingWaypointIndex(index)}
+            onDrag={(event: any) => {
+              // Update waypoint position during drag
+              if (!onWaypointsChange) return;
+              const newWaypoints = [...waypoints];
+              newWaypoints[index] = { lat: event.lngLat.lat, lng: event.lngLat.lng };
+              onWaypointsChange(newWaypoints);
+            }}
+            onDragEnd={() => setDraggingWaypointIndex(null)}
           >
-            <View style={styles.waypointMarker}>
+            <View style={[
+              styles.waypointMarker,
+              draggingWaypointIndex === index && styles.waypointMarkerDragging
+            ]}>
               <Text style={styles.waypointText}>{index + 1}</Text>
             </View>
           </Marker>
@@ -821,11 +852,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
+    cursor: 'grab' as any,
   },
   waypointText: {
     fontSize: 14,
     fontWeight: 'bold',
     color: 'white',
+  },
+  waypointMarkerDragging: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    cursor: 'grabbing' as any,
   },
   hoverPointMarker: {
     width: 20,
