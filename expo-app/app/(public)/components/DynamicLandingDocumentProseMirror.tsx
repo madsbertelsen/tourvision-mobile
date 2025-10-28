@@ -972,7 +972,6 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: '50%',
     zIndex: 1000,
-    maxWidth: 700,
     ...Platform.select({
       web: {
         transform: 'translateX(-50%)' as any,
@@ -1012,7 +1011,6 @@ const styles = StyleSheet.create({
     minHeight: 400,
     position: 'relative',
     width: '100%',
-    maxWidth: 700,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1041,7 +1039,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     width: '100%',
-    maxWidth: 700,
     maxHeight: '85vh',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
