@@ -1246,25 +1246,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   // Transport form styles
-  transportFormOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '50%',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.15)' as any,
-      },
-    }),
-  },
   transportFormContent: {
     padding: 20,
     gap: 24,
