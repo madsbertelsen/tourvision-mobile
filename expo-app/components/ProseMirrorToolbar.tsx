@@ -6,9 +6,11 @@ interface ProseMirrorToolbarProps {
   selectionEmpty?: boolean;
   highlightedButton?: string | null;
   onCommand: (command: string, params?: any) => void;
+  viewMode?: 'document' | 'map';
+  onViewModeChange?: (mode: 'document' | 'map') => void;
 }
 
-export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand }: ProseMirrorToolbarProps) {
+export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand, viewMode, onViewModeChange }: ProseMirrorToolbarProps) {
   if (!editable) {
     return null;
   }
@@ -166,6 +168,21 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
             <Text style={styles.buttonText}>🔗</Text>
           </TouchableOpacity>
         </View>
+
+        {/* View Mode Toggle - Only show if onViewModeChange is provided */}
+        {onViewModeChange && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.group}>
+              <TouchableOpacity
+                style={[styles.button, viewMode === 'map' && styles.buttonHighlighted]}
+                onPress={() => onViewModeChange(viewMode === 'document' ? 'map' : 'document')}
+              >
+                <Text style={styles.buttonText}>{viewMode === 'document' ? '🗺️' : '📄'}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );

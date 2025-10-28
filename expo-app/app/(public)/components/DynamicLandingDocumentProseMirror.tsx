@@ -594,27 +594,16 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       {/* Floating Toolbar - Shows on click or Tab key */}
       {showFloatingToolbar && (
         <View style={styles.floatingToolbarContainer}>
-          <View style={styles.toolbarWithViewToggle}>
-            <ProseMirrorToolbar
-              editable={true}
-              selectionEmpty={!hasTextSelection}
-              highlightedButton={highlightedButton}
-              onCommand={(command, params) => {
-                webViewRef.current?.sendCommand(command, params);
-              }}
-            />
-            <View style={styles.viewToggleDivider} />
-            <TouchableOpacity
-              style={[styles.viewToggleButton, viewMode === 'map' && styles.viewToggleButtonActive]}
-              onPress={() => setViewMode(viewMode === 'document' ? 'map' : 'document')}
-            >
-              <Ionicons
-                name={viewMode === 'document' ? 'map' : 'document-text'}
-                size={20}
-                color={viewMode === 'map' ? '#fff' : '#374151'}
-              />
-            </TouchableOpacity>
-          </View>
+          <ProseMirrorToolbar
+            editable={true}
+            selectionEmpty={!hasTextSelection}
+            highlightedButton={highlightedButton}
+            onCommand={(command, params) => {
+              webViewRef.current?.sendCommand(command, params);
+            }}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
         </View>
       )}
 
@@ -1418,36 +1407,6 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-  },
-  // View toggle styles
-  toolbarWithViewToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewToggleDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#d1d5db',
-    marginHorizontal: 8,
-  },
-  viewToggleButton: {
-    width: 40,
-    height: 36,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
-  },
-  viewToggleButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
   },
   // Full-screen map view styles
   fullScreenMapContainer: {
