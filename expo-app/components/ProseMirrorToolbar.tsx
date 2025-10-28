@@ -28,7 +28,8 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
   const isButtonHighlighted = (buttonId: string) => highlightedButton === buttonId;
 
   const handleBlockTypeChange = (value: string) => {
-    setBlockType(value);
+    // Don't update local state - let it update from highlightedButton prop
+    // This prevents the delay/flash effect
     if (value === 'paragraph') {
       onCommand('setParagraph');
     } else if (value === 'heading1') {
