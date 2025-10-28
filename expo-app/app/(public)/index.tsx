@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   },
   editorFullWidth: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     width: '100%',
   },
   features: {

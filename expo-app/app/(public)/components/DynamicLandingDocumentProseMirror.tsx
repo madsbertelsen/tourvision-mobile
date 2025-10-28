@@ -6,7 +6,7 @@ import { TypingAnimatorCommands, AnimationState, DEFAULT_TYPING_CONFIG } from '@
 import { EditorCommand } from '@/utils/command-sequence-generator';
 import { Ionicons } from '@expo/vector-icons';
 import { LANDING_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
-import LocationMapWeb from '@/components/LocationMapWeb';
+import LocationSearchMap from '@/components/LocationSearchMap';
 
 interface Location {
   geoId: string;
@@ -38,6 +38,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [selectedText, setSelectedText] = useState('');
   const [showFloatingToolbar, setShowFloatingToolbar] = useState(false);
   const [selectionRange, setSelectionRange] = useState<{ from: number; to: number } | null>(null);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(0);
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
@@ -163,6 +164,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         const searchQuery = command.geoMarkData.placeName || command.geoMarkData.selectedText;
         setIsLoadingLocation(true);
         setLocationSearchResults([]);
+        setSelectedResultIndex(0);
         setShowLocationModal(true);
 
         fetch(
@@ -259,6 +261,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     // Fetch location from Nominatim
     setIsLoadingLocation(true);
     setLocationSearchResults([]);
+    setSelectedResultIndex(0);
     setShowLocationModal(true);
 
     fetch(
@@ -357,6 +360,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     setShowLocationModal(true);
     setIsLoadingLocation(true);
     setLocationSearchResults([]);
+    setSelectedResultIndex(0);
 
     // Fetch location data from Nominatim
     fetch(
@@ -479,15 +483,26 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         </View>
       )}
 
-      {/* Location Creation Modal - Shows real UI for adding locations */}
+      {/* Location Creation Modal - Bottom sheet style */}
       <Modal
         visible={showLocationModal}
         transparent={true}
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowLocationModal(false)}
       >
         <View style={styles.modalOverlay}>
+          {/* Backdrop */}
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowLocationModal(false)}
+          />
+
+          {/* Bottom Sheet */}
           <View style={styles.modalContent}>
+            {/* Drag handle */}
+            <View style={styles.dragHandle} />
+
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Location</Text>
               <TouchableOpacity onPress={() => setShowLocationModal(false)}>
@@ -495,63 +510,24 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              {isLoadingLocation ? (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.loadingText}>🔍 Searching for location...</Text>
-                </View>
-              ) : (
-                <>
-                  {/* Map */}
-                  {locationModalData && (
-                    <View style={styles.mapContainer}>
-                      <LocationMapWeb
-                        latitude={locationModalData.lat}
-                        longitude={locationModalData.lng}
-                        name={locationModalData.placeName}
-                        colorIndex={0}
-                      />
-                    </View>
-                  )}
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Location Found</Text>
-                    <View style={styles.locationResultBox}>
-                      <Ionicons name="location" size={20} color="#3b82f6" />
-                      <Text style={styles.locationResultText} numberOfLines={2}>
-                        {locationModalData?.placeName || 'Searching...'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Coordinates</Text>
-                    <View style={styles.coordinatesRow}>
-                      <View style={styles.coordinateInput}>
-                        <Text style={styles.coordinateLabel}>Latitude</Text>
-                        <Text style={styles.coordinateValue}>
-                          {locationModalData?.lat.toFixed(4) || '-'}
-                        </Text>
-                      </View>
-                      <View style={styles.coordinateInput}>
-                        <Text style={styles.coordinateLabel}>Longitude</Text>
-                        <Text style={styles.coordinateValue}>
-                          {locationModalData?.lng.toFixed(4) || '-'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {locationSearchResults.length > 1 && (
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>
-                        {locationSearchResults.length} results found (showing first)
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-            </ScrollView>
+            <View style={styles.modalBody}>
+              {/* Map showing all search results (or rotating globe while loading) */}
+              <View style={styles.mapContainer}>
+                <LocationSearchMap
+                  results={locationSearchResults}
+                  selectedIndex={selectedResultIndex}
+                  onSelectResult={(index) => {
+                    setSelectedResultIndex(index);
+                    const selected = locationSearchResults[index];
+                    setLocationModalData({
+                      placeName: selected.display_name,
+                      lat: parseFloat(selected.lat),
+                      lng: parseFloat(selected.lon),
+                    });
+                  }}
+                />
+              </View>
+            </View>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
@@ -608,7 +584,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
   },
   controls: {
     flexDirection: 'row',
@@ -714,31 +691,65 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     minHeight: 400,
     position: 'relative',
+    width: '100%',
+    maxWidth: 700,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)' as any,
+      },
+    }),
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 20,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     width: '100%',
-    maxWidth: 600,
-    maxHeight: '90vh',
+    maxWidth: 700,
+    maxHeight: '85vh',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
     elevation: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.25)' as any,
+      },
+    }),
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -749,14 +760,15 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
-    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mapContainer: {
     width: '100%',
-    height: 300,
-    marginBottom: 20,
-    borderRadius: 8,
-    overflow: 'hidden',
+    height: '100%',
+    maxWidth: '100vh',
+    maxHeight: '100vw',
+    aspectRatio: 1,
   },
   inputGroup: {
     marginBottom: 16,

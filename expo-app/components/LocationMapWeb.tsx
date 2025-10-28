@@ -140,7 +140,7 @@ export default function LocationMapWeb({
       <Map
         ref={mapRef}
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_TOKEN}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
