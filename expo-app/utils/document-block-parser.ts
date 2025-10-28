@@ -1,0 +1,114 @@
+/**
+ * Parse ProseMirror document into navigable blocks with geo-marks
+ */
+
+export interface GeoMarkInBlock {
+  geoId: string;
+  placeName: string;
+  lat: number;
+  lng: number;
+  colorIndex: number;
+  text: string;
+}
+
+export interface DocumentBlock {
+  type: 'paragraph' | 'heading';
+  level?: number; // for headings
+  text: string;
+  geoMarks: GeoMarkInBlock[];
+  hasGeoMarks: boolean;
+}
+
+/**
+ * Extract text content from a node and its children
+ */
+function extractTextContent(node: any): string {
+  if (!node) return '';
+
+  if (node.type === 'text') {
+    return node.text || '';
+  }
+
+  if (node.type === 'geoMark' && node.content) {
+    // Extract text from geo-mark content
+    return node.content.map((child: any) => extractTextContent(child)).join('');
+  }
+
+  if (node.content && Array.isArray(node.content)) {
+    return node.content.map((child: any) => extractTextContent(child)).join('');
+  }
+
+  return '';
+}
+
+/**
+ * Extract geo-marks from a node
+ */
+function extractGeoMarks(node: any): GeoMarkInBlock[] {
+  const geoMarks: GeoMarkInBlock[] = [];
+
+  if (!node || !node.content) return geoMarks;
+
+  function traverse(n: any) {
+    if (n.type === 'geoMark' && n.attrs) {
+      const text = extractTextContent(n);
+      geoMarks.push({
+        geoId: n.attrs.geoId,
+        placeName: n.attrs.placeName,
+        lat: n.attrs.lat,
+        lng: n.attrs.lng,
+        colorIndex: n.attrs.colorIndex || 0,
+        text: text
+      });
+    }
+
+    if (n.content && Array.isArray(n.content)) {
+      n.content.forEach((child: any) => traverse(child));
+    }
+  }
+
+  node.content.forEach((child: any) => traverse(child));
+
+  return geoMarks;
+}
+
+/**
+ * Parse document into blocks
+ */
+export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
+  if (!doc || !doc.content) return [];
+
+  const blocks: DocumentBlock[] = [];
+
+  for (const node of doc.content) {
+    if (node.type === 'paragraph' || node.type === 'heading') {
+      const text = extractTextContent(node);
+      const geoMarks = extractGeoMarks(node);
+
+      blocks.push({
+        type: node.type,
+        level: node.attrs?.level,
+        text: text,
+        geoMarks: geoMarks,
+        hasGeoMarks: geoMarks.length > 0
+      });
+    }
+  }
+
+  return blocks;
+}
+
+/**
+ * Get all geo-marks from specific blocks
+ */
+export function getGeoMarksFromBlocks(blocks: DocumentBlock[], blockIndices: number[]): GeoMarkInBlock[] {
+  const geoMarks: GeoMarkInBlock[] = [];
+
+  for (const index of blockIndices) {
+    if (index >= 0 && index < blocks.length) {
+      geoMarks.push(...blocks[index].geoMarks);
+    }
+  }
+
+  return geoMarks;
+}

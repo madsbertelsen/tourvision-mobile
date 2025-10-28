@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LANDING_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import LocationSearchMap from '@/components/LocationSearchMap';
 import LocationMapWeb from '@/components/LocationMapWeb';
+import { parseDocumentIntoBlocks, DocumentBlock, getGeoMarksFromBlocks } from '@/utils/document-block-parser';
 
 interface Location {
   geoId: string;
@@ -50,6 +51,12 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'document' | 'map'>('document');
+
+  // Block navigation state for map mode
+  const [documentBlocks, setDocumentBlocks] = useState<DocumentBlock[]>([]);
+  const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
+  const [currentDocument, setCurrentDocument] = useState<any>(INITIAL_CONTENT);
+
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
@@ -323,7 +330,26 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     if (isAnimationCompleteRef.current) {
       console.log('[Landing] User edited document');
     }
-  }, []);
+
+    // Update current document and parse blocks for map mode
+    setCurrentDocument(doc);
+    const blocks = parseDocumentIntoBlocks(doc);
+    setDocumentBlocks(blocks);
+
+    // Update locations list from all geo-marks
+    const allGeoMarks = blocks.flatMap(block => block.geoMarks);
+    const locationsList = allGeoMarks.map(gm => ({
+      geoId: gm.geoId,
+      placeName: gm.placeName,
+      lat: gm.lat,
+      lng: gm.lng
+    }));
+    setLocations(locationsList);
+
+    if (onLocationsChange) {
+      onLocationsChange(locationsList);
+    }
+  }, [onLocationsChange]);
 
   const handleSelectionChange = useCallback((empty: boolean, selectedText: string, boundingRect: any) => {
     // NOTE: Floating menu is now handled entirely inside ProseMirror WebView
@@ -867,45 +893,94 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       </View>
 
       {/* Map View - Overlay on top of document */}
-      {viewMode === 'map' && locations.length > 0 && (
-        <View style={styles.fullScreenMapContainer}>
-          <LocationMapWeb
-            latitude={locations[0].lat}
-            longitude={locations[0].lng}
-            name="TourVision Demo"
-            colorIndex={0}
-          />
-          {/* Close button to return to document mode */}
-          <TouchableOpacity
-            style={styles.closeMapButton}
-            onPress={() => setViewMode('document')}
-          >
-            <View style={styles.closeMapButtonBg}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </View>
-          </TouchableOpacity>
+      {viewMode === 'map' && documentBlocks.length > 0 && (() => {
+        const currentBlock = documentBlocks[currentBlockIndex];
+        const blockGeoMarks = currentBlock?.geoMarks || [];
+        const hasGeoMarks = blockGeoMarks.length > 0;
 
-          {/* Locations list overlay */}
-          <View style={styles.mapLocationsOverlay}>
-            <Text style={styles.mapOverlayTitle}>Locations</Text>
-            <ScrollView style={styles.locationsList} showsVerticalScrollIndicator={false}>
-              {locations.map((location, index) => (
-                <View key={location.geoId} style={styles.locationItem}>
-                  <View
-                    style={[
-                      styles.locationMarkerDot,
-                      { backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 5] }
-                    ]}
-                  />
-                  <Text style={styles.locationItemText} numberOfLines={1}>
-                    {location.placeName}
+        // Find first block with geo-marks if current block has none
+        const firstGeoMarkBlock = documentBlocks.find(b => b.hasGeoMarks);
+        const displayGeoMarks = hasGeoMarks ? blockGeoMarks : (firstGeoMarkBlock?.geoMarks || []);
+
+        if (displayGeoMarks.length === 0) return null;
+
+        return (
+          <View style={styles.fullScreenMapContainer}>
+            <LocationMapWeb
+              latitude={displayGeoMarks[0].lat}
+              longitude={displayGeoMarks[0].lng}
+              name={displayGeoMarks[0].placeName}
+              colorIndex={displayGeoMarks[0].colorIndex}
+            />
+
+            {/* Close button to return to document mode */}
+            <TouchableOpacity
+              style={styles.closeMapButton}
+              onPress={() => setViewMode('document')}
+            >
+              <View style={styles.closeMapButtonBg}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Current block content overlay */}
+            {currentBlock && (
+              <View style={styles.blockContentOverlay}>
+                <View style={styles.blockContentHeader}>
+                  <Text style={styles.blockContentText} numberOfLines={3}>
+                    {currentBlock.text}
                   </Text>
                 </View>
-              ))}
-            </ScrollView>
+
+                {/* Block navigation */}
+                <View style={styles.blockNavigation}>
+                  <TouchableOpacity
+                    style={[styles.navButton, currentBlockIndex === 0 && styles.navButtonDisabled]}
+                    onPress={() => setCurrentBlockIndex(Math.max(0, currentBlockIndex - 1))}
+                    disabled={currentBlockIndex === 0}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={currentBlockIndex === 0 ? '#9CA3AF' : '#fff'} />
+                  </TouchableOpacity>
+
+                  <Text style={styles.blockCounter}>
+                    {currentBlockIndex + 1} / {documentBlocks.length}
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[styles.navButton, currentBlockIndex === documentBlocks.length - 1 && styles.navButtonDisabled]}
+                    onPress={() => setCurrentBlockIndex(Math.min(documentBlocks.length - 1, currentBlockIndex + 1))}
+                    disabled={currentBlockIndex === documentBlocks.length - 1}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={currentBlockIndex === documentBlocks.length - 1 ? '#9CA3AF' : '#fff'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Locations in current block */}
+            {hasGeoMarks && (
+              <View style={styles.mapLocationsOverlay}>
+                <Text style={styles.mapOverlayTitle}>Locations in this block</Text>
+                <ScrollView style={styles.locationsList} showsVerticalScrollIndicator={false}>
+                  {blockGeoMarks.map((geoMark, index) => (
+                    <View key={geoMark.geoId} style={styles.locationItem}>
+                      <View
+                        style={[
+                          styles.locationMarkerDot,
+                          { backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][geoMark.colorIndex % 5] }
+                        ]}
+                      />
+                      <Text style={styles.locationItemText} numberOfLines={1}>
+                        {geoMark.placeName}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
-        </View>
-      )}
+        );
+      })()}
     </View>
   );
 }
@@ -1436,6 +1511,54 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  blockContentOverlay: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    maxWidth: 500,
+  },
+  blockContentHeader: {
+    marginBottom: 12,
+  },
+  blockContentText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  blockNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 8,
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navButtonDisabled: {
+    backgroundColor: 'rgba(156, 163, 175, 0.3)',
+  },
+  blockCounter: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    minWidth: 60,
+    textAlign: 'center',
   },
   mapLocationsOverlay: {
     position: 'absolute',
