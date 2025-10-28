@@ -596,6 +596,8 @@
     <button class="toolbar-button" data-command="toggleOrderedList" title="Numbered List">1.</button>
     <div class="toolbar-divider"></div>
     <button class="toolbar-button" data-command="createGeoMark" title="Add Location">📍</button>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-button" id="viewModeToggle" data-command="toggleViewMode" title="Toggle Map View">🗺️</button>
   </div>
 
   <script>
@@ -1442,6 +1444,13 @@
             } else {
               console.log('[WebView] No text selected for geo-mark');
             }
+            break;
+          case 'toggleViewMode':
+            // Send message to React Native to toggle view mode
+            console.log('[WebView] Toggle view mode requested');
+            sendMessageToNative({
+              type: 'toggleViewMode'
+            });
             break;
           // Add more commands as needed
         }

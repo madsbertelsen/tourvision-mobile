@@ -118,6 +118,7 @@ interface ProseMirrorWebViewProps {
   onToolbarStateChange?: (state: any) => void;
   onShowCommentEditor?: (data: { selectedText: string; from: number; to: number }) => void;
   onCommentClick?: (commentAttrs: any) => void;
+  onToggleViewMode?: () => void;
   onReady?: () => void;
 }
 
@@ -300,6 +301,12 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
             case 'showCommentEditor':
               if (onShowCommentEditor) {
                 onShowCommentEditor(data.data);
+              }
+              break;
+
+            case 'toggleViewMode':
+              if (onToggleViewMode) {
+                onToggleViewMode();
               }
               break;
 
