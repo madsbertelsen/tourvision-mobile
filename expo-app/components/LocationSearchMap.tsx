@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker } from 'react-map-gl/mapbox';
+import { Marker, Source, Layer } from 'react-map-gl/mapbox';
 
 interface LocationSearchResult {
   lat: string;
@@ -15,6 +15,16 @@ interface LocationSearchMapProps {
   results: LocationSearchResult[];
   selectedIndex?: number;
   onSelectResult?: (index: number) => void;
+  existingLocations?: Array<{
+    geoId: string;
+    placeName: string;
+    lat: number;
+    lng: number;
+  }>;
+  routeFrom?: { lat: number; lng: number; name: string } | null;
+  routeTo?: { placeName: string; lat: number; lng: number } | null;
+  routeGeometry?: any;
+  showRoute?: boolean;
 }
 
 // Animation utility functions
@@ -124,13 +134,22 @@ const calculateDuration = (startLat: number, startLng: number, endLat: number, e
   return Math.min(maxDuration, Math.max(minDuration, arcAdjustedDuration));
 };
 
-export default function LocationSearchMap({ results, selectedIndex = 0, onSelectResult }: LocationSearchMapProps) {
+export default function LocationSearchMap({
+  results,
+  selectedIndex = 0,
+  onSelectResult,
+  existingLocations = [],
+  routeFrom,
+  routeTo,
+  routeGeometry,
+  showRoute = false
+}: LocationSearchMapProps) {
   const mapRef = useRef<any>(null);
   const animationRef = useRef<any>(null);
   const scrollViewRef = useRef<any>(null);
 
   // Auto-play state
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [autoPlayProgress, setAutoPlayProgress] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const autoPlayTimerRef = useRef<any>(null);
@@ -382,8 +401,75 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
           zoom: 1
         }}
       >
-        {/* Show all results as markers */}
-        {results.length > 0 && results.map((result, index) => (
+        {/* Show existing locations as gray markers for context */}
+        {existingLocations.map((location) => (
+          <Marker
+            key={location.geoId}
+            latitude={location.lat}
+            longitude={location.lng}
+            anchor="center"
+          >
+            <View style={styles.existingMarker}>
+              <View style={styles.existingMarkerInner} />
+            </View>
+          </Marker>
+        ))}
+
+        {/* Show route line if in transport configuration mode */}
+        {showRoute && routeGeometry && routeGeometry.coordinates && (
+          <Source
+            id="route"
+            type="geojson"
+            data={{
+              type: 'Feature',
+              geometry: routeGeometry,
+              properties: {}
+            }}
+          >
+            <Layer
+              id="route-line"
+              type="line"
+              paint={{
+                'line-color': '#3b82f6',
+                'line-width': 4,
+                'line-opacity': 0.8
+              }}
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round'
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Show route start marker */}
+        {showRoute && routeFrom && (
+          <Marker
+            latitude={routeFrom.lat}
+            longitude={routeFrom.lng}
+            anchor="center"
+          >
+            <View style={styles.routeStartMarker}>
+              <Text style={styles.routeMarkerText}>A</Text>
+            </View>
+          </Marker>
+        )}
+
+        {/* Show route end marker */}
+        {showRoute && routeTo && (
+          <Marker
+            latitude={routeTo.lat}
+            longitude={routeTo.lng}
+            anchor="center"
+          >
+            <View style={styles.routeEndMarker}>
+              <Text style={styles.routeMarkerText}>B</Text>
+            </View>
+          </Marker>
+        )}
+
+        {/* Show all search results as markers (only visible in Step 1) */}
+        {!showRoute && results.length > 0 && results.map((result, index) => (
           <Marker
             key={index}
             latitude={parseFloat(result.lat)}
@@ -402,8 +488,8 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
         ))}
       </Map>
 
-      {/* Results carousel - only show when we have results */}
-      {results.length > 0 && (
+      {/* Results carousel - only show when we have results and not showing route */}
+      {results.length > 0 && !showRoute && (
       <View style={styles.carouselContainer}>
         <ScrollView
           ref={scrollViewRef}
@@ -552,5 +638,61 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
+  },
+  // Existing location markers (gray, for context)
+  existingMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#9ca3af',
+    borderWidth: 2,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    opacity: 0.7,
+  },
+  existingMarkerInner: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'white',
+  },
+  // Route markers
+  routeStartMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10b981',
+    borderWidth: 3,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  routeEndMarker: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: '#3b82f6',
+    borderWidth: 3,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  routeMarkerText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });

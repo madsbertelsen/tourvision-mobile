@@ -633,26 +633,31 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             </View>
 
             <View style={styles.modalBody}>
-              {modalStep === 'location' ? (
-                /* Step 1: Location Selection with Map */
-                <View style={styles.mapContainer}>
-                  <LocationSearchMap
-                    results={locationSearchResults}
-                    selectedIndex={selectedResultIndex}
-                    onSelectResult={(index) => {
-                      setSelectedResultIndex(index);
-                      const selected = locationSearchResults[index];
-                      setLocationModalData({
-                        placeName: selected.display_name,
-                        lat: parseFloat(selected.lat),
-                        lng: parseFloat(selected.lon),
-                      });
-                    }}
-                  />
-                </View>
-              ) : (
-                /* Step 2: Transport Configuration */
-                <ScrollView style={styles.transportForm} contentContainerStyle={styles.transportFormContent}>
+              {/* Map is always visible - shows search results in Step 1, route in Step 2 */}
+              <View style={styles.mapContainer}>
+                <LocationSearchMap
+                  results={locationSearchResults}
+                  selectedIndex={selectedResultIndex}
+                  onSelectResult={(index) => {
+                    setSelectedResultIndex(index);
+                    const selected = locationSearchResults[index];
+                    setLocationModalData({
+                      placeName: selected.display_name,
+                      lat: parseFloat(selected.lat),
+                      lng: parseFloat(selected.lon),
+                    });
+                  }}
+                  existingLocations={locations}
+                  routeFrom={transportFrom}
+                  routeTo={selectedLocation}
+                  routeGeometry={routeGeometry}
+                  showRoute={modalStep === 'transport'}
+                />
+              </View>
+
+              {/* Step 2: Transport Configuration Form Overlay */}
+              {modalStep === 'transport' && (
+                <ScrollView style={styles.transportFormOverlay} contentContainerStyle={styles.transportFormContent}>
                   {/* Selected Location Display */}
                   {selectedLocation && (
                     <View style={styles.selectedLocationChip}>
@@ -1170,9 +1175,24 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   // Transport form styles
-  transportForm: {
-    flex: 1,
-    width: '100%',
+  transportFormOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.15)' as any,
+      },
+    }),
   },
   transportFormContent: {
     padding: 20,
