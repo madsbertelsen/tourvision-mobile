@@ -237,7 +237,7 @@ function hexToRgb(hex: string): [number, number, number, number] {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: 400,
+    height: '100%',
     position: 'relative',
   },
   originMarker: {
