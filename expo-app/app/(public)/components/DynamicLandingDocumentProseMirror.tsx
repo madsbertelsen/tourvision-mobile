@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, Text, Pressable, Platform, Modal, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Platform, Modal, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import ProseMirrorWebView, { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { TypingAnimatorCommands, AnimationState, DEFAULT_TYPING_CONFIG } from '@/utils/typing-animator-commands';
@@ -39,6 +39,16 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [showFloatingToolbar, setShowFloatingToolbar] = useState(false);
   const [selectionRange, setSelectionRange] = useState<{ from: number; to: number } | null>(null);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
+
+  // Two-step modal flow state
+  const [modalStep, setModalStep] = useState<'location' | 'transport'>('location');
+  const [selectedLocation, setSelectedLocation] = useState<{ placeName: string; lat: number; lng: number } | null>(null);
+  const [transportMode, setTransportMode] = useState<'walking' | 'driving' | 'transit' | 'cycling' | 'flight'>('walking');
+  const [transportFrom, setTransportFrom] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<any>(null);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
+  const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
@@ -392,21 +402,54 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       });
   }, []);
 
-  // Handle adding location to document
+  // Handle moving from Step 1 (location) to Step 2 (transport)
+  const handleContinueToTransport = useCallback(() => {
+    if (!locationModalData) {
+      console.warn('[Landing] No location selected');
+      return;
+    }
+
+    // Store selected location
+    setSelectedLocation(locationModalData);
+
+    // Smart default: Set transport from to previous location if available
+    if (locations.length > 0) {
+      const prevLocation = locations[locations.length - 1];
+      setTransportFrom({
+        lat: prevLocation.lat,
+        lng: prevLocation.lng,
+        name: prevLocation.placeName
+      });
+    } else {
+      // No previous location - start fresh
+      setTransportFrom(null);
+    }
+
+    // Move to transport configuration step
+    setModalStep('transport');
+  }, [locationModalData, locations]);
+
+  // Handle adding location to document (called from Step 2)
   const handleAddLocationToDocument = useCallback(() => {
-    if (!locationModalData || !selectionRange || !webViewRef.current) {
+    if (!selectedLocation || !selectionRange || !webViewRef.current) {
       console.warn('[Landing] Missing data for creating geo-mark');
       return;
     }
 
-    // Create geo-mark data
+    // Create geo-mark data with transport information
     const geoMarkData = {
       geoId: `geo-${Date.now()}`,
-      placeName: locationModalData.placeName,
-      lat: locationModalData.lat,
-      lng: locationModalData.lng,
+      placeName: selectedLocation.placeName,
+      lat: selectedLocation.lat,
+      lng: selectedLocation.lng,
       colorIndex: locations.length % 10,
       coordSource: 'nominatim',
+      transportFrom: transportFrom,
+      transportProfile: transportMode,
+      routeGeometry: routeGeometry,
+      routeDistance: routeDistance,
+      routeDuration: routeDuration,
+      waypoints: null, // TODO: Add waypoints support later
     };
 
     console.log('[Landing] Creating geo-mark with data:', geoMarkData);
@@ -428,10 +471,87 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       return updated;
     });
 
-    // Close modal
+    // Reset modal state and close
     setShowLocationModal(false);
     setSelectionRange(null);
-  }, [locationModalData, selectionRange, locations, onLocationsChange]);
+    setModalStep('location');
+    setSelectedLocation(null);
+    setTransportFrom(null);
+    setRouteGeometry(null);
+    setRouteDistance(null);
+    setRouteDuration(null);
+  }, [selectedLocation, selectionRange, locations, transportFrom, transportMode, routeGeometry, routeDistance, routeDuration, onLocationsChange]);
+
+  // Fetch route from Mapbox Directions API when transport config changes
+  useEffect(() => {
+    if (modalStep !== 'transport' || !transportFrom || !selectedLocation) {
+      return;
+    }
+
+    const fetchRoute = async () => {
+      setIsLoadingRoute(true);
+
+      try {
+        // Map transport mode to Mapbox profile
+        const profileMap = {
+          walking: 'walking',
+          driving: 'driving-traffic',
+          transit: 'driving', // No transit profile in Directions API
+          cycling: 'cycling',
+          flight: 'driving', // Use straight line for flight
+        };
+
+        const profile = profileMap[transportMode];
+        const coordinates = `${transportFrom.lng},${transportFrom.lat};${selectedLocation.lng},${selectedLocation.lat}`;
+
+        const response = await fetch(
+          `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?` +
+          `geometries=geojson&access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}`
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch route');
+        }
+
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          setRouteGeometry(route.geometry);
+          setRouteDistance(route.distance);
+          setRouteDuration(route.duration);
+        } else {
+          console.warn('[Landing] No route found');
+          setRouteGeometry(null);
+          setRouteDistance(null);
+          setRouteDuration(null);
+        }
+      } catch (error) {
+        console.error('[Landing] Error fetching route:', error);
+        setRouteGeometry(null);
+        setRouteDistance(null);
+        setRouteDuration(null);
+      } finally {
+        setIsLoadingRoute(false);
+      }
+    };
+
+    fetchRoute();
+  }, [modalStep, transportFrom, selectedLocation, transportMode]);
+
+  // Handle modal close - reset all state
+  const handleCloseModal = useCallback(() => {
+    setShowLocationModal(false);
+    setModalStep('location');
+    setSelectedLocation(null);
+    setTransportFrom(null);
+    setRouteGeometry(null);
+    setRouteDistance(null);
+    setRouteDuration(null);
+    setLocationModalData(null);
+    setLocationSearchResults([]);
+    setSelectedResultIndex(0);
+  }, []);
 
   // Handle clicks outside toolbar to hide it
   const handleClickOutside = useCallback(() => {
@@ -488,14 +608,14 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         visible={showLocationModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowLocationModal(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           {/* Backdrop */}
           <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setShowLocationModal(false)}
+            onPress={handleCloseModal}
           />
 
           {/* Bottom Sheet */}
@@ -504,40 +624,183 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             <View style={styles.dragHandle} />
 
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Location</Text>
-              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+              <Text style={styles.modalTitle}>
+                {modalStep === 'location' ? 'Add Location' : 'Configure Transport'}
+              </Text>
+              <TouchableOpacity onPress={handleCloseModal}>
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
-              {/* Map showing all search results (or rotating globe while loading) */}
-              <View style={styles.mapContainer}>
-                <LocationSearchMap
-                  results={locationSearchResults}
-                  selectedIndex={selectedResultIndex}
-                  onSelectResult={(index) => {
-                    setSelectedResultIndex(index);
-                    const selected = locationSearchResults[index];
-                    setLocationModalData({
-                      placeName: selected.display_name,
-                      lat: parseFloat(selected.lat),
-                      lng: parseFloat(selected.lon),
-                    });
-                  }}
-                />
-              </View>
+              {modalStep === 'location' ? (
+                /* Step 1: Location Selection with Map */
+                <View style={styles.mapContainer}>
+                  <LocationSearchMap
+                    results={locationSearchResults}
+                    selectedIndex={selectedResultIndex}
+                    onSelectResult={(index) => {
+                      setSelectedResultIndex(index);
+                      const selected = locationSearchResults[index];
+                      setLocationModalData({
+                        placeName: selected.display_name,
+                        lat: parseFloat(selected.lat),
+                        lng: parseFloat(selected.lon),
+                      });
+                    }}
+                  />
+                </View>
+              ) : (
+                /* Step 2: Transport Configuration */
+                <ScrollView style={styles.transportForm} contentContainerStyle={styles.transportFormContent}>
+                  {/* Selected Location Display */}
+                  {selectedLocation && (
+                    <View style={styles.selectedLocationChip}>
+                      <Ionicons name="location" size={20} color="#3b82f6" />
+                      <Text style={styles.selectedLocationText} numberOfLines={2}>
+                        {selectedLocation.placeName}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Starting Location Section */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.formSectionTitle}>FROM</Text>
+                    {transportFrom ? (
+                      <View style={styles.transportFromBox}>
+                        <Ionicons name="location-outline" size={20} color="#6b7280" />
+                        <Text style={styles.transportFromText}>{transportFrom.name}</Text>
+                        <TouchableOpacity
+                          style={styles.changeButton}
+                          onPress={() => {
+                            // TODO: Add ability to change starting location
+                            console.log('Change starting location');
+                          }}
+                        >
+                          <Text style={styles.changeButtonText}>Change</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.noTransportFrom}>
+                        <Ionicons name="information-circle-outline" size={20} color="#9ca3af" />
+                        <Text style={styles.noTransportFromText}>No previous location - starting fresh</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Transport Mode Section */}
+                  <View style={styles.formSection}>
+                    <Text style={styles.formSectionTitle}>TRANSPORT MODE</Text>
+                    <View style={styles.transportModes}>
+                      <TouchableOpacity
+                        style={[styles.modeButton, transportMode === 'walking' && styles.modeButtonActive]}
+                        onPress={() => setTransportMode('walking')}
+                      >
+                        <Ionicons name="walk" size={24} color={transportMode === 'walking' ? '#fff' : '#6b7280'} />
+                        <Text style={[styles.modeButtonText, transportMode === 'walking' && styles.modeButtonTextActive]}>
+                          Walk
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeButton, transportMode === 'driving' && styles.modeButtonActive]}
+                        onPress={() => setTransportMode('driving')}
+                      >
+                        <Ionicons name="car" size={24} color={transportMode === 'driving' ? '#fff' : '#6b7280'} />
+                        <Text style={[styles.modeButtonText, transportMode === 'driving' && styles.modeButtonTextActive]}>
+                          Drive
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeButton, transportMode === 'transit' && styles.modeButtonActive]}
+                        onPress={() => setTransportMode('transit')}
+                      >
+                        <Ionicons name="train" size={24} color={transportMode === 'transit' ? '#fff' : '#6b7280'} />
+                        <Text style={[styles.modeButtonText, transportMode === 'transit' && styles.modeButtonTextActive]}>
+                          Transit
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeButton, transportMode === 'cycling' && styles.modeButtonActive]}
+                        onPress={() => setTransportMode('cycling')}
+                      >
+                        <Ionicons name="bicycle" size={24} color={transportMode === 'cycling' ? '#fff' : '#6b7280'} />
+                        <Text style={[styles.modeButtonText, transportMode === 'cycling' && styles.modeButtonTextActive]}>
+                          Cycle
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeButton, transportMode === 'flight' && styles.modeButtonActive]}
+                        onPress={() => setTransportMode('flight')}
+                      >
+                        <Ionicons name="airplane" size={24} color={transportMode === 'flight' ? '#fff' : '#6b7280'} />
+                        <Text style={[styles.modeButtonText, transportMode === 'flight' && styles.modeButtonTextActive]}>
+                          Flight
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Route Preview Section */}
+                  {transportFrom && selectedLocation && (
+                    <View style={styles.formSection}>
+                      <Text style={styles.formSectionTitle}>ROUTE PREVIEW</Text>
+                      {isLoadingRoute ? (
+                        <View style={styles.routePreviewLoading}>
+                          <ActivityIndicator size="small" color="#3b82f6" />
+                          <Text style={styles.routePreviewLoadingText}>Calculating route...</Text>
+                        </View>
+                      ) : routeDistance && routeDuration ? (
+                        <View style={styles.routeInfo}>
+                          <View style={styles.routeInfoItem}>
+                            <Ionicons name="navigate" size={20} color="#6b7280" />
+                            <Text style={styles.routeInfoText}>
+                              {(routeDistance / 1000).toFixed(1)} km
+                            </Text>
+                          </View>
+                          <View style={styles.routeInfoItem}>
+                            <Ionicons name="time" size={20} color="#6b7280" />
+                            <Text style={styles.routeInfoText}>
+                              {Math.round(routeDuration / 60)} min
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+                </ScrollView>
+              )}
             </View>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.saveButton, !locationModalData && styles.saveButtonDisabled]}
-                onPress={handleAddLocationToDocument}
-                disabled={!locationModalData}
-              >
-                <Ionicons name="location" size={20} color="#fff" />
-                <Text style={styles.saveButtonText}>Add to Document</Text>
-              </TouchableOpacity>
+              {modalStep === 'location' ? (
+                // Step 1: Continue to transport configuration
+                <TouchableOpacity
+                  style={[styles.saveButton, !locationModalData && styles.saveButtonDisabled]}
+                  onPress={handleContinueToTransport}
+                  disabled={!locationModalData}
+                >
+                  <Text style={styles.saveButtonText}>Continue</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                // Step 2: Add to document with transport info
+                <View style={styles.footerButtons}>
+                  <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => setModalStep('location')}
+                  >
+                    <Ionicons name="arrow-back" size={20} color="#3b82f6" />
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveButton, styles.primaryButton]}
+                    onPress={handleAddLocationToDocument}
+                  >
+                    <Ionicons name="location" size={20} color="#fff" />
+                    <Text style={styles.saveButtonText}>Add to Document</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -905,5 +1168,177 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#ffffff',
+  },
+  // Transport form styles
+  transportForm: {
+    flex: 1,
+    width: '100%',
+  },
+  transportFormContent: {
+    padding: 20,
+    gap: 24,
+  },
+  selectedLocationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  selectedLocationText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1e40af',
+  },
+  formSection: {
+    gap: 12,
+  },
+  formSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  transportFromBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  transportFromText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#374151',
+  },
+  changeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 6,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  changeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#3b82f6',
+  },
+  noTransportFrom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  noTransportFromText: {
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  transportModes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  modeButton: {
+    flex: 1,
+    minWidth: 80,
+    alignItems: 'center',
+    gap: 6,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  modeButtonActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  modeButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  modeButtonTextActive: {
+    color: '#ffffff',
+  },
+  routePreviewLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  routePreviewLoadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  routeInfo: {
+    flexDirection: 'row',
+    gap: 16,
+    padding: 16,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  routeInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  routeInfoText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#15803d',
+  },
+  footerButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  primaryButton: {
+    flex: 1,
   },
 });
