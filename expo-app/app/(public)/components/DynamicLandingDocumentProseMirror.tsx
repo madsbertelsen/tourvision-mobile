@@ -51,6 +51,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'document' | 'map'>('document');
+  const [waypoints, setWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
 
   // Block navigation state for map mode
   const [documentBlocks, setDocumentBlocks] = useState<DocumentBlock[]>([]);
@@ -655,6 +656,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                     routeTo={selectedLocation}
                     routeGeometry={routeGeometry}
                     showRoute={modalStep === 'transport'}
+                    waypoints={waypoints}
+                    onWaypointsChange={setWaypoints}
                   />
                 </View>
               </View>
