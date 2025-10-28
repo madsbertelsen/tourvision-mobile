@@ -25,6 +25,8 @@ interface LocationSearchMapProps {
   routeTo?: { placeName: string; lat: number; lng: number } | null;
   routeGeometry?: any;
   showRoute?: boolean;
+  waypoints?: Array<{ lat: number; lng: number }>;
+  onWaypointsChange?: (waypoints: Array<{ lat: number; lng: number }>) => void;
 }
 
 // Animation utility functions
@@ -134,6 +136,57 @@ const calculateDuration = (startLat: number, startLng: number, endLat: number, e
   return Math.min(maxDuration, Math.max(minDuration, arcAdjustedDuration));
 };
 
+// Find closest point on a line segment to a given point
+const closestPointOnSegment = (
+  px: number, py: number, // point
+  x1: number, y1: number, // segment start
+  x2: number, y2: number  // segment end
+): { x: number; y: number; distance: number } => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  if (dx === 0 && dy === 0) {
+    // Segment is a point
+    const dist = Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+    return { x: x1, y: y1, distance: dist };
+  }
+
+  // Calculate parameter t that represents the closest point on the line
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+  const distance = Math.sqrt((px - closestX) ** 2 + (py - closestY) ** 2);
+
+  return { x: closestX, y: closestY, distance };
+};
+
+// Find closest point on entire route to cursor
+const findClosestPointOnRoute = (
+  cursorLng: number,
+  cursorLat: number,
+  routeCoordinates: number[][]
+): { lng: number; lat: number; distance: number } | null => {
+  if (!routeCoordinates || routeCoordinates.length < 2) return null;
+
+  let minDistance = Infinity;
+  let closestPoint = null;
+
+  for (let i = 0; i < routeCoordinates.length - 1; i++) {
+    const [lng1, lat1] = routeCoordinates[i];
+    const [lng2, lat2] = routeCoordinates[i + 1];
+
+    const result = closestPointOnSegment(cursorLng, cursorLat, lng1, lat1, lng2, lat2);
+
+    if (result.distance < minDistance) {
+      minDistance = result.distance;
+      closestPoint = { lng: result.x, lat: result.y, distance: result.distance };
+    }
+  }
+
+  return closestPoint;
+};
+
 export default function LocationSearchMap({
   results,
   selectedIndex = 0,
@@ -142,7 +195,9 @@ export default function LocationSearchMap({
   routeFrom,
   routeTo,
   routeGeometry,
-  showRoute = false
+  showRoute = false,
+  waypoints = [],
+  onWaypointsChange
 }: LocationSearchMapProps) {
   const mapRef = useRef<any>(null);
   const animationRef = useRef<any>(null);
@@ -154,6 +209,9 @@ export default function LocationSearchMap({
   const [isAnimating, setIsAnimating] = useState(false);
   const autoPlayTimerRef = useRef<any>(null);
   const autoPlayIntervalRef = useRef<any>(null);
+
+  // Waypoint state
+  const [hoverPoint, setHoverPoint] = useState<{ lng: number; lat: number } | null>(null);
 
   // Core animation function
   const animateMapTo = (targetLat: number, targetLng: number, targetZoom: number, duration?: number) => {
@@ -388,6 +446,33 @@ export default function LocationSearchMap({
     }
   };
 
+  // Handle mouse move to show hover point on route
+  const handleMouseMove = (event: any) => {
+    if (!showRoute || !routeGeometry || !routeGeometry.coordinates) {
+      setHoverPoint(null);
+      return;
+    }
+
+    const { lngLat } = event;
+    const closestPoint = findClosestPointOnRoute(lngLat.lng, lngLat.lat, routeGeometry.coordinates);
+
+    // Only show hover point if cursor is close enough (within ~0.01 degrees, roughly 1km)
+    if (closestPoint && closestPoint.distance < 0.01) {
+      setHoverPoint({ lng: closestPoint.lng, lat: closestPoint.lat });
+    } else {
+      setHoverPoint(null);
+    }
+  };
+
+  // Handle click to add waypoint
+  const handleMapClick = (event: any) => {
+    if (!hoverPoint || !onWaypointsChange) return;
+
+    // Add waypoint at hover position
+    const newWaypoints = [...waypoints, { lat: hoverPoint.lat, lng: hoverPoint.lng }];
+    onWaypointsChange(newWaypoints);
+  };
+
   return (
     <View style={styles.container}>
       <Map
@@ -400,6 +485,9 @@ export default function LocationSearchMap({
           longitude: 0,
           zoom: 1
         }}
+        onMouseMove={handleMouseMove}
+        onClick={handleMapClick}
+        interactiveLayerIds={showRoute ? ['route-line'] : []}
       >
         {/* Show existing locations as gray markers for context */}
         {existingLocations.map((location) => (
@@ -465,6 +553,31 @@ export default function LocationSearchMap({
             <View style={styles.routeEndMarker}>
               <Text style={styles.routeMarkerText}>B</Text>
             </View>
+          </Marker>
+        )}
+
+        {/* Show waypoint markers */}
+        {showRoute && waypoints.map((waypoint, index) => (
+          <Marker
+            key={`waypoint-${index}`}
+            latitude={waypoint.lat}
+            longitude={waypoint.lng}
+            anchor="center"
+          >
+            <View style={styles.waypointMarker}>
+              <Text style={styles.waypointText}>{index + 1}</Text>
+            </View>
+          </Marker>
+        ))}
+
+        {/* Show hover point (white circle) when cursor is near route */}
+        {showRoute && hoverPoint && (
+          <Marker
+            latitude={hoverPoint.lat}
+            longitude={hoverPoint.lng}
+            anchor="center"
+          >
+            <View style={styles.hoverPointMarker} />
           </Marker>
         )}
 
@@ -694,5 +807,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+  },
+  waypointMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f59e0b',
+    borderWidth: 3,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  waypointText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  hoverPointMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'white',
+    borderWidth: 3,
+    borderColor: '#3b82f6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
 });
