@@ -140,6 +140,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       onToolbarStateChange,
       onShowCommentEditor,
       onCommentClick,
+      onMessage,
       onReady,
     },
     ref
