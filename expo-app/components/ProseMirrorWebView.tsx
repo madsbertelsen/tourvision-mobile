@@ -118,8 +118,8 @@ interface ProseMirrorWebViewProps {
   onToolbarStateChange?: (state: any) => void;
   onShowCommentEditor?: (data: { selectedText: string; from: number; to: number }) => void;
   onCommentClick?: (commentAttrs: any) => void;
-  onToggleViewMode?: () => void;
   onReady?: () => void;
+  onMessage?: (message: any) => void;
 }
 
 // We'll load the HTML from the assets folder
@@ -304,12 +304,6 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               }
               break;
 
-            case 'toggleViewMode':
-              if (onToggleViewMode) {
-                onToggleViewMode();
-              }
-              break;
-
             case 'commentClick':
               if (onCommentClick) {
                 onCommentClick(data.attrs);
@@ -370,13 +364,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             // Y.js message handlers
             default:
-              console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
+              // Pass unhandled messages to generic onMessage handler
+              if (onMessage) {
+                onMessage(data);
+              } else {
+                console.warn('[ProseMirrorWebView] Unknown message type:', data.type);
+              }
           }
         } catch (error) {
           console.error('[ProseMirrorWebView] Error handling message:', error);
         }
       },
-      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, onShowCommentEditor, onCommentClick, content, editable, sendMessageInternal]
+      [onChange, onSelectionChange, onToolbarStateChange, onShowGeoMarkEditor, onGeoMarkNavigate, onShowCommentEditor, onCommentClick, onMessage, content, editable, sendMessageInternal]
     );
 
     // Update content when it changes externally

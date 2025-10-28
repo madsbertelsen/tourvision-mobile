@@ -886,7 +886,11 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             onContentChange={handleContentChange}
             onSelectionChange={handleSelectionChange}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
-            onToggleViewMode={() => setViewMode(viewMode === 'document' ? 'map' : 'document')}
+            onMessage={(data) => {
+              if (data.type === 'toggleViewMode') {
+                setViewMode(viewMode === 'document' ? 'map' : 'document');
+              }
+            }}
             editable={true}
             showToolbar={false}
             onReady={handleReady}
