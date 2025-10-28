@@ -66,6 +66,13 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   // Track text selection for geo-mark creation
   const pendingGeoMarkRef = useRef<{ start: number; end: number; data: any } | null>(null);
 
+  // Parse initial document on mount
+  useEffect(() => {
+    const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
+    setDocumentBlocks(blocks);
+    console.log('[Landing] Initial document blocks:', blocks.length);
+  }, []);
+
   // Initialize animator
   useEffect(() => {
     const animator = new TypingAnimatorCommands(
