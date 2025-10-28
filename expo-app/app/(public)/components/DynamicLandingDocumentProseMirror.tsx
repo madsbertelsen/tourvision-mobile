@@ -515,6 +515,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     setRouteGeometry(null);
     setRouteDistance(null);
     setRouteDuration(null);
+    setWaypoints([]);
   }, [selectedLocation, selectionRange, locations, transportFrom, transportMode, routeGeometry, routeDistance, routeDuration, onLocationsChange]);
 
   // Fetch route from Mapbox Directions API when transport config changes
@@ -537,7 +538,22 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         };
 
         const profile = profileMap[transportMode];
-        const coordinates = `${transportFrom.lng},${transportFrom.lat};${selectedLocation.lng},${selectedLocation.lat}`;
+
+        // Build coordinates string with waypoints
+        // Format: lng,lat;lng,lat;...
+        let coordinatesArray = [`${transportFrom.lng},${transportFrom.lat}`];
+
+        // Add waypoints in order
+        if (waypoints && waypoints.length > 0) {
+          waypoints.forEach(waypoint => {
+            coordinatesArray.push(`${waypoint.lng},${waypoint.lat}`);
+          });
+        }
+
+        // Add destination
+        coordinatesArray.push(`${selectedLocation.lng},${selectedLocation.lat}`);
+
+        const coordinates = coordinatesArray.join(';');
 
         const response = await fetch(
           `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?` +
@@ -572,7 +588,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     };
 
     fetchRoute();
-  }, [modalStep, transportFrom, selectedLocation, transportMode]);
+  }, [modalStep, transportFrom, selectedLocation, transportMode, waypoints]);
 
   // Handle modal close - reset all state
   const handleCloseModal = useCallback(() => {
@@ -586,6 +602,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     setLocationModalData(null);
     setLocationSearchResults([]);
     setSelectedResultIndex(0);
+    setWaypoints([]);
   }, []);
 
 
@@ -848,7 +865,10 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                 <View style={styles.footerButtons}>
                   <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => setModalStep('location')}
+                    onPress={() => {
+                      setModalStep('location');
+                      setWaypoints([]);
+                    }}
                   >
                     <Ionicons name="arrow-back" size={20} color="#3b82f6" />
                     <Text style={styles.backButtonText}>Back</Text>
