@@ -192,12 +192,6 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
           >
             <Text style={styles.buttonText}>☰</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('toggleOrderedList')}
-          >
-            <Text style={styles.buttonText}>1.</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.divider} />
