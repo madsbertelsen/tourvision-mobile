@@ -212,11 +212,6 @@ export default function LocationMapWeb({
           </Text>
         </View>
       )}
-
-      {/* Location name overlay */}
-      <View style={styles.locationOverlay}>
-        <Text style={styles.locationText}>📍 {name}</Text>
-      </View>
     </View>
   );
 }
