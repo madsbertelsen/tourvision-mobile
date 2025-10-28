@@ -28,8 +28,10 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
   const isButtonHighlighted = (buttonId: string) => highlightedButton === buttonId;
 
   const handleBlockTypeChange = (value: string) => {
+    console.log('[ProseMirrorToolbar] Block type change START:', value, Date.now());
     // Don't update local state - let it update from highlightedButton prop
     // This prevents the delay/flash effect
+
     if (value === 'paragraph') {
       onCommand('setParagraph');
     } else if (value === 'heading1') {
@@ -39,6 +41,7 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
     } else if (value === 'heading3') {
       onCommand('setHeading', { level: 3 });
     }
+    console.log('[ProseMirrorToolbar] Block type change END:', value, Date.now());
   };
 
   return (

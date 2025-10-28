@@ -564,6 +564,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
           selectionEmpty={!hasTextSelection}
           highlightedButton={highlightedButton}
           onCommand={(command, params) => {
+            console.log('[Landing] onCommand received:', command, params, Date.now());
             webViewRef.current?.sendCommand(command, params);
           }}
           viewMode={viewMode}
