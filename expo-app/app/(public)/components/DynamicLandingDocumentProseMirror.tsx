@@ -680,116 +680,116 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                       {selectedLocation && (
                         <View style={styles.selectedLocationChip}>
                           <Ionicons name="location" size={20} color="#3b82f6" />
-                      <Text style={styles.selectedLocationText} numberOfLines={2}>
-                        {selectedLocation.placeName}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Starting Location Section */}
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionTitle}>FROM</Text>
-                    {transportFrom ? (
-                      <View style={styles.transportFromBox}>
-                        <Ionicons name="location-outline" size={20} color="#6b7280" />
-                        <Text style={styles.transportFromText}>{transportFrom.name}</Text>
-                        <TouchableOpacity
-                          style={styles.changeButton}
-                          onPress={() => {
-                            // TODO: Add ability to change starting location
-                            console.log('Change starting location');
-                          }}
-                        >
-                          <Text style={styles.changeButtonText}>Change</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.noTransportFrom}>
-                        <Ionicons name="information-circle-outline" size={20} color="#9ca3af" />
-                        <Text style={styles.noTransportFromText}>No previous location - starting fresh</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Transport Mode Section */}
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionTitle}>TRANSPORT MODE</Text>
-                    <View style={styles.transportModes}>
-                      <TouchableOpacity
-                        style={[styles.modeButton, transportMode === 'walking' && styles.modeButtonActive]}
-                        onPress={() => setTransportMode('walking')}
-                      >
-                        <Ionicons name="walk" size={24} color={transportMode === 'walking' ? '#fff' : '#6b7280'} />
-                        <Text style={[styles.modeButtonText, transportMode === 'walking' && styles.modeButtonTextActive]}>
-                          Walk
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeButton, transportMode === 'driving' && styles.modeButtonActive]}
-                        onPress={() => setTransportMode('driving')}
-                      >
-                        <Ionicons name="car" size={24} color={transportMode === 'driving' ? '#fff' : '#6b7280'} />
-                        <Text style={[styles.modeButtonText, transportMode === 'driving' && styles.modeButtonTextActive]}>
-                          Drive
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeButton, transportMode === 'transit' && styles.modeButtonActive]}
-                        onPress={() => setTransportMode('transit')}
-                      >
-                        <Ionicons name="train" size={24} color={transportMode === 'transit' ? '#fff' : '#6b7280'} />
-                        <Text style={[styles.modeButtonText, transportMode === 'transit' && styles.modeButtonTextActive]}>
-                          Transit
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeButton, transportMode === 'cycling' && styles.modeButtonActive]}
-                        onPress={() => setTransportMode('cycling')}
-                      >
-                        <Ionicons name="bicycle" size={24} color={transportMode === 'cycling' ? '#fff' : '#6b7280'} />
-                        <Text style={[styles.modeButtonText, transportMode === 'cycling' && styles.modeButtonTextActive]}>
-                          Cycle
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeButton, transportMode === 'flight' && styles.modeButtonActive]}
-                        onPress={() => setTransportMode('flight')}
-                      >
-                        <Ionicons name="airplane" size={24} color={transportMode === 'flight' ? '#fff' : '#6b7280'} />
-                        <Text style={[styles.modeButtonText, transportMode === 'flight' && styles.modeButtonTextActive]}>
-                          Flight
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Route Preview Section */}
-                  {transportFrom && selectedLocation && (
-                    <View style={styles.formSection}>
-                      <Text style={styles.formSectionTitle}>ROUTE PREVIEW</Text>
-                      {isLoadingRoute ? (
-                        <View style={styles.routePreviewLoading}>
-                          <ActivityIndicator size="small" color="#3b82f6" />
-                          <Text style={styles.routePreviewLoadingText}>Calculating route...</Text>
+                          <Text style={styles.selectedLocationText} numberOfLines={2}>
+                            {selectedLocation.placeName}
+                          </Text>
                         </View>
-                      ) : routeDistance && routeDuration ? (
-                        <View style={styles.routeInfo}>
-                          <View style={styles.routeInfoItem}>
-                            <Ionicons name="navigate" size={20} color="#6b7280" />
-                            <Text style={styles.routeInfoText}>
-                              {(routeDistance / 1000).toFixed(1)} km
-                            </Text>
+                      )}
+
+                      {/* Starting Location Section */}
+                      <View style={styles.formSection}>
+                        <Text style={styles.formSectionTitle}>FROM</Text>
+                        {transportFrom ? (
+                          <View style={styles.transportFromBox}>
+                            <Ionicons name="location-outline" size={20} color="#6b7280" />
+                            <Text style={styles.transportFromText}>{transportFrom.name}</Text>
+                            <TouchableOpacity
+                              style={styles.changeButton}
+                              onPress={() => {
+                                // TODO: Add ability to change starting location
+                                console.log('Change starting location');
+                              }}
+                            >
+                              <Text style={styles.changeButtonText}>Change</Text>
+                            </TouchableOpacity>
                           </View>
-                          <View style={styles.routeInfoItem}>
-                            <Ionicons name="time" size={20} color="#6b7280" />
-                            <Text style={styles.routeInfoText}>
-                              {Math.round(routeDuration / 60)} min
-                            </Text>
+                        ) : (
+                          <View style={styles.noTransportFrom}>
+                            <Ionicons name="information-circle-outline" size={20} color="#9ca3af" />
+                            <Text style={styles.noTransportFromText}>No previous location - starting fresh</Text>
                           </View>
+                        )}
+                      </View>
+
+                      {/* Transport Mode Section */}
+                      <View style={styles.formSection}>
+                        <Text style={styles.formSectionTitle}>TRANSPORT MODE</Text>
+                        <View style={styles.transportModes}>
+                          <TouchableOpacity
+                            style={[styles.modeButton, transportMode === 'walking' && styles.modeButtonActive]}
+                            onPress={() => setTransportMode('walking')}
+                          >
+                            <Ionicons name="walk" size={24} color={transportMode === 'walking' ? '#fff' : '#6b7280'} />
+                            <Text style={[styles.modeButtonText, transportMode === 'walking' && styles.modeButtonTextActive]}>
+                              Walk
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modeButton, transportMode === 'driving' && styles.modeButtonActive]}
+                            onPress={() => setTransportMode('driving')}
+                          >
+                            <Ionicons name="car" size={24} color={transportMode === 'driving' ? '#fff' : '#6b7280'} />
+                            <Text style={[styles.modeButtonText, transportMode === 'driving' && styles.modeButtonTextActive]}>
+                              Drive
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modeButton, transportMode === 'transit' && styles.modeButtonActive]}
+                            onPress={() => setTransportMode('transit')}
+                          >
+                            <Ionicons name="train" size={24} color={transportMode === 'transit' ? '#fff' : '#6b7280'} />
+                            <Text style={[styles.modeButtonText, transportMode === 'transit' && styles.modeButtonTextActive]}>
+                              Transit
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modeButton, transportMode === 'cycling' && styles.modeButtonActive]}
+                            onPress={() => setTransportMode('cycling')}
+                          >
+                            <Ionicons name="bicycle" size={24} color={transportMode === 'cycling' ? '#fff' : '#6b7280'} />
+                            <Text style={[styles.modeButtonText, transportMode === 'cycling' && styles.modeButtonTextActive]}>
+                              Cycle
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modeButton, transportMode === 'flight' && styles.modeButtonActive]}
+                            onPress={() => setTransportMode('flight')}
+                          >
+                            <Ionicons name="airplane" size={24} color={transportMode === 'flight' ? '#fff' : '#6b7280'} />
+                            <Text style={[styles.modeButtonText, transportMode === 'flight' && styles.modeButtonTextActive]}>
+                              Flight
+                            </Text>
+                          </TouchableOpacity>
                         </View>
-                      ) : null}
-                    </View>
-                  )}
+                      </View>
+
+                      {/* Route Preview Section */}
+                      {transportFrom && selectedLocation && (
+                        <View style={styles.formSection}>
+                          <Text style={styles.formSectionTitle}>ROUTE PREVIEW</Text>
+                          {isLoadingRoute ? (
+                            <View style={styles.routePreviewLoading}>
+                              <ActivityIndicator size="small" color="#3b82f6" />
+                              <Text style={styles.routePreviewLoadingText}>Calculating route...</Text>
+                            </View>
+                          ) : routeDistance && routeDuration ? (
+                            <View style={styles.routeInfo}>
+                              <View style={styles.routeInfoItem}>
+                                <Ionicons name="navigate" size={20} color="#6b7280" />
+                                <Text style={styles.routeInfoText}>
+                                  {(routeDistance / 1000).toFixed(1)} km
+                                </Text>
+                              </View>
+                              <View style={styles.routeInfoItem}>
+                                <Ionicons name="time" size={20} color="#6b7280" />
+                                <Text style={styles.routeInfoText}>
+                                  {Math.round(routeDuration / 60)} min
+                                </Text>
+                              </View>
+                            </View>
+                          ) : null}
+                        </View>
+                      )}
                     </>
                   )}
                 </ScrollView>
@@ -1247,27 +1247,27 @@ const styles = StyleSheet.create({
   },
   // Transport form styles
   transportFormContent: {
-    padding: 20,
-    gap: 24,
+    padding: 16,
+    gap: 16,
   },
   selectedLocationChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#eff6ff',
-    padding: 12,
+    padding: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#bfdbfe',
   },
   selectedLocationText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#1e40af',
   },
   formSection: {
-    gap: 12,
+    gap: 10,
   },
   formSectionTitle: {
     fontSize: 12,
@@ -1279,8 +1279,8 @@ const styles = StyleSheet.create({
   transportFromBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
+    gap: 10,
+    padding: 12,
     backgroundColor: '#f9fafb',
     borderRadius: 8,
     borderWidth: 1,
@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
   },
   transportFromText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#374151',
   },
   changeButton: {
@@ -1311,27 +1311,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 16,
+    padding: 12,
     backgroundColor: '#f9fafb',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   noTransportFromText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9ca3af',
   },
   transportModes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   modeButton: {
     flex: 1,
-    minWidth: 80,
+    minWidth: 75,
     alignItems: 'center',
-    gap: 6,
-    padding: 16,
+    gap: 4,
+    padding: 12,
     backgroundColor: '#f9fafb',
     borderRadius: 8,
     borderWidth: 2,
@@ -1357,19 +1357,19 @@ const styles = StyleSheet.create({
   routePreviewLoading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
+    gap: 10,
+    padding: 12,
     backgroundColor: '#f9fafb',
     borderRadius: 8,
   },
   routePreviewLoadingText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
   },
   routeInfo: {
     flexDirection: 'row',
-    gap: 16,
-    padding: 16,
+    gap: 12,
+    padding: 12,
     backgroundColor: '#f0fdf4',
     borderRadius: 8,
     borderWidth: 1,
@@ -1381,7 +1381,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   routeInfoText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
     color: '#15803d',
   },
