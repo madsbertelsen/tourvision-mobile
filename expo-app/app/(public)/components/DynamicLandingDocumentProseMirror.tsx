@@ -602,65 +602,94 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             </View>
 
             <View style={styles.modalBody}>
-              {/* Map is always visible - shows search results in Step 1, route in Step 2 */}
-              <View style={styles.mapContainer}>
-                <LocationSearchMap
-                  results={locationSearchResults}
-                  selectedIndex={selectedResultIndex}
-                  onSelectResult={(index) => {
-                    setSelectedResultIndex(index);
-                    const selected = locationSearchResults[index];
-                    setLocationModalData({
-                      placeName: selected.display_name,
-                      lat: parseFloat(selected.lat),
-                      lng: parseFloat(selected.lon),
-                    });
-                  }}
-                  existingLocations={locations}
-                  routeFrom={transportFrom}
-                  routeTo={selectedLocation}
-                  routeGeometry={routeGeometry}
-                  showRoute={modalStep === 'transport'}
-                />
-              </View>
-
-              {/* Step 1: Location Results Overlay */}
-              {modalStep === 'location' && locationSearchResults.length > 0 && !isLoadingLocation && (
-                <ScrollView style={styles.transportFormOverlay} contentContainerStyle={styles.transportFormContent}>
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionTitle}>SELECT LOCATION</Text>
-                    {locationSearchResults.map((result, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.locationResultItem,
-                          index === selectedResultIndex && styles.locationResultItemSelected
-                        ]}
-                        onPress={() => {
+              {/* Step 1: Split layout (map top 60%, results bottom 40%) */}
+              {modalStep === 'location' && locationSearchResults.length > 0 && !isLoadingLocation ? (
+                <>
+                  {/* Map Section - 60% height */}
+                  <View style={styles.mapSection}>
+                    <View style={styles.mapContainer}>
+                      <LocationSearchMap
+                        results={locationSearchResults}
+                        selectedIndex={selectedResultIndex}
+                        onSelectResult={(index) => {
                           setSelectedResultIndex(index);
+                          const selected = locationSearchResults[index];
                           setLocationModalData({
-                            placeName: result.display_name,
-                            lat: parseFloat(result.lat),
-                            lng: parseFloat(result.lon),
+                            placeName: selected.display_name,
+                            lat: parseFloat(selected.lat),
+                            lng: parseFloat(selected.lon),
                           });
                         }}
-                      >
-                        <View style={[
-                          styles.locationResultNumber,
-                          index === selectedResultIndex && styles.locationResultNumberSelected
-                        ]}>
-                          <Text style={styles.locationResultNumberText}>{index + 1}</Text>
-                        </View>
-                        <Text style={styles.locationResultText} numberOfLines={2}>
-                          {result.display_name}
-                        </Text>
-                        {index === selectedResultIndex && (
-                          <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
+                        existingLocations={locations}
+                        routeFrom={transportFrom}
+                        routeTo={selectedLocation}
+                        routeGeometry={routeGeometry}
+                        showRoute={false}
+                      />
+                    </View>
                   </View>
-                </ScrollView>
+
+                  {/* Results Section - 40% height */}
+                  <View style={styles.resultsSection}>
+                    <ScrollView contentContainerStyle={styles.transportFormContent}>
+                      <View style={styles.formSection}>
+                        <Text style={styles.formSectionTitle}>SELECT LOCATION</Text>
+                        {locationSearchResults.map((result, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.locationResultItem,
+                              index === selectedResultIndex && styles.locationResultItemSelected
+                            ]}
+                            onPress={() => {
+                              setSelectedResultIndex(index);
+                              setLocationModalData({
+                                placeName: result.display_name,
+                                lat: parseFloat(result.lat),
+                                lng: parseFloat(result.lon),
+                              });
+                            }}
+                          >
+                            <View style={[
+                              styles.locationResultNumber,
+                              index === selectedResultIndex && styles.locationResultNumberSelected
+                            ]}>
+                              <Text style={styles.locationResultNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.locationResultText} numberOfLines={2}>
+                              {result.display_name}
+                            </Text>
+                            {index === selectedResultIndex && (
+                              <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+                </>
+              ) : (
+                /* Default: Full-size map for initial state and Step 2 transport */
+                <View style={styles.mapContainer}>
+                  <LocationSearchMap
+                    results={locationSearchResults}
+                    selectedIndex={selectedResultIndex}
+                    onSelectResult={(index) => {
+                      setSelectedResultIndex(index);
+                      const selected = locationSearchResults[index];
+                      setLocationModalData({
+                        placeName: selected.display_name,
+                        lat: parseFloat(selected.lat),
+                        lng: parseFloat(selected.lon),
+                      });
+                    }}
+                    existingLocations={locations}
+                    routeFrom={transportFrom}
+                    routeTo={selectedLocation}
+                    routeGeometry={routeGeometry}
+                    showRoute={modalStep === 'transport'}
+                  />
+                </View>
               )}
 
               {/* Step 2: Transport Configuration Form Overlay */}
@@ -1068,8 +1097,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: 'column',
   },
   mapContainer: {
     width: '100%',
@@ -1077,6 +1105,15 @@ const styles = StyleSheet.create({
     maxWidth: '100vh',
     maxHeight: '100vw',
     aspectRatio: 1,
+  },
+  mapSection: {
+    flex: 3, // 60% of height
+  },
+  resultsSection: {
+    flex: 2, // 40% of height
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   inputGroup: {
     marginBottom: 16,
