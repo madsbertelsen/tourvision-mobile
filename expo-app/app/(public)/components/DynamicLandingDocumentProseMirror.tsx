@@ -828,7 +828,34 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
         </View>
       )} */}
 
-      {/* Map View - Full screen */}
+      {/* ProseMirror Editor - Always rendered to preserve state */}
+      <View
+        ref={editorContainerRef}
+        style={styles.editorContainer}
+        onClick={() => {
+          if (Platform.OS === 'web') {
+            setShowFloatingToolbar(true);
+          }
+        }}
+      >
+        <ProseMirrorWebView
+          ref={webViewRef}
+          initialContent={INITIAL_CONTENT}
+          onContentChange={handleContentChange}
+          onSelectionChange={handleSelectionChange}
+          onShowGeoMarkEditor={handleShowGeoMarkEditor}
+          onMessage={(data) => {
+            if (data.type === 'toggleViewMode') {
+              setViewMode(viewMode === 'document' ? 'map' : 'document');
+            }
+          }}
+          editable={true}
+          showToolbar={false}
+          onReady={handleReady}
+        />
+      </View>
+
+      {/* Map View - Overlay on top of document */}
       {viewMode === 'map' && locations.length > 0 && (
         <View style={styles.fullScreenMapContainer}>
           <LocationMapWeb
@@ -866,35 +893,6 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
               ))}
             </ScrollView>
           </View>
-        </View>
-      )}
-
-      {/* ProseMirror Editor - Only visible in document mode */}
-      {viewMode === 'document' && (
-        <View
-          ref={editorContainerRef}
-          style={styles.editorContainer}
-          onClick={() => {
-            if (Platform.OS === 'web') {
-              setShowFloatingToolbar(true);
-            }
-          }}
-        >
-          <ProseMirrorWebView
-            ref={webViewRef}
-            initialContent={INITIAL_CONTENT}
-            onContentChange={handleContentChange}
-            onSelectionChange={handleSelectionChange}
-            onShowGeoMarkEditor={handleShowGeoMarkEditor}
-            onMessage={(data) => {
-              if (data.type === 'toggleViewMode') {
-                setViewMode(viewMode === 'document' ? 'map' : 'document');
-              }
-            }}
-            editable={true}
-            showToolbar={false}
-            onReady={handleReady}
-          />
         </View>
       )}
     </View>
