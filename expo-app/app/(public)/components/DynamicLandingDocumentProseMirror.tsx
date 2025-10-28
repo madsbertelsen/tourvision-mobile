@@ -624,6 +624,45 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                 />
               </View>
 
+              {/* Step 1: Location Results Overlay */}
+              {modalStep === 'location' && locationSearchResults.length > 0 && !isLoadingLocation && (
+                <ScrollView style={styles.transportFormOverlay} contentContainerStyle={styles.transportFormContent}>
+                  <View style={styles.formSection}>
+                    <Text style={styles.formSectionTitle}>SELECT LOCATION</Text>
+                    {locationSearchResults.map((result, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.locationResultItem,
+                          index === selectedResultIndex && styles.locationResultItemSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedResultIndex(index);
+                          setLocationModalData({
+                            placeName: result.display_name,
+                            lat: parseFloat(result.lat),
+                            lng: parseFloat(result.lon),
+                          });
+                        }}
+                      >
+                        <View style={[
+                          styles.locationResultNumber,
+                          index === selectedResultIndex && styles.locationResultNumberSelected
+                        ]}>
+                          <Text style={styles.locationResultNumberText}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.locationResultText} numberOfLines={2}>
+                          {result.display_name}
+                        </Text>
+                        {index === selectedResultIndex && (
+                          <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
+
               {/* Step 2: Transport Configuration Form Overlay */}
               {modalStep === 'transport' && (
                 <ScrollView style={styles.transportFormOverlay} contentContainerStyle={styles.transportFormContent}>
@@ -1427,5 +1466,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
+  },
+  // Location result items (Step 1 bottom sheet)
+  locationResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    marginBottom: 12,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+        transition: 'all 0.2s' as any,
+      },
+    }),
+  },
+  locationResultItemSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+  },
+  locationResultNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationResultNumberSelected: {
+    backgroundColor: '#3b82f6',
+  },
+  locationResultNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  locationResultText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    lineHeight: 20,
   },
 });

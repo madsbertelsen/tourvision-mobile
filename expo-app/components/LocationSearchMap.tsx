@@ -488,8 +488,8 @@ export default function LocationSearchMap({
         ))}
       </Map>
 
-      {/* Results carousel - only show when we have results and not showing route */}
-      {results.length > 0 && !showRoute && (
+      {/* Results carousel - DISABLED: Now shown in bottom sheet overlay in parent component */}
+      {false && results.length > 0 && !showRoute && (
       <View style={styles.carouselContainer}>
         <ScrollView
           ref={scrollViewRef}
