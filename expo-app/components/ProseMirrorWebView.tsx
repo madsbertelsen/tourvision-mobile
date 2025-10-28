@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v26 - Reverted selection clearing changes
+// v42 - Fixed message structure: data nested correctly for showGeoMarkEditor
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -353,6 +353,12 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                   to: data.to
                 }, []); // Pass empty locations array as second argument
               }
+              break;
+
+            case 'showToolbar':
+            case 'hideToolbar':
+              // These are handled by parent component via custom onMessage prop
+              // Just pass through without warning
               break;
 
             // Y.js message handlers

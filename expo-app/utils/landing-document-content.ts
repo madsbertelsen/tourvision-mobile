@@ -3,41 +3,21 @@
  * This represents a ProseMirror document structure
  */
 
+// SIMPLE CONTENT - SHORT VERSION WITH PLAIN TEXT (no geo-mark yet)
 export const LANDING_DOCUMENT_CONTENT = {
   type: 'doc',
   content: [
     {
       type: 'paragraph',
       content: [
-        { type: 'text', text: 'Plan your next trip to ' },
-        {
-          type: 'geoMark',
-          attrs: {
-            geoId: 'landing-paris',
-            placeName: 'Paris, France',
-            lat: 48.8566,
-            lng: 2.3522,
-            colorIndex: 0,
-            coordSource: 'manual',
-            description: 'The City of Light',
-            visitDocument: null,
-            transportFrom: null,
-            transportProfile: null,
-            waypoints: null,
-            photoName: null
-          },
-          content: [
-            { type: 'text', text: 'Paris' }
-          ]
-        },
-        { type: 'text', text: ' with TourVision!' }
+        { type: 'text', text: 'Plan your next trip to Paris with TourVision!' }
       ]
     }
   ]
 };
 
-/* FULL CONTENT - COMMENTED OUT FOR DEBUGGING
-export const LANDING_DOCUMENT_CONTENT = {
+/* FULL LANDING PAGE CONTENT - COMMENTED OUT
+export const OLD_LANDING_DOCUMENT_CONTENT = {
   type: 'doc',
   content: [
     {

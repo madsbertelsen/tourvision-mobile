@@ -5,6 +5,8 @@ import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { TypingAnimatorCommands, AnimationState, DEFAULT_TYPING_CONFIG } from '@/utils/typing-animator-commands';
 import { EditorCommand } from '@/utils/command-sequence-generator';
 import { Ionicons } from '@expo/vector-icons';
+import { LANDING_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
+import LocationMapWeb from '@/components/LocationMapWeb';
 
 interface Location {
   geoId: string;
@@ -17,8 +19,8 @@ interface DynamicLandingDocumentProseMirrorProps {
   onLocationsChange?: (locations: Location[]) => void;
 }
 
-// Define initialContent outside component to prevent recreation on every render
-const INITIAL_CONTENT = { type: 'doc', content: [{ type: 'paragraph', content: [] }] };
+// Use the full landing page content
+const INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
 export default function DynamicLandingDocumentProseMirror({ onLocationsChange }: DynamicLandingDocumentProseMirrorProps) {
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
@@ -34,6 +36,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedText, setSelectedText] = useState('');
+  const [showFloatingToolbar, setShowFloatingToolbar] = useState(false);
+  const [selectionRange, setSelectionRange] = useState<{ from: number; to: number } | null>(null);
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
   const editorContainerRef = useRef<View>(null);
@@ -323,6 +327,14 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const handleReady = useCallback(() => {
     console.log('[Landing] ===== EDITOR ONREADY CALLBACK FIRED =====');
     console.log('[Landing] Setting editorReady to TRUE');
+
+    // Send Mapbox token to WebView
+    if (webViewRef.current) {
+      webViewRef.current.sendCommand('setMapboxToken', {
+        token: process.env.EXPO_PUBLIC_MAPBOX_TOKEN
+      });
+    }
+
     setEditorReady(true);
     console.log('[Landing] editorReady state should now be true');
   }, []);
@@ -337,6 +349,9 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       console.warn('[Landing] No text selected, cannot create location');
       return;
     }
+
+    // Store selection range
+    setSelectionRange({ from: data.from, to: data.to });
 
     // Show the modal immediately
     setShowLocationModal(true);
@@ -373,32 +388,96 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       });
   }, []);
 
-  return (
-    <View style={styles.container}>
-      {/* Animation Controls - Removed per user request */}
+  // Handle adding location to document
+  const handleAddLocationToDocument = useCallback(() => {
+    if (!locationModalData || !selectionRange || !webViewRef.current) {
+      console.warn('[Landing] Missing data for creating geo-mark');
+      return;
+    }
 
-      {/* Toolbar with Button Highlighting */}
-      <View style={styles.toolbarContainer}>
-        <ProseMirrorToolbar
-          editable={true}
-          selectionEmpty={!hasTextSelection}
-          highlightedButton={highlightedButton}
-          onCommand={(command, params) => {
-            webViewRef.current?.sendCommand(command, params);
-          }}
-        />
-        {/* Highlight overlay for specific buttons */}
-        {highlightedButton && (
-          <View style={styles.highlightOverlay}>
-            <Text style={styles.highlightText}>
-              {highlightedButton === 'bold' && '✨ Making text bold'}
-              {highlightedButton === 'heading-1' && '✨ Creating main heading'}
-              {highlightedButton === 'heading-2' && '✨ Creating subheading'}
-              {highlightedButton === 'location' && '✨ Adding location marker'}
-            </Text>
-          </View>
-        )}
-      </View>
+    // Create geo-mark data
+    const geoMarkData = {
+      geoId: `geo-${Date.now()}`,
+      placeName: locationModalData.placeName,
+      lat: locationModalData.lat,
+      lng: locationModalData.lng,
+      colorIndex: locations.length % 10,
+      coordSource: 'nominatim',
+    };
+
+    console.log('[Landing] Creating geo-mark with data:', geoMarkData);
+
+    // Send command to WebView to create geo-mark
+    webViewRef.current.sendCommand('createGeoMark', { geoMarkData });
+
+    // Add to locations tracking
+    const newLocation: Location = {
+      geoId: geoMarkData.geoId,
+      placeName: geoMarkData.placeName,
+      lat: geoMarkData.lat,
+      lng: geoMarkData.lng,
+    };
+
+    setLocations(prev => {
+      const updated = [...prev, newLocation];
+      setTimeout(() => onLocationsChange?.(updated), 0);
+      return updated;
+    });
+
+    // Close modal
+    setShowLocationModal(false);
+    setSelectionRange(null);
+  }, [locationModalData, selectionRange, locations, onLocationsChange]);
+
+  // Handle clicks outside toolbar to hide it
+  const handleClickOutside = useCallback(() => {
+    if (Platform.OS === 'web') {
+      setShowFloatingToolbar(false);
+    }
+  }, []);
+
+  // Add keyboard handler for Tab key (web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setShowFloatingToolbar(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setShowFloatingToolbar(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return (
+    <View
+      style={styles.container}
+      // @ts-ignore - onClick is web-only
+      onClick={(e: any) => {
+        // Only hide toolbar if clicking outside the toolbar and editor
+        const target = e.target as HTMLElement;
+        if (!target.closest('.ProseMirror') && !target.closest('[style*="floatingToolbarContainer"]')) {
+          setShowFloatingToolbar(false);
+        }
+      }}
+    >
+      {/* Floating Toolbar - Shows on click or Tab key */}
+      {showFloatingToolbar && (
+        <View style={styles.floatingToolbarContainer}>
+          <ProseMirrorToolbar
+            editable={true}
+            selectionEmpty={!hasTextSelection}
+            highlightedButton={highlightedButton}
+            onCommand={(command, params) => {
+              webViewRef.current?.sendCommand(command, params);
+            }}
+          />
+        </View>
+      )}
 
       {/* Location Creation Modal - Shows real UI for adding locations */}
       <Modal
@@ -416,13 +495,25 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
+            <ScrollView style={styles.modalBody}>
               {isLoadingLocation ? (
                 <View style={styles.loadingContainer}>
                   <Text style={styles.loadingText}>🔍 Searching for location...</Text>
                 </View>
               ) : (
                 <>
+                  {/* Map */}
+                  {locationModalData && (
+                    <View style={styles.mapContainer}>
+                      <LocationMapWeb
+                        latitude={locationModalData.lat}
+                        longitude={locationModalData.lng}
+                        name={locationModalData.placeName}
+                        colorIndex={0}
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Location Found</Text>
                     <View style={styles.locationResultBox}>
@@ -460,10 +551,14 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                   )}
                 </>
               )}
-            </View>
+            </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.saveButton} disabled>
+              <TouchableOpacity
+                style={[styles.saveButton, !locationModalData && styles.saveButtonDisabled]}
+                onPress={handleAddLocationToDocument}
+                disabled={!locationModalData}
+              >
                 <Ionicons name="location" size={20} color="#fff" />
                 <Text style={styles.saveButtonText}>Add to Document</Text>
               </TouchableOpacity>
@@ -486,7 +581,15 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       )} */}
 
       {/* ProseMirror Editor */}
-      <View ref={editorContainerRef} style={styles.editorContainer}>
+      <View
+        ref={editorContainerRef}
+        style={styles.editorContainer}
+        onClick={() => {
+          if (Platform.OS === 'web') {
+            setShowFloatingToolbar(true);
+          }
+        }}
+      >
         <ProseMirrorWebView
           ref={webViewRef}
           initialContent={INITIAL_CONTENT}
@@ -558,6 +661,27 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     textAlign: 'center',
   },
+  floatingToolbarContainer: {
+    position: 'absolute',
+    top: 20,
+    left: '50%',
+    transform: [{ translateX: -200 }],
+    zIndex: 1000,
+    width: 400,
+    maxWidth: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
   toolbarContainer: {
     position: 'relative',
     borderBottomWidth: 1,
@@ -602,7 +726,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 600,
+    maxHeight: '90vh',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -623,7 +748,15 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   modalBody: {
+    flex: 1,
     padding: 20,
+  },
+  mapContainer: {
+    width: '100%',
+    height: 300,
+    marginBottom: 20,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   inputGroup: {
     marginBottom: 16,
@@ -673,6 +806,20 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 8,
     gap: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.6,
+    ...Platform.select({
+      web: {
+        cursor: 'not-allowed' as any,
+      },
+    }),
   },
   saveButtonText: {
     fontSize: 16,

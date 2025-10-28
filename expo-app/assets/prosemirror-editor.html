@@ -637,6 +637,49 @@
 
         console.log('[ProseMirror WebView] Editor initialized');
         sendMessage({ type: 'ready' });
+
+        // Add DOM selection listener to catch manual text selection
+        document.addEventListener('selectionchange', function() {
+          if (!editorView) return;
+
+          const domSelection = window.getSelection();
+          if (!domSelection || domSelection.rangeCount === 0) return;
+
+          const range = domSelection.getRangeAt(0);
+          const empty = domSelection.isCollapsed;
+
+          // Only send if there's a non-empty selection
+          if (!empty) {
+            const selectedText = domSelection.toString();
+            const rect = range.getBoundingClientRect();
+
+            const boundingRect = {
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height
+            };
+
+            console.log('[WebView] DOM selection detected, sending to React:', { selectedText, boundingRect });
+
+            sendMessage({
+              type: 'selectionChange',
+              empty: false,
+              selectedText: selectedText,
+              boundingRect: boundingRect
+            });
+          } else {
+            // Send empty selection message
+            sendMessage({
+              type: 'selectionChange',
+              empty: true,
+              selectedText: '',
+              boundingRect: null
+            });
+          }
+        });
       }
 
       // Handle messages from React Native

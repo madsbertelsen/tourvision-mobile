@@ -6,6 +6,9 @@
   <title>ProseMirror Editor</title>
   <!-- Socket.io client for collaboration -->
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <!-- Mapbox GL JS for map in location modal -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -16,13 +19,13 @@
       padding: 0;
       height: 100%;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #ffffff;
+      background: #f5f5f5;
     }
 
     #editor-container {
       padding: 0;
       height: 100%;
-      background: white;
+      background: #f5f5f5;
       display: flex;
       justify-content: center;
       /* Thin, auto-hiding scrollbar for WebKit browsers (Chrome, Safari, Edge) */
@@ -52,7 +55,7 @@
     .ProseMirror {
       outline: none;
       padding: 20px 32px;
-      min-height: 100%;
+      min-height: 100vh;
       max-width: 700px;
       width: 100%;
       background: white;
@@ -61,6 +64,7 @@
       caret-color: #3b82f6; /* Bright blue cursor */
       -webkit-text-size-adjust: 100%;
       -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
     }
 
     /* Disable spell checking underlines */
@@ -307,30 +311,242 @@
       position: relative; /* Make editor container the positioning context */
     }
 
-    /* Floating menu tooltip */
-    .selection-tooltip {
-      position: absolute;
+    /* Floating Toolbar */
+    .floating-toolbar {
       display: none;
-      background: #3B82F6;
-      color: white;
-      padding: 8px 16px;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      z-index: 1500;
+      background: #2d3748;
+      border-radius: 12px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+      transition: transform 0.2s ease-in-out;
+      max-width: 700px;
+    }
+
+    .floating-toolbar.active {
+      display: flex;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toolbar-button {
+      width: 40px;
+      height: 36px;
       border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      color: #ffffff;
+      transition: all 0.2s;
+    }
+
+    .toolbar-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .toolbar-button.active {
+      background: #3b82f6;
+      color: #ffffff;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.2);
+      margin: 0 4px;
+    }
+
+    .toolbar-select {
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #ffffff;
       font-size: 14px;
       font-weight: 600;
+      padding: 0 12px;
       cursor: pointer;
-      z-index: 1000;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      white-space: nowrap;
-      pointer-events: auto;
-      user-select: none;
+      transition: all 0.2s;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding-right: 32px;
+      background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="20" viewBox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      min-width: 120px;
     }
 
-    .selection-tooltip:hover {
-      background: #2563EB;
+    .toolbar-select:hover {
+      background: rgba(255, 255, 255, 0.2);
     }
 
-    .selection-tooltip::before {
-      content: '📍 ';
+    .toolbar-select:focus {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .toolbar-select option {
+      background: #2d3748;
+      color: #ffffff;
+      padding: 8px;
+    }
+
+    /* Location modal */
+    .location-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .location-modal-overlay.active {
+      display: flex;
+    }
+
+    .location-modal {
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .location-modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #E5E7EB;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .location-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .location-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6B7280;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+
+    .location-modal-close:hover {
+      background: #F3F4F6;
+    }
+
+    .location-modal-body {
+      padding: 0;
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .location-modal-map {
+      height: 300px;
+      width: 100%;
+      background: #f0f0f0;
+      position: relative;
+    }
+
+    .location-modal-search {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .location-modal-results {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .location-search-input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #E5E7EB;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      box-sizing: border-box;
+    }
+
+    .location-search-input:focus {
+      outline: none;
+      border-color: #3B82F6;
+    }
+
+    .location-results {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .location-result-item {
+      padding: 12px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .location-result-item:hover {
+      background: #F9FAFB;
+      border-color: #3B82F6;
+    }
+
+    .location-result-name {
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+
+    .location-result-address {
+      font-size: 13px;
+      color: #6B7280;
+    }
+
+    .location-loading {
+      text-align: center;
+      padding: 40px;
+      color: #6B7280;
+    }
+
+    .location-no-results {
+      text-align: center;
+      padding: 40px;
+      color: #6B7280;
     }
   </style>
 </head>
@@ -339,7 +555,52 @@
   <div id="collab-status">Disconnected</div>
   <div id="collab-users"></div>
   <div id="editor-container"></div>
+
+  <!-- Location Modal -->
+  <div id="locationModalOverlay" class="location-modal-overlay">
+    <div class="location-modal">
+      <div class="location-modal-header">
+        <div class="location-modal-title">Add Location</div>
+        <button class="location-modal-close" id="closeLocationModal">×</button>
+      </div>
+      <div class="location-modal-body">
+        <div id="locationMap" class="location-modal-map"></div>
+        <div class="location-modal-search">
+          <input
+            type="text"
+            class="location-search-input"
+            id="locationSearchInput"
+            placeholder="Search for a location..."
+          />
+        </div>
+        <div class="location-modal-results">
+          <div id="locationResults" class="location-results"></div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="typing-cursor"></div>
+
+  <!-- Floating Toolbar -->
+  <div id="floatingToolbar" class="floating-toolbar active">
+    <select id="blockTypeSelect" class="toolbar-select" title="Block Type">
+      <option value="paragraph">Paragraph</option>
+      <option value="heading1">Heading 1</option>
+      <option value="heading2">Heading 2</option>
+      <option value="heading3">Heading 3</option>
+    </select>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-button" data-command="toggleBold" title="Bold" style="font-weight: bold;">B</button>
+    <button class="toolbar-button" data-command="toggleItalic" title="Italic" style="font-style: italic;">I</button>
+    <button class="toolbar-button" data-command="toggleStrike" title="Strikethrough" style="text-decoration: line-through;">S</button>
+    <button class="toolbar-button" data-command="toggleCode" title="Code" style="font-family: monospace; font-size: 13px;">&lt;/&gt;</button>
+    <button class="toolbar-button" data-command="toggleUnderline" title="Underline" style="text-decoration: underline;">U</button>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-button" data-command="toggleBulletList" title="Bullet List">☰</button>
+    <button class="toolbar-button" data-command="toggleOrderedList" title="Numbered List">1.</button>
+    <div class="toolbar-divider"></div>
+    <button class="toolbar-button" data-command="createGeoMark" title="Add Location">📍</button>
+  </div>
 
   <script>
     console.log('[WebView] Script starting...');
@@ -687,154 +948,213 @@
       ]);
 
       // Create initial editor state
-      // Selection Tooltip Plugin (Medium-style floating menu)
-      class SelectionTooltip {
-        constructor(view) {
-          this.view = view;
-          this.tooltip = document.createElement('div');
-          this.tooltip.className = 'selection-tooltip';
-          this.tooltip.textContent = 'Add Location';
-          view.dom.parentNode.appendChild(this.tooltip);
-          this.isVisible = false;
+      // Location Modal Functions
+      let currentLocationSelection = null;
+      let locationMap = null;
+      let locationMarker = null;
 
-          // Store selection when showing tooltip
-          this.storedSelection = null;
-          this.storedText = '';
-
-          // Handle click on tooltip
-          this.tooltip.addEventListener('click', () => {
-            // Use stored text and selection
-            const selectedText = this.storedText;
-            const selection = this.storedSelection || this.view.state.selection;
-            const { from, to } = selection;
-            console.log('[WebView] Tooltip clicked, selected text:', selectedText);
-
-            // Send message to React Native to handle location creation
-            sendMessageToNative({
-              type: 'createLocationFromSelection',
-              selectedText: selectedText,
-              from: from,
-              to: to
-            });
-
-            // Hide tooltip after clicking
-            this.hideTooltip();
-          });
-
-          // Handle clicks on selected text to show tooltip
-          view.dom.addEventListener('mousedown', (e) => {
-            // Check selection BEFORE ProseMirror processes the click
-            const state = this.view.state;
-            if (!state.selection.empty) {
-              const { from, to } = state.selection;
-              const pos = this.view.posAtCoords({ left: e.clientX, top: e.clientY });
-
-              if (pos && pos.pos >= from && pos.pos <= to) {
-                console.log('[WebView] Clicked on selection, preventing default and showing tooltip');
-                // IMPORTANT: Store selection HERE, before any state changes
-                this.storedSelection = { from, to };
-                this.storedText = state.doc.textBetween(from, to, ' ');
-                console.log('[WebView] Stored selection in mousedown:', { from, to, text: this.storedText });
-
-                // Prevent ProseMirror from clearing the selection
-                e.preventDefault();
-                e.stopPropagation();
-                this.showTooltip();
-                return false;
-              }
-            }
-            // Click was outside selection or no selection, hide tooltip
-            this.hideTooltip();
-          });
-
-          this.update(view, null);
-        }
-
-        showTooltip() {
-          this.isVisible = true;
-          // Selection is already stored in mousedown handler
-          this.positionTooltip();
-        }
-
-        hideTooltip() {
-          this.isVisible = false;
-          this.tooltip.style.display = 'none';
-        }
-
-        positionTooltip() {
-          if (!this.isVisible) return;
-
-          const state = this.view.state;
-          if (state.selection.empty) {
-            this.hideTooltip();
+      function initLocationMap(lat, lng) {
+        if (!locationMap) {
+          // Check if mapboxgl is available
+          if (typeof mapboxgl === 'undefined') {
+            console.warn('[LocationModal] Mapbox GL JS not loaded');
             return;
           }
 
-          const { from, to } = state.selection;
-
-          // Get coordinates of selection start and end
-          const start = this.view.coordsAtPos(from);
-          const end = this.view.coordsAtPos(to);
-
-          // Calculate center position
-          const centerX = (start.left + end.left) / 2;
-
-          // Position above selection, but ensure it's not off-screen
-          // If selection is too close to top, show below instead
-          let topY = start.top - 50; // 50px above selection
-          let placementBelow = false;
-
-          if (topY < 10) {
-            // Too close to top, show below instead
-            topY = start.bottom + 10;
-            placementBelow = true;
-          }
-
-          // Position tooltip using absolute positioning
-          this.tooltip.style.left = centerX + 'px';
-          this.tooltip.style.top = topY + 'px';
-          this.tooltip.style.transform = 'translateX(-50%)'; // Center horizontally
-          this.tooltip.style.display = 'block';
-
-          console.log('[WebView] Tooltip positioned:', {
-            centerX,
-            topY,
-            placementBelow,
-            startTop: start.top,
-            startBottom: start.bottom,
-            startLeft: start.left,
-            endLeft: end.left
-          });
-        }
-
-        update(view, lastState) {
-          const state = view.state;
-
-          // Don't do anything if the document/selection didn't change
-          if (lastState && lastState.doc.eq(state.doc) &&
-              lastState.selection.eq(state.selection)) return;
-
-          // Hide tooltip if selection is empty
-          if (state.selection.empty) {
-            this.hideTooltip();
+          // Get Mapbox token from environment (passed via postMessage)
+          if (!window.__mapboxToken) {
+            console.error('[LocationModal] No Mapbox token available. Set EXPO_PUBLIC_MAPBOX_TOKEN in your environment.');
             return;
           }
 
-          // If tooltip is visible, update its position
-          if (this.isVisible) {
-            this.positionTooltip();
-          }
+          mapboxgl.accessToken = window.__mapboxToken;
+
+          locationMap = new mapboxgl.Map({
+            container: 'locationMap',
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: [lng, lat],
+            zoom: 12
+          });
+
+          // Disable map rotation
+          locationMap.dragRotate.disable();
+          locationMap.touchZoomRotate.disableRotation();
         }
 
-        destroy() {
-          this.tooltip.remove();
+        // Update or create marker
+        if (locationMarker) {
+          locationMarker.setLngLat([lng, lat]);
+        } else {
+          locationMarker = new mapboxgl.Marker({ color: '#3B82F6' })
+            .setLngLat([lng, lat])
+            .addTo(locationMap);
         }
+
+        // Fly to location
+        locationMap.flyTo({
+          center: [lng, lat],
+          zoom: 12,
+          duration: 1000
+        });
       }
 
-      const selectionTooltipPlugin = new Plugin({
-        view(editorView) {
-          return new SelectionTooltip(editorView);
+      function showLocationModal(searchText, from, to) {
+        console.log('[LocationModal] Showing modal for:', searchText);
+        currentLocationSelection = { searchText, from, to };
+
+        const modalOverlay = document.getElementById('locationModalOverlay');
+        const searchInput = document.getElementById('locationSearchInput');
+        const resultsContainer = document.getElementById('locationResults');
+
+        // Set initial search query
+        searchInput.value = searchText;
+
+        // Show modal
+        modalOverlay.classList.add('active');
+
+        // Focus search input
+        setTimeout(() => searchInput.focus(), 100);
+
+        // Fetch initial results
+        searchLocations(searchText, resultsContainer);
+      }
+
+      function hideLocationModal() {
+        console.log('[LocationModal] Hiding modal');
+        const modalOverlay = document.getElementById('locationModalOverlay');
+        modalOverlay.classList.remove('active');
+        currentLocationSelection = null;
+      }
+
+      function searchLocations(query, resultsContainer) {
+        if (!query.trim()) {
+          resultsContainer.innerHTML = '<div class="location-no-results">Enter a location to search</div>';
+          return;
         }
+
+        resultsContainer.innerHTML = '<div class="location-loading">Searching...</div>';
+
+        fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&limit=5&addressdetails=1`,
+          { headers: { 'User-Agent': 'TourVision-App' } }
+        )
+          .then(res => res.json())
+          .then(results => {
+            if (!results || results.length === 0) {
+              resultsContainer.innerHTML = '<div class="location-no-results">No locations found</div>';
+              return;
+            }
+
+            resultsContainer.innerHTML = results.map(result => `
+              <div class="location-result-item" data-lat="${result.lat}" data-lng="${result.lon}" data-name="${escapeHtml(result.display_name)}">
+                <div class="location-result-name">${escapeHtml(result.name || result.display_name.split(',')[0])}</div>
+                <div class="location-result-address">${escapeHtml(result.display_name)}</div>
+              </div>
+            `).join('');
+
+            // Add click handlers to results
+            resultsContainer.querySelectorAll('.location-result-item').forEach(item => {
+              item.addEventListener('click', () => {
+                const lat = parseFloat(item.dataset.lat);
+                const lng = parseFloat(item.dataset.lng);
+                const placeName = item.dataset.name;
+
+                // Update map view
+                initLocationMap(lat, lng);
+
+                handleLocationSelected(placeName, lat, lng);
+              });
+            });
+
+            // Initialize map with first result
+            if (results.length > 0) {
+              const firstResult = results[0];
+              initLocationMap(parseFloat(firstResult.lat), parseFloat(firstResult.lon));
+            }
+          })
+          .catch(error => {
+            console.error('[LocationModal] Search error:', error);
+            resultsContainer.innerHTML = '<div class="location-no-results">Error searching locations</div>';
+          });
+      }
+
+      function handleLocationSelected(placeName, lat, lng) {
+        console.log('[LocationModal] Location selected:', { placeName, lat, lng });
+
+        if (!currentLocationSelection) {
+          console.error('[LocationModal] No current selection');
+          return;
+        }
+
+        if (!editorView) {
+          console.error('[LocationModal] Editor view not available');
+          return;
+        }
+
+        // Create geo-mark in the document
+        const { searchText, from, to } = currentLocationSelection;
+
+        try {
+          // Generate unique geoId
+          const geoId = 'loc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+          // Create geo-mark node with location data
+          const geoMarkNode = schema.nodes.geoMark.create(
+            {
+              geoId: geoId,
+              placeName: placeName,
+              lat: lat.toString(),
+              lng: lng.toString(),
+              colorIndex: 0,
+              coordSource: 'nominatim',
+              description: null,
+              transportFrom: null,
+              transportProfile: null,
+              waypoints: null,
+              visitDocument: null,
+              photoName: null
+            },
+            schema.text(searchText)
+          );
+
+          // Create transaction to replace selected text with geo-mark
+          const tr = editorView.state.tr.replaceRangeWith(from, to, geoMarkNode);
+
+          // Dispatch transaction
+          editorView.dispatch(tr);
+
+          console.log('[LocationModal] Geo-mark created successfully:', geoId);
+        } catch (error) {
+          console.error('[LocationModal] Error creating geo-mark:', error);
+        }
+
+        // Hide modal
+        hideLocationModal();
+      }
+
+      function escapeHtml(unsafe) {
+        return unsafe
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      // Set up modal event listeners
+      document.getElementById('closeLocationModal').addEventListener('click', hideLocationModal);
+      document.getElementById('locationModalOverlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+          hideLocationModal();
+        }
+      });
+
+      let searchTimeout;
+      document.getElementById('locationSearchInput').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          searchLocations(e.target.value, document.getElementById('locationResults'));
+        }, 300);
       });
 
       let editorState = EditorState.create({
@@ -843,8 +1163,7 @@
         plugins: [
           history(),
           keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-          keymap(baseKeymap),
-          selectionTooltipPlugin
+          keymap(baseKeymap)
         ]
       });
 
@@ -1053,8 +1372,112 @@
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
 
+      // Floating toolbar functionality
+      const floatingToolbar = document.getElementById('floatingToolbar');
+      let toolbarVisible = true; // Toolbar is always visible
+
+      // Handle toolbar button clicks
+      floatingToolbar.addEventListener('click', function(e) {
+        const button = e.target.closest('.toolbar-button');
+
+        // Stop propagation to prevent editor click handler from toggling
+        e.stopPropagation();
+
+        // If clicking on toolbar background (not a button), hide toolbar
+        if (!button) {
+          hideToolbar();
+          return;
+        }
+
+        const command = button.dataset.command;
+        const level = button.dataset.level;
+
+        console.log('[WebView] Toolbar button clicked:', command);
+
+        // Execute ProseMirror commands
+        const state = editorView.state;
+        const {tr} = state;
+
+        switch(command) {
+          case 'setParagraph':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.paragraph));
+            break;
+          case 'setHeading':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.heading, {level: parseInt(level)}));
+            break;
+          case 'toggleBold':
+            const boldMark = schema.marks.strong;
+            if (boldMark) {
+              const isActive = state.doc.rangeHasMark(state.selection.from, state.selection.to, boldMark);
+              if (isActive) {
+                editorView.dispatch(tr.removeMark(state.selection.from, state.selection.to, boldMark));
+              } else {
+                editorView.dispatch(tr.addMark(state.selection.from, state.selection.to, boldMark.create()));
+              }
+            }
+            break;
+          case 'toggleItalic':
+            const italicMark = schema.marks.em;
+            if (italicMark) {
+              const isActive = state.doc.rangeHasMark(state.selection.from, state.selection.to, italicMark);
+              if (isActive) {
+                editorView.dispatch(tr.removeMark(state.selection.from, state.selection.to, italicMark));
+              } else {
+                editorView.dispatch(tr.addMark(state.selection.from, state.selection.to, italicMark.create()));
+              }
+            }
+            break;
+          case 'createGeoMark':
+            // Request location modal from React Native if there's a selection
+            if (!state.selection.empty) {
+              const selectedText = state.doc.textBetween(state.selection.from, state.selection.to, ' ');
+              console.log('[WebView] Requesting location modal from React Native for:', selectedText);
+
+              // Send message to React Native to show location modal
+              sendMessageToNative({
+                type: 'showGeoMarkEditor',
+                data: {
+                  selectedText: selectedText,
+                  from: state.selection.from,
+                  to: state.selection.to
+                },
+                existingLocations: []
+              });
+            } else {
+              console.log('[WebView] No text selected for geo-mark');
+            }
+            break;
+          // Add more commands as needed
+        }
+      });
+
+      // Handle block type dropdown changes
+      const blockTypeSelect = document.getElementById('blockTypeSelect');
+      blockTypeSelect.addEventListener('change', function(e) {
+        const value = e.target.value;
+        const state = editorView.state;
+        const {tr} = state;
+
+        console.log('[WebView] Block type changed to:', value);
+
+        switch(value) {
+          case 'paragraph':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.paragraph));
+            break;
+          case 'heading1':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.heading, {level: 1}));
+            break;
+          case 'heading2':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.heading, {level: 2}));
+            break;
+          case 'heading3':
+            editorView.dispatch(tr.setBlockType(state.selection.from, state.selection.to, schema.nodes.heading, {level: 3}));
+            break;
+        }
+      });
+
       // Add click handler for geo-marks and comments
-      document.querySelector('#editor-container').addEventListener('click', function(e) {
+      document.querySelector('.ProseMirror').addEventListener('click', function(e) {
         if (e.target.classList.contains('geo-mark')) {
           const attrs = {
             geoId: e.target.getAttribute('data-geo-id'),
@@ -1726,6 +2149,12 @@
                   paraTr = paraTr.setBlockType(newBlockStart, newBlockEnd, schema.nodes.paragraph);
                   dispatch(paraTr);
                   console.log('[WebView] Paragraph split/inserted and reset to paragraph type');
+                  break;
+
+                case 'setMapboxToken':
+                  console.log('[WebView] Received Mapbox token');
+                  // Store token globally for use in location map
+                  window.__mapboxToken = data.params?.token;
                   break;
 
                 case 'selectText':

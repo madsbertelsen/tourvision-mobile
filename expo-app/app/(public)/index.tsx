@@ -13,78 +13,55 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 
 // Dynamically import components only on web
-const HeroGlobe = Platform.OS === 'web'
-  ? require('./components/HeroGlobe').default
-  : null;
-
 const DynamicLandingDocumentProseMirror = Platform.OS === 'web'
   ? require('./components/DynamicLandingDocumentProseMirror').default
   : null;
 
-interface Location {
-  geoId: string;
-  placeName: string;
-  lat: number;
-  lng: number;
-}
-
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const [locations, setLocations] = useState<Location[]>([]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
           <Text style={styles.logo}>TourVision</Text>
           <View style={styles.headerButtons}>
-            {isAuthenticated ? (
-              <TouchableOpacity
-                style={styles.dashboardButton}
-                onPress={() => router.push('/(app)/dashboard')}
-              >
-                <Text style={styles.dashboardButtonText}>Dashboard</Text>
-                <Ionicons name="arrow-forward" size={16} color="#fff" />
-              </TouchableOpacity>
-            ) : (
+            {!isAuthenticated ? (
               <>
                 <TouchableOpacity
-                  style={styles.loginButton}
+                  style={styles.headerButton}
                   onPress={() => router.push('/(auth)/login')}
                 >
-                  <Text style={styles.loginButtonText}>Login</Text>
+                  <Text style={styles.headerButtonText}>Log in</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.signupButton}
+                  style={styles.headerButtonPrimary}
                   onPress={() => router.push('/(auth)/register')}
                 >
-                  <Text style={styles.signupButtonText}>Sign Up</Text>
+                  <Text style={styles.headerButtonPrimaryText}>Sign up</Text>
                 </TouchableOpacity>
               </>
+            ) : (
+              <TouchableOpacity
+                style={styles.headerButtonPrimary}
+                onPress={() => router.push('/(app)/dashboard')}
+              >
+                <Text style={styles.headerButtonPrimaryText}>Dashboard</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
+      </View>
 
-        {/* Dynamic Document Section with Split View */}
-        {Platform.OS === 'web' && DynamicLandingDocumentProseMirror ? (
-          <View style={styles.splitViewContainer}>
-            {/* Left: Editor */}
-            <View style={styles.editorSection}>
-              <DynamicLandingDocumentProseMirror
-                onLocationsChange={(newLocations: Location[]) => setLocations(newLocations)}
-              />
-            </View>
-
-            {/* Right: Globe */}
-            {HeroGlobe && (
-              <View style={styles.globeSection}>
-                <HeroGlobe locations={locations} />
-              </View>
-            )}
-          </View>
-        ) : (
+      {/* Dynamic Document Section */}
+      {Platform.OS === 'web' && DynamicLandingDocumentProseMirror ? (
+        <View style={styles.editorFullWidth}>
+          <DynamicLandingDocumentProseMirror />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
           <>
             {/* Fallback for non-web platforms */}
             <View style={styles.hero}>
@@ -126,21 +103,8 @@ export default function LandingPage() {
               </View>
             </View>
           </>
-        )}
-
-        {/* Footer CTA */}
-        <View style={styles.footerCTA}>
-          <Text style={styles.footerCTATitle}>Ready to create your first presentation?</Text>
-          {!isAuthenticated && (
-            <TouchableOpacity
-              style={styles.footerCTAButton}
-              onPress={() => router.push('/(auth)/register')}
-            >
-              <Text style={styles.footerCTAButtonText}>Start Creating for Free</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -154,13 +118,20 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    maxWidth: 1200,
+    marginHorizontal: 'auto',
+    width: '100%',
   },
   logo: {
     fontSize: 24,
@@ -170,6 +141,37 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     gap: 12,
+  },
+  headerButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  headerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  headerButtonPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#3B82F6',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+      },
+    }),
+  },
+  headerButtonPrimaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   loginButton: {
     paddingHorizontal: 16,
@@ -300,45 +302,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3B82F6',
   },
-  splitViewContainer: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    minHeight: Platform.OS === 'web' ? '85vh' : 600,
+  editorFullWidth: {
+    flex: 1,
     backgroundColor: '#fff',
-    // Responsive breakpoints for web
-    ...(Platform.OS === 'web' && {
-      '@media (max-width: 768px)': {
-        flexDirection: 'column',
-      },
-    }),
-  },
-  editorSection: {
-    flex: Platform.OS === 'web' ? 0.6 : 1,
-    minWidth: Platform.OS === 'web' ? 500 : undefined,
-    backgroundColor: '#fff',
-    // Responsive: Full width on mobile
-    ...(Platform.OS === 'web' && {
-      '@media (max-width: 768px)': {
-        flex: 1,
-        minWidth: undefined,
-      },
-    }),
-  },
-  globeSection: {
-    flex: Platform.OS === 'web' ? 0.4 : 0,
-    minWidth: Platform.OS === 'web' ? 400 : undefined,
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: '#f9fafb',
-    // Responsive: Hidden on mobile
-    ...(Platform.OS === 'web' && {
-      '@media (max-width: 768px)': {
-        display: 'none',
-      },
-      '@media (max-width: 1024px)': {
-        flex: 0.3,
-        minWidth: 300,
-      },
-    }),
+    width: '100%',
   },
   features: {
     paddingHorizontal: 24,
@@ -479,29 +446,5 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 22,
     textAlign: 'center',
-  },
-  footerCTA: {
-    paddingHorizontal: 24,
-    paddingVertical: 64,
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  footerCTATitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  footerCTAButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 8,
-    backgroundColor: '#3B82F6',
-  },
-  footerCTAButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
   },
 });

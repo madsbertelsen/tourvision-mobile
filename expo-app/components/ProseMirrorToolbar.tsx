@@ -22,19 +22,55 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Undo/Redo */}
+        {/* Block types */}
         <View style={styles.group}>
           <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('undo')}
+            style={[
+              styles.button,
+              isButtonHighlighted('paragraph') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setParagraph')}
           >
-            <Text style={styles.buttonText}>↶</Text>
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
+            ]}>P</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('redo')}
+            style={[
+              styles.button,
+              isButtonHighlighted('h1') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 1 })}
           >
-            <Text style={styles.buttonText}>↷</Text>
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h1') && styles.buttonTextHighlighted
+            ]}>H1</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isButtonHighlighted('h2') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 2 })}
+          >
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h2') && styles.buttonTextHighlighted
+            ]}>H2</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isButtonHighlighted('h3') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 3 })}
+          >
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h3') && styles.buttonTextHighlighted
+            ]}>H3</Text>
           </TouchableOpacity>
         </View>
 
@@ -137,46 +173,42 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    height: 44,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
+    backgroundColor: '#f9fafb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    height: 52,
+    paddingVertical: 8,
   },
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   group: {
     flexDirection: 'row',
-    gap: 2,
+    gap: 6,
   },
   button: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
+    width: 40,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   buttonDisabled: {
     opacity: 0.4,
   },
   buttonHighlighted: {
     backgroundColor: '#3b82f6',
-    transform: [{ scale: 1.1 }],
+    borderColor: '#3b82f6',
   },
   buttonText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#374151',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   buttonTextDisabled: {
     opacity: 0.4,
@@ -185,37 +217,37 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   buttonEmoji: {
-    fontSize: 16,
+    fontSize: 18,
   },
   boldText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#374151',
   },
   italicText: {
-    fontSize: 14,
+    fontSize: 15,
     fontStyle: 'italic',
     color: '#374151',
   },
   strikeText: {
-    fontSize: 14,
+    fontSize: 15,
     textDecorationLine: 'line-through',
     color: '#374151',
   },
   codeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'monospace',
     color: '#374151',
   },
   underlineText: {
-    fontSize: 14,
+    fontSize: 15,
     textDecorationLine: 'underline',
     color: '#374151',
   },
   divider: {
     width: 1,
-    height: 24,
-    backgroundColor: '#e5e7eb',
-    marginHorizontal: 4,
+    height: 28,
+    backgroundColor: '#d1d5db',
+    marginHorizontal: 8,
   },
 });
