@@ -29,9 +29,11 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
 
   const handleBlockTypeChange = (value: string) => {
     console.log('[ProseMirrorToolbar] Block type change START:', value, Date.now());
-    // Don't update local state - let it update from highlightedButton prop
-    // This prevents the delay/flash effect
 
+    // Update state immediately for instant visual feedback
+    setBlockType(value);
+
+    // Then send command to editor
     if (value === 'paragraph') {
       onCommand('setParagraph');
     } else if (value === 'heading1') {
