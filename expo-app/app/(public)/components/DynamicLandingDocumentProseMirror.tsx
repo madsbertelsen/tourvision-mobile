@@ -913,7 +913,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
     alignItems: 'center',
   },
   controls: {
@@ -922,7 +922,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     gap: 12,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -957,9 +957,9 @@ const styles = StyleSheet.create({
   },
   completionBanner: {
     padding: 16,
-    backgroundColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
     borderBottomWidth: 1,
-    borderBottomColor: '#93c5fd',
+    borderBottomColor: '#bfdbfe',
   },
   completionText: {
     fontSize: 16,
