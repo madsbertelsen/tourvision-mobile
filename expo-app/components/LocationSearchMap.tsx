@@ -490,12 +490,60 @@ export default function LocationSearchMap({
     }
   };
 
+  // Find the best position to insert a new waypoint based on route geometry
+  const findWaypointInsertPosition = (newPoint: { lat: number; lng: number }): number => {
+    if (!routeFrom || !routeTo || !routeGeometry || !routeGeometry.coordinates) {
+      return waypoints.length; // Append if no route info
+    }
+
+    // Build the full list of route points: origin -> waypoints -> destination
+    const routePoints: Array<{ lat: number; lng: number; type: 'origin' | 'waypoint' | 'destination' }> = [
+      { lat: routeFrom.lat, lng: routeFrom.lng, type: 'origin' },
+      ...localWaypoints.map(w => ({ ...w, type: 'waypoint' as const })),
+      { lat: routeTo.lat, lng: routeTo.lng, type: 'destination' }
+    ];
+
+    // For each segment between route points, calculate the distance from the new point
+    let bestSegmentIndex = 0;
+    let minDistanceToSegment = Infinity;
+
+    for (let i = 0; i < routePoints.length - 1; i++) {
+      const start = routePoints[i];
+      const end = routePoints[i + 1];
+
+      // Calculate distance from new point to this segment
+      const distanceInfo = closestPointOnSegment(
+        newPoint.lng,
+        newPoint.lat,
+        start.lng,
+        start.lat,
+        end.lng,
+        end.lat
+      );
+
+      if (distanceInfo.distance < minDistanceToSegment) {
+        minDistanceToSegment = distanceInfo.distance;
+        bestSegmentIndex = i;
+      }
+    }
+
+    // The waypoint should be inserted after the start point of the best segment
+    // But we need to account for the origin (which is not in the waypoints array)
+    // bestSegmentIndex 0 means between origin and first waypoint -> insert at index 0
+    // bestSegmentIndex 1 means between first and second waypoint -> insert at index 1
+    return bestSegmentIndex;
+  };
+
   // Handle click to add waypoint
   const handleMapClick = (event: any) => {
     if (!hoverPoint || !onWaypointsChange) return;
 
-    // Add waypoint at hover position
-    const newWaypoints = [...waypoints, { lat: hoverPoint.lat, lng: hoverPoint.lng }];
+    const newWaypoint = { lat: hoverPoint.lat, lng: hoverPoint.lng };
+    const insertPosition = findWaypointInsertPosition(newWaypoint);
+
+    // Insert waypoint at the calculated position
+    const newWaypoints = [...waypoints];
+    newWaypoints.splice(insertPosition, 0, newWaypoint);
     onWaypointsChange(newWaypoints);
   };
 
