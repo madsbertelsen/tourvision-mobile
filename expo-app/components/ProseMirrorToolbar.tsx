@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 
 interface ProseMirrorToolbarProps {
   editable: boolean;
@@ -21,8 +21,10 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
     <View style={styles.container}>
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={false}
+        showsHorizontalScrollIndicator={Platform.OS === 'web'}
         contentContainerStyle={styles.scrollContent}
+        style={{ flex: 1 }}
+        nestedScrollEnabled={true}
       >
         {/* Block types */}
         <View style={styles.group}>
@@ -195,11 +197,21 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
     height: 52,
     paddingVertical: 8,
+    ...Platform.select({
+      web: {
+        overflow: 'visible' as any,
+      },
+    }),
   },
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
+    ...Platform.select({
+      web: {
+        minWidth: '100%' as any,
+      },
+    }),
   },
   group: {
     flexDirection: 'row',
