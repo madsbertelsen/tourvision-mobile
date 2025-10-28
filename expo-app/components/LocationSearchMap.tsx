@@ -213,6 +213,14 @@ export default function LocationSearchMap({
   // Waypoint state
   const [hoverPoint, setHoverPoint] = useState<{ lng: number; lat: number } | null>(null);
   const [draggingWaypointIndex, setDraggingWaypointIndex] = useState<number | null>(null);
+  const [localWaypoints, setLocalWaypoints] = useState<Array<{ lat: number; lng: number }>>(waypoints);
+
+  // Update local waypoints when prop changes (but not during drag)
+  useEffect(() => {
+    if (draggingWaypointIndex === null) {
+      setLocalWaypoints(waypoints);
+    }
+  }, [waypoints, draggingWaypointIndex]);
 
   // Core animation function
   const animateMapTo = (targetLat: number, targetLng: number, targetZoom: number, duration?: number) => {
@@ -449,7 +457,7 @@ export default function LocationSearchMap({
 
   // Check if cursor is near any existing waypoint
   const isNearWaypoint = (lng: number, lat: number, threshold: number = 0.005): boolean => {
-    return waypoints.some(waypoint => {
+    return localWaypoints.some(waypoint => {
       const distance = Math.sqrt(
         Math.pow(lng - waypoint.lng, 2) + Math.pow(lat - waypoint.lat, 2)
       );
@@ -575,7 +583,7 @@ export default function LocationSearchMap({
         )}
 
         {/* Show waypoint markers */}
-        {showRoute && waypoints.map((waypoint, index) => (
+        {showRoute && localWaypoints.map((waypoint, index) => (
           <Marker
             key={`waypoint-${index}`}
             latitude={waypoint.lat}
@@ -584,13 +592,19 @@ export default function LocationSearchMap({
             draggable={true}
             onDragStart={() => setDraggingWaypointIndex(index)}
             onDrag={(event: any) => {
-              // Update waypoint position during drag
+              // Update local waypoint position during drag (don't trigger route recalculation)
+              const newWaypoints = [...localWaypoints];
+              newWaypoints[index] = { lat: event.lngLat.lat, lng: event.lngLat.lng };
+              setLocalWaypoints(newWaypoints);
+            }}
+            onDragEnd={(event: any) => {
+              // Update parent state only when drag ends (triggers route recalculation)
               if (!onWaypointsChange) return;
-              const newWaypoints = [...waypoints];
+              const newWaypoints = [...localWaypoints];
               newWaypoints[index] = { lat: event.lngLat.lat, lng: event.lngLat.lng };
               onWaypointsChange(newWaypoints);
+              setDraggingWaypointIndex(null);
             }}
-            onDragEnd={() => setDraggingWaypointIndex(null)}
           >
             <View style={[
               styles.waypointMarker,
