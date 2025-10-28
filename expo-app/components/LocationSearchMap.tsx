@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
@@ -129,6 +129,13 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
   const animationRef = useRef<any>(null);
   const scrollViewRef = useRef<any>(null);
 
+  // Auto-play state
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [autoPlayProgress, setAutoPlayProgress] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const autoPlayTimerRef = useRef<any>(null);
+  const autoPlayIntervalRef = useRef<any>(null);
+
   // Core animation function
   const animateMapTo = (targetLat: number, targetLng: number, targetZoom: number, duration?: number) => {
     if (!mapRef.current) return;
@@ -151,6 +158,7 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
     const animDuration = duration ?? calculateDuration(startLat, startLng, targetLat, targetLng, startZoom, targetZoom);
 
     const startTime = Date.now();
+    setIsAnimating(true);
 
     const animate = () => {
       if (!mapRef.current) return;
@@ -158,29 +166,30 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / animDuration, 1);
 
-      // Determine which phase we're in (40/20/40 split - longer zoom phases)
+      // Three-phase sequential animation (NO overlap):
+      // Phase 1 (0-30%): Zoom out at start position
+      // Phase 2 (30-70%): Pan at peak zoom (high altitude)
+      // Phase 3 (70-100%): Zoom in at target position
       let lat, lng, zoom;
 
-      if (progress < 0.4) {
-        // Phase 1: Zoom out while staying at start location (40% of time)
-        const phaseProgress = progress / 0.4;
+      if (progress < 0.3) {
+        // Phase 1: Zoom out at start position
+        const phaseProgress = progress / 0.3;
         const phaseEased = easeInOutCubic(phaseProgress);
 
         lat = startLat;
         lng = startLng;
         zoom = lerpZoom(startZoom, peakZoom, phaseEased);
-
-      } else if (progress < 0.6) {
-        // Phase 2: Pan to target while maintaining peak zoom (20% of time)
-        const phaseProgress = (progress - 0.4) / 0.2;
+      } else if (progress < 0.7) {
+        // Phase 2: Pan at peak zoom (high altitude)
+        const phaseProgress = (progress - 0.3) / 0.4;
         const phaseEased = easeInOutCubic(phaseProgress);
 
         [lat, lng] = lerpLatLng(startLat, startLng, targetLat, targetLng, phaseEased);
-        zoom = peakZoom;
-
+        zoom = peakZoom; // Keep zoom constant at peak
       } else {
-        // Phase 3: Zoom in while staying at target location (40% of time)
-        const phaseProgress = (progress - 0.6) / 0.4;
+        // Phase 3: Zoom in at target position
+        const phaseProgress = (progress - 0.7) / 0.3;
         const phaseEased = easeInOutCubic(phaseProgress);
 
         lat = targetLat;
@@ -197,6 +206,7 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
         animationRef.current = requestAnimationFrame(animate);
       } else {
         animationRef.current = null;
+        setIsAnimating(false);
       }
     };
 
@@ -307,7 +317,53 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
     };
   }, []);
 
+  // Auto-play effect - only start countdown after animation completes
+  useEffect(() => {
+    if (!isAutoPlaying || results.length <= 1 || isAnimating) {
+      // Don't start countdown if still animating
+      setAutoPlayProgress(0);
+      return;
+    }
+
+    // Reset progress
+    setAutoPlayProgress(0);
+
+    // Animate progress from 0 to 1 over 3 seconds
+    const startTime = Date.now();
+    const duration = 3000;
+
+    const updateProgress = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      setAutoPlayProgress(progress);
+
+      if (progress < 1) {
+        autoPlayTimerRef.current = requestAnimationFrame(updateProgress);
+      }
+    };
+
+    autoPlayTimerRef.current = requestAnimationFrame(updateProgress);
+
+    // Advance to next after 3 seconds
+    autoPlayIntervalRef.current = setTimeout(() => {
+      const nextIndex = (selectedIndex + 1) % results.length;
+      if (onSelectResult) {
+        onSelectResult(nextIndex);
+      }
+    }, duration);
+
+    return () => {
+      if (autoPlayTimerRef.current) {
+        cancelAnimationFrame(autoPlayTimerRef.current);
+      }
+      if (autoPlayIntervalRef.current) {
+        clearTimeout(autoPlayIntervalRef.current);
+      }
+    };
+  }, [isAutoPlaying, selectedIndex, results.length, onSelectResult, isAnimating]);
+
   const handleSelectResult = (index: number) => {
+    setIsAutoPlaying(false); // Pause on manual selection
     if (onSelectResult) {
       onSelectResult(index);
     }
@@ -373,6 +429,19 @@ export default function LocationSearchMap({ results, selectedIndex = 0, onSelect
               >
                 {result.display_name.split(',').slice(0, 2).join(',')}
               </Text>
+              {/* Circular countdown indicator */}
+              {index === selectedIndex && isAutoPlaying && results.length > 1 && (
+                <View style={styles.countdownContainer}>
+                  <View
+                    style={[
+                      styles.countdownCircle,
+                      {
+                        background: `conic-gradient(#3B82F6 ${autoPlayProgress * 360}deg, #e5e7eb 0deg)` as any
+                      }
+                    ]}
+                  />
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -471,5 +540,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#374151',
     lineHeight: 18,
+  },
+  countdownContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+  },
+  countdownCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 });
