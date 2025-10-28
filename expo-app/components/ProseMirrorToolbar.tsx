@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 
 interface ProseMirrorToolbarProps {
@@ -11,11 +11,34 @@ interface ProseMirrorToolbarProps {
 }
 
 export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand, viewMode, onViewModeChange }: ProseMirrorToolbarProps) {
+  const [blockType, setBlockType] = useState('paragraph');
+
+  // Update block type based on highlightedButton
+  useEffect(() => {
+    if (highlightedButton === 'paragraph') setBlockType('paragraph');
+    else if (highlightedButton === 'h1') setBlockType('heading1');
+    else if (highlightedButton === 'h2') setBlockType('heading2');
+    else if (highlightedButton === 'h3') setBlockType('heading3');
+  }, [highlightedButton]);
+
   if (!editable) {
     return null;
   }
 
   const isButtonHighlighted = (buttonId: string) => highlightedButton === buttonId;
+
+  const handleBlockTypeChange = (value: string) => {
+    setBlockType(value);
+    if (value === 'paragraph') {
+      onCommand('setParagraph');
+    } else if (value === 'heading1') {
+      onCommand('setHeading', { level: 1 });
+    } else if (value === 'heading2') {
+      onCommand('setHeading', { level: 2 });
+    } else if (value === 'heading3') {
+      onCommand('setHeading', { level: 3 });
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -26,57 +49,90 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
         style={{ flex: 1 }}
         nestedScrollEnabled={true}
       >
-        {/* Block types */}
-        <View style={styles.group}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('paragraph') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('setParagraph')}
+        {/* Block type selector */}
+        {Platform.OS === 'web' ? (
+          <select
+            value={blockType}
+            onChange={(e: any) => handleBlockTypeChange(e.target.value)}
+            style={{
+              height: 36,
+              borderRadius: 8,
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              color: '#ffffff',
+              fontSize: 14,
+              fontWeight: 600,
+              padding: '0 12px',
+              paddingRight: 32,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              outline: 'none',
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none',
+              backgroundImage: `url('data:image/svg+xml;utf8,<svg fill="white" height="20" viewBox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>')`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 8px center',
+              minWidth: 120,
+            }}
           >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
-            ]}>P</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('h1') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('setHeading', { level: 1 })}
-          >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('h1') && styles.buttonTextHighlighted
-            ]}>H1</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('h2') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('setHeading', { level: 2 })}
-          >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('h2') && styles.buttonTextHighlighted
-            ]}>H2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('h3') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('setHeading', { level: 3 })}
-          >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('h3') && styles.buttonTextHighlighted
-            ]}>H3</Text>
-          </TouchableOpacity>
-        </View>
+            <option value="paragraph" style={{ background: '#2d3748', color: '#ffffff' }}>Paragraph</option>
+            <option value="heading1" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 1</option>
+            <option value="heading2" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 2</option>
+            <option value="heading3" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 3</option>
+          </select>
+        ) : (
+          <View style={styles.group}>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isButtonHighlighted('paragraph') && styles.buttonHighlighted
+              ]}
+              onPress={() => onCommand('setParagraph')}
+            >
+              <Text style={[
+                styles.buttonText,
+                isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
+              ]}>P</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isButtonHighlighted('h1') && styles.buttonHighlighted
+              ]}
+              onPress={() => onCommand('setHeading', { level: 1 })}
+            >
+              <Text style={[
+                styles.buttonText,
+                isButtonHighlighted('h1') && styles.buttonTextHighlighted
+              ]}>H1</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isButtonHighlighted('h2') && styles.buttonHighlighted
+              ]}
+              onPress={() => onCommand('setHeading', { level: 2 })}
+            >
+              <Text style={[
+                styles.buttonText,
+                isButtonHighlighted('h2') && styles.buttonTextHighlighted
+              ]}>H2</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isButtonHighlighted('h3') && styles.buttonHighlighted
+              ]}
+              onPress={() => onCommand('setHeading', { level: 3 })}
+            >
+              <Text style={[
+                styles.buttonText,
+                isButtonHighlighted('h3') && styles.buttonTextHighlighted
+              ]}>H3</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.divider} />
 
