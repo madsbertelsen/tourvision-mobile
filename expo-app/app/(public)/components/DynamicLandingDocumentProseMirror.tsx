@@ -37,7 +37,6 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedText, setSelectedText] = useState('');
-  const [showFloatingToolbar, setShowFloatingToolbar] = useState(false);
   const [selectionRange, setSelectionRange] = useState<{ from: number; to: number } | null>(null);
   const [selectedResultIndex, setSelectedResultIndex] = useState(0);
 
@@ -555,57 +554,22 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     setSelectedResultIndex(0);
   }, []);
 
-  // Handle clicks outside toolbar to hide it
-  const handleClickOutside = useCallback(() => {
-    if (Platform.OS === 'web') {
-      setShowFloatingToolbar(false);
-    }
-  }, []);
-
-  // Add keyboard handler for Tab key (web only)
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        setShowFloatingToolbar(prev => !prev);
-      } else if (e.key === 'Escape') {
-        setShowFloatingToolbar(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   return (
-    <View
-      style={styles.container}
-      // @ts-ignore - onClick is web-only
-      onClick={(e: any) => {
-        // Only hide toolbar if clicking outside the toolbar and editor
-        const target = e.target as HTMLElement;
-        if (!target.closest('.ProseMirror') && !target.closest('[style*="floatingToolbarContainer"]')) {
-          setShowFloatingToolbar(false);
-        }
-      }}
-    >
-      {/* Floating Toolbar - Shows on click or Tab key */}
-      {showFloatingToolbar && (
-        <View style={styles.floatingToolbarContainer}>
-          <ProseMirrorToolbar
-            editable={true}
-            selectionEmpty={!hasTextSelection}
-            highlightedButton={highlightedButton}
-            onCommand={(command, params) => {
-              webViewRef.current?.sendCommand(command, params);
-            }}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
-        </View>
-      )}
+    <View style={styles.container}>
+      {/* Toolbar - Fixed at top */}
+      <View style={styles.toolbarContainer}>
+        <ProseMirrorToolbar
+          editable={true}
+          selectionEmpty={!hasTextSelection}
+          highlightedButton={highlightedButton}
+          onCommand={(command, params) => {
+            webViewRef.current?.sendCommand(command, params);
+          }}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
+      </View>
 
       {/* Location Creation Modal - Bottom sheet style */}
       <Modal
@@ -832,11 +796,6 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       <View
         ref={editorContainerRef}
         style={styles.editorContainer}
-        onClick={() => {
-          if (Platform.OS === 'web') {
-            setShowFloatingToolbar(true);
-          }
-        }}
       >
         <ProseMirrorWebView
           ref={webViewRef}
@@ -956,31 +915,9 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     textAlign: 'center',
   },
-  floatingToolbarContainer: {
-    position: 'absolute',
-    top: 20,
-    left: '50%',
-    transform: [{ translateX: -200 }],
-    zIndex: 1000,
-    width: 400,
-    maxWidth: '90%',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
   toolbarContainer: {
-    position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    width: '100%',
+    maxWidth: 700,
   },
   highlightOverlay: {
     position: 'absolute',
