@@ -602,83 +602,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
             </View>
 
             <View style={styles.modalBody}>
-              {/* Step 1: Split layout (map top 60%, results bottom 40%) - Always rendered to avoid layout shift */}
-              {modalStep === 'location' ? (
-                <>
-                  {/* Map Section - 60% height */}
-                  <View style={styles.mapSection}>
-                    <View style={styles.mapContainer}>
-                      <LocationSearchMap
-                        results={locationSearchResults}
-                        selectedIndex={selectedResultIndex}
-                        onSelectResult={(index) => {
-                          setSelectedResultIndex(index);
-                          const selected = locationSearchResults[index];
-                          setLocationModalData({
-                            placeName: selected.display_name,
-                            lat: parseFloat(selected.lat),
-                            lng: parseFloat(selected.lon),
-                          });
-                        }}
-                        existingLocations={locations}
-                        routeFrom={transportFrom}
-                        routeTo={selectedLocation}
-                        routeGeometry={routeGeometry}
-                        showRoute={false}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Results Section - 40% height - Always shown, even when empty */}
-                  <View style={styles.resultsSection}>
-                    <ScrollView contentContainerStyle={styles.transportFormContent}>
-                      <View style={styles.formSection}>
-                        <Text style={styles.formSectionTitle}>SELECT LOCATION</Text>
-                        {locationSearchResults.length > 0 && !isLoadingLocation ? (
-                          locationSearchResults.map((result, index) => (
-                            <TouchableOpacity
-                              key={index}
-                              style={[
-                                styles.locationResultItem,
-                                index === selectedResultIndex && styles.locationResultItemSelected
-                              ]}
-                              onPress={() => {
-                                setSelectedResultIndex(index);
-                                setLocationModalData({
-                                  placeName: result.display_name,
-                                  lat: parseFloat(result.lat),
-                                  lng: parseFloat(result.lon),
-                                });
-                              }}
-                            >
-                              <View style={[
-                                styles.locationResultNumber,
-                                index === selectedResultIndex && styles.locationResultNumberSelected
-                              ]}>
-                                <Text style={styles.locationResultNumberText}>{index + 1}</Text>
-                              </View>
-                              <Text style={styles.locationResultText} numberOfLines={2}>
-                                {result.display_name}
-                              </Text>
-                              {index === selectedResultIndex && (
-                                <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
-                              )}
-                            </TouchableOpacity>
-                          ))
-                        ) : (
-                          <View style={styles.emptyResultsState}>
-                            <Ionicons name="search" size={32} color="#9ca3af" />
-                            <Text style={styles.emptyResultsText}>
-                              {isLoadingLocation ? 'Searching locations...' : 'Search results will appear here'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </ScrollView>
-                  </View>
-                </>
-              ) : (
-                /* Step 2: Full-size map with transport overlay */
+              {/* Map Section - 60% height - Always rendered for both steps */}
+              <View style={styles.mapSection}>
                 <View style={styles.mapContainer}>
                   <LocationSearchMap
                     results={locationSearchResults}
@@ -699,15 +624,62 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                     showRoute={modalStep === 'transport'}
                   />
                 </View>
-              )}
+              </View>
 
-              {/* Step 2: Transport Configuration Form Overlay */}
-              {modalStep === 'transport' && (
-                <ScrollView style={styles.transportFormOverlay} contentContainerStyle={styles.transportFormContent}>
-                  {/* Selected Location Display */}
-                  {selectedLocation && (
-                    <View style={styles.selectedLocationChip}>
-                      <Ionicons name="location" size={20} color="#3b82f6" />
+              {/* Bottom Section - 40% height - Content changes based on step */}
+              <View style={styles.resultsSection}>
+                <ScrollView contentContainerStyle={styles.transportFormContent}>
+                  {modalStep === 'location' && (
+                    <View style={styles.formSection}>
+                      <Text style={styles.formSectionTitle}>SELECT LOCATION</Text>
+                      {locationSearchResults.length > 0 && !isLoadingLocation ? (
+                        locationSearchResults.map((result, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.locationResultItem,
+                              index === selectedResultIndex && styles.locationResultItemSelected
+                            ]}
+                            onPress={() => {
+                              setSelectedResultIndex(index);
+                              setLocationModalData({
+                                placeName: result.display_name,
+                                lat: parseFloat(result.lat),
+                                lng: parseFloat(result.lon),
+                              });
+                            }}
+                          >
+                            <View style={[
+                              styles.locationResultNumber,
+                              index === selectedResultIndex && styles.locationResultNumberSelected
+                            ]}>
+                              <Text style={styles.locationResultNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.locationResultText} numberOfLines={2}>
+                              {result.display_name}
+                            </Text>
+                            {index === selectedResultIndex && (
+                              <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
+                            )}
+                          </TouchableOpacity>
+                        ))
+                      ) : (
+                        <View style={styles.emptyResultsState}>
+                          <Ionicons name="search" size={32} color="#9ca3af" />
+                          <Text style={styles.emptyResultsText}>
+                            {isLoadingLocation ? 'Searching locations...' : 'Search results will appear here'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {modalStep === 'transport' && (
+                    <>
+                      {/* Selected Location Display */}
+                      {selectedLocation && (
+                        <View style={styles.selectedLocationChip}>
+                          <Ionicons name="location" size={20} color="#3b82f6" />
                       <Text style={styles.selectedLocationText} numberOfLines={2}>
                         {selectedLocation.placeName}
                       </Text>
@@ -818,8 +790,10 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
                       ) : null}
                     </View>
                   )}
+                    </>
+                  )}
                 </ScrollView>
-              )}
+              </View>
             </View>
 
             <View style={styles.modalFooter}>
