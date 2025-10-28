@@ -916,8 +916,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   toolbarContainer: {
-    width: '100%',
+    position: 'absolute',
+    bottom: 20,
+    left: '50%',
+    zIndex: 1000,
     maxWidth: 700,
+    ...Platform.select({
+      web: {
+        transform: 'translateX(-50%)' as any,
+      },
+      default: {
+        // For native platforms, center using marginLeft
+        width: 700,
+        marginLeft: -350,
+      }
+    }),
   },
   highlightOverlay: {
     position: 'absolute',

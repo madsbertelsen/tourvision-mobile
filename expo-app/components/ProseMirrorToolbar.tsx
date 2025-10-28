@@ -192,13 +192,13 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f9fafb',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    height: 52,
+    backgroundColor: '#2d3748',
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     ...Platform.select({
       web: {
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' as any,
         overflow: 'visible' as any,
       },
     }),
@@ -206,10 +206,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    gap: 6,
     ...Platform.select({
       web: {
-        minWidth: '100%' as any,
+        minWidth: 'auto' as any,
       },
     }),
   },
@@ -223,20 +223,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    ...Platform.select({
+      web: {
+        transition: 'all 0.2s' as any,
+        cursor: 'pointer' as any,
+      },
+    }),
   },
   buttonDisabled: {
     opacity: 0.4,
   },
   buttonHighlighted: {
     backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
   },
   buttonText: {
     fontSize: 15,
-    color: '#374151',
+    color: '#ffffff',
     fontWeight: '600',
   },
   buttonTextDisabled: {
@@ -251,32 +254,32 @@ const styles = StyleSheet.create({
   boldText: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#374151',
+    color: '#ffffff',
   },
   italicText: {
     fontSize: 15,
     fontStyle: 'italic',
-    color: '#374151',
+    color: '#ffffff',
   },
   strikeText: {
     fontSize: 15,
     textDecorationLine: 'line-through',
-    color: '#374151',
+    color: '#ffffff',
   },
   codeText: {
     fontSize: 13,
     fontFamily: 'monospace',
-    color: '#374151',
+    color: '#ffffff',
   },
   underlineText: {
     fontSize: 15,
     textDecorationLine: 'underline',
-    color: '#374151',
+    color: '#ffffff',
   },
   divider: {
     width: 1,
     height: 28,
-    backgroundColor: '#d1d5db',
-    marginHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 4,
   },
 });
