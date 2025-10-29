@@ -56,14 +56,6 @@ export default function TripDocumentView() {
       <DynamicLandingDocumentProseMirror
         onLocationsChange={setLocations}
       />
-
-      {/* Info Banner */}
-      <View style={styles.infoBanner}>
-        <Ionicons name="information-circle" size={20} color="#3B82F6" />
-        <Text style={styles.infoText}>
-          New document route - Based on landing page demo. Work in progress.
-        </Text>
-      </View>
     </View>
   );
 }
@@ -100,24 +92,5 @@ const styles = StyleSheet.create({
   },
   iconButtonActive: {
     backgroundColor: '#3B82F6',
-  },
-  infoBanner: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#DBEAFE',
-    gap: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1E40AF',
   },
 });
