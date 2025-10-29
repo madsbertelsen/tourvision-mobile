@@ -354,6 +354,13 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       lng: gm.lng,
       colorIndex: gm.colorIndex
     }));
+
+    // Debug: Log locations with colorIndex
+    console.log('[DynamicLanding] Sending locations to map:', locationsList.map(l => ({
+      name: l.placeName,
+      colorIndex: l.colorIndex
+    })));
+
     setLocations(locationsList);
 
     if (onLocationsChange) {

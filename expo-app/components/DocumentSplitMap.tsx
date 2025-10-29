@@ -26,6 +26,13 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
 
+  // Debug: Log locations to verify colorIndex
+  console.log('[DocumentSplitMap] Locations:', locations.map(l => ({
+    name: l.placeName,
+    colorIndex: l.colorIndex,
+    color: COLORS[(l.colorIndex || 0) % 5]
+  })));
+
   // Fetch routes between consecutive locations
   useEffect(() => {
     const fetchRoutes = async () => {

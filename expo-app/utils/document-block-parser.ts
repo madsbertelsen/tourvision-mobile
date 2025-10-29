@@ -43,21 +43,28 @@ function extractTextContent(node: any): string {
 
 /**
  * Extract geo-marks from a node
+ * Auto-assigns sequential colorIndex if not present
  */
-function extractGeoMarks(node: any): GeoMarkInBlock[] {
+function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBlock[] {
   const geoMarks: GeoMarkInBlock[] = [];
+  let colorCounter = startingColorIndex;
 
   if (!node || !node.content) return geoMarks;
 
   function traverse(n: any) {
     if (n.type === 'geoMark' && n.attrs) {
       const text = extractTextContent(n);
+      // Use stored colorIndex if available, otherwise auto-assign sequentially
+      const colorIndex = n.attrs.colorIndex !== undefined
+        ? n.attrs.colorIndex
+        : colorCounter++;
+
       geoMarks.push({
         geoId: n.attrs.geoId,
         placeName: n.attrs.placeName,
         lat: n.attrs.lat,
         lng: n.attrs.lng,
-        colorIndex: n.attrs.colorIndex || 0,
+        colorIndex: colorIndex,
         text: text
       });
     }
@@ -74,16 +81,21 @@ function extractGeoMarks(node: any): GeoMarkInBlock[] {
 
 /**
  * Parse document into blocks
+ * Auto-assigns sequential colorIndex across all geo-marks in document
  */
 export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
   if (!doc || !doc.content) return [];
 
   const blocks: DocumentBlock[] = [];
+  let globalColorIndex = 0;
 
   for (const node of doc.content) {
     if (node.type === 'paragraph' || node.type === 'heading') {
       const text = extractTextContent(node);
-      const geoMarks = extractGeoMarks(node);
+      const geoMarks = extractGeoMarks(node, globalColorIndex);
+
+      // Update globalColorIndex for next block
+      globalColorIndex += geoMarks.filter(gm => gm.colorIndex >= globalColorIndex).length;
 
       blocks.push({
         type: node.type,
