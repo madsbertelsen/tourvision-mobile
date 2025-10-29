@@ -53,7 +53,8 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
                 return {
                   geometry: data.routes[0].geometry,
                   from: from.geoId,
-                  to: to.geoId
+                  to: to.geoId,
+                  colorIndex: from.colorIndex || 0
                 };
               }
               return null;
@@ -131,24 +132,27 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
         <GeolocateControl position="top-right" />
 
         {/* Route lines */}
-        {routes.map((route, index) => (
-          <Source
-            key={`route-${index}`}
-            id={`route-${index}`}
-            type="geojson"
-            data={route.geometry}
-          >
-            <Layer
-              id={`route-line-${index}`}
-              type="line"
-              paint={{
-                'line-color': '#3B82F6',
-                'line-width': 3,
-                'line-opacity': 0.75
-              }}
-            />
-          </Source>
-        ))}
+        {routes.map((route, index) => {
+          const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
+          return (
+            <Source
+              key={`route-${index}`}
+              id={`route-${index}`}
+              type="geojson"
+              data={route.geometry}
+            >
+              <Layer
+                id={`route-line-${index}`}
+                type="line"
+                paint={{
+                  'line-color': routeColor,
+                  'line-width': 3,
+                  'line-opacity': 0.75
+                }}
+              />
+            </Source>
+          );
+        })}
 
         {/* Location markers */}
         {locations.map((location) => (
