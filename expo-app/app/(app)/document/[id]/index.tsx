@@ -18,17 +18,19 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
+import DocumentSplitMap from '@/components/DocumentSplitMap';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, setLocations } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations } = useTripContext();
+  const [showMap, setShowMap] = useState(true);
 
   return (
     <View style={styles.container}>
@@ -40,22 +42,47 @@ export default function TripDocumentView() {
 
         <Text style={styles.title}>Trip Document (New)</Text>
 
-        <TouchableOpacity
-          onPress={() => setIsEditMode(!isEditMode)}
-          style={[styles.iconButton, isEditMode && styles.iconButtonActive]}
-        >
-          <Ionicons
-            name={isEditMode ? "book" : "create-outline"}
-            size={22}
-            color={isEditMode ? "#fff" : "#6B7280"}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => setShowMap(!showMap)}
+            style={[styles.iconButton, showMap && styles.iconButtonActive]}
+          >
+            <Ionicons
+              name={showMap ? "map" : "map-outline"}
+              size={22}
+              color={showMap ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setIsEditMode(!isEditMode)}
+            style={[styles.iconButton, isEditMode && styles.iconButtonActive]}
+          >
+            <Ionicons
+              name={isEditMode ? "book" : "create-outline"}
+              size={22}
+              color={isEditMode ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Main Content - Landing Page Component */}
-      <DynamicLandingDocumentProseMirror
-        onLocationsChange={setLocations}
-      />
+      {/* Main Content - Split View */}
+      <View style={styles.contentWrapper}>
+        {/* Document */}
+        <View style={[styles.documentContainer, showMap && styles.documentContainerSplit]}>
+          <DynamicLandingDocumentProseMirror
+            onLocationsChange={setLocations}
+          />
+        </View>
+
+        {/* Map */}
+        {showMap && (
+          <View style={styles.mapContainer}>
+            <DocumentSplitMap locations={locations} />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -85,6 +112,10 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   iconButton: {
     padding: 8,
     borderRadius: 6,
@@ -92,5 +123,21 @@ const styles = StyleSheet.create({
   },
   iconButtonActive: {
     backgroundColor: '#3B82F6',
+  },
+  contentWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  documentContainer: {
+    flex: 1,
+  },
+  documentContainerSplit: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: '#e5e7eb',
+  },
+  mapContainer: {
+    flex: 1,
+    minWidth: 400,
   },
 });
