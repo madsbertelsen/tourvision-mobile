@@ -29,7 +29,7 @@ import DocumentSplitMap from '@/components/DocumentSplitMap';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc } = useTripContext();
   const [showMap, setShowMap] = useState(true);
 
   return (
@@ -72,7 +72,10 @@ export default function TripDocumentView() {
         {/* Document */}
         <View style={[styles.documentContainer, showMap && styles.documentContainerSplit]}>
           <DynamicLandingDocumentProseMirror
+            initialContent={currentDoc}
             onLocationsChange={setLocations}
+            onContentChange={setCurrentDoc}
+            disableAnimation={true}
           />
         </View>
 

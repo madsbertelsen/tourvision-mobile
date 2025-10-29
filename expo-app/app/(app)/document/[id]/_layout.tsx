@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, Stack } from 'expo-router';
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 // Context for sharing document state across nested routes
 interface TripContextType {
@@ -31,9 +31,64 @@ export default function TripLayout() {
   const params = useGlobalSearchParams();
   const tripId = params.id as string;
 
-  const [currentDoc, setCurrentDoc] = useState<any>(null);
+  const [currentDoc, setCurrentDocState] = useState<any>(null);
   const [isEditMode, setIsEditMode] = useState(false); // Start in read mode
   const [locations, setLocations] = useState<any[]>([]);
+
+  // Load document from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('@tourvision_documents');
+      if (stored) {
+        const documents = JSON.parse(stored);
+        // Find document by ID
+        const doc = documents.find((d: any) => d.id === tripId);
+        if (doc && doc.content) {
+          console.log('[TripLayout] Loading document from localStorage:', tripId);
+          setCurrentDocState(doc.content);
+        }
+      }
+    } catch (error) {
+      console.error('[TripLayout] Error loading from localStorage:', error);
+    }
+  }, [tripId]);
+
+  // Custom setCurrentDoc that also saves to localStorage
+  const setCurrentDoc = useCallback((doc: any) => {
+    setCurrentDocState(doc);
+
+    // Save to localStorage
+    try {
+      const stored = localStorage.getItem('@tourvision_documents');
+      let documents = stored ? JSON.parse(stored) : [];
+
+      // Find and update existing document or create new one
+      const existingIndex = documents.findIndex((d: any) => d.id === tripId);
+
+      if (existingIndex >= 0) {
+        // Update existing document's content
+        documents[existingIndex].content = doc;
+        documents[existingIndex].updatedAt = Date.now();
+      } else {
+        // Create new document entry
+        documents.push({
+          id: tripId,
+          title: 'Document',
+          description: '',
+          content: doc,
+          messages: [],
+          locations: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+
+      localStorage.setItem('@tourvision_documents', JSON.stringify(documents));
+      console.log('[TripLayout] Saved document to localStorage:', tripId);
+    } catch (error) {
+      console.error('[TripLayout] Error saving to localStorage:', error);
+    }
+  }, [tripId]);
 
   return (
     <TripContext.Provider

@@ -19,13 +19,17 @@ interface Location {
 }
 
 interface DynamicLandingDocumentProseMirrorProps {
+  initialContent?: any;
   onLocationsChange?: (locations: Location[]) => void;
+  onContentChange?: (doc: any) => void;
+  disableAnimation?: boolean;
 }
 
 // Use the full landing page content
-const INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
+const DEFAULT_INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
-export default function DynamicLandingDocumentProseMirror({ onLocationsChange }: DynamicLandingDocumentProseMirrorProps) {
+export default function DynamicLandingDocumentProseMirror({ initialContent, onLocationsChange, onContentChange, disableAnimation = false }: DynamicLandingDocumentProseMirrorProps) {
+  const INITIAL_CONTENT = initialContent || DEFAULT_INITIAL_CONTENT;
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
@@ -77,6 +81,13 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
 
   // Initialize animator
   useEffect(() => {
+    // Skip animator initialization if animation is disabled
+    if (disableAnimation) {
+      console.log('[Landing] Animation disabled, skipping animator initialization');
+      isAnimationCompleteRef.current = true; // Mark as complete immediately
+      return;
+    }
+
     const animator = new TypingAnimatorCommands(
       DEFAULT_TYPING_CONFIG,
       (state) => {
@@ -101,10 +112,16 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     return () => {
       animator.pause();
     };
-  }, []);
+  }, [disableAnimation]);
 
   // Start animation when editor is ready - DO NOT use timeout, start immediately
   useEffect(() => {
+    // Skip animation start if disabled
+    if (disableAnimation) {
+      console.log('[Landing] Animation disabled, skipping animation start');
+      return;
+    }
+
     if (editorReady && animatorRef.current && !animationStarted) {
       console.log('[Landing] ===== STARTING ANIMATION IMMEDIATELY =====');
       console.log('[Landing] Editor ready state:', editorReady);
@@ -114,7 +131,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       setAnimationStarted(true);
       animatorRef.current?.start();
     }
-  }, [editorReady, animationStarted]);
+  }, [editorReady, animationStarted, disableAnimation]);
 
   const handleCommand = (command: EditorCommand) => {
     if (!webViewRef.current) {
@@ -335,6 +352,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
   // Memoize callbacks to prevent iframe recreation on every render
   // Use refs instead of state in dependencies to keep callbacks stable
   const handleContentChange = useCallback((doc: any) => {
+    console.log('[DynamicLanding] handleContentChange called');
+
     // Handle user edits after animation completes
     if (isAnimationCompleteRef.current) {
       console.log('[Landing] User edited document');
@@ -344,6 +363,11 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     setCurrentDocument(doc);
     const blocks = parseDocumentIntoBlocks(doc);
     setDocumentBlocks(blocks);
+
+    // Call the onContentChange prop if provided
+    if (onContentChange) {
+      onContentChange(doc);
+    }
 
     // Update locations list from all geo-marks
     const allGeoMarks = blocks.flatMap(block => block.geoMarks);
@@ -366,7 +390,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
     if (onLocationsChange) {
       onLocationsChange(locationsList);
     }
-  }, [onLocationsChange]);
+  }, [onLocationsChange, onContentChange]);
 
   const handleSelectionChange = useCallback((empty: boolean, selectedText: string, boundingRect: any) => {
     // NOTE: Floating menu is now handled entirely inside ProseMirror WebView
@@ -916,8 +940,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       >
         <ProseMirrorWebView
           ref={webViewRef}
-          initialContent={INITIAL_CONTENT}
-          onContentChange={handleContentChange}
+          content={INITIAL_CONTENT}
+          onChange={handleContentChange}
           onSelectionChange={handleSelectionChange}
           onShowGeoMarkEditor={handleShowGeoMarkEditor}
           onMessage={(data) => {
