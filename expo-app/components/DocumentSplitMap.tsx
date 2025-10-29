@@ -17,9 +17,9 @@ interface DocumentSplitMapProps {
   locations: Location[];
 }
 
+// Match the exact color array from DynamicLandingDocumentProseMirror
 const COLORS = [
-  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
-  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'
 ];
 
 export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
@@ -133,7 +133,7 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
 
         {/* Route lines */}
         {routes.map((route, index) => {
-          const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
+          const routeColor = COLORS[(route.colorIndex || 0) % 5];
           return (
             <Source
               key={`route-${index}`}
@@ -164,7 +164,7 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
           >
             <View style={[
               styles.marker,
-              { backgroundColor: COLORS[(location.colorIndex || 0) % COLORS.length] }
+              { backgroundColor: COLORS[(location.colorIndex || 0) % 5] }
             ]}>
               <View style={styles.markerInner} />
             </View>
