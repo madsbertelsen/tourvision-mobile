@@ -15,6 +15,7 @@ interface Location {
   placeName: string;
   lat: number;
   lng: number;
+  colorIndex?: number;
 }
 
 interface DynamicLandingDocumentProseMirrorProps {
@@ -350,7 +351,8 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       geoId: gm.geoId,
       placeName: gm.placeName,
       lat: gm.lat,
-      lng: gm.lng
+      lng: gm.lng,
+      colorIndex: gm.colorIndex
     }));
     setLocations(locationsList);
 
