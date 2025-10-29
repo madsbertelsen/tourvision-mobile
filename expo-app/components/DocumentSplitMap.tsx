@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
+import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/mapbox';
 
 interface Location {
   geoId: string;
@@ -24,6 +24,53 @@ const COLORS = [
 
 export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
+  const [routes, setRoutes] = useState<any[]>([]);
+
+  // Fetch routes between consecutive locations
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      if (locations.length < 2) {
+        setRoutes([]);
+        return;
+      }
+
+      const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+      const routePromises = [];
+
+      // Fetch route between each pair of consecutive locations
+      for (let i = 0; i < locations.length - 1; i++) {
+        const from = locations[i];
+        const to = locations[i + 1];
+
+        const coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+        routePromises.push(
+          fetch(url)
+            .then(res => res.json())
+            .then(data => {
+              if (data.routes && data.routes[0]) {
+                return {
+                  geometry: data.routes[0].geometry,
+                  from: from.geoId,
+                  to: to.geoId
+                };
+              }
+              return null;
+            })
+            .catch(err => {
+              console.error('Error fetching route:', err);
+              return null;
+            })
+        );
+      }
+
+      const fetchedRoutes = await Promise.all(routePromises);
+      setRoutes(fetchedRoutes.filter(r => r !== null));
+    };
+
+    fetchRoutes();
+  }, [locations]);
 
   // Calculate initial view state to fit all locations
   const getInitialViewState = () => {
@@ -82,6 +129,26 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
         {/* Navigation controls */}
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
+
+        {/* Route lines */}
+        {routes.map((route, index) => (
+          <Source
+            key={`route-${index}`}
+            id={`route-${index}`}
+            type="geojson"
+            data={route.geometry}
+          >
+            <Layer
+              id={`route-line-${index}`}
+              type="line"
+              paint={{
+                'line-color': '#3B82F6',
+                'line-width': 3,
+                'line-opacity': 0.75
+              }}
+            />
+          </Source>
+        ))}
 
         {/* Location markers */}
         {locations.map((location) => (
