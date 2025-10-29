@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
@@ -17,21 +17,15 @@ interface DocumentSplitMapProps {
   locations: Location[];
 }
 
-// Match the exact color array from DynamicLandingDocumentProseMirror
+// Color array starting with Purple (to match expected first location color)
 const COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'
+  '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
+  // Purple,   Blue,     Green,    Orange,   Red
 ];
 
-export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
+const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
-
-  // Debug: Log locations to verify colorIndex
-  console.log('[DocumentSplitMap] Locations:', locations.map(l => ({
-    name: l.placeName,
-    colorIndex: l.colorIndex,
-    color: COLORS[(l.colorIndex || 0) % 5]
-  })));
 
   // Fetch routes between consecutive locations
   useEffect(() => {
@@ -180,7 +174,30 @@ export default function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
       </Map>
     </View>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  // Only re-render if locations actually changed
+  if (prevProps.locations.length !== nextProps.locations.length) {
+    return false; // Re-render
+  }
+
+  // Check if any location changed
+  for (let i = 0; i < prevProps.locations.length; i++) {
+    const prev = prevProps.locations[i];
+    const next = nextProps.locations[i];
+
+    if (prev.geoId !== next.geoId ||
+        prev.lat !== next.lat ||
+        prev.lng !== next.lng ||
+        prev.colorIndex !== next.colorIndex) {
+      return false; // Re-render
+    }
+  }
+
+  return true; // Skip re-render
+});
+
+export default DocumentSplitMap;
 
 const styles = StyleSheet.create({
   container: {

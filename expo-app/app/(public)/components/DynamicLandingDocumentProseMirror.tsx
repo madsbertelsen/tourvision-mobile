@@ -72,12 +72,30 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
   // Track text selection for geo-mark creation
   const pendingGeoMarkRef = useRef<{ start: number; end: number; data: any } | null>(null);
 
-  // Parse initial document on mount
+  // Parse initial document on mount and extract locations
   useEffect(() => {
     const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
     setDocumentBlocks(blocks);
     console.log('[Landing] Initial document blocks:', blocks.length);
-  }, []);
+
+    // Extract and set initial locations from geo-marks
+    const allGeoMarks = blocks.flatMap(block => block.geoMarks);
+    const locationsList = allGeoMarks.map(gm => ({
+      geoId: gm.geoId,
+      placeName: gm.placeName,
+      lat: gm.lat,
+      lng: gm.lng,
+      colorIndex: gm.colorIndex
+    }));
+
+    console.log('[Landing] Initial locations extracted:', locationsList);
+    setLocations(locationsList);
+
+    // Notify parent component of initial locations
+    if (onLocationsChange && locationsList.length > 0) {
+      onLocationsChange(locationsList);
+    }
+  }, [INITIAL_CONTENT, onLocationsChange]);
 
   // Initialize animator
   useEffect(() => {
@@ -199,8 +217,7 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
 
         setLocations(prev => {
           const updated = [...prev, newLocation];
-          // Notify parent component after state update completes
-          setTimeout(() => onLocationsChange?.(updated), 0);
+          onLocationsChange?.(updated);
           return updated;
         });
 
@@ -326,8 +343,7 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
 
           setLocations(prev => {
             const updated = [...prev, newLocation];
-            // Notify parent component after state update completes
-            setTimeout(() => onLocationsChange?.(updated), 0);
+            onLocationsChange?.(updated);
             return updated;
           });
 
@@ -352,8 +368,6 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
   // Memoize callbacks to prevent iframe recreation on every render
   // Use refs instead of state in dependencies to keep callbacks stable
   const handleContentChange = useCallback((doc: any) => {
-    console.log('[DynamicLanding] handleContentChange called');
-
     // Handle user edits after animation completes
     if (isAnimationCompleteRef.current) {
       console.log('[Landing] User edited document');
@@ -379,17 +393,22 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
       colorIndex: gm.colorIndex
     }));
 
-    // Debug: Log locations with colorIndex
-    console.log('[DynamicLanding] Sending locations to map:', locationsList.map(l => ({
-      name: l.placeName,
-      colorIndex: l.colorIndex
-    })));
+    setLocations(prevLocations => {
+      // Only update if locations actually changed
+      const locationsChanged = prevLocations.length !== locationsList.length ||
+        locationsList.some((loc, idx) =>
+          !prevLocations[idx] ||
+          prevLocations[idx].geoId !== loc.geoId ||
+          prevLocations[idx].lat !== loc.lat ||
+          prevLocations[idx].lng !== loc.lng
+        );
 
-    setLocations(locationsList);
+      if (locationsChanged && onLocationsChange) {
+        onLocationsChange(locationsList);
+      }
 
-    if (onLocationsChange) {
-      onLocationsChange(locationsList);
-    }
+      return locationsList;
+    });
   }, [onLocationsChange, onContentChange]);
 
   const handleSelectionChange = useCallback((empty: boolean, selectedText: string, boundingRect: any) => {
@@ -535,7 +554,7 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
 
     setLocations(prev => {
       const updated = [...prev, newLocation];
-      setTimeout(() => onLocationsChange?.(updated), 0);
+      onLocationsChange?.(updated);
       return updated;
     });
 
@@ -1071,11 +1090,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   controlButtonText: {
     fontSize: 14,
@@ -1110,17 +1129,18 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: '50%',
     zIndex: 1000,
-    maxWidth: 700,
-    ...Platform.select({
-      web: {
-        transform: 'translateX(-50%)' as any,
-      },
-      default: {
-        // For native platforms, center using marginLeft
-        width: 700,
-        marginLeft: -350,
-      }
-    }),
+    width: '100%',
+    maxWidth: 700, // Match editor maxWidth
+    maxHeight: 200, // Allow space for wrapped content
+    paddingHorizontal: 0,
+    ...(Platform.OS === 'web'
+      ? {
+          transform: 'translateX(-50%)' as any,
+        }
+      : {
+          // For native platforms, center using marginLeft
+          marginLeft: -350,
+        }),
   },
   highlightOverlay: {
     position: 'absolute',
@@ -1155,11 +1175,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)' as any,
+        }
+      : {}),
   },
   modalOverlay: {
     flex: 1,
@@ -1186,11 +1206,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.25)' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.25)' as any,
+        }
+      : {}),
   },
   dragHandle: {
     width: 40,
@@ -1284,20 +1304,20 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 8,
     gap: 8,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   saveButtonDisabled: {
     backgroundColor: '#9ca3af',
     opacity: 0.6,
-    ...Platform.select({
-      web: {
-        cursor: 'not-allowed' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'not-allowed' as any,
+        }
+      : {}),
   },
   saveButtonText: {
     fontSize: 16,
@@ -1359,11 +1379,11 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 12,
     zIndex: 1000,
-    ...Platform.select({
-      web: {
-        pointerEvents: 'auto' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          pointerEvents: 'auto' as any,
+        }
+      : {}),
   },
   floatingMenuItem: {
     flexDirection: 'row',
@@ -1372,11 +1392,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 4,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   floatingMenuText: {
     fontSize: 14,
@@ -1434,11 +1454,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: '#eff6ff',
     borderRadius: 6,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   changeButtonText: {
     fontSize: 14,
@@ -1474,11 +1494,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#e5e7eb',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   modeButtonActive: {
     backgroundColor: '#3b82f6',
@@ -1537,11 +1557,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#3b82f6',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+        }
+      : {}),
   },
   backButtonText: {
     fontSize: 16,
@@ -1676,12 +1696,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#e5e7eb',
     marginBottom: 12,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer' as any,
-        transition: 'all 0.2s' as any,
-      },
-    }),
+    ...(Platform.OS === 'web'
+      ? {
+          cursor: 'pointer' as any,
+          transition: 'all 0.2s' as any,
+        }
+      : {}),
   },
   locationResultItemSelected: {
     backgroundColor: '#eff6ff',

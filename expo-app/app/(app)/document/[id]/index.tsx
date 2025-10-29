@@ -133,14 +133,16 @@ const styles = StyleSheet.create({
   },
   documentContainer: {
     flex: 1,
+    maxWidth: 700,  // Set max width for document
   },
   documentContainerSplit: {
-    flex: 1,
+    width: 700,  // Fixed width when split
+    maxWidth: 700,  // Enforce max width
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
   },
   mapContainer: {
-    flex: 1,
+    flex: 1,  // Let map take remaining space
     minWidth: 400,
   },
 });
