@@ -279,7 +279,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       selectedText: selectedText,
       lat: 0, // Will be filled by Nominatim
       lng: 0,
-      colorIndex: locations.length % 10,
+      colorIndex: locations.length % 5,  // Match 5-color palette
       coordSource: 'manual',
     };
 
@@ -486,7 +486,7 @@ export default function DynamicLandingDocumentProseMirror({ onLocationsChange }:
       placeName: selectedLocation.placeName,
       lat: selectedLocation.lat,
       lng: selectedLocation.lng,
-      colorIndex: locations.length % 10,
+      colorIndex: locations.length % 5,  // Match 5-color palette
       coordSource: 'nominatim',
       transportFrom: transportFrom,
       transportProfile: transportMode,

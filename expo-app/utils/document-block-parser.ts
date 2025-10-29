@@ -59,6 +59,8 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
         ? n.attrs.colorIndex
         : colorCounter++;
 
+      console.log('[Parser] Geo-mark:', n.attrs.placeName, 'stored:', n.attrs.colorIndex, 'assigned:', colorIndex);
+
       geoMarks.push({
         geoId: n.attrs.geoId,
         placeName: n.attrs.placeName,
@@ -94,8 +96,8 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
       const text = extractTextContent(node);
       const geoMarks = extractGeoMarks(node, globalColorIndex);
 
-      // Update globalColorIndex for next block
-      globalColorIndex += geoMarks.filter(gm => gm.colorIndex >= globalColorIndex).length;
+      // Increment globalColorIndex by number of geo-marks found
+      globalColorIndex += geoMarks.length;
 
       blocks.push({
         type: node.type,
