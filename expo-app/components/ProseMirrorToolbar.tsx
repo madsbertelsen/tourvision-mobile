@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 
 interface ProseMirrorToolbarProps {
@@ -6,173 +6,67 @@ interface ProseMirrorToolbarProps {
   selectionEmpty?: boolean;
   highlightedButton?: string | null;
   onCommand: (command: string, params?: any) => void;
-  viewMode?: 'document' | 'map';
-  onViewModeChange?: (mode: 'document' | 'map') => void;
 }
 
-export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand, viewMode, onViewModeChange }: ProseMirrorToolbarProps) {
-  const [blockType, setBlockType] = useState('paragraph');
-
-  // Update block type based on highlightedButton
-  useEffect(() => {
-    if (highlightedButton === 'paragraph') setBlockType('paragraph');
-    else if (highlightedButton === 'h1') setBlockType('heading1');
-    else if (highlightedButton === 'h2') setBlockType('heading2');
-    else if (highlightedButton === 'h3') setBlockType('heading3');
-  }, [highlightedButton]);
-
+export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand }: ProseMirrorToolbarProps) {
   if (!editable) {
     return null;
   }
 
   const isButtonHighlighted = (buttonId: string) => highlightedButton === buttonId;
 
-  const handleBlockTypeChange = (value: string) => {
-    console.log('[ProseMirrorToolbar] Block type change START:', value, Date.now());
-
-    // Update state immediately for instant visual feedback
-    setBlockType(value);
-
-    // Then send command to editor
-    if (value === 'paragraph') {
-      onCommand('setParagraph');
-    } else if (value === 'heading1') {
-      onCommand('setHeading', { level: 1 });
-    } else if (value === 'heading2') {
-      onCommand('setHeading', { level: 2 });
-    } else if (value === 'heading3') {
-      onCommand('setHeading', { level: 3 });
-    }
-    console.log('[ProseMirrorToolbar] Block type change END:', value, Date.now());
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.toolbarContent}>
-        {/* Block type selector */}
-        {Platform.OS === 'web' ? (
-          <select
-            value={blockType}
-            onChange={(e: any) => handleBlockTypeChange(e.target.value)}
-            style={{
-              height: 36,
-              borderRadius: 8,
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: 'none',
-              color: '#ffffff',
-              fontSize: 14,
-              fontWeight: 600,
-              padding: '0 12px',
-              paddingRight: 32,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              outline: 'none',
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              MozAppearance: 'none',
-              backgroundImage: `url('data:image/svg+xml;utf8,<svg fill="white" height="20" viewBox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>')`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 8px center',
-              minWidth: 120,
-            }}
-          >
-            <option value="paragraph" style={{ background: '#2d3748', color: '#ffffff' }}>Paragraph</option>
-            <option value="heading1" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 1</option>
-            <option value="heading2" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 2</option>
-            <option value="heading3" style={{ background: '#2d3748', color: '#ffffff' }}>Heading 3</option>
-          </select>
-        ) : (
-          <View style={styles.group}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                isButtonHighlighted('paragraph') && styles.buttonHighlighted
-              ]}
-              onPress={() => onCommand('setParagraph')}
-            >
-              <Text style={[
-                styles.buttonText,
-                isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
-              ]}>P</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                isButtonHighlighted('h1') && styles.buttonHighlighted
-              ]}
-              onPress={() => onCommand('setHeading', { level: 1 })}
-            >
-              <Text style={[
-                styles.buttonText,
-                isButtonHighlighted('h1') && styles.buttonTextHighlighted
-              ]}>H1</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                isButtonHighlighted('h2') && styles.buttonHighlighted
-              ]}
-              onPress={() => onCommand('setHeading', { level: 2 })}
-            >
-              <Text style={[
-                styles.buttonText,
-                isButtonHighlighted('h2') && styles.buttonTextHighlighted
-              ]}>H2</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                isButtonHighlighted('h3') && styles.buttonHighlighted
-              ]}
-              onPress={() => onCommand('setHeading', { level: 3 })}
-            >
-              <Text style={[
-                styles.buttonText,
-                isButtonHighlighted('h3') && styles.buttonTextHighlighted
-              ]}>H3</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.divider} />
-
-        {/* Text formatting */}
+        {/* Block type selector - Always use buttons, no dropdown */}
         <View style={styles.group}>
           <TouchableOpacity
             style={[
               styles.button,
-              isButtonHighlighted('bold') && styles.buttonHighlighted
+              isButtonHighlighted('paragraph') && styles.buttonHighlighted
             ]}
-            onPress={() => onCommand('toggleBold')}
+            onPress={() => onCommand('setParagraph')}
           >
             <Text style={[
-              styles.boldText,
-              isButtonHighlighted('bold') && styles.buttonTextHighlighted
-            ]}>B</Text>
+              styles.buttonText,
+              isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
+            ]}>P</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('toggleItalic')}
+            style={[
+              styles.button,
+              isButtonHighlighted('h1') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 1 })}
           >
-            <Text style={styles.italicText}>I</Text>
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h1') && styles.buttonTextHighlighted
+            ]}>H1</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('toggleStrike')}
+            style={[
+              styles.button,
+              isButtonHighlighted('h2') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 2 })}
           >
-            <Text style={styles.strikeText}>S</Text>
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h2') && styles.buttonTextHighlighted
+            ]}>H2</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('toggleCode')}
+            style={[
+              styles.button,
+              isButtonHighlighted('h3') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('setHeading', { level: 3 })}
           >
-            <Text style={styles.codeText}>{'</>'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('toggleUnderline')}
-          >
-            <Text style={styles.underlineText}>U</Text>
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('h3') && styles.buttonTextHighlighted
+            ]}>H3</Text>
           </TouchableOpacity>
         </View>
 
@@ -201,40 +95,13 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
             onPress={() => !selectionEmpty && onCommand('createGeoMark')}
             disabled={selectionEmpty}
           >
-            <Text style={[
-              styles.buttonEmoji,
-              selectionEmpty && styles.buttonTextDisabled,
-              isButtonHighlighted('location') && styles.buttonTextHighlighted
-            ]}>📍</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Link */}
-        <View style={styles.group}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => onCommand('insertLink')}
-          >
-            <Text style={styles.buttonText}>🔗</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* View Mode Toggle - Only show if onViewModeChange is provided */}
-        {onViewModeChange && (
-          <>
-            <View style={styles.divider} />
-            <View style={styles.group}>
-              <TouchableOpacity
-                style={[styles.button, viewMode === 'map' && styles.buttonHighlighted]}
-                onPress={() => onViewModeChange(viewMode === 'document' ? 'map' : 'document')}
-              >
-                <Text style={styles.buttonText}>{viewMode === 'document' ? '🗺️' : '📄'}</Text>
-              </TouchableOpacity>
+            <View style={[styles.locationIcon, selectionEmpty && styles.locationIconDisabled]}>
+              <View style={styles.locationPin} />
+              <View style={styles.locationDot} />
             </View>
-          </>
-        )}
+          </TouchableOpacity>
+        </View>
+
       </View>
     </View>
   );
@@ -242,13 +109,19 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#2d3748',
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 0,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    width: '100%',
+    minHeight: 52,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' as any,
+        boxShadow: 'none' as any,
         overflow: 'visible' as any,
       },
     }),
@@ -258,6 +131,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flexWrap: 'wrap',
+    rowGap: 8, // Add space between wrapped rows
     ...Platform.select({
       web: {
         minWidth: 'auto' as any,
@@ -271,10 +145,10 @@ const styles = StyleSheet.create({
   button: {
     width: 40,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#f9fafb',
     ...Platform.select({
       web: {
         transition: 'all 0.2s' as any,
@@ -286,18 +160,18 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   buttonHighlighted: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#e5e7eb',
   },
   buttonText: {
     fontSize: 15,
-    color: '#ffffff',
+    color: '#374151',
     fontWeight: '600',
   },
   buttonTextDisabled: {
     opacity: 0.4,
   },
   buttonTextHighlighted: {
-    color: '#ffffff',
+    color: '#111827',
   },
   buttonEmoji: {
     fontSize: 18,
@@ -330,7 +204,32 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#e5e7eb',
     marginHorizontal: 4,
+  },
+  locationIcon: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationIconDisabled: {
+    opacity: 0.4,
+  },
+  locationPin: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    backgroundColor: '#374151',
+    borderRadius: 7,
+    top: 1,
+  },
+  locationDot: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: 3,
+    top: 5,
   },
 });

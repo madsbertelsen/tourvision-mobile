@@ -670,8 +670,6 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
             console.log('[Landing] onCommand received:', command, params, Date.now());
             webViewRef.current?.sendCommand(command, params);
           }}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
         />
       </View>
 
@@ -1126,7 +1124,7 @@ const styles = StyleSheet.create({
   },
   toolbarContainer: {
     position: 'absolute',
-    bottom: 20,
+    top: 0,
     left: '50%',
     zIndex: 1000,
     width: '100%',
@@ -1171,6 +1169,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     maxWidth: 700,
+    paddingTop: 60, // Add padding for top-positioned toolbar
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
