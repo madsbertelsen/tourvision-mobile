@@ -109,8 +109,9 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
         geoMarks: geoMarks,
         hasGeoMarks: geoMarks.length > 0
       });
-    } else if (node.type === 'bulletList' || node.type === 'orderedList') {
-      // Process list items to extract geo-marks
+    } else if (node.type === 'bulletList' || node.type === 'orderedList' ||
+               node.type === 'bullet_list' || node.type === 'ordered_list') {
+      // Process list items to extract geo-marks (handle both camelCase and snake_case)
       const text = extractTextContent(node);
       const geoMarks = extractGeoMarks(node, globalColorIndex);
 
