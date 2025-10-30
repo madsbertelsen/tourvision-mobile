@@ -315,25 +315,40 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDAT
 
 ### Querying Remote Database
 
-The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`. To query the remote database for debugging:
+The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`.
+
+#### Method 1: Using Docker with psql (Direct SQL)
 
 ```bash
-# Using Node.js scripts with Supabase client (RECOMMENDED)
-node scripts/check-ai-user.js
+# Use docker run with postgres image to connect to remote database
+PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql \
+  -h aws-0-us-west-1.pooler.supabase.com \
+  -p 6543 \
+  -U postgres.unocjfiipormnaujsuhk \
+  -d postgres \
+  -c "SELECT * FROM your_table LIMIT 5;"
 
-# The script uses the remote Supabase URL and service_role key
-# This is the safest way to inspect production data
+# Examples:
+# List all documents
+PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, title, created_by FROM documents LIMIT 5;"
+
+# Check recent chat messages
+PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, role, content, created_at FROM document_chats ORDER BY created_at DESC LIMIT 5;"
+
+# List all tables
+PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "\dt"
 ```
 
-**Important Notes:**
-- Remote database queries should use the Supabase client library (not direct psql)
-- Use service_role key for admin operations (defined in scripts)
-- Scripts in `/scripts` directory are already configured for remote access
-- Docker exec only works for LOCAL Supabase (via `npx supabase start`)
-- Never commit service_role keys to git (they're hardcoded in `.gitignore`d scripts for dev convenience)
+#### Method 2: Using Node.js Scripts with Supabase Client
 
-**Creating Query Scripts:**
-To inspect remote database state, create Node.js scripts like this:
+For more complex queries or when you need to respect RLS policies:
+
+```bash
+# Using existing scripts
+node scripts/check-ai-user.js
+```
+
+**Creating Custom Query Scripts:**
 
 ```javascript
 const { createClient } = require('@supabase/supabase-js');
@@ -354,6 +369,12 @@ async function queryData() {
 
 queryData().catch(console.error);
 ```
+
+**Important Notes:**
+- `docker exec` works for LOCAL database (supabase_db_tourvision-mobile container)
+- `docker run postgres:15 psql` works for REMOTE database (Supabase cloud)
+- Remote connection uses pooler on port 6543
+- Password and credentials should not be committed to git
 
 ### Prototype Reference
 The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the itinerary document structure stored in the `trips.itinerary_document` column.
