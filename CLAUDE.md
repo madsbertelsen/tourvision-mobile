@@ -319,9 +319,11 @@ The document-chat-listener and production systems connect to the remote Supabase
 
 #### Method 1: Using Docker with psql (Direct SQL)
 
+**Note:** Direct connection (`db.unocjfiipormnaujsuhk.supabase.co:5432`) is IPv6-only and requires IPv4 add-on. Use the **Shared Pooler** endpoint instead, which supports IPv4.
+
 ```bash
-# Use docker run with postgres image to connect to remote database
-PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql \
+# Use docker run with postgres image to connect to remote database via pooler
+PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql \
   -h aws-0-us-west-1.pooler.supabase.com \
   -p 6543 \
   -U postgres.unocjfiipormnaujsuhk \
@@ -330,13 +332,13 @@ PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql \
 
 # Examples:
 # List all documents
-PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, title, created_by FROM documents LIMIT 5;"
+PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, title, created_by FROM documents LIMIT 5;"
 
 # Check recent chat messages
-PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, role, content, created_at FROM document_chats ORDER BY created_at DESC LIMIT 5;"
+PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, role, content, created_at FROM document_chats ORDER BY created_at DESC LIMIT 5;"
 
 # List all tables
-PGPASSWORD='S2G2WJuNfxFXhXNx' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "\dt"
+PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "\dt"
 ```
 
 #### Method 2: Using Node.js Scripts with Supabase Client
