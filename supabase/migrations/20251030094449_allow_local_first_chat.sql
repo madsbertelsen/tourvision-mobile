@@ -1,0 +1,3 @@
+-- Revert: Keep the strict policy requiring document ownership
+-- Documents must be created in the database before chat is enabled
+-- This migration is intentionally empty to maintain migration history
