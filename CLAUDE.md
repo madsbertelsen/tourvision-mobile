@@ -313,6 +313,48 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDAT
 
 **Note:** The container name `supabase_db_tourvision-mobile` is based on your project folder name. The database is always `postgres` and the user is `postgres` with no password needed when accessing via Docker exec.
 
+### Querying Remote Database
+
+The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`. To query the remote database for debugging:
+
+```bash
+# Using Node.js scripts with Supabase client (RECOMMENDED)
+node scripts/check-ai-user.js
+
+# The script uses the remote Supabase URL and service_role key
+# This is the safest way to inspect production data
+```
+
+**Important Notes:**
+- Remote database queries should use the Supabase client library (not direct psql)
+- Use service_role key for admin operations (defined in scripts)
+- Scripts in `/scripts` directory are already configured for remote access
+- Docker exec only works for LOCAL Supabase (via `npx supabase start`)
+- Never commit service_role keys to git (they're hardcoded in `.gitignore`d scripts for dev convenience)
+
+**Creating Query Scripts:**
+To inspect remote database state, create Node.js scripts like this:
+
+```javascript
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
+const SUPABASE_SERVICE_KEY = 'your-service-key';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+async function queryData() {
+  const { data, error } = await supabase
+    .from('your_table')
+    .select('*')
+    .limit(5);
+
+  console.log(data);
+}
+
+queryData().catch(console.error);
+```
+
 ### Prototype Reference
 The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the itinerary document structure stored in the `trips.itinerary_document` column.
 
