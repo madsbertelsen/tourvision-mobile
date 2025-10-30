@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { htmlToProsemirror } from '@/utils/prosemirror-html';
+import ProseMirrorNativeRenderer from './ProseMirrorNativeRenderer';
 
 interface ChatMessage {
   id: string;
@@ -187,36 +189,47 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             </Text>
           </View>
         ) : (
-          messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.messageWrapper,
-                message.role === 'user' && styles.messageWrapperUser,
-              ]}
-            >
+          messages.map((message) => {
+            // Parse assistant messages as ProseMirror HTML
+            const parsedContent = message.role === 'assistant'
+              ? htmlToProsemirror(message.content)
+              : null;
+
+            return (
               <View
+                key={message.id}
                 style={[
-                  styles.messageBubble,
-                  message.role === 'user'
-                    ? styles.messageBubbleUser
-                    : styles.messageBubbleAssistant,
+                  styles.messageWrapper,
+                  message.role === 'user' && styles.messageWrapperUser,
                 ]}
               >
-                <Text
+                <View
                   style={[
-                    styles.messageText,
+                    styles.messageBubble,
                     message.role === 'user'
-                      ? styles.messageTextUser
-                      : styles.messageTextAssistant,
+                      ? styles.messageBubbleUser
+                      : styles.messageBubbleAssistant,
                   ]}
                 >
-                  {message.content}
-                </Text>
-                <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
+                  {message.role === 'assistant' && parsedContent ? (
+                    <ProseMirrorNativeRenderer content={parsedContent} />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.messageText,
+                        message.role === 'user'
+                          ? styles.messageTextUser
+                          : styles.messageTextAssistant,
+                      ]}
+                    >
+                      {message.content}
+                    </Text>
+                  )}
+                  <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
+                </View>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
 
