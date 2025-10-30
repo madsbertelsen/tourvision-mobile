@@ -22,6 +22,30 @@ export function ChatMessageProseMirror({ content }: ChatMessageProseMirrorProps)
       containerRef.current.innerHTML = '';
       // Append new DOM fragment
       containerRef.current.appendChild(domFragment);
+
+      // Add custom copy handler to preserve ProseMirror structure
+      const handleCopy = (e: ClipboardEvent) => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const range = selection.getRangeAt(0);
+        const fragment = range.cloneContents();
+
+        // Create a temporary div to hold the fragment
+        const temp = document.createElement('div');
+        temp.appendChild(fragment);
+
+        // Set both HTML and plain text
+        e.clipboardData?.setData('text/html', temp.innerHTML);
+        e.clipboardData?.setData('text/plain', selection.toString());
+        e.preventDefault();
+      };
+
+      containerRef.current.addEventListener('copy', handleCopy);
+
+      return () => {
+        containerRef.current?.removeEventListener('copy', handleCopy);
+      };
     }
   }, [domFragment]);
 

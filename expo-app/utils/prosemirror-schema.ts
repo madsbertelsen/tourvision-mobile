@@ -1,5 +1,8 @@
 import { Schema, NodeSpec, MarkSpec } from 'prosemirror-model';
 
+// Counter for generating unique geo IDs during paste operations
+let geoIdCounter = 0;
+
 // Define custom node specs
 const nodes: { [key: string]: NodeSpec } = {
   doc: {
@@ -138,11 +141,20 @@ const nodes: { [key: string]: NodeSpec } = {
           }
         }
 
+        // Generate geoId if not present (e.g., when pasting from chat)
+        let geoId = dom.getAttribute("data-geo-id");
+        if (!geoId) {
+          // Use counter and random string to ensure uniqueness when pasting multiple locations at once
+          const counter = geoIdCounter++;
+          const random = Math.random().toString(36).substr(2, 9);
+          geoId = `geo-${Date.now()}-${counter}-${random}`;
+        }
+
         return {
           lat: dom.getAttribute("data-lat"),
           lng: dom.getAttribute("data-lng"),
           placeName: dom.getAttribute("data-place-name") || dom.textContent,
-          geoId: dom.getAttribute("data-geo-id"),
+          geoId: geoId,
           transportFrom: dom.getAttribute("data-transport-from"),
           transportProfile: dom.getAttribute("data-transport-profile"),
           coordSource: dom.getAttribute("data-coord-source"),
@@ -163,7 +175,8 @@ const nodes: { [key: string]: NodeSpec } = {
       if (node.attrs.lat) attrs["data-lat"] = node.attrs.lat;
       if (node.attrs.lng) attrs["data-lng"] = node.attrs.lng;
       if (node.attrs.placeName) attrs["data-place-name"] = node.attrs.placeName;
-      if (node.attrs.geoId) attrs["data-geo-id"] = node.attrs.geoId;
+      // Always output geoId (it should always exist after parseDOM generates it)
+      attrs["data-geo-id"] = node.attrs.geoId || `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       if (node.attrs.transportFrom) attrs["data-transport-from"] = node.attrs.transportFrom;
       if (node.attrs.transportProfile) attrs["data-transport-profile"] = node.attrs.transportProfile;
       if (node.attrs.coordSource) attrs["data-coord-source"] = node.attrs.coordSource;
