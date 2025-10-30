@@ -27,6 +27,7 @@ import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
+import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
@@ -95,7 +96,7 @@ export default function TripDocumentView() {
           (showMap || showChat) && styles.documentContainerSplit
         ]}>
           <DynamicLandingDocumentProseMirror
-            initialContent={currentDoc}
+            initialContent={currentDoc || EMPTY_DOCUMENT_CONTENT}
             onLocationsChange={setLocations}
             onContentChange={setCurrentDoc}
             disableAnimation={true}

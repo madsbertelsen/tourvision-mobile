@@ -3,6 +3,17 @@
  * This represents a ProseMirror document structure
  */
 
+// Empty document for new documents (starts blank)
+export const EMPTY_DOCUMENT_CONTENT = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: []
+    }
+  ]
+};
+
 // SIMPLE CONTENT - SHORT VERSION WITH GEO-MARKS
 export const LANDING_DOCUMENT_CONTENT = {
   type: 'doc',
