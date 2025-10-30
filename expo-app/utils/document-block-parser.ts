@@ -109,6 +109,20 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
         geoMarks: geoMarks,
         hasGeoMarks: geoMarks.length > 0
       });
+    } else if (node.type === 'bulletList' || node.type === 'orderedList') {
+      // Process list items to extract geo-marks
+      const text = extractTextContent(node);
+      const geoMarks = extractGeoMarks(node, globalColorIndex);
+
+      // Increment globalColorIndex by number of geo-marks found
+      globalColorIndex += geoMarks.length;
+
+      blocks.push({
+        type: 'paragraph', // Treat as paragraph for simplicity
+        text: text,
+        geoMarks: geoMarks,
+        hasGeoMarks: geoMarks.length > 0
+      });
     }
   }
 

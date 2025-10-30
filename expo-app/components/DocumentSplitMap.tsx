@@ -156,9 +156,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentS
         })}
 
         {/* Location markers */}
-        {locations.map((location) => (
+        {locations.map((location, index) => (
           <Marker
-            key={location.geoId}
+            key={location.geoId || `marker-${index}-${location.lat}-${location.lng}`}
             latitude={location.lat}
             longitude={location.lng}
             anchor="center"
