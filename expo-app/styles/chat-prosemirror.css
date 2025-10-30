@@ -1,7 +1,18 @@
 /* Chat-specific ProseMirror styling */
-.ProseMirror {
+.chat-prosemirror-readonly .ProseMirror {
   padding: 0;
   outline: none;
+  cursor: default;
+  caret-color: transparent;
+}
+
+/* Disable cursor/caret completely in readonly mode */
+.chat-prosemirror-readonly .ProseMirror[contenteditable="false"] {
+  cursor: default;
+}
+
+.chat-prosemirror-readonly .ProseMirror * {
+  cursor: default;
 }
 
 .ProseMirror p {
