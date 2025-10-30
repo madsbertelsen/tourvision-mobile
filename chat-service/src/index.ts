@@ -6,8 +6,8 @@ import { config } from 'dotenv';
 import { ollama } from 'ollama-ai-provider-v2';
 import { openai } from '@ai-sdk/openai';
 
-// Load environment variables from root .env.local
-config({ path: '../.env.local' });
+// Load environment variables from .env.local
+config();
 
 // Configuration
 const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
