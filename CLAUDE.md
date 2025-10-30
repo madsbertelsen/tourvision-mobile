@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Structure
 
-This is a monorepo with two main applications:
+This is a monorepo with the following structure:
 - **`/expo-app`** - Expo React Native frontend (iOS, Android, Web)
-- **`/nextjs-api`** - Next.js backend API (currently unused, we use Supabase directly)
 - **`/supabase`** - Database migrations and seed data
+- **`/scripts`** - Node.js scripts for AI chat listener and utilities
 
 ## Current Status
 
@@ -15,24 +15,14 @@ This is a monorepo with two main applications:
 - Authentication (login, register, logout, password reset)
 - Protected routes with automatic redirect
 - Dashboard with user profile display
-- Trip cards showing sample trips
 - Database seeding with test data
 - Web platform support
-- **AI-Powered Chat** - Streaming responses with location extraction
-- **Interactive Maps** - Mapbox with smooth animations and flying marker
-- **Geo-Mark Navigation** - Click locations in chat to focus on map
-- **LLM-Biased Geocoding** - Accurate location resolution using Google Places API
-- **Enrichment Pipeline** - Automatic coordinate lookup for locations in chat
-
-### 🚧 In Progress
-- Trip detail views (`/trip/[id]`) - Mostly complete with document editor
-- TipTap editor integration - Working with custom nodes and diff preview
-- Collaboration features - Chat and AI proposals working
-- Native iOS/Android support - Web platform fully functional
+- **Document Chat System** - AI-powered chat with Mistral API via document-chat-listener.js
+- **ProseMirror Editor** - Rich text editing with geo-marks for locations
+- **Real-time Collaboration** - Tiptap Cloud (Hocuspocus) with Y.js CRDT
 
 ### 📝 Known Limitations
-- DOM components (TipTap, Maps) only work on web currently
-- No real-time collaboration yet
+- Web platform primary focus (native iOS/Android support limited)
 - Limited mobile responsiveness
 - Test coverage needed
 
@@ -125,63 +115,32 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 - **Expo SDK 54** - React Native framework with web support
 - **Expo Router** - File-based routing in `/app` directory
 - **NativeWind v4** - Tailwind CSS for React Native styling
-- **TipTap** - Rich text editor for trip itineraries (runs in DOM components)
-- **react-map-gl + Mapbox GL** - Interactive maps with animations (runs in DOM components)
+- **ProseMirror** - Rich text editor (HTML-based via WebView)
 - **Supabase** - Backend, auth, and real-time database
-- **Zustand** - State management with persistence
-- **React Query** - Data fetching and caching
-- **Vercel AI SDK** - Streaming AI responses from Next.js API
-- **Google Places API** - Location geocoding and disambiguation
+- **Mistral AI** - Chat responses via document-chat-listener.js
+- **Tiptap Cloud** - Real-time collaboration with Y.js CRDT
 
 ### Key Architectural Patterns
 
-#### DOM Components
-This app uses Expo DOM components to run web-only libraries (TipTap, react-map-gl) in React Native through WebViews:
-
-1. DOM components are in `/components/dom/` and start with `'use dom';`
-2. They're wrapped by native components (e.g., `TipTapEditorWrapper.tsx`)
-3. Communication between native and DOM happens via message passing
-
-#### Custom TipTap Nodes
-The editor uses custom nodes for travel planning:
-- **DestinationNode** - Places with coordinates, booking info, duration
-- **DayNode** - Container for daily travel plans
-- **TransportationNode** - Travel between destinations
-- **GroupSplitNode** - Split group activities
-- **TipNode** - Travel tips and recommendations
-
-Each node has specific attributes stored in the TipTap document JSON structure.
-
 #### Routing Structure
-- `/expo-app/app/index.tsx` - Dashboard/home screen
-- `/expo-app/app/(auth)/` - Authentication screens (login, register, forgot-password)
-- `/expo-app/app/(mock)/index.tsx` - Mock chat interface with AI and maps
-- `/expo-app/app/(mock)/location/[id].tsx` - Location detail screen
-- `/expo-app/app/trip/[id]/` - Trip detail screens with tabs
+- `/expo-app/app/(app)/index.tsx` - Main app screen
+- `/expo-app/app/(auth)/` - Authentication screens
+- `/expo-app/app/(app)/document/[id]/` - Document editor with chat
 - `/expo-app/app/_layout.tsx` - Root layout with auth protection
+
+#### Document Chat System
+- **Node.js Listener** (`/scripts/document-chat-listener.js`) - Listens to `document_chats` table
+- **Mistral AI** - Generates responses to user messages
+- **Realtime Subscriptions** - Uses anon key for subscriptions, service key for operations
+- **See**: DOCUMENT_CHAT_AI_SETUP.md for detailed setup instructions
 
 ### Database Schema
 
 Key tables in Supabase:
 - `profiles` - User profiles extending auth.users
-- `trips` - Trip records with itinerary documents (column: `itinerary_document`)
-- `places` - Location data with coordinates
-- `trip_places` - Junction table for places in trips
-- `collaboration_sessions` - Real-time collaboration state
-- `map_tiles` - PMTiles storage for offline maps
-
-Row Level Security (RLS) is enabled on all tables.
-
-### State Management
-
-The app uses Zustand stores:
-- `/stores/itinerary-store.ts` - Main trip/itinerary state with persistence
-
-State includes:
-- Current trip's itinerary document
-- Destinations and split groups
-- View preferences
-- Collaboration state
+- `documents` - Document records with ProseMirror JSON content
+- `document_chats` - Chat messages for AI-powered document generation
+- Row Level Security (RLS) is enabled on all tables
 
 ### Environment Configuration
 
@@ -234,6 +193,10 @@ For local development:
 #### Diff Preview Not Showing
 - **Cause:** Content already exists in document (duplicate proposal) or positions out of bounds
 - **Solution:** System now dynamically recalculates positions and handles empty documents
+
+#### Document Chat Listener Not Running
+- **Symptom:** AI responses not appearing in chat
+- **Solution:** Run `node scripts/document-chat-listener.js` - see DOCUMENT_CHAT_AI_SETUP.md
 
 ### Database Management
 
@@ -313,6 +276,20 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDAT
 
 **Note:** The container name `supabase_db_tourvision-mobile` is based on your project folder name. The database is always `postgres` and the user is `postgres` with no password needed when accessing via Docker exec.
 
+### Starting Document Chat Listener
+
+To enable AI responses in document chat, run the listener:
+
+```bash
+# From project root
+node scripts/document-chat-listener.js
+```
+
+See DOCUMENT_CHAT_AI_SETUP.md for detailed setup instructions including:
+- Configuring MISTRAL_API_KEY in .env.local
+- How the listener works
+- Troubleshooting realtime subscriptions
+
 ### Querying Remote Database
 
 The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`. Use curl to query the database via Supabase's REST API:
@@ -357,9 +334,6 @@ curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?rol
 - Use service_role key to bypass RLS policies
 - `docker exec` is for LOCAL database only (supabase_db_tourvision-mobile container)
 - Password and credentials should not be committed to git
-
-### Prototype Reference
-The `/expo-app/tourvision-prototype/pages/itinerary.html` contains detailed TipTap document schema specifications in HTML comments. This serves as the reference implementation for the itinerary document structure stored in the `trips.itinerary_document` column.
 
 ### Testing Approach
 Currently no test framework is configured. When adding tests:
@@ -704,205 +678,6 @@ git commit -m "feat: Description of changes"
 git push origin main
 ```
 
-## Diff Preview System
-
-### Overview
-The diff preview system shows proposed changes from AI suggestions before they're applied to the document. This allows users to visualize exactly what will be added, modified, or removed.
-
-### How It Works
-
-1. **AI Proposals**: When users discuss trip changes in chat, the AI creates proposals
-2. **Preview Changes**: Click "Show Changes in Document" to see what will be added
-3. **Visual Indicators**:
-   - Green highlighting/background for additions
-   - Strike-through for deletions
-   - Yellow highlighting for modifications
-4. **Accept/Reject**: Users can then accept or reject the proposed changes
-
-### Implementation Details
-
-#### Core Components
-
-**Diff Visualization Extension** (`/components/dom/tiptap-diff-extension.tsx`):
-- ProseMirror extension for rendering diff decorations
-- Handles inline decorations for existing content
-- Creates widget decorations for new content in empty documents
-
-**Recalculation Utility** (`/utils/recalculate-diff-decorations.ts`):
-- Dynamically recalculates decoration positions based on current document
-- Handles document evolution between proposal creation and viewing
-- Special handling for empty/minimal documents
-
-**Proposal System**:
-- Proposals store `diff_decorations` with positions and content
-- `proposed_content` contains the full document after changes
-- `current_content` snapshot at time of proposal creation
-
-### Testing Diff Preview
-
-#### Manual Testing Steps
-
-1. **Setup**:
-   ```bash
-   npx supabase db reset --local
-   npx expo start --web --port 8082
-   ```
-
-2. **Login**:
-   - Email: `test@example.com`
-   - Password: `TestPassword123!`
-
-3. **Test with Existing Document**:
-   - Open "Barcelona Adventure" trip
-   - Go to Document tab
-   - In chat, suggest: "Add visit to Sagrada Familia"
-   - Click "Show Changes in Document" when AI responds
-   - Verify green highlighting appears
-
-4. **Test with Empty Document**:
-   - Create new trip
-   - Go to Document tab (should be empty)
-   - Suggest: "Let's start with visiting Madrid"
-   - Verify preview appears even in empty document
-
-#### Automated Testing with Playwright
-
-```javascript
-const { chromium } = require('playwright');
-
-(async () => {
-  const browser = await chromium.launch({ headless: false });
-  const page = await browser.newPage();
-
-  // Navigate and login
-  await page.goto('http://localhost:8082');
-  await page.fill('input[type="email"]', 'test@example.com');
-  await page.fill('input[type="password"]', 'TestPassword123!');
-  await page.click('button:has-text("Sign in")');
-
-  // Open trip document
-  await page.waitForSelector('text=Barcelona Adventure');
-  await page.click('text=Barcelona Adventure');
-  await page.click('text=Document');
-
-  // Trigger AI proposal
-  await page.fill('input[placeholder*="message"]', 'Add Sagrada Familia visit');
-  await page.press('input[placeholder*="message"]', 'Enter');
-
-  // Test diff preview
-  await page.waitForSelector('text=Show Changes in Document', { timeout: 10000 });
-  await page.click('text=Show Changes in Document');
-
-  // Verify diff appears
-  const diffVisible = await page.locator('.diff-addition-preview').isVisible();
-  console.log('Diff preview visible:', diffVisible);
-
-  // Take screenshot
-  await page.screenshot({ path: 'diff-preview.png' });
-
-  await browser.close();
-})();
-```
-
-### Troubleshooting
-
-#### Preview Not Appearing
-
-1. **Check Console Logs**:
-   - Look for "DiffVisualization Plugin" messages
-   - Verify decoration positions are within document bounds
-   - Check if proposed content differs from current
-
-2. **Verify Proposal Data**:
-   ```sql
-   -- Check if proposal has diff decorations
-   SELECT id, title, diff_decorations
-   FROM proposals
-   WHERE trip_id = 'YOUR_TRIP_ID';
-   ```
-
-3. **Common Issues**:
-   - Content already exists (duplicate proposal)
-   - Document changed since proposal creation
-   - Empty document special case not handled
-
-## Edge Functions Development
-
-### Starting Edge Functions
-```bash
-# Start Edge Functions with environment variables
-npx supabase functions serve --env-file ./supabase/.env.local
-
-# The function will be available at:
-# http://127.0.0.1:54321/functions/v1/process-chat-message
-```
-
-### Monitoring Edge Functions
-**Important Note:** Edge Functions are NOT visible in the local Supabase Studio dashboard. This is a known limitation of local development.
-
-#### Option 1: Terminal Logs (Primary Method)
-Edge Function logs appear directly in the terminal where `npx supabase functions serve` is running. This shows:
-- Incoming requests
-- Console.log outputs
-- Error messages
-- Function execution details
-
-#### Option 2: Monitoring Script
-```bash
-# Run the monitoring script
-./scripts/monitor-edge-function.sh
-
-# This provides an interactive menu to:
-# 1. Test the Edge Function directly
-# 2. View recent chat messages from database
-# 3. View recent AI suggestions
-# 4. Check function health
-```
-
-#### Option 3: Direct API Testing
-```bash
-# Test the Edge Function manually
-curl -X POST http://127.0.0.1:54321/functions/v1/process-chat-message \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU" \
-  -H "Content-Type: application/json" \
-  -d '{"message_id": "test-123", "trip_id": "77528bea-3f27-450b-9dce-11f1c18fce0e", "user_id": "test-user", "message": "Test message"}'
-```
-
-#### Option 4: Chrome DevTools Debugging
-The Edge Function inspector is available on port 8083 (configured in config.toml). You can attach Chrome DevTools for advanced debugging.
-
-### Environment Variables for Edge Functions
-Edit `supabase/.env.local` to configure API keys:
-```bash
-# Mistral API key for AI processing
-MISTRAL_API_KEY=your-actual-mistral-api-key
-
-# Optional: other API keys if needed
-OPENAI_API_KEY=sk-your-openai-key-here
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
-```
-
-### Edge Function Configuration
-The function is configured in `supabase/config.toml`:
-```toml
-[functions.process-chat-message]
-verify_jwt = false  # Skip JWT verification for webhook calls
-```
-
-### AI-Powered Chat Processing
-The `process-chat-message` Edge Function:
-1. Triggered automatically when messages are inserted into `trip_chat_messages` table
-2. Uses Mistral AI (mistral-small-latest model) to analyze conversations
-3. Creates AI suggestions when consensus is detected in chat
-4. Stores suggestions in `ai_suggestions` table for voting
-
-### Database Webhook Flow
-1. User sends message in chat → Inserted into `trip_chat_messages`
-2. Database trigger fires → Calls Edge Function via pg_net
-3. Edge Function processes → Analyzes with Mistral AI
-4. If consensus detected → Creates suggestion in `ai_suggestions`
-5. Real-time subscription → Updates UI with new suggestion
-
 ### Realtime Subscription Important Note
 **Service role keys DO NOT work with Supabase realtime subscriptions.** When building listeners or background processes that need realtime updates:
 
@@ -958,262 +733,6 @@ The MCP tools allow direct database queries through natural language:
 - **Data validation**: Ensure seed data loaded correctly
 
 Using MCP tools provides accurate, real-time database information and significantly speeds up debugging compared to trial-and-error approaches.
-
-## AI Chat and Map Integration
-
-### Overview
-The mock chat interface (`/expo-app/app/(mock)/index.tsx`) demonstrates the AI-powered travel planning experience with integrated map visualization and location navigation.
-
-### Architecture
-
-#### Backend API (Next.js)
-Located in `/nextjs-api/app/api/chat-simple/route.ts`:
-- Uses Vercel AI SDK for streaming responses
-- Mistral AI model (`mistral-small-latest`) for chat
-- Enrichment pipeline for coordinate lookup
-- Tool support for URL content extraction (Firecrawl)
-
-#### Frontend Components
-
-**1. Chat Screen** (`/expo-app/app/(mock)/index.tsx`):
-- Uses `useChat` hook from AI SDK
-- Displays messages with HTML parsing
-- Shows map above chat interface
-- Handles geo-mark clicks for navigation
-
-**2. Map Wrapper** (`/expo-app/components/MapViewSimpleWrapper.tsx`):
-- Bridge between React Native and DOM component
-- Gets `focusedLocation` from MockContext
-- Passes location data to map
-
-**3. Map Component** (`/expo-app/components/dom/map-view-simple.tsx`):
-- DOM component with Mapbox GL
-- Animated camera movements with requestAnimationFrame
-- Flying marker with trail effect
-- Two-phase animation system
-
-**4. Message Display** (`/expo-app/components/MessageElementWithFocus.tsx`):
-- Parses HTML content and geo-marks
-- Makes locations clickable
-- Updates context on geo-mark click
-
-### Geo-Mark System
-
-#### What are Geo-Marks?
-Geo-marks are special HTML spans that wrap location names in AI responses:
-```html
-<span class="geo-mark"
-      data-geo="true"
-      data-lat="48.8584"
-      data-lng="2.2945"
-      data-place-name="Eiffel Tower, Paris, France"
-      data-coord-source="google"
-      title="📍 Eiffel Tower">
-  Eiffel Tower
-</span>
-```
-
-#### How They Work
-1. **AI Generation**: LLM wraps location names in geo-mark spans with approximate coordinates
-2. **Enrichment**: Backend pipeline queries Google Places API for accurate coordinates
-3. **Display**: Frontend parses and makes them clickable
-4. **Navigation**: Click triggers map focus animation
-
-#### Coordinate Sources
-- `google` - Accurate coordinates from Google Places Text Search API
-- `llm-fallback` - LLM-provided coordinates when API fails
-- `cache` - Previously fetched coordinates (24-hour TTL)
-
-### Map Animation System
-
-#### Two-Phase Animation
-The map uses a sophisticated two-phase animation to maintain spatial awareness:
-
-**Forward Animation (Focusing on Location)**:
-1. **Pan Phase (60%)**: Move camera to location, keeping zoom constant
-2. **Zoom Phase (40%)**: Zoom in to detail view (zoom level 12)
-
-**Reverse Animation (Unfocusing)**:
-1. **Zoom Phase (40%)**: Zoom out to overview level
-2. **Pan Phase (60%)**: Move camera back to original position
-
-#### Implementation Details
-- Duration: 2 seconds total
-- Easing: `easeInOutCubic` for smooth motion
-- Flying marker: Moves ahead of camera by 20%
-- Trail effect: Last 20 marker positions rendered as line
-- State restoration: Saves view state before focusing
-
-#### Code Location
-`/expo-app/components/dom/map-view-simple.tsx`:
-- `animateToLocation()` function handles animation logic
-- `useEffect` watches `focusedLocation` prop changes
-- `prevFocusedLocationRef` prevents infinite loops
-
-### Enrichment Pipeline
-
-#### Purpose
-Automatically enriches AI-generated content with accurate coordinates from Google Places API.
-
-#### Flow
-1. **LLM Response**: Includes geo-marks with approximate coordinates
-2. **Stream Processing**: Transform stream intercepts text chunks
-3. **Geo-Mark Detection**: RegEx finds complete `<span class="geo-mark">` tags
-4. **Coordinate Lookup**: Queries Google Places API with location bias
-5. **Replacement**: Updates data-lat/data-lng with accurate values
-6. **Client Rendering**: Frontend receives enriched HTML
-
-#### Code Location
-- **Pipeline**: `/nextjs-api/lib/enrichment-pipeline.ts`
-  - `EnrichmentPipeline` class handles buffering and processing
-  - `createEnrichmentTransform()` creates TransformStream
-- **Geocoding**: `/nextjs-api/lib/geocoding-service.ts`
-  - `geocodeLocation()` queries Google Places API
-  - Supports proximity bias for disambiguation
-  - Includes caching with 24-hour TTL
-
-### Google Places API Integration
-
-#### Text Search API
-Uses the new Google Places Text Search API (v1):
-```typescript
-POST https://places.googleapis.com/v1/places:searchText
-Headers:
-  X-Goog-Api-Key: YOUR_API_KEY
-  X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location
-Body:
-  {
-    "textQuery": "Eiffel Tower, Paris",
-    "locationBias": {
-      "circle": {
-        "center": { "latitude": 48.86, "longitude": 2.29 },
-        "radius": 50000.0
-      }
-    }
-  }
-```
-
-#### Location Disambiguation
-The LLM-provided approximate coordinates help disambiguate locations:
-- Multiple "Springfield" cities → Uses proximity to select correct one
-- Common landmark names → Biases toward expected region
-- Radius: 50km circle around LLM coordinates
-
-#### Environment Variables
-Required in `/nextjs-api/.env.local`:
-```bash
-GOOGLE_PLACES_API_KEY=your-api-key-here
-# OR
-GOOGLE_MAPS_API_KEY=your-api-key-here
-```
-
-### Mock Context
-
-#### Purpose
-Manages state for the mock chat interface, particularly focused location.
-
-#### Location
-`/expo-app/contexts/mock-context.tsx`
-
-#### State
-```typescript
-interface MockContextType {
-  focusedLocation: FocusedLocation | null;
-  setFocusedLocation: (location: FocusedLocation | null) => void;
-}
-
-interface FocusedLocation {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-}
-```
-
-#### Usage Pattern
-1. **Setting Focus**: Click geo-mark → `setFocusedLocation({ id, name, lat, lng })`
-2. **Map Response**: Map watches `focusedLocation` prop → Triggers animation
-3. **Clearing Focus**: Navigate back → `setFocusedLocation(null)`
-4. **State Restoration**: Map animates back to saved view state
-
-### Common Patterns
-
-#### Checking for HTML Content
-```typescript
-const hasHTMLContent = message.parts?.some((part: any) =>
-  part.type === 'text' && (
-    part.text?.includes('<itinerary>') ||
-    part.text?.includes('<h1>') ||
-    part.text?.includes('<ul>') ||
-    part.text?.includes('geo-mark')
-  )
-);
-```
-
-#### Parsing Geo-Marks
-```typescript
-const geoMarkRegex = /<span class="geo-mark"[^>]*data-lat="([^"]*)"[^>]*data-lng="([^"]*)"[^>]*data-place-name="([^"]*)"[^>]*>([^<]*)<\/span>/g;
-```
-
-#### Preventing Animation Loops
-```typescript
-// Track previous value to detect actual changes
-const prevFocusedLocationRef = useRef<FocusedLocation | null>(null);
-
-useEffect(() => {
-  const prevFocusedLocation = prevFocusedLocationRef.current;
-
-  // Only animate if ID actually changed
-  const focusedLocationChanged =
-    (!prevFocusedLocation && focusedLocation) ||
-    (prevFocusedLocation && !focusedLocation) ||
-    (prevFocusedLocation && focusedLocation && prevFocusedLocation.id !== focusedLocation.id);
-
-  if (!focusedLocationChanged) return;
-
-  // ... animation logic
-
-  prevFocusedLocationRef.current = focusedLocation;
-}, [focusedLocation]);
-```
-
-### Testing the Integration
-
-#### Manual Testing
-1. Start Next.js API:
-   ```bash
-   cd nextjs-api
-   PORT=3001 npm run dev
-   ```
-
-2. Start Expo app:
-   ```bash
-   cd expo-app
-   npx expo start --web --port 8082
-   ```
-
-3. Navigate to mock chat interface
-4. Ask AI: "Plan a 3-day trip to Paris"
-5. Verify:
-   - AI wraps locations in geo-marks
-   - Coordinates are enriched by backend
-   - Clicking location animates map
-   - Back navigation restores view
-
-#### Debugging Tips
-- **Check enrichment logs**: Look for `[Geocoding]` and `[EnrichmentPipeline]` in API logs
-- **Inspect HTML**: Use browser DevTools to verify geo-mark attributes
-- **Monitor API calls**: Check Google Places API requests in Network tab
-- **Test without API key**: Verify fallback to LLM coordinates
-- **Watch animation**: Open console to see animation logs
-
-### Future Enhancements
-- Real-time collaboration on map
-- Offline map tiles
-- Custom marker clustering
-- Route visualization between locations
-- Distance/duration calculations
-- Integration with TipTap document editor
 
 ## Tiptap Cloud Collaboration
 
