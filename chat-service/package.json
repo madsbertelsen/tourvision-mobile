@@ -7,7 +7,16 @@
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts"
   },
-  "keywords": ["chat", "supabase", "realtime", "ai"],
+  "keywords": [
+    "chat",
+    "supabase",
+    "realtime",
+    "ai"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "ai": "^5.0.82",
+    "ollama-ai-provider-v2": "^1.5.2"
+  }
 }
