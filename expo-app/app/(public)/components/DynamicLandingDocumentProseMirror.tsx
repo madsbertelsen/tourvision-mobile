@@ -23,12 +23,21 @@ interface DynamicLandingDocumentProseMirrorProps {
   onLocationsChange?: (locations: Location[]) => void;
   onContentChange?: (doc: any) => void;
   disableAnimation?: boolean;
+  webViewRef?: React.RefObject<ProseMirrorWebViewRef>;
+  onShowGeoMarkEditor?: (data: any, locations: Location[]) => void;
 }
 
 // Use the full landing page content
 const DEFAULT_INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
-export default function DynamicLandingDocumentProseMirror({ initialContent, onLocationsChange, onContentChange, disableAnimation = false }: DynamicLandingDocumentProseMirrorProps) {
+export default function DynamicLandingDocumentProseMirror({
+  initialContent,
+  onLocationsChange,
+  onContentChange,
+  disableAnimation = false,
+  webViewRef: externalWebViewRef,
+  onShowGeoMarkEditor: externalOnShowGeoMarkEditor
+}: DynamicLandingDocumentProseMirrorProps) {
   const INITIAL_CONTENT = initialContent || DEFAULT_INITIAL_CONTENT;
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
   const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
@@ -64,7 +73,8 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
   const [currentDocument, setCurrentDocument] = useState<any>(INITIAL_CONTENT);
 
   const animatorRef = useRef<TypingAnimatorCommands | null>(null);
-  const webViewRef = useRef<ProseMirrorWebViewRef>(null);
+  const internalWebViewRef = useRef<ProseMirrorWebViewRef>(null);
+  const webViewRef = externalWebViewRef || internalWebViewRef;
   const editorContainerRef = useRef<View>(null);
   // Use ref instead of state to avoid callback recreation
   const isAnimationCompleteRef = useRef(false);
@@ -439,7 +449,14 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
     console.log('[Landing] editorReady state should now be true');
   }, []);
 
-  const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
+  const handleShowGeoMarkEditor = useCallback((data: any, locs: any[]) => {
+    // Use external handler if provided (for split-screen mode)
+    if (externalOnShowGeoMarkEditor) {
+      externalOnShowGeoMarkEditor(data, locs);
+      return;
+    }
+
+    // Otherwise, use internal modal (for standalone landing page)
     console.log('[Landing] handleShowGeoMarkEditor called with:', data);
 
     // Get the search query from selected text
@@ -487,7 +504,7 @@ export default function DynamicLandingDocumentProseMirror({ initialContent, onLo
           lng: 2.3522,
         });
       });
-  }, []);
+  }, [externalOnShowGeoMarkEditor]);
 
   // Handle moving from Step 1 (location) to Step 2 (transport)
   const handleContinueToTransport = useCallback(() => {

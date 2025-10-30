@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, memo } from 'react';
+import React, { useRef, useState, useEffect, memo, ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
@@ -18,6 +18,7 @@ interface Location {
 
 interface DocumentSplitMapProps {
   locations: Location[];
+  modalContent?: ReactNode;
 }
 
 // Color array starting with Purple (to match expected first location color)
@@ -26,7 +27,7 @@ const COLORS = [
   // Purple,   Blue,     Green,    Orange,   Red
 ];
 
-const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentSplitMapProps) {
+const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalContent }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
 
@@ -197,12 +198,20 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentS
           </Marker>
         ))}
       </Map>
+
+      {/* Modal overlay - rendered within map container */}
+      {modalContent}
     </View>
   );
 }, (prevProps, nextProps) => {
   // Custom comparison function to prevent unnecessary re-renders
-  // Only re-render if locations actually changed
+  // Re-render if locations changed or modal content changed
   if (prevProps.locations.length !== nextProps.locations.length) {
+    return false; // Re-render
+  }
+
+  // Check if modal content changed
+  if (prevProps.modalContent !== nextProps.modalContent) {
     return false; // Re-render
   }
 

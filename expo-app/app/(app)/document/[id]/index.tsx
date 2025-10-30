@@ -18,7 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,13 +27,30 @@ import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
+import LocationModalPanel from '@/components/LocationModalPanel';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
+import { useLocationModal } from '@/hooks/useLocationModal';
+import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal } = useTripContext();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(true);
+
+  // Ref for ProseMirror WebView (needed by location modal hook)
+  const webViewRef = useRef<ProseMirrorWebViewRef>(null);
+
+  // Location modal handlers
+  const {
+    handleShowGeoMarkEditor,
+    handleSelectResult,
+    handleContinue,
+    handleTransportModeChange,
+    handleWaypointsChange,
+    handleAddLocation,
+    handleClose,
+  } = useLocationModal({ webViewRef });
 
   return (
     <View style={styles.container}>
@@ -100,13 +117,37 @@ export default function TripDocumentView() {
             onLocationsChange={setLocations}
             onContentChange={setCurrentDoc}
             disableAnimation={true}
+            webViewRef={webViewRef}
+            onShowGeoMarkEditor={handleShowGeoMarkEditor}
           />
         </View>
 
         {/* Map */}
         {showMap && (
           <View style={styles.mapContainer}>
-            <DocumentSplitMap locations={locations} />
+            <DocumentSplitMap
+              locations={locations}
+              modalContent={
+                <LocationModalPanel
+                  visible={locationModal.visible}
+                  onClose={handleClose}
+                  step={locationModal.step}
+                  onStepChange={(step) => {}}  // Handled by hook
+                  locationSearchResults={locationModal.locationSearchResults}
+                  selectedResultIndex={locationModal.selectedResultIndex}
+                  onSelectResult={handleSelectResult}
+                  isLoadingLocation={locationModal.isLoadingLocation}
+                  selectedLocation={locationModal.selectedLocation}
+                  transportConfig={locationModal.transportConfig}
+                  onTransportModeChange={handleTransportModeChange}
+                  onWaypointsChange={handleWaypointsChange}
+                  isLoadingRoute={locationModal.isLoadingRoute}
+                  existingLocations={locations}
+                  onContinue={handleContinue}
+                  onAddLocation={handleAddLocation}
+                />
+              }
+            />
           </View>
         )}
       </View>
