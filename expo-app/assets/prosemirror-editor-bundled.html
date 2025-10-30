@@ -1042,15 +1042,26 @@
       // Custom Enter key handler to prevent geo-marks from extending into new paragraphs
       const customEnterKeymap = keymap({
         'Enter': (state, dispatch) => {
+          console.log('[Enter Handler] Enter key pressed');
           const { $from } = state.selection;
-          // Check if cursor is at the end of a geo-mark node
           const nodeBefore = $from.nodeBefore;
+
+          console.log('[Enter Handler] nodeBefore:', nodeBefore ? nodeBefore.type.name : 'null');
+          console.log('[Enter Handler] $from.pos:', $from.pos);
+          console.log('[Enter Handler] Parent node:', $from.parent.type.name);
+
+          // Check if cursor is directly after a geo-mark node
           if (nodeBefore && nodeBefore.type.name === 'geoMark') {
-            // Split the block and clear node marks
+            console.log('[Enter Handler] Detected geoMark before cursor - intercepting Enter');
+            // Split the block without carrying over inline node context
             const tr = state.tr.split($from.pos, 1, [{ type: state.schema.nodes.paragraph }]);
-            if (dispatch) dispatch(tr.scrollIntoView());
+            if (dispatch) {
+              dispatch(tr.scrollIntoView());
+            }
             return true;
           }
+
+          console.log('[Enter Handler] No geoMark detected - letting base keymap handle');
           return false; // Let base keymap handle it
         }
       });
