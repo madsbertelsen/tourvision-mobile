@@ -1,24 +1,43 @@
 #!/usr/bin/env node
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-import { config } from 'dotenv';
 import { streamText } from 'ai';
+import { config } from 'dotenv';
 import { ollama } from 'ollama-ai-provider-v2';
+import { openai } from '@ai-sdk/openai';
 
 // Load environment variables from root .env.local
 config({ path: '../.env.local' });
 
 // Configuration
 const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTU2OTAsImV4cCI6MjA3Njc5MTY5MH0.GAMDmtZOvoHzJ2sesN7NC24Q8FYVuEHZlsvYvsQQEBU';
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0';
 
 // AI Assistant user ID (created by scripts/create-ai-user.js)
 const AI_USER_ID = '9e33f156-c21d-4234-939f-bc3455e2e5c2';
 
-// Ollama configuration
+// AI Provider configuration
+const AI_PROVIDER = process.env.AI_PROVIDER || 'ollama'; // 'ollama' or 'vercel-gateway'
+
+// Ollama configuration (direct connection)
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
+
+// Vercel AI Gateway configuration (OpenAI-compatible endpoint)
+const VERCEL_AI_GATEWAY_URL = process.env.VERCEL_AI_GATEWAY_URL; // e.g., https://gateway.vercel.ai/v1
+const VERCEL_AI_API_KEY = process.env.VERCEL_AI_API_KEY;
+const VERCEL_GATEWAY_MODEL = process.env.VERCEL_GATEWAY_MODEL || 'gpt-4o-mini'; // Model routed through gateway
+
+// Get the appropriate model based on provider
+function getModel() {
+  if (AI_PROVIDER === 'vercel-gateway' && VERCEL_AI_GATEWAY_URL && VERCEL_AI_API_KEY) {
+    return openai(VERCEL_GATEWAY_MODEL, {
+      baseURL: VERCEL_AI_GATEWAY_URL,
+      apiKey: VERCEL_AI_API_KEY,
+    });
+  }
+  return ollama(OLLAMA_MODEL);
+}
 
 // Types
 interface ChatMessage {
@@ -72,8 +91,14 @@ const supabaseAdmin: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVIC
 
 console.log('🚀 Document Chat Listener started');
 console.log('📡 Connecting to Supabase:', SUPABASE_URL);
-console.log('🤖 Using Ollama at:', OLLAMA_BASE_URL);
-console.log('🧠 Model:', OLLAMA_MODEL);
+console.log('🤖 AI Provider:', AI_PROVIDER);
+if (AI_PROVIDER === 'vercel-gateway') {
+  console.log('🌐 Gateway URL:', VERCEL_AI_GATEWAY_URL);
+  console.log('🧠 Model:', VERCEL_GATEWAY_MODEL);
+} else {
+  console.log('🤖 Ollama URL:', OLLAMA_BASE_URL);
+  console.log('🧠 Model:', OLLAMA_MODEL);
+}
 console.log('⏳ Listening for new chat messages...\n');
 
 // Track processing to avoid duplicates
@@ -381,16 +406,15 @@ function ensureProseMirrorHTML(text: string): string {
 
 async function generateAIResponseStreaming(
   messages: AIMessage[],
-  documentId: string,
+  _documentId: string,
   assistantMessageId: string
 ): Promise<string> {
-  // Using Ollama with AI SDK v5 streaming via ollama-ai-provider-v2
+  // Stream using configured AI provider (Ollama or Vercel AI Gateway)
   try {
-    const result = await streamText({
-      model: ollama(OLLAMA_MODEL),
+    const result = streamText({
+      model: getModel(),
       messages: messages,
       temperature: 0.7,
-      maxTokens: 500,
     });
 
     let fullText = '';
@@ -402,13 +426,14 @@ async function generateAIResponseStreaming(
     for await (const chunk of result.textStream) {
       buffer += chunk;
       fullText += chunk;
+      console.log(chunk);
 
       const now = Date.now();
       const shouldUpdate = (now - lastUpdateTime) >= updateInterval || buffer.length > 50;
 
       if (shouldUpdate) {
         // Update the assistant message with accumulated content
-        const formattedText = ensureProseMirrorHTML(buffer);
+        const formattedText = buffer;//ensureProseMirrorHTML(buffer);
         await supabaseAdmin
           .from('document_chats')
           .update({

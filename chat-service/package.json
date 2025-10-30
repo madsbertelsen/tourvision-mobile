@@ -16,6 +16,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.58",
     "ai": "^5.0.82",
     "ollama-ai-provider-v2": "^1.5.2"
   }
