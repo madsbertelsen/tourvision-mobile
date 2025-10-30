@@ -244,7 +244,48 @@ Your role is to:
 - Help them refine their travel plans
 - Be concise and friendly
 
-Keep responses focused and practical.`
+CRITICAL OUTPUT FORMAT REQUIREMENT:
+You MUST format ALL responses as valid ProseMirror HTML. The schema supports these elements:
+
+Block Elements:
+- <p>Paragraph text</p> - Standard paragraph
+- <h1>, <h2>, <h3>, <h4>, <h5>, <h6> - Headings (level 1-6)
+- <blockquote> - Quoted text
+- <ul><li>Item</li></ul> - Bullet list with list items
+- <ol><li>Item</li></ol> - Numbered list with list items
+- <pre><code>Code</code></pre> - Code block
+- <hr> - Horizontal rule
+
+Inline Formatting (marks):
+- <strong>Bold</strong> or <b>Bold</b> - Bold text
+- <em>Italic</em> or <i>Italic</i> - Italic text
+- <code>inline code</code> - Inline code
+- <a href="url">Link text</a> - Hyperlink
+- <br> - Line break
+
+Location References (geo-marks):
+When mentioning specific locations, wrap them as:
+<span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-coord-source="llm">Eiffel Tower</span>
+
+Example response:
+<p>I'd recommend visiting <span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-coord-source="llm">Eiffel Tower</span> in the morning.</p>
+
+<h2>Day 1 Itinerary</h2>
+<ul>
+<li><strong>Morning:</strong> Breakfast at café</li>
+<li><strong>Afternoon:</strong> Visit <span class="geo-mark" data-place-name="Louvre Museum, Paris, France" data-lat="48.8606" data-lng="2.3376" data-coord-source="llm">Louvre</span></li>
+<li><strong>Evening:</strong> Dinner near hotel</li>
+</ul>
+
+<p>Would you like me to add more details?</p>
+
+FORBIDDEN:
+- DO NOT use plain text without HTML tags
+- DO NOT use markdown syntax
+- DO NOT use <think> tags or reasoning tags
+- DO NOT skip wrapping text in <p> tags
+
+Keep responses practical and well-structured.`
       }
     ];
 
@@ -314,6 +355,23 @@ Keep responses focused and practical.`
   }
 }
 
+/**
+ * Ensure the response is properly formatted as ProseMirror HTML
+ */
+function ensureProseMirrorHTML(text: string): string {
+  // Remove <think> tags if present
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+  // If response doesn't start with an HTML tag, wrap it in <p> tags
+  if (!text.startsWith('<')) {
+    // Split by double newlines to create paragraphs
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+    return paragraphs.map(p => `<p>${p.trim()}</p>`).join('\n');
+  }
+
+  return text;
+}
+
 async function generateAIResponse(messages: AIMessage[]): Promise<string> {
   // Using Ollama with AI SDK v5 via ollama-ai-provider-v2
   try {
@@ -324,7 +382,11 @@ async function generateAIResponse(messages: AIMessage[]): Promise<string> {
       maxTokens: 500,
     });
 
-    return text;
+    // Ensure response is in ProseMirror HTML format
+    const formattedText = ensureProseMirrorHTML(text);
+    console.log(`   📝 Formatted response: ${formattedText.substring(0, 150)}...`);
+
+    return formattedText;
   } catch (error: any) {
     console.error('   ⚠️ Ollama error:', error);
     throw new Error(`Ollama error: ${error.message}`);
