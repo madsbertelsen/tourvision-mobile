@@ -199,13 +199,14 @@ async function syncDocumentToSupabase(document: SavedDocument): Promise<void> {
       });
 
     if (dbError) {
+      console.error('[syncDocumentToSupabase] Database error:', dbError);
       throw dbError;
     }
 
     console.log('[syncDocumentToSupabase] Successfully synced document to database:', document.id);
   } catch (error: any) {
     // Don't throw - this is non-blocking background sync
-    console.error('[syncDocumentToSupabase] Failed to sync document:', error.message);
+    console.error('[syncDocumentToSupabase] Failed to sync document:', error);
     throw error;
   }
 }
