@@ -317,31 +317,58 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDAT
 
 The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`.
 
-#### Method 1: Using Docker with psql (Direct SQL)
+#### Method 1: Using curl with Supabase REST API (RECOMMENDED)
 
-**Note:** Direct connection (`db.unocjfiipormnaujsuhk.supabase.co:5432`) is IPv6-only and requires IPv4 add-on. Use the **Shared Pooler** endpoint instead, which supports IPv4.
+The easiest way to query the remote database without IPv6 issues:
 
 ```bash
-# Use docker run with postgres image to connect to remote database via pooler
-PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql \
-  -h aws-0-us-west-1.pooler.supabase.com \
-  -p 6543 \
-  -U postgres.unocjfiipormnaujsuhk \
-  -d postgres \
-  -c "SELECT * FROM your_table LIMIT 5;"
+# Basic query format
+curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/TABLE_NAME?select=COLUMNS&limit=5" \
+  -H "apikey: SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer SERVICE_ROLE_KEY" \
+  2>/dev/null | jq
 
 # Examples:
 # List all documents
-PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, title, created_by FROM documents LIMIT 5;"
+curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/documents?select=id,title,created_by&limit=5" \
+  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  2>/dev/null | jq
 
-# Check recent chat messages
-PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "SELECT id, role, content, created_at FROM document_chats ORDER BY created_at DESC LIMIT 5;"
+# Check recent chat messages with ordering
+curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?select=id,role,content,created_at&order=created_at.desc&limit=5" \
+  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  2>/dev/null | jq
 
-# List all tables
-PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql -h aws-0-us-west-1.pooler.supabase.com -p 6543 -U postgres.unocjfiipormnaujsuhk -d postgres -c "\dt"
+# Filter by condition
+curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?role=eq.assistant&select=*" \
+  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
+  2>/dev/null | jq
 ```
 
-#### Method 2: Using Node.js Scripts with Supabase Client
+**PostgREST Query Operators:**
+- `select=col1,col2` - Select specific columns
+- `order=col.desc` - Order by column descending
+- `limit=N` - Limit results
+- `col=eq.value` - Filter where col equals value
+- `col=gt.value` - Greater than
+- `col=lt.value` - Less than
+- See [PostgREST docs](https://postgrest.org/en/stable/references/api/tables_views.html) for more
+
+#### Method 2: Using Docker with psql (Requires IPv6 or add-on)
+
+**Note:** Direct connection (`db.unocjfiipormnaujsuhk.supabase.co:5432`) is IPv6-only. Docker containers typically don't have IPv6 networking configured, making this method challenging. Use curl (Method 1) or Node.js scripts (Method 3) instead.
+
+```bash
+# This requires IPv6 networking in Docker (often not available)
+PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql \
+  "postgresql://postgres:IGB3hdgETTGX4gQW@db.unocjfiipormnaujsuhk.supabase.co:5432/postgres" \
+  -c "\dt"
+```
+
+#### Method 3: Using Node.js Scripts with Supabase Client
 
 For more complex queries or when you need to respect RLS policies:
 
@@ -373,9 +400,11 @@ queryData().catch(console.error);
 ```
 
 **Important Notes:**
-- `docker exec` works for LOCAL database (supabase_db_tourvision-mobile container)
-- `docker run postgres:15 psql` works for REMOTE database (Supabase cloud)
-- Remote connection uses pooler on port 6543
+- `docker exec` → LOCAL database (supabase_db_tourvision-mobile container)
+- `curl` with REST API → REMOTE database (RECOMMENDED - works everywhere)
+- `docker run postgres:15 psql` → REMOTE database (requires IPv6, often fails)
+- `node scripts/*.js` → REMOTE database (good for complex queries)
+- Use service_role key to bypass RLS policies
 - Password and credentials should not be committed to git
 
 ### Prototype Reference
