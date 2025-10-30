@@ -73,8 +73,8 @@ const subscription = supabaseRealtime
         console.log(`   ✨ This is an initial prompt - generating document...`);
         await processInitialPrompt(message);
       } else {
-        console.log(`   💬 Regular chat message - would process normally`);
-        // TODO: Handle regular chat messages
+        console.log(`   💬 Regular chat message - generating AI response...`);
+        await processRegularMessage(message);
       }
 
       // Remove from processing set after a delay
@@ -237,6 +237,149 @@ async function processInitialPrompt(message) {
       console.error('   ❌ Failed to insert error message:', insertError);
     }
   }
+}
+
+async function processRegularMessage(message) {
+  const { document_id, user_id, content } = message;
+
+  try {
+    console.log(`\n🤖 Generating AI response for: "${content}"`);
+
+    // Get recent chat history for context
+    const { data: chatHistory, error: historyError } = await supabaseAdmin
+      .from('document_chats')
+      .select('role, content')
+      .eq('document_id', document_id)
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (historyError) {
+      console.error('   ⚠️ Error fetching chat history:', historyError);
+    }
+
+    // Get current document content for context
+    const { data: document, error: docError } = await supabaseAdmin
+      .from('documents')
+      .select('document, title')
+      .eq('id', document_id)
+      .single();
+
+    if (docError) {
+      console.error('   ⚠️ Error fetching document:', docError);
+    }
+
+    // Build conversation context
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a helpful travel planning assistant. You are helping the user plan their trip "${document?.title || 'Untitled Trip'}".
+
+The current document contains: ${document?.document ? 'travel itinerary content' : 'no content yet'}.
+
+Your role is to:
+- Answer questions about their trip
+- Provide helpful suggestions and recommendations
+- Help them refine their travel plans
+- Be concise and friendly
+
+Keep responses focused and practical.`
+      }
+    ];
+
+    // Add chat history for context
+    if (chatHistory && chatHistory.length > 0) {
+      chatHistory.forEach(chat => {
+        messages.push({
+          role: chat.role === 'assistant' ? 'assistant' : 'user',
+          content: chat.content
+        });
+      });
+    }
+
+    // Add current user message
+    messages.push({
+      role: 'user',
+      content: content
+    });
+
+    // Call AI API (using Mistral via Supabase Edge Function or direct API)
+    const aiResponse = await generateAIResponse(messages);
+
+    console.log(`   💬 AI Response: ${aiResponse.substring(0, 100)}...`);
+
+    // Insert assistant response into chat
+    const { error: chatError } = await supabaseAdmin
+      .from('document_chats')
+      .insert({
+        document_id,
+        user_id, // Use same user_id so it appears as their conversation
+        role: 'assistant',
+        content: aiResponse,
+        metadata: {
+          source: 'document_chat_listener',
+          model: 'mistral-small-latest'
+        }
+      });
+
+    if (chatError) {
+      console.error('   ⚠️ Error inserting AI response:', chatError);
+    } else {
+      console.log(`   ✅ AI response added to chat`);
+    }
+
+  } catch (error) {
+    console.error(`   ❌ Error processing message:`, error);
+
+    // Insert error message into chat
+    try {
+      await supabaseAdmin
+        .from('document_chats')
+        .insert({
+          document_id,
+          user_id,
+          role: 'assistant',
+          content: `Sorry, I encountered an error while processing your message. Please try again.`,
+          metadata: {
+            source: 'document_chat_listener',
+            error: true,
+            error_message: error.message
+          }
+        });
+    } catch (insertError) {
+      console.error('   ❌ Failed to insert error message:', insertError);
+    }
+  }
+}
+
+async function generateAIResponse(messages) {
+  // Using Mistral API directly
+  const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+
+  if (!MISTRAL_API_KEY) {
+    throw new Error('MISTRAL_API_KEY not configured');
+  }
+
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${MISTRAL_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'mistral-small-latest',
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 500
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Mistral API error: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
 
 // Handle graceful shutdown
