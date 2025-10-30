@@ -26,11 +26,13 @@ import { router } from 'expo-router';
 import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
+import DocumentChat from '@/components/DocumentChat';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc } = useTripContext();
   const [showMap, setShowMap] = useState(true);
+  const [showChat, setShowChat] = useState(true);
 
   return (
     <View style={styles.container}>
@@ -43,6 +45,17 @@ export default function TripDocumentView() {
         <Text style={styles.title}>Trip Document (New)</Text>
 
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => setShowChat(!showChat)}
+            style={[styles.iconButton, showChat && styles.iconButtonActive]}
+          >
+            <Ionicons
+              name={showChat ? "chatbubbles" : "chatbubbles-outline"}
+              size={22}
+              color={showChat ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => setShowMap(!showMap)}
             style={[styles.iconButton, showMap && styles.iconButtonActive]}
@@ -69,8 +82,18 @@ export default function TripDocumentView() {
 
       {/* Main Content - Split View */}
       <View style={styles.contentWrapper}>
+        {/* Chat Panel */}
+        {showChat && (
+          <View style={styles.chatContainer}>
+            <DocumentChat documentId={tripId} />
+          </View>
+        )}
+
         {/* Document */}
-        <View style={[styles.documentContainer, showMap && styles.documentContainerSplit]}>
+        <View style={[
+          styles.documentContainer,
+          (showMap || showChat) && styles.documentContainerSplit
+        ]}>
           <DynamicLandingDocumentProseMirror
             initialContent={currentDoc}
             onLocationsChange={setLocations}
@@ -130,6 +153,13 @@ const styles = StyleSheet.create({
   contentWrapper: {
     flex: 1,
     flexDirection: 'row',
+  },
+  chatContainer: {
+    width: 350,
+    minWidth: 300,
+    maxWidth: 400,
+    borderRightWidth: 1,
+    borderRightColor: '#e5e7eb',
   },
   documentContainer: {
     flex: 1,
