@@ -9,6 +9,9 @@ export interface GeoMarkInBlock {
   lng: number;
   colorIndex: number;
   text: string;
+  transportFrom?: string | null;
+  transportProfile?: string | null;
+  waypoints?: Array<{lat: number, lng: number}> | null;
 }
 
 export interface DocumentBlock {
@@ -70,7 +73,10 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
         lat: n.attrs.lat,
         lng: n.attrs.lng,
         colorIndex: colorIndex,
-        text: text
+        text: text,
+        transportFrom: n.attrs.transportFrom || null,
+        transportProfile: n.attrs.transportProfile || null,
+        waypoints: n.attrs.waypoints || null
       });
     }
 

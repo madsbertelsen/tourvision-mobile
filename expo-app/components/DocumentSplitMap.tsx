@@ -11,6 +11,9 @@ interface Location {
   lat: number;
   lng: number;
   colorIndex?: number;
+  transportFrom?: string | null;
+  transportProfile?: string | null;
+  waypoints?: Array<{lat: number, lng: number}> | null;
 }
 
 interface DocumentSplitMapProps {
@@ -27,7 +30,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentS
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
 
-  // Fetch routes between consecutive locations
+  // Fetch routes between consecutive locations (only when transportation is defined)
   useEffect(() => {
     const fetchRoutes = async () => {
       if (locations.length < 2) {
@@ -38,13 +41,35 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations }: DocumentS
       const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
       const routePromises = [];
 
-      // Fetch route between each pair of consecutive locations
-      for (let i = 0; i < locations.length - 1; i++) {
-        const from = locations[i];
-        const to = locations[i + 1];
+      // Only fetch routes for locations that have transportFrom defined
+      for (let i = 0; i < locations.length; i++) {
+        const to = locations[i];
 
-        const coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+        // Skip if no transport connection is defined
+        if (!to.transportFrom) {
+          continue;
+        }
+
+        // Find the "from" location by geoId
+        const from = locations.find(loc => loc.geoId === to.transportFrom);
+        if (!from) {
+          console.warn(`Transport from location ${to.transportFrom} not found for ${to.placeName}`);
+          continue;
+        }
+
+        // Use waypoints if defined, otherwise direct route
+        let coordinates;
+        if (to.waypoints && to.waypoints.length > 0) {
+          // Include waypoints in the route
+          const waypointCoords = to.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+          coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+        } else {
+          coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+        }
+
+        // Determine transport profile (default to walking)
+        const profile = to.transportProfile || 'walking';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
 
         routePromises.push(
           fetch(url)
