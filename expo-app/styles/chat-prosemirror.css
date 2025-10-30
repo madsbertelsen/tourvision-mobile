@@ -1,0 +1,97 @@
+/* Chat-specific ProseMirror styling */
+.ProseMirror {
+  padding: 0;
+  outline: none;
+}
+
+.ProseMirror p {
+  margin: 0 0 8px 0;
+}
+
+.ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.ProseMirror h1 {
+  font-size: 1.5em;
+}
+
+.ProseMirror h2 {
+  font-size: 1.3em;
+}
+
+.ProseMirror h3 {
+  font-size: 1.1em;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.ProseMirror li {
+  margin: 4px 0;
+}
+
+/* Geo-mark styling with colors */
+.ProseMirror .geo-mark {
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  border-bottom: 1px solid;
+  user-select: text;
+}
+
+/* Color palette for geo-marks - matching DocumentSplitMap colors */
+.ProseMirror .geo-mark[data-color-index="0"] {
+  background-color: rgba(59, 130, 246, 0.2);   /* Blue */
+  border-bottom-color: rgba(59, 130, 246, 0.6);
+}
+
+.ProseMirror .geo-mark[data-color-index="1"] {
+  background-color: rgba(139, 92, 246, 0.2);   /* Purple */
+  border-bottom-color: rgba(139, 92, 246, 0.6);
+}
+
+.ProseMirror .geo-mark[data-color-index="2"] {
+  background-color: rgba(16, 185, 129, 0.2);   /* Green */
+  border-bottom-color: rgba(16, 185, 129, 0.6);
+}
+
+.ProseMirror .geo-mark[data-color-index="3"] {
+  background-color: rgba(245, 158, 11, 0.2);   /* Orange */
+  border-bottom-color: rgba(245, 158, 11, 0.6);
+}
+
+.ProseMirror .geo-mark[data-color-index="4"] {
+  background-color: rgba(239, 68, 68, 0.2);    /* Red */
+  border-bottom-color: rgba(239, 68, 68, 0.6);
+}
+
+/* Hover effect for geo-marks */
+.ProseMirror .geo-mark:hover {
+  opacity: 0.8;
+}
+
+/* Bold and italic formatting */
+.ProseMirror strong {
+  font-weight: 600;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+/* Ensure text is selectable */
+.ProseMirror * {
+  user-select: text;
+  -webkit-user-select: text;
+}

@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import ProseMirrorNativeRenderer from './ProseMirrorNativeRenderer';
+import { ChatMessageProseMirror } from './ChatMessageProseMirror';
 
 interface ChatMessage {
   id: string;
@@ -212,7 +213,11 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                   ]}
                 >
                   {message.role === 'assistant' && parsedContent ? (
-                    <ProseMirrorNativeRenderer content={parsedContent} />
+                    Platform.OS === 'web' ? (
+                      <ChatMessageProseMirror content={parsedContent} />
+                    ) : (
+                      <ProseMirrorNativeRenderer content={parsedContent} />
+                    )
                   ) : (
                     <Text
                       style={[
