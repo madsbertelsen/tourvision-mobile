@@ -40,7 +40,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
   useEffect(() => {
     loadMessages();
 
-    // Subscribe to new messages
+    // Subscribe to new messages and updates (for streaming)
     const channel = supabase
       .channel(`document-chat-${documentId}`)
       .on(
@@ -58,6 +58,27 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
           setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
           }, 100);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'document_chats',
+          filter: `document_id=eq.${documentId}`,
+        },
+        (payload) => {
+          const updatedMessage = payload.new as ChatMessage;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === updatedMessage.id ? updatedMessage : msg
+            )
+          );
+          // Auto-scroll if we're near the bottom (within 100px)
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 50);
         }
       )
       .subscribe();

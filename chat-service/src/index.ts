@@ -2,7 +2,7 @@
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
-import { generateText } from 'ai';
+import { streamText } from 'ai';
 import { ollama } from 'ollama-ai-provider-v2';
 
 // Load environment variables from root .env.local
@@ -305,31 +305,38 @@ Keep responses practical and well-structured.`
       content: content
     });
 
-    // Call AI API (using Mistral via direct API)
-    const aiResponse = await generateAIResponse(messages);
-
-    console.log(`   💬 AI Response: ${aiResponse.substring(0, 100)}...`);
-
-    // Insert assistant response into chat (using AI user ID)
-    const { error: chatError } = await supabaseAdmin
+    // Create placeholder assistant message first (for streaming updates)
+    console.log(`   💬 Creating streaming assistant message...`);
+    const { data: assistantMessage, error: insertError } = await supabaseAdmin
       .from('document_chats')
       .insert({
         document_id,
         user_id: AI_USER_ID,
         role: 'assistant',
-        content: aiResponse,
+        content: '', // Empty initially, will be updated via streaming
         metadata: {
           source: 'document_chat_listener',
           model: OLLAMA_MODEL,
-          provider: 'ollama'
+          provider: 'ollama',
+          streaming: true,
+          complete: false
         }
-      });
+      })
+      .select()
+      .single();
 
-    if (chatError) {
-      console.error('   ⚠️ Error inserting AI response:', chatError);
-    } else {
-      console.log(`   ✅ AI response added to chat`);
+    if (insertError || !assistantMessage) {
+      console.error('   ⚠️ Error creating assistant message:', insertError);
+      throw new Error('Failed to create assistant message');
     }
+
+    console.log(`   📡 Starting streaming response (message ID: ${assistantMessage.id})...`);
+
+    // Stream AI response and update the message in real-time
+    await generateAIResponseStreaming(messages, document_id, assistantMessage.id);
+
+    console.log(`   ✅ Streaming response complete`);
+
 
   } catch (error: any) {
     console.error(`   ❌ Error processing message:`, error);
@@ -372,23 +379,75 @@ function ensureProseMirrorHTML(text: string): string {
   return text;
 }
 
-async function generateAIResponse(messages: AIMessage[]): Promise<string> {
-  // Using Ollama with AI SDK v5 via ollama-ai-provider-v2
+async function generateAIResponseStreaming(
+  messages: AIMessage[],
+  documentId: string,
+  assistantMessageId: string
+): Promise<string> {
+  // Using Ollama with AI SDK v5 streaming via ollama-ai-provider-v2
   try {
-    const { text } = await generateText({
+    const result = await streamText({
       model: ollama(OLLAMA_MODEL),
       messages: messages,
       temperature: 0.7,
       maxTokens: 500,
     });
 
-    // Ensure response is in ProseMirror HTML format
-    const formattedText = ensureProseMirrorHTML(text);
-    console.log(`   📝 Formatted response: ${formattedText.substring(0, 150)}...`);
+    let fullText = '';
+    let buffer = '';
+    const updateInterval = 100; // Update every 100ms or when buffer has enough text
+    let lastUpdateTime = Date.now();
 
+    // Stream chunks and update the database in real-time
+    for await (const chunk of result.textStream) {
+      buffer += chunk;
+      fullText += chunk;
+
+      const now = Date.now();
+      const shouldUpdate = (now - lastUpdateTime) >= updateInterval || buffer.length > 50;
+
+      if (shouldUpdate) {
+        // Update the assistant message with accumulated content
+        const formattedText = ensureProseMirrorHTML(buffer);
+        await supabaseAdmin
+          .from('document_chats')
+          .update({
+            content: formattedText,
+            metadata: {
+              source: 'document_chat_listener',
+              model: OLLAMA_MODEL,
+              provider: 'ollama',
+              streaming: true,
+              complete: false
+            }
+          })
+          .eq('id', assistantMessageId);
+
+        lastUpdateTime = now;
+        console.log(`   📡 Streamed ${fullText.length} chars...`);
+      }
+    }
+
+    // Final update with complete response
+    const formattedText = ensureProseMirrorHTML(fullText);
+    await supabaseAdmin
+      .from('document_chats')
+      .update({
+        content: formattedText,
+        metadata: {
+          source: 'document_chat_listener',
+          model: OLLAMA_MODEL,
+          provider: 'ollama',
+          streaming: true,
+          complete: true
+        }
+      })
+      .eq('id', assistantMessageId);
+
+    console.log(`   ✅ Streaming complete: ${fullText.length} chars total`);
     return formattedText;
   } catch (error: any) {
-    console.error('   ⚠️ Ollama error:', error);
+    console.error('   ⚠️ Ollama streaming error:', error);
     throw new Error(`Ollama error: ${error.message}`);
   }
 }
