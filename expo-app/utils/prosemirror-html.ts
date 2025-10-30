@@ -174,10 +174,30 @@ export function htmlToProsemirror(html: string): JSONContent {
     return inlineNodes;
   };
 
+  // Helper function to parse list items
+  const parseListItems = (listHtml: string): any[] => {
+    const items: any[] = [];
+    const itemRegex = /<li[^>]*>(.*?)<\/li>/gis;
+    let match;
+
+    while ((match = itemRegex.exec(listHtml)) !== null) {
+      items.push({
+        type: 'listItem',
+        content: [{
+          type: 'paragraph',
+          content: parseInlineContent(match[1])
+        }]
+      });
+    }
+
+    return items;
+  };
+
   // Simple regex-based parsing for complete elements only
   const paragraphs = cleanHtml.match(/<p[^>]*>(.*?)<\/p>/gis) || [];
   const headings = cleanHtml.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/gis) || [];
-  const listItems = cleanHtml.match(/<li[^>]*>(.*?)<\/li>/gis) || [];
+  const bulletLists = cleanHtml.match(/<ul[^>]*>(.*?)<\/ul>/gis) || [];
+  const orderedLists = cleanHtml.match(/<ol[^>]*>(.*?)<\/ol>/gis) || [];
 
   // Combine and sort by position in cleanHtml
   const elements: { pos: number; node: any; length: number }[] = [];
@@ -208,6 +228,36 @@ export function htmlToProsemirror(html: string): JSONContent {
           type: 'heading',
           attrs: { level: parseInt(match[1]) },
           content: parseInlineContent(match[2])
+        }
+      });
+    }
+  });
+
+  bulletLists.forEach(ul => {
+    const pos = cleanHtml.indexOf(ul);
+    const match = ul.match(/<ul[^>]*>(.*?)<\/ul>/is);
+    if (match) {
+      elements.push({
+        pos,
+        length: ul.length,
+        node: {
+          type: 'bulletList',
+          content: parseListItems(match[1])
+        }
+      });
+    }
+  });
+
+  orderedLists.forEach(ol => {
+    const pos = cleanHtml.indexOf(ol);
+    const match = ol.match(/<ol[^>]*>(.*?)<\/ol>/is);
+    if (match) {
+      elements.push({
+        pos,
+        length: ol.length,
+        node: {
+          type: 'orderedList',
+          content: parseListItems(match[1])
         }
       });
     }
