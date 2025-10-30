@@ -1,6 +1,5 @@
 import DocumentsSidebar from '@/components/DocumentsSidebar';
 import { AppProvider } from '@/contexts/AppContext';
-import { YjsCollaborationProvider } from '@/contexts/YjsCollaborationContext';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React from 'react';
@@ -138,9 +137,7 @@ function MockLayoutContent() {
 export default function MockLayout() {
   return (
     <AppProvider>
-      <YjsCollaborationProvider>
-        <MockLayoutContent />
-      </YjsCollaborationProvider>
+      <MockLayoutContent />
     </AppProvider>
   );
 }

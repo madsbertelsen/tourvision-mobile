@@ -83,7 +83,7 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
         border: 'none',
         backgroundColor: '#ffffff',
       }}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-same-origin"
     />
   );
 });

@@ -55,11 +55,14 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
     if (n.type === 'geoMark' && n.attrs) {
       const text = extractTextContent(n);
       // Use stored colorIndex if available, otherwise auto-assign sequentially
-      const colorIndex = n.attrs.colorIndex !== undefined
-        ? n.attrs.colorIndex
-        : colorCounter++;
+      const hasStoredColor = n.attrs.colorIndex !== undefined;
+      const colorIndex = hasStoredColor ? n.attrs.colorIndex : colorCounter++;
 
-      console.log('[Parser] Geo-mark:', n.attrs.placeName, 'stored:', n.attrs.colorIndex, 'assigned:', colorIndex);
+      console.log('[Parser] Geo-mark:', n.attrs.placeName,
+        'hasStored:', hasStoredColor,
+        'stored:', n.attrs.colorIndex,
+        'assigned:', colorIndex,
+        'counter:', colorCounter);
 
       geoMarks.push({
         geoId: n.attrs.geoId,

@@ -6,7 +6,7 @@ import Map from 'react-map-gl/mapbox';
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { GeolocateControl, Layer, Marker, NavigationControl, Source, useControl } from 'react-map-gl/mapbox';
+import { Layer, Marker, Source, useControl } from 'react-map-gl/mapbox';
 
 interface LocationMapWebProps {
   latitude: number;
@@ -147,10 +147,6 @@ export default function LocationMapWeb({
       >
         {/* DeckGL overlay */}
         <DeckGLOverlay layers={layers} />
-
-        {/* Navigation controls */}
-        <NavigationControl position="top-right" />
-        <GeolocateControl position="top-right" />
 
         {/* Origin marker (as fallback if deck.gl doesn't render) */}
         {transportFrom && (

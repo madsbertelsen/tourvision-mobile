@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "@hocuspocus/provider": "^3.3.2",
+    "@supabase/supabase-js": "^2.77.0",
+    "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.3",
     "yjs": "^13.6.27"

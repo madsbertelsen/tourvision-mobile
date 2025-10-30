@@ -20,9 +20,9 @@ export default function PromptTripScreen() {
       return;
     }
 
-    // Navigate to generate-trip screen with the prompt
+    // Navigate to generate-document screen with the prompt
     router.push({
-      pathname: '/(app)/generate-trip',
+      pathname: '/(app)/generate-document',
       params: { prompt: prompt.trim() }
     });
   };

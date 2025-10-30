@@ -12,11 +12,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/supabase/auth-context';
 
-// Dynamically import components only on web
-const DynamicLandingDocumentProseMirror = Platform.OS === 'web'
-  ? require('./components/DynamicLandingDocumentProseMirror').default
-  : null;
-
 export default function LandingPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
@@ -55,56 +50,47 @@ export default function LandingPage() {
         </View>
       </View>
 
-      {/* Dynamic Document Section */}
-      {Platform.OS === 'web' && DynamicLandingDocumentProseMirror ? (
-        <View style={styles.editorFullWidth}>
-          <DynamicLandingDocumentProseMirror />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <>
-            {/* Fallback for non-web platforms */}
-            <View style={styles.hero}>
-              <View style={styles.heroContent}>
-                <View style={styles.heroText}>
-                  <Text style={styles.heroTitle}>Create Stunning Travel Presentations</Text>
-                  <Text style={styles.heroSubtitle}>
-                    Transform your journeys into immersive stories. Plan, collaborate, and share beautiful travel presentations with the world.
-                  </Text>
+      {/* Hero Section */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.hero}>
+          <View style={styles.heroContent}>
+            <View style={styles.heroText}>
+              <Text style={styles.heroTitle}>Create Stunning Travel Presentations</Text>
+              <Text style={styles.heroSubtitle}>
+                Transform your journeys into immersive stories. Plan, collaborate, and share beautiful travel presentations with the world.
+              </Text>
 
-                  <View style={styles.ctaButtons}>
-                    {isAuthenticated ? (
-                      <TouchableOpacity
-                        style={styles.primaryCTA}
-                        onPress={() => router.push('/(app)/dashboard')}
-                      >
-                        <Text style={styles.primaryCTAText}>Go to Dashboard</Text>
-                        <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
-                      </TouchableOpacity>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.primaryCTA}
-                          onPress={() => router.push('/(auth)/register')}
-                        >
-                          <Text style={styles.primaryCTAText}>Start Creating</Text>
-                          <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.secondaryCTA}
-                          onPress={() => router.push('/(auth)/login')}
-                        >
-                          <Text style={styles.secondaryCTAText}>Login</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                </View>
+              <View style={styles.ctaButtons}>
+                {isAuthenticated ? (
+                  <TouchableOpacity
+                    style={styles.primaryCTA}
+                    onPress={() => router.push('/(app)/dashboard')}
+                  >
+                    <Text style={styles.primaryCTAText}>Go to Dashboard</Text>
+                    <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.primaryCTA}
+                      onPress={() => router.push('/(auth)/register')}
+                    >
+                      <Text style={styles.primaryCTAText}>Start Creating</Text>
+                      <Ionicons name="arrow-forward-circle" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.secondaryCTA}
+                      onPress={() => router.push('/(auth)/login')}
+                    >
+                      <Text style={styles.secondaryCTAText}>Login</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
-          </>
-        </ScrollView>
-      )}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

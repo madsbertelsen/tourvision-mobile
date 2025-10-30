@@ -323,6 +323,308 @@ Currently no test framework is configured. When adding tests:
 3. Test both native and DOM components separately
 4. Test auth flow with the seeded test users
 
+## Testing with Playwright MCP
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation tools for testing web features. It's particularly useful for testing complex UI interactions that involve iframes, text selection, and multi-step workflows.
+
+### Prerequisites
+
+1. **Playwright MCP server must be connected**:
+   - Check connection status with `/mcp` command
+   - If disconnected, reconnect using `/mcp` command
+   - Verify "Reconnected to playwright" message appears
+
+2. **App must be running**:
+   ```bash
+   cd expo-app
+   npx expo start --web --port 8082
+   ```
+
+3. **Test data should be available**:
+   - Document at `http://localhost:8082/document/test-id` should exist
+   - Or create test data through the app UI first
+
+### Available MCP Tools
+
+#### Navigation and Page Management
+- `browser_navigate` - Navigate to a URL
+- `browser_navigate_back` - Go back to previous page
+- `browser_tabs` - List, create, close, or select browser tabs
+- `browser_close` - Close the browser
+
+#### Content Inspection
+- `browser_snapshot` - Capture accessibility snapshot of current page (better than screenshot)
+- `browser_take_screenshot` - Take a PNG/JPEG screenshot
+- `browser_console_messages` - Returns all console messages
+
+#### User Interactions
+- `browser_click` - Click on elements
+- `browser_type` - Type text into editable elements
+- `browser_press_key` - Press keyboard keys (ArrowLeft, Enter, etc.)
+- `browser_fill_form` - Fill multiple form fields at once
+- `browser_select_option` - Select dropdown options
+- `browser_hover` - Hover over elements
+- `browser_drag` - Drag and drop between elements
+
+#### Advanced Operations
+- `browser_evaluate` - Execute JavaScript in page context
+- `browser_wait_for` - Wait for text to appear/disappear or time to pass
+- `browser_network_requests` - View all network requests
+
+### Common Testing Patterns
+
+#### Pattern 1: Testing Location Addition with Geo-Marks
+
+This pattern tests the complete flow of adding a location to a document, which involves:
+1. Navigating to document
+2. Typing text in ProseMirror iframe
+3. Selecting specific text
+4. Clicking location button
+5. Verifying the location was added with correct color
+
+**Full Example:**
+```javascript
+// 1. Navigate to test document
+await browser_navigate({ url: 'http://localhost:8082/document/test-id' });
+
+// 2. Wait for page to load
+await browser_wait_for({ time: 3 });
+
+// 3. Click in the iframe to focus it
+const snapshot = await browser_snapshot();
+// Find the iframe paragraph element from snapshot
+await browser_click({ element: 'paragraph in iframe', ref: '<ref-from-snapshot>' });
+
+// 4. Type text character by character (required for iframe)
+const text = 'Trip to Paris and Brussels.';
+for (const char of text) {
+  if (char === ' ') {
+    await browser_press_key({ key: 'Space' });
+  } else if (char === '.') {
+    await browser_press_key({ key: 'Period' });
+  } else {
+    await browser_press_key({ key: char });
+  }
+  await browser_wait_for({ time: 0.05 }); // Small delay between characters
+}
+
+// 5. Select "Paris" using JavaScript evaluation
+await browser_evaluate({
+  function: `() => {
+    const iframe = document.querySelector('iframe');
+    const iframeDoc = iframe.contentDocument;
+    const paragraph = iframeDoc.querySelector('p');
+    const text = paragraph.textContent;
+    const parisIndex = text.indexOf('Paris');
+
+    const selection = iframeDoc.getSelection();
+    const range = iframeDoc.createRange();
+    const textNode = paragraph.firstChild;
+
+    range.setStart(textNode, parisIndex);
+    range.setEnd(textNode, parisIndex + 5);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }`
+});
+
+// 6. Click location button
+await browser_click({ element: 'location button', ref: '<ref-for-location-btn>' });
+
+// 7. Wait for location search modal
+await browser_wait_for({ time: 2 });
+
+// 8. Click Continue button
+await browser_click({ element: 'Continue button', ref: '<ref-for-continue-btn>' });
+
+// 9. Click Add to Document button
+await browser_click({ element: 'Add to Document button', ref: '<ref-for-add-btn>' });
+
+// 10. Verify in console
+const messages = await browser_console_messages();
+// Look for "Created geo-mark NodeView with color: #3B82F6"
+```
+
+#### Pattern 2: Testing Multi-Node Text Selection
+
+When text contains geo-marks (colored location nodes), you need to traverse multiple text nodes:
+
+```javascript
+await browser_evaluate({
+  function: `() => {
+    const iframe = document.querySelector('iframe');
+    const iframeDoc = iframe.contentDocument;
+    const paragraph = iframeDoc.querySelector('p');
+
+    // Get all text nodes (plain text + text inside geo-marks)
+    function getAllTextNodes(node) {
+      let textNodes = [];
+      if (node.nodeType === Node.TEXT_NODE) {
+        textNodes.push(node);
+      } else {
+        for (let child of node.childNodes) {
+          textNodes = textNodes.concat(getAllTextNodes(child));
+        }
+      }
+      return textNodes;
+    }
+
+    const textNodes = getAllTextNodes(paragraph);
+    let allText = '';
+    const nodeMap = [];
+
+    // Build a map of text nodes with their positions
+    for (const node of textNodes) {
+      nodeMap.push({ node, start: allText.length, text: node.textContent });
+      allText += node.textContent;
+    }
+
+    // Find "Brussels" in the combined text
+    const brusselsIndex = allText.indexOf('Brussels');
+    const startOffset = brusselsIndex;
+    const endOffset = startOffset + 8;
+
+    // Map offsets back to actual text nodes
+    let startNode = null, endNode = null;
+    let startNodeOffset = 0, endNodeOffset = 0;
+
+    for (const item of nodeMap) {
+      if (startOffset >= item.start && startOffset < item.start + item.text.length) {
+        startNode = item.node;
+        startNodeOffset = startOffset - item.start;
+      }
+      if (endOffset > item.start && endOffset <= item.start + item.text.length) {
+        endNode = item.node;
+        endNodeOffset = endOffset - item.start;
+      }
+    }
+
+    // Create selection
+    const selection = iframeDoc.getSelection();
+    const range = iframeDoc.createRange();
+    range.setStart(startNode, startNodeOffset);
+    range.setEnd(endNode, endNodeOffset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }`
+});
+```
+
+#### Pattern 3: Verifying Colors in Document
+
+After adding locations, verify they have the correct colors:
+
+```javascript
+// Extract color information from document
+const colorInfo = await browser_evaluate({
+  function: `() => {
+    const iframe = document.querySelector('iframe');
+    const iframeDoc = iframe.contentDocument;
+
+    const geoMarks = Array.from(iframeDoc.querySelectorAll('[data-geo-id]'));
+    const docColors = geoMarks.map(gm => {
+      const style = window.getComputedStyle(gm);
+      return {
+        name: gm.textContent,
+        backgroundColor: style.backgroundColor,
+        geoId: gm.getAttribute('data-geo-id')
+      };
+    });
+
+    return { docColors };
+  }`
+});
+
+console.log('Document colors:', colorInfo);
+// Expected: Paris=rgb(59, 130, 246), Brussels=rgb(139, 92, 246)
+```
+
+### Common Issues and Solutions
+
+#### Issue 1: Playwright MCP Disconnected
+**Symptom**: Tools return "Not connected" errors
+
+**Solution**:
+1. Use `/mcp` command to reconnect
+2. Wait for "Reconnected to playwright" message
+3. Try the operation again
+
+#### Issue 2: Text Not Typing in Iframe
+**Symptom**: `browser_type` doesn't work in ProseMirror iframe
+
+**Solution**:
+1. Click in the iframe first to focus it
+2. Use `browser_press_key` for individual characters instead of `browser_type`
+3. Add small delays between keystrokes (50ms)
+
+```javascript
+// WRONG - browser_type doesn't work in iframe
+await browser_type({ element: 'paragraph', ref: '<ref>', text: 'Paris' });
+
+// RIGHT - click first, then press keys individually
+await browser_click({ element: 'paragraph', ref: '<ref>' });
+await browser_press_key({ key: 'P' });
+await browser_wait_for({ time: 0.05 });
+await browser_press_key({ key: 'a' });
+// ... etc
+```
+
+#### Issue 3: Modal Not Opening on Second Interaction
+**Symptom**: After successfully adding first location, clicking location button for second location doesn't open modal
+
+**Possible Causes**:
+1. Text selection was lost after previous operation
+2. UI state not properly reset after first interaction
+3. Event listeners not properly attached after DOM update
+
+**Solutions**:
+1. Re-select the text again
+2. Add longer wait time after previous operation completes
+3. Verify selection is stored by checking console logs
+4. Click outside and back into iframe to reset focus
+
+#### Issue 4: Elements Not Found in Snapshot
+**Symptom**: `browser_snapshot` doesn't show expected elements
+
+**Solution**:
+1. Wait longer for page to load (`browser_wait_for`)
+2. Check if content is inside an iframe (iframe content may not appear in main snapshot)
+3. Use `browser_evaluate` to inspect iframe content separately
+4. Take a screenshot to visually verify what's on page
+
+### Best Practices
+
+1. **Always snapshot first**: Use `browser_snapshot` before clicking to get element refs
+2. **Add wait times**: Give UI time to update between actions (1-3 seconds typical)
+3. **Verify with console**: Use `browser_console_messages` to check application logs
+4. **Handle iframes specially**: Iframe content requires JavaScript evaluation, not direct MCP interaction
+5. **Use character-by-character typing**: For ProseMirror iframes, press individual keys instead of using `browser_type`
+6. **Check disconnections**: If tools fail, check MCP connection status first
+7. **Take screenshots for debugging**: When tests fail, capture screenshot to see actual state
+
+### Example Test Workflow
+
+Here's a complete example testing the color bug fix (DocumentSplitMap.tsx COLORS array):
+
+1. **Setup**: Navigate to test document
+2. **Type content**: "Trip to Paris and Brussels."
+3. **Add Paris**: Select "Paris", click location button, add it
+4. **Verify Paris color**: Check console for "#3B82F6" (Blue)
+5. **Add Brussels**: Select "Brussels", click location button, add it
+6. **Verify Brussels color**: Check console for "#8B5CF6" (Purple)
+7. **Take screenshot**: Capture final result
+8. **Extract data**: Use JavaScript to get computed colors from DOM
+
+This verifies that:
+- Paris (colorIndex: 0) → Blue (#3B82F6) ✓
+- Brussels (colorIndex: 1) → Purple (#8B5CF6) ✓
+
+### Resources
+
+- **Playwright MCP Documentation**: Check MCP server docs for full tool reference
+- **Manual Testing Fallback**: If MCP testing is too complex, document manual test steps in a `.md` file (see `/Users/mads/workspace/tourvision-mobile/MANUAL_COLOR_TEST.md` for example)
+
 ### Code Quality
 
 When completing tasks, always run:
@@ -555,6 +857,32 @@ The `process-chat-message` Edge Function:
 3. Edge Function processes → Analyzes with Mistral AI
 4. If consensus detected → Creates suggestion in `ai_suggestions`
 5. Real-time subscription → Updates UI with new suggestion
+
+### Realtime Subscription Important Note
+**Service role keys DO NOT work with Supabase realtime subscriptions.** When building listeners or background processes that need realtime updates:
+
+1. Create **two separate Supabase clients**:
+   - One with `SUPABASE_ANON_KEY` for realtime subscriptions
+   - One with `SUPABASE_SERVICE_KEY` for admin operations (insert, update, delete)
+
+2. Example pattern:
+```javascript
+const supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  realtime: { params: { eventsPerSecond: 10 } }
+});
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+// Use anon client for subscriptions
+supabaseRealtime.channel('my-channel')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'my_table' }, callback)
+  .subscribe();
+
+// Use admin client for operations
+await supabaseAdmin.from('my_table').insert({ ... });
+```
+
+This is implemented in `/scripts/document-chat-listener.js`.
 
 ## Debugging with Supabase MCP
 

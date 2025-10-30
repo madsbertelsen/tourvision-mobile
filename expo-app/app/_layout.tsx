@@ -79,9 +79,11 @@ function ProtectedLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inPublicGroup = segments[0] === '(public)';
+    const inAppGroup = segments[0] === '(app)';
+    const inDocumentRoute = inAppGroup && segments[1] === 'document';
 
-    if (!isAuthenticated && !inAuthGroup && !inPublicGroup) {
-      // Redirect to landing page if not authenticated and not in auth or public group
+    if (!isAuthenticated && !inAuthGroup && !inPublicGroup && !inDocumentRoute) {
+      // Redirect to landing page if not authenticated and not in auth, public, or document route
       router.replace('/(public)');
     } else if (isAuthenticated && inAuthGroup) {
       // Redirect to dashboard if authenticated and in auth group
