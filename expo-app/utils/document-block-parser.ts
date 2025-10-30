@@ -46,40 +46,52 @@ function extractTextContent(node: any): string {
 
 /**
  * Extract geo-marks from a node
+ * Now extracts from marks (not nodes) since geo-marks are marks in ProseMirror schema
  * Auto-assigns sequential colorIndex if not present
  */
 function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBlock[] {
   const geoMarks: GeoMarkInBlock[] = [];
+  const seenGeoIds = new Set<string>();
   let colorCounter = startingColorIndex;
 
   if (!node || !node.content) return geoMarks;
 
   function traverse(n: any) {
-    if (n.type === 'geoMark' && n.attrs) {
-      const text = extractTextContent(n);
-      // Use stored colorIndex if available, otherwise auto-assign sequentially
-      const hasStoredColor = n.attrs.colorIndex !== undefined;
-      const colorIndex = hasStoredColor ? n.attrs.colorIndex : colorCounter++;
+    // Check if this node is a text node with geo-mark marks
+    if (n.type === 'text' && n.marks && Array.isArray(n.marks)) {
+      for (const mark of n.marks) {
+        if (mark.type === 'geoMark' && mark.attrs) {
+          // Only add each geo-mark once (by geoId) to avoid duplicates
+          if (!seenGeoIds.has(mark.attrs.geoId)) {
+            seenGeoIds.add(mark.attrs.geoId);
 
-      console.log('[Parser] Geo-mark:', n.attrs.placeName,
-        'hasStored:', hasStoredColor,
-        'stored:', n.attrs.colorIndex,
-        'assigned:', colorIndex,
-        'counter:', colorCounter);
+            // Use stored colorIndex if available, otherwise auto-assign sequentially
+            const hasStoredColor = mark.attrs.colorIndex !== undefined;
+            const colorIndex = hasStoredColor ? mark.attrs.colorIndex : colorCounter++;
 
-      geoMarks.push({
-        geoId: n.attrs.geoId,
-        placeName: n.attrs.placeName,
-        lat: n.attrs.lat,
-        lng: n.attrs.lng,
-        colorIndex: colorIndex,
-        text: text,
-        transportFrom: n.attrs.transportFrom || null,
-        transportProfile: n.attrs.transportProfile || null,
-        waypoints: n.attrs.waypoints || null
-      });
+            console.log('[Parser] Geo-mark:', mark.attrs.placeName,
+              'hasStored:', hasStoredColor,
+              'stored:', mark.attrs.colorIndex,
+              'assigned:', colorIndex,
+              'counter:', colorCounter);
+
+            geoMarks.push({
+              geoId: mark.attrs.geoId,
+              placeName: mark.attrs.placeName,
+              lat: mark.attrs.lat,
+              lng: mark.attrs.lng,
+              colorIndex: colorIndex,
+              text: n.text || '',  // Use the text from the text node
+              transportFrom: mark.attrs.transportFrom || null,
+              transportProfile: mark.attrs.transportProfile || null,
+              waypoints: mark.attrs.waypoints || null
+            });
+          }
+        }
+      }
     }
 
+    // Continue traversing child nodes
     if (n.content && Array.isArray(n.content)) {
       n.content.forEach((child: any) => traverse(child));
     }
