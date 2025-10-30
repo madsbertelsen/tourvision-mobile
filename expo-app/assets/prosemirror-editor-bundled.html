@@ -1039,12 +1039,29 @@
         }, 300);
       });
 
+      // Custom Enter key handler to prevent geo-marks from extending into new paragraphs
+      const customEnterKeymap = keymap({
+        'Enter': (state, dispatch) => {
+          const { $from } = state.selection;
+          // Check if cursor is at the end of a geo-mark node
+          const nodeBefore = $from.nodeBefore;
+          if (nodeBefore && nodeBefore.type.name === 'geoMark') {
+            // Split the block and clear node marks
+            const tr = state.tr.split($from.pos, 1, [{ type: state.schema.nodes.paragraph }]);
+            if (dispatch) dispatch(tr.scrollIntoView());
+            return true;
+          }
+          return false; // Let base keymap handle it
+        }
+      });
+
       let editorState = EditorState.create({
         doc: doc,
         schema: schema,
         plugins: [
           history(),
           keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+          customEnterKeymap,
           keymap(baseKeymap)
         ]
       });
@@ -1484,6 +1501,7 @@
                     plugins: [
                       history(),
                       keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                      customEnterKeymap,
                       keymap(baseKeymap)
                     ]
                   });
@@ -2237,6 +2255,7 @@
                       window.PM.yProsemirror.yCursorPlugin(awareness),
                       window.PM.yProsemirror.yUndoPlugin(),
                       keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                      customEnterKeymap,
                       keymap(baseKeymap)
                     ]
                   });
@@ -2300,6 +2319,7 @@
                       plugins: [
                         history(),
                         keymap({ 'Mod-z': undo, 'Mod-y': redo }),
+                        customEnterKeymap,
                         keymap(baseKeymap)
                       ]
                     });
