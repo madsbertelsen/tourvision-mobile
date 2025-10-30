@@ -2,6 +2,8 @@
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
+import { generateText } from 'ai';
+import { ollama } from 'ollama-ai-provider-v2';
 
 // Load environment variables from root .env.local
 config({ path: '../.env.local' });
@@ -13,6 +15,10 @@ const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 
 // AI Assistant user ID (created by scripts/create-ai-user.js)
 const AI_USER_ID = '9e33f156-c21d-4234-939f-bc3455e2e5c2';
+
+// Ollama configuration
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 
 // Types
 interface ChatMessage {
@@ -35,20 +41,11 @@ interface ChatMessage {
 interface Document {
   id: string;
   title: string;
-  document?: any;
 }
 
 interface AIMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
-}
-
-interface MistralResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
 }
 
 // Create two Supabase clients:
@@ -75,6 +72,8 @@ const supabaseAdmin: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVIC
 
 console.log('🚀 Document Chat Listener started');
 console.log('📡 Connecting to Supabase:', SUPABASE_URL);
+console.log('🤖 Using Ollama at:', OLLAMA_BASE_URL);
+console.log('🧠 Model:', OLLAMA_MODEL);
 console.log('⏳ Listening for new chat messages...\n');
 
 // Track processing to avoid duplicates
@@ -155,34 +154,8 @@ async function processInitialPrompt(message: ChatMessage): Promise<void> {
   try {
     console.log(`\n🤖 Generating document for prompt: "${content}"`);
 
-    // For now, generate a simple response (Edge Function removed)
-    // TODO: Implement direct AI generation logic here
-    const simpleResponse = {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          content: [
-            { type: 'text', text: `Document generated from prompt: ${content}` }
-          ]
-        }
-      ]
-    };
-
-    // Update the document with generated content
-    console.log(`   💾 Updating document ${document_id}...`);
-    const { error: updateError } = await supabaseAdmin
-      .from('documents')
-      .update({
-        document: simpleResponse,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', document_id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
+    // For initial prompts, just respond with an acknowledgment
+    // Document generation would happen through the Y.js collaboration layer
     // Insert assistant response into chat (using AI user ID)
     console.log(`   💬 Adding assistant response to chat...`);
     const { error: chatError } = await supabaseAdmin
@@ -191,18 +164,20 @@ async function processInitialPrompt(message: ChatMessage): Promise<void> {
         document_id,
         user_id: AI_USER_ID,
         role: 'assistant',
-        content: 'I\'ve generated your travel document based on your prompt. The document has been updated with the itinerary.',
+        content: 'I\'m ready to help you plan your trip! You can edit the document directly, and I\'ll assist with suggestions and recommendations.',
         metadata: {
           source: 'document_chat_listener',
           document_generated: true,
+          model: OLLAMA_MODEL,
+          provider: 'ollama'
         }
       });
 
     if (chatError) {
       console.error('   ⚠️ Error inserting assistant message:', chatError);
+    } else {
+      console.log(`   ✅ Response sent!`);
     }
-
-    console.log(`   ✅ Document generation complete!`);
 
   } catch (error: any) {
     console.error(`   ❌ Error processing initial prompt:`, error);
@@ -215,7 +190,7 @@ async function processInitialPrompt(message: ChatMessage): Promise<void> {
           document_id,
           user_id: AI_USER_ID,
           role: 'assistant',
-          content: `I encountered an error while generating your document: ${error.message}. Please try again.`,
+          content: `I encountered an error while processing your prompt: ${error.message}. Please try again.`,
           metadata: {
             source: 'document_chat_listener',
             error: true,
@@ -246,10 +221,10 @@ async function processRegularMessage(message: ChatMessage): Promise<void> {
       console.error('   ⚠️ Error fetching chat history:', historyError);
     }
 
-    // Get current document content for context
+    // Get current document title for context
     const { data: document, error: docError } = await supabaseAdmin
       .from('documents')
-      .select('document, title')
+      .select('title')
       .eq('id', document_id)
       .single();
 
@@ -262,8 +237,6 @@ async function processRegularMessage(message: ChatMessage): Promise<void> {
       {
         role: 'system',
         content: `You are a helpful travel planning assistant. You are helping the user plan their trip "${document?.title || 'Untitled Trip'}".
-
-The current document contains: ${document?.document ? 'travel itinerary content' : 'no content yet'}.
 
 Your role is to:
 - Answer questions about their trip
@@ -306,7 +279,8 @@ Keep responses focused and practical.`
         content: aiResponse,
         metadata: {
           source: 'document_chat_listener',
-          model: 'mistral-small-latest'
+          model: OLLAMA_MODEL,
+          provider: 'ollama'
         }
       });
 
@@ -341,34 +315,20 @@ Keep responses focused and practical.`
 }
 
 async function generateAIResponse(messages: AIMessage[]): Promise<string> {
-  // Using Mistral API directly
-  const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-
-  if (!MISTRAL_API_KEY) {
-    throw new Error('MISTRAL_API_KEY not configured');
-  }
-
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${MISTRAL_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'mistral-small-latest',
+  // Using Ollama with AI SDK v5 via ollama-ai-provider-v2
+  try {
+    const { text } = await generateText({
+      model: ollama(OLLAMA_MODEL),
       messages: messages,
       temperature: 0.7,
-      max_tokens: 500
-    })
-  });
+      maxTokens: 500,
+    });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Mistral API error: ${error}`);
+    return text;
+  } catch (error: any) {
+    console.error('   ⚠️ Ollama error:', error);
+    throw new Error(`Ollama error: ${error.message}`);
   }
-
-  const data: MistralResponse = await response.json();
-  return data.choices[0].message.content;
 }
 
 // Handle graceful shutdown
