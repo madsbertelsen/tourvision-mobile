@@ -404,6 +404,31 @@ function ensureProseMirrorHTML(text: string): string {
   return text;
 }
 
+/**
+ * Add sequential color indices to geo-marks in the HTML
+ * This ensures each location gets a unique color in the chat UI
+ */
+function assignColorIndicesToGeoMarks(html: string): string {
+  let colorIndex = 0;
+
+  // Match geo-mark spans and add data-color-index attribute
+  return html.replace(
+    /<span class="geo-mark"([^>]*?)>/g,
+    (match, attributes) => {
+      // Check if color-index already exists
+      if (attributes.includes('data-color-index')) {
+        return match; // Already has color index, don't change it
+      }
+
+      // Add color-index attribute (rotate through 0-4 for 5 colors)
+      const currentColor = colorIndex % 5;
+      colorIndex++;
+
+      return `<span class="geo-mark"${attributes} data-color-index="${currentColor}">`;
+    }
+  );
+}
+
 async function generateAIResponseStreaming(
   messages: AIMessage[],
   _documentId: string,
@@ -454,7 +479,10 @@ async function generateAIResponseStreaming(
     }
 
     // Final update with complete response
-    const formattedText = ensureProseMirrorHTML(fullText);
+    let formattedText = ensureProseMirrorHTML(fullText);
+    // Assign sequential color indices to all geo-marks
+    formattedText = assignColorIndicesToGeoMarks(formattedText);
+
     await supabaseAdmin
       .from('document_chats')
       .update({
