@@ -18,7 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,12 +27,24 @@ import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
+import ResizableDivider from '@/components/ResizableDivider';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc } = useTripContext();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(true);
+  const [chatWidth, setChatWidth] = useState(350);
+  const dragStartWidth = useRef(350);
+
+  const handleChatDrag = (deltaX: number) => {
+    const newWidth = Math.max(250, Math.min(500, dragStartWidth.current + deltaX));
+    setChatWidth(newWidth);
+  };
+
+  const handleChatDragStart = () => {
+    dragStartWidth.current = chatWidth;
+  };
 
   return (
     <View style={styles.container}>
@@ -84,9 +96,15 @@ export default function TripDocumentView() {
       <View style={styles.contentWrapper}>
         {/* Chat Panel */}
         {showChat && (
-          <View style={styles.chatContainer}>
-            <DocumentChat documentId={tripId} />
-          </View>
+          <>
+            <View style={[styles.chatContainer, { width: chatWidth }]}>
+              <DocumentChat documentId={tripId} />
+            </View>
+            <ResizableDivider
+              onDrag={handleChatDrag}
+              onDragStart={handleChatDragStart}
+            />
+          </>
         )}
 
         {/* Document */}
@@ -155,11 +173,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   chatContainer: {
-    width: 350,
-    minWidth: 300,
-    maxWidth: 400,
-    borderRightWidth: 1,
-    borderRightColor: '#e5e7eb',
+    minWidth: 250,
+    maxWidth: 500,
   },
   documentContainer: {
     flex: 1,
