@@ -1,0 +1,13 @@
+{
+  "name": "chat-service",
+  "version": "1.0.0",
+  "description": "TypeScript-based document chat listener service",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "keywords": ["chat", "supabase", "realtime", "ai"],
+  "author": "",
+  "license": "ISC"
+}
