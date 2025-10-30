@@ -155,9 +155,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   chatContainer: {
-    width: 350,
-    minWidth: 300,
-    maxWidth: 400,
+    flex: 1,
+    minWidth: 350,
+    maxWidth: 500,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
   },
