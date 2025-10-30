@@ -26,11 +26,9 @@ import { CollabConnection, createCollabPlugin, initializeCollaboration } from '.
 
 // Create a custom schema with list support and geo-mark
 const mySchema = new Schema({
-  nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block')
+  nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block'),
+  marks: schema.spec.marks
     .addToEnd('geoMark', {
-      inline: true,
-      group: 'inline',
-      content: 'text*',
       attrs: {
         geoId: { default: null },
         placeName: { default: '' },
@@ -45,6 +43,7 @@ const mySchema = new Schema({
         visitDocument: { default: null },
         photoName: { default: null }
       },
+      inclusive: false,  // KEY: Prevents mark from extending on Enter
       parseDOM: [{
         tag: 'span.geo-mark',
         getAttrs(dom) {
@@ -58,19 +57,28 @@ const mySchema = new Schema({
           };
         }
       }],
-      toDOM(node) {
+      toDOM(mark) {
+        // Apply background color based on colorIndex
+        const colors = [
+          '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+          '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+        ];
+        const colorIndex = mark.attrs.colorIndex || 0;
+        const color = colors[colorIndex % colors.length];
+        const backgroundColor = color + '33'; // 33 = 20% opacity
+
         return ['span', {
           class: 'geo-mark',
-          'data-geo-id': node.attrs.geoId,
-          'data-place-name': node.attrs.placeName,
-          'data-lat': node.attrs.lat,
-          'data-lng': node.attrs.lng,
-          'data-color-index': node.attrs.colorIndex,
-          'data-coord-source': node.attrs.coordSource
+          'data-geo-id': mark.attrs.geoId,
+          'data-place-name': mark.attrs.placeName,
+          'data-lat': mark.attrs.lat,
+          'data-lng': mark.attrs.lng,
+          'data-color-index': mark.attrs.colorIndex,
+          'data-coord-source': mark.attrs.coordSource,
+          style: `background-color: ${backgroundColor}; padding: 2px 4px; border-radius: 3px; cursor: pointer; transition: all 0.2s ease;`
         }, 0];
       }
-    }),
-  marks: schema.spec.marks
+    })
     .addToEnd('comment', {
       attrs: {
         commentId: { default: null },

@@ -980,27 +980,29 @@
           // Generate unique geoId
           const geoId = 'loc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
-          // Create geo-mark node with location data
-          const geoMarkNode = schema.nodes.geoMark.create(
-            {
-              geoId: geoId,
-              placeName: placeName,
-              lat: lat.toString(),
-              lng: lng.toString(),
-              colorIndex: 0,
-              coordSource: 'nominatim',
-              description: null,
-              transportFrom: null,
-              transportProfile: null,
-              waypoints: null,
-              visitDocument: null,
-              photoName: null
-            },
-            schema.text(searchText)
-          );
+          // Create geo-mark MARK (not node) with location data
+          const geoMarkType = schema.marks.geoMark;
+          if (!geoMarkType) {
+            throw new Error('geoMark mark type not found in schema');
+          }
 
-          // Create transaction to replace selected text with geo-mark
-          const tr = editorView.state.tr.replaceRangeWith(from, to, geoMarkNode);
+          const geoMarkMark = geoMarkType.create({
+            geoId: geoId,
+            placeName: placeName,
+            lat: lat.toString(),
+            lng: lng.toString(),
+            colorIndex: 0,
+            coordSource: 'nominatim',
+            description: null,
+            transportFrom: null,
+            transportProfile: null,
+            waypoints: null,
+            visitDocument: null,
+            photoName: null
+          });
+
+          // Apply the mark to the selected text
+          const tr = editorView.state.tr.addMark(from, to, geoMarkMark);
 
           // Dispatch transaction
           editorView.dispatch(tr);
@@ -1039,40 +1041,12 @@
         }, 300);
       });
 
-      // Custom Enter key handler to prevent geo-marks from extending into new paragraphs
-      const customEnterKeymap = keymap({
-        'Enter': (state, dispatch) => {
-          console.log('[Enter Handler] Enter key pressed');
-          const { $from } = state.selection;
-          const nodeBefore = $from.nodeBefore;
-
-          console.log('[Enter Handler] nodeBefore:', nodeBefore ? nodeBefore.type.name : 'null');
-          console.log('[Enter Handler] $from.pos:', $from.pos);
-          console.log('[Enter Handler] Parent node:', $from.parent.type.name);
-
-          // Check if cursor is directly after a geo-mark node
-          if (nodeBefore && nodeBefore.type.name === 'geoMark') {
-            console.log('[Enter Handler] Detected geoMark before cursor - intercepting Enter');
-            // Split the block without carrying over inline node context
-            const tr = state.tr.split($from.pos, 1, [{ type: state.schema.nodes.paragraph }]);
-            if (dispatch) {
-              dispatch(tr.scrollIntoView());
-            }
-            return true;
-          }
-
-          console.log('[Enter Handler] No geoMark detected - letting base keymap handle');
-          return false; // Let base keymap handle it
-        }
-      });
-
       let editorState = EditorState.create({
         doc: doc,
         schema: schema,
         plugins: [
           history(),
           keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-          customEnterKeymap,
           keymap(baseKeymap)
         ]
       });
@@ -1080,43 +1054,8 @@
       console.log('[WebView] Creating editor view...');
 
       // Color palette for geo-marks - MUST match DocumentSplitMap.tsx
-      const COLORS = [
-        '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
-        '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
-      ];
-
-      // NodeView for geo-marks
-      function createGeoMarkNodeView(node) {
-        const span = document.createElement('span');
-        span.className = 'geo-mark';
-
-        // Apply background color based on colorIndex
-        const colorIndex = node.attrs.colorIndex || 0;
-        const color = COLORS[colorIndex % COLORS.length];
-        span.style.backgroundColor = color + '33'; // 33 = 20% opacity
-        span.style.padding = '2px 4px';
-        span.style.borderRadius = '3px';
-        span.style.cursor = 'pointer';
-        span.style.transition = 'all 0.2s ease';
-        span.style.textDecoration = 'none';
-        span.style.border = 'none';
-        span.style.borderBottom = 'none';
-
-        // Store attributes as data attributes for click handling
-        if (node.attrs.geoId) span.setAttribute('data-geo-id', node.attrs.geoId);
-        if (node.attrs.placeName) span.setAttribute('data-place-name', node.attrs.placeName);
-        if (node.attrs.lat) span.setAttribute('data-lat', node.attrs.lat);
-        if (node.attrs.lng) span.setAttribute('data-lng', node.attrs.lng);
-        if (node.attrs.colorIndex !== undefined) span.setAttribute('data-color-index', node.attrs.colorIndex);
-        if (node.attrs.coordSource) span.setAttribute('data-coord-source', node.attrs.coordSource);
-
-        console.log('[WebView] Created geo-mark NodeView with color:', color, 'for:', node.attrs.placeName);
-
-        return {
-          dom: span,
-          contentDOM: span
-        };
-      }
+      // NOTE: Geo-marks are now rendered via schema toDOM() method
+      // No custom NodeView needed - marks use toDOM for rendering
 
       // Typing cursor management
       const typingCursor = document.getElementById('typing-cursor');
@@ -1228,9 +1167,6 @@
       // Create editor view
       editorView = new EditorView(document.querySelector('#editor-container'), {
         state: editorState,
-        nodeViews: {
-          geoMark: createGeoMarkNodeView
-        },
         attributes: {
           spellcheck: 'false',
           autocorrect: 'off',
@@ -1512,7 +1448,6 @@
                     plugins: [
                       history(),
                       keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                      customEnterKeymap,
                       keymap(baseKeymap)
                     ]
                   });
@@ -1565,32 +1500,29 @@
 
                 // Now create the geo-mark with the selected text
                 const selectedText = state.doc.textBetween(from, to, ' ');
-                const geoMarkType = schema.nodes.geoMark;
+                const geoMarkType = schema.marks.geoMark;
                 if (!geoMarkType) {
-                  console.error('[WebView] geoMark node type not found in schema');
+                  console.error('[WebView] geoMark mark type not found in schema');
                   break;
                 }
 
-                const geoMarkNode = geoMarkType.create(
-                  {
-                    geoId: data.geoMarkData.geoId,
-                    placeName: data.geoMarkData.placeName,
-                    lat: data.geoMarkData.lat,
-                    lng: data.geoMarkData.lng,
-                    colorIndex: data.geoMarkData.colorIndex || 0,
-                    coordSource: data.geoMarkData.coordSource || 'manual',
-                    description: data.geoMarkData.description || null,
-                    transportFrom: data.geoMarkData.transportFrom || null,
-                    transportProfile: data.geoMarkData.transportProfile || null,
-                    waypoints: data.geoMarkData.waypoints || null,
-                    visitDocument: data.geoMarkData.visitDocument || null,
-                    photoName: data.geoMarkData.photoName || null,
-                  },
-                  schema.text(selectedText)
-                );
+                const geoMarkMark = geoMarkType.create({
+                  geoId: data.geoMarkData.geoId,
+                  placeName: data.geoMarkData.placeName,
+                  lat: data.geoMarkData.lat,
+                  lng: data.geoMarkData.lng,
+                  colorIndex: data.geoMarkData.colorIndex || 0,
+                  coordSource: data.geoMarkData.coordSource || 'manual',
+                  description: data.geoMarkData.description || null,
+                  transportFrom: data.geoMarkData.transportFrom || null,
+                  transportProfile: data.geoMarkData.transportProfile || null,
+                  waypoints: data.geoMarkData.waypoints || null,
+                  visitDocument: data.geoMarkData.visitDocument || null,
+                  photoName: data.geoMarkData.photoName || null,
+                });
 
-                // Replace the selection with the geo-mark node
-                const tr2 = editorView.state.tr.replaceSelectionWith(geoMarkNode);
+                // Apply the mark to the selected text
+                const tr2 = editorView.state.tr.addMark(from, to, geoMarkMark);
                 dispatch(tr2);
                 console.log('[WebView] Geo-mark created from recent text');
               }
@@ -1624,45 +1556,42 @@
                   message: `[WebView DEBUG] Selection from ${from} to ${to}, selected text: "${state.doc.textBetween(from, to, ' ')}"`
                 });
 
-                // Create a geoMark NODE (not mark) with the location data
-                const geoMarkType = schema.nodes.geoMark;
+                // Create a geoMark MARK (not node) with the location data
+                const geoMarkType = schema.marks.geoMark;
                 if (!geoMarkType) {
-                  throw new Error('geoMark node type not found in schema');
+                  throw new Error('geoMark mark type not found in schema');
                 }
-                console.log('[WebView] Step 4: geoMarkType found in schema');
+                console.log('[WebView] Step 4: geoMarkType found in schema (as mark)');
 
                 // Get the selected text
                 const selectedText = state.doc.textBetween(from, to, ' ');
                 console.log('[WebView] Step 5: Selected text:', selectedText);
 
-                // Create geoMark node with text content and all attributes
-                const geoMarkNode = geoMarkType.create(
-                  {
-                    geoId: data.geoMarkData.geoId,
-                    placeName: data.geoMarkData.placeName,
-                    lat: data.geoMarkData.lat,
-                    lng: data.geoMarkData.lng,
-                    colorIndex: data.geoMarkData.colorIndex || 0,
-                    coordSource: data.geoMarkData.coordSource || 'manual',
-                    description: data.geoMarkData.description || null,
-                    transportFrom: data.geoMarkData.transportFrom || null,
-                    transportProfile: data.geoMarkData.transportProfile || null,
-                    waypoints: data.geoMarkData.waypoints || null,
-                    visitDocument: data.geoMarkData.visitDocument || null,
-                    photoName: data.geoMarkData.photoName || null
-                  },
-                  schema.text(selectedText)
-                );
-                console.log('[WebView] Step 6: geoMarkNode created:', geoMarkNode);
+                // Create geoMark mark with all attributes
+                const geoMarkMark = geoMarkType.create({
+                  geoId: data.geoMarkData.geoId,
+                  placeName: data.geoMarkData.placeName,
+                  lat: data.geoMarkData.lat,
+                  lng: data.geoMarkData.lng,
+                  colorIndex: data.geoMarkData.colorIndex || 0,
+                  coordSource: data.geoMarkData.coordSource || 'manual',
+                  description: data.geoMarkData.description || null,
+                  transportFrom: data.geoMarkData.transportFrom || null,
+                  transportProfile: data.geoMarkData.transportProfile || null,
+                  waypoints: data.geoMarkData.waypoints || null,
+                  visitDocument: data.geoMarkData.visitDocument || null,
+                  photoName: data.geoMarkData.photoName || null
+                });
+                console.log('[WebView] Step 6: geoMarkMark created:', geoMarkMark);
 
-                // Replace the selected text with the geo-mark node
-                const tr = state.tr.replaceSelectionWith(geoMarkNode);
-                console.log('[WebView] Step 7: Transaction created');
+                // Apply the mark to the selected text
+                const tr = state.tr.addMark(from, to, geoMarkMark);
+                console.log('[WebView] Step 7: Transaction created (addMark)');
 
                 dispatch(tr);
                 console.log('[WebView] Step 8: Transaction dispatched');
 
-                console.log('[WebView] Geo-mark NODE created successfully');
+                console.log('[WebView] Geo-mark MARK applied successfully');
                 sendMessageToNative({
                   type: 'info',
                   message: 'Location created: ' + data.geoMarkData.placeName
@@ -1757,40 +1686,37 @@
                   if (data.params && data.params.geoMarkData) {
                     console.log('[WebView] Animation mode: Creating geo-mark directly with data:', data.params.geoMarkData);
                     try {
-                      const geoMarkType = schema.nodes.geoMark;
+                      const geoMarkType = schema.marks.geoMark;
                       if (!geoMarkType) {
-                        throw new Error('geoMark node type not found in schema');
+                        throw new Error('geoMark mark type not found in schema');
                       }
                       console.log('[WebView] Step 1: geoMarkType found in schema');
 
-                      // Create geoMark node with text content and all attributes
-                      const geoMarkNode = geoMarkType.create(
-                        {
-                          geoId: data.params.geoMarkData.geoId,
-                          placeName: data.params.geoMarkData.placeName,
-                          lat: data.params.geoMarkData.lat,
-                          lng: data.params.geoMarkData.lng,
-                          colorIndex: data.params.geoMarkData.colorIndex || 0,
-                          coordSource: data.params.geoMarkData.coordSource || 'manual',
-                          description: data.params.geoMarkData.description || null,
-                          transportFrom: data.params.geoMarkData.transportFrom || null,
-                          transportProfile: data.params.geoMarkData.transportProfile || null,
-                          waypoints: data.params.geoMarkData.waypoints || null,
-                          visitDocument: data.params.geoMarkData.visitDocument || null,
-                          photoName: data.params.geoMarkData.photoName || null
-                        },
-                        schema.text(selectedText)
-                      );
-                      console.log('[WebView] Step 2: geoMarkNode created');
+                      // Create geoMark MARK with all attributes
+                      const geoMarkMark = geoMarkType.create({
+                        geoId: data.params.geoMarkData.geoId,
+                        placeName: data.params.geoMarkData.placeName,
+                        lat: data.params.geoMarkData.lat,
+                        lng: data.params.geoMarkData.lng,
+                        colorIndex: data.params.geoMarkData.colorIndex || 0,
+                        coordSource: data.params.geoMarkData.coordSource || 'manual',
+                        description: data.params.geoMarkData.description || null,
+                        transportFrom: data.params.geoMarkData.transportFrom || null,
+                        transportProfile: data.params.geoMarkData.transportProfile || null,
+                        waypoints: data.params.geoMarkData.waypoints || null,
+                        visitDocument: data.params.geoMarkData.visitDocument || null,
+                        photoName: data.params.geoMarkData.photoName || null
+                      });
+                      console.log('[WebView] Step 2: geoMarkMark created');
 
-                      // Replace the selected text with the geo-mark node
-                      const tr = state.tr.replaceSelectionWith(geoMarkNode);
+                      // Apply the mark to the selected text
+                      const tr = state.tr.addMark(from, to, geoMarkMark);
                       console.log('[WebView] Step 3: Transaction created');
 
                       dispatch(tr);
                       console.log('[WebView] Step 4: Transaction dispatched');
 
-                      console.log('[WebView] Geo-mark NODE created successfully!');
+                      console.log('[WebView] Geo-mark MARK created successfully!');
                       sendMessageToNative({
                         type: 'info',
                         message: 'Location created: ' + data.params.geoMarkData.placeName
@@ -2266,7 +2192,6 @@
                       window.PM.yProsemirror.yCursorPlugin(awareness),
                       window.PM.yProsemirror.yUndoPlugin(),
                       keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                      customEnterKeymap,
                       keymap(baseKeymap)
                     ]
                   });
@@ -2330,7 +2255,6 @@
                       plugins: [
                         history(),
                         keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                        customEnterKeymap,
                         keymap(baseKeymap)
                       ]
                     });
