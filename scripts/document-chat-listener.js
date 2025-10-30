@@ -8,6 +8,9 @@ const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTU2OTAsImV4cCI6MjA3Njc5MTY5MH0.GAMDmtZOvoHzJ2sesN7NC24Q8FYVuEHZlsvYvsQQEBU';
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0';
 
+// AI Assistant user ID (created by scripts/create-ai-user.js)
+const AI_USER_ID = '9e33f156-c21d-4234-939f-bc3455e2e5c2';
+
 // Create two Supabase clients:
 // 1. Service key for realtime subscriptions (bypasses RLS, required for Node.js)
 // 2. Service key for admin operations (updating documents, inserting messages)
@@ -194,13 +197,13 @@ async function processInitialPrompt(message) {
       throw updateError;
     }
 
-    // Insert assistant response into chat
+    // Insert assistant response into chat (using AI user ID)
     console.log(`   💬 Adding assistant response to chat...`);
     const { error: chatError } = await supabaseAdmin
       .from('document_chats')
       .insert({
         document_id,
-        user_id,
+        user_id: AI_USER_ID,
         role: 'assistant',
         content: 'I\'ve generated your travel document based on your prompt. The document has been updated with the itinerary.',
         metadata: {
@@ -218,13 +221,13 @@ async function processInitialPrompt(message) {
   } catch (error) {
     console.error(`   ❌ Error processing initial prompt:`, error);
 
-    // Insert error message into chat
+    // Insert error message into chat (using AI user ID)
     try {
       await supabaseAdmin
         .from('document_chats')
         .insert({
           document_id,
-          user_id,
+          user_id: AI_USER_ID,
           role: 'assistant',
           content: `I encountered an error while generating your document: ${error.message}. Please try again.`,
           metadata: {
@@ -307,12 +310,12 @@ Keep responses focused and practical.`
 
     console.log(`   💬 AI Response: ${aiResponse.substring(0, 100)}...`);
 
-    // Insert assistant response into chat
+    // Insert assistant response into chat (using AI user ID)
     const { error: chatError } = await supabaseAdmin
       .from('document_chats')
       .insert({
         document_id,
-        user_id, // Use same user_id so it appears as their conversation
+        user_id: AI_USER_ID,
         role: 'assistant',
         content: aiResponse,
         metadata: {
@@ -330,13 +333,13 @@ Keep responses focused and practical.`
   } catch (error) {
     console.error(`   ❌ Error processing message:`, error);
 
-    // Insert error message into chat
+    // Insert error message into chat (using AI user ID)
     try {
       await supabaseAdmin
         .from('document_chats')
         .insert({
           document_id,
-          user_id,
+          user_id: AI_USER_ID,
           role: 'assistant',
           content: `Sorry, I encountered an error while processing your message. Please try again.`,
           metadata: {
