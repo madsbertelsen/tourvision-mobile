@@ -315,11 +315,7 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDAT
 
 ### Querying Remote Database
 
-The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`.
-
-#### Method 1: Using curl with Supabase REST API (RECOMMENDED)
-
-The easiest way to query the remote database without IPv6 issues:
+The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`. Use curl to query the database via Supabase's REST API:
 
 ```bash
 # Basic query format
@@ -357,54 +353,9 @@ curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?rol
 - `col=lt.value` - Less than
 - See [PostgREST docs](https://postgrest.org/en/stable/references/api/tables_views.html) for more
 
-#### Method 2: Using Docker with psql (Requires IPv6 or add-on)
-
-**Note:** Direct connection (`db.unocjfiipormnaujsuhk.supabase.co:5432`) is IPv6-only. Docker containers typically don't have IPv6 networking configured, making this method challenging. Use curl (Method 1) or Node.js scripts (Method 3) instead.
-
-```bash
-# This requires IPv6 networking in Docker (often not available)
-PGPASSWORD='IGB3hdgETTGX4gQW' docker run --rm postgres:15 psql \
-  "postgresql://postgres:IGB3hdgETTGX4gQW@db.unocjfiipormnaujsuhk.supabase.co:5432/postgres" \
-  -c "\dt"
-```
-
-#### Method 3: Using Node.js Scripts with Supabase Client
-
-For more complex queries or when you need to respect RLS policies:
-
-```bash
-# Using existing scripts
-node scripts/check-ai-user.js
-```
-
-**Creating Custom Query Scripts:**
-
-```javascript
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
-const SUPABASE_SERVICE_KEY = 'your-service-key';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-async function queryData() {
-  const { data, error } = await supabase
-    .from('your_table')
-    .select('*')
-    .limit(5);
-
-  console.log(data);
-}
-
-queryData().catch(console.error);
-```
-
 **Important Notes:**
-- `docker exec` → LOCAL database (supabase_db_tourvision-mobile container)
-- `curl` with REST API → REMOTE database (RECOMMENDED - works everywhere)
-- `docker run postgres:15 psql` → REMOTE database (requires IPv6, often fails)
-- `node scripts/*.js` → REMOTE database (good for complex queries)
 - Use service_role key to bypass RLS policies
+- `docker exec` is for LOCAL database only (supabase_db_tourvision-mobile container)
 - Password and credentials should not be committed to git
 
 ### Prototype Reference
