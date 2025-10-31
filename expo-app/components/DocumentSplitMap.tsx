@@ -258,14 +258,14 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     screenSpeed: 0, // Magnitude in pixels/frame
     // Physics parameters
     isFollowing: true,
-    springK: 0.03,     // Spring constant (stiffness)
-    damping: 0.85,     // Damping factor (0-1)
-    maxVelocity: 2,    // Maximum velocity in degrees/frame
+    springK: 0.008,    // Spring constant (much gentler)
+    damping: 0.92,     // Damping factor (more friction)
+    maxVelocity: 0.5,  // Maximum velocity in degrees/frame (much slower)
     // Zoom control parameters
-    comfortableSpeed: 15,  // Comfortable screen speed in pixels/frame
-    maxScreenSpeed: 50,    // Maximum tolerable screen speed
-    zoomSpringK: 0.05,     // Zoom spring constant
-    zoomDamping: 0.9,      // Zoom damping factor
+    comfortableSpeed: 5,   // Comfortable screen speed in pixels/frame (much lower)
+    maxScreenSpeed: 15,    // Maximum tolerable screen speed (much lower)
+    zoomSpringK: 0.1,      // Zoom spring constant (faster reaction)
+    zoomDamping: 0.85,     // Zoom damping factor (faster settling)
     minZoom: 3,            // Don't zoom out beyond world view
     maxZoom: 16            // Don't zoom in beyond street level
   });
@@ -341,17 +341,17 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
       const state = animationStateRef.current;
 
-      // Physics simulation - accelerate then decelerate
+      // Physics simulation - accelerate then decelerate (MUCH SLOWER)
       // Ensure minimum velocity near the end so we reach the target
-      if (state.t < 0.4) {
-        // Acceleration phase
-        state.velocity = Math.min(0.04, state.velocity + 0.002);
-      } else if (state.t < 0.9) {
-        // Deceleration phase
-        state.velocity = Math.max(0.01, state.velocity - 0.001);
+      if (state.t < 0.3) {
+        // Gentle acceleration phase
+        state.velocity = Math.min(0.015, state.velocity + 0.0005);
+      } else if (state.t < 0.85) {
+        // Cruise phase
+        state.velocity = Math.max(0.008, state.velocity - 0.0002);
       } else {
         // Final approach - ensure we reach exactly 1.0
-        state.velocity = Math.max(0.005, (1 - state.t) / 2);
+        state.velocity = Math.max(0.003, (1 - state.t) / 3);
       }
 
       state.t = Math.min(1, state.t + state.velocity);
@@ -399,11 +399,26 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           camera.velocityLng *= scale;
         }
 
+        // Calculate predicted screen-space velocity BEFORE moving
+        const predictedScreenVelocity = calculateScreenVelocity(
+          camera.velocityLat,
+          camera.velocityLng,
+          camera.zoom,
+          camera.lat
+        );
+
+        // If predicted screen speed is too high, scale down the velocity
+        if (predictedScreenVelocity.screenSpeed > camera.maxScreenSpeed) {
+          const scale = camera.maxScreenSpeed / predictedScreenVelocity.screenSpeed;
+          camera.velocityLat *= scale;
+          camera.velocityLng *= scale;
+        }
+
         // Update position: pos = pos + velocity
         camera.lat += camera.velocityLat;
         camera.lng += camera.velocityLng;
 
-        // Calculate screen-space velocity
+        // Calculate actual screen-space velocity after capping
         const screenVelocity = calculateScreenVelocity(
           camera.velocityLat,
           camera.velocityLng,
@@ -417,18 +432,21 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         camera.screenSpeed = screenVelocity.screenSpeed;
 
         // Dynamic zoom adjustment based on screen speed
+        // Be more aggressive about zooming out when speed increases
         if (camera.screenSpeed > camera.comfortableSpeed) {
           // Calculate how much we need to zoom out
           // Each zoom level halves the scale, so we use log2
           const speedRatio = camera.screenSpeed / camera.comfortableSpeed;
-          const zoomReduction = Math.log2(speedRatio);
+          const zoomReduction = Math.log2(speedRatio) * 1.5; // More aggressive zoom out
 
           // Set target zoom (lower number = zoomed out more)
           camera.targetZoom = Math.max(camera.minZoom, camera.zoom - zoomReduction);
-        } else {
-          // If we're moving slowly, gradually return to normal zoom
+        } else if (camera.screenSpeed < camera.comfortableSpeed * 0.5) {
+          // Only zoom back in when we're moving quite slowly
+          // This adds hysteresis to prevent constant zoom changes
           camera.targetZoom = Math.min(camera.maxZoom, 12); // Default zoom level
         }
+        // If speed is between 0.5x and 1x comfortable, keep current target zoom (hysteresis)
 
         // Apply spring physics to zoom changes
         const zoomDisplacement = camera.targetZoom - camera.zoom;
@@ -445,7 +463,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, camera.zoom));
 
         // Debug output (remove in production)
-        if (camera.screenSpeed > 10) {
+        if (camera.screenSpeed > 3) {
           console.log(`Speed: ${camera.screenSpeed.toFixed(1)} px/f | Zoom: ${camera.zoom.toFixed(1)} (target: ${camera.targetZoom.toFixed(1)})`);
         }
 
