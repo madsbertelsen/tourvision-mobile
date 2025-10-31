@@ -149,8 +149,8 @@ export default function TripDocumentView() {
             onSelectionChange={handleSelectionChange}
           />
 
-          {/* Horizontal line from selection for testing - shows immediately when text is selected */}
-          {showMap && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && (() => {
+          {/* Horizontal line from selection - only visible when location modal is open */}
+          {showMap && locationModal.visible && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && (() => {
             // Calculate the right edge of the selection (end of selected text)
             const selectionRight = locationModal.selectionLeft + (locationModal.selectionWidth || 0);
             const lineStart = selectionRight;
@@ -193,6 +193,7 @@ export default function TripDocumentView() {
                   onWaypointsChange={handleWaypointsChange}
                   isLoadingRoute={locationModal.isLoadingRoute}
                   selectionTop={locationModal.selectionTop}
+                  arrowEndY={contentHeight > 0 ? contentHeight - 200 : undefined}
                   onContinue={handleContinue}
                   onAddLocation={handleAddLocation}
                   onFocusChange={handleSelectResult} // Update map when focus changes
