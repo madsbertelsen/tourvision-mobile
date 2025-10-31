@@ -487,7 +487,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       if (state.t < 0.999) {  // Use 0.999 to ensure we get very close
         animationRef.current = requestAnimationFrame(animate);
       } else {
-        // Snap to final position
+        // Snap dot to final position
         state.t = 1;
         setAnimatedDotGeoJSON({
           type: 'Feature',
@@ -500,24 +500,76 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         // Update last position ref
         lastAnimatedPosition.current = { lat: targetLat, lng: targetLng };
 
-        // Continue camera spring physics to reach final position
-        if (cameraStateRef.current.isFollowing) {
-          // Let spring physics continue running for smooth arrival
-          // The spring will naturally settle at the target position
-          // We could add a separate settling animation here if needed
-        }
+        // Continue camera settling animation
+        let settlingFrames = 0;
+        const maxSettlingFrames = 120; // 2 seconds at 60fps
 
-        animationRef.current = null;
-        // Clear the arc line after animation completes
-        setTimeout(() => {
-          setArcTrajectoryGeoJSON({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: []
-            }
+        const cameraSettle = () => {
+          const camera = cameraStateRef.current;
+          settlingFrames++;
+
+          // Calculate displacement from camera to final target
+          const displacementLat = targetLat - camera.lat;
+          const displacementLng = targetLng - camera.lng;
+          const distance = Math.sqrt(displacementLat ** 2 + displacementLng ** 2);
+
+          // Continue spring physics toward target
+          const forceLat = camera.springK * displacementLat;
+          const forceLng = camera.springK * displacementLng;
+
+          camera.velocityLat += forceLat;
+          camera.velocityLng += forceLng;
+          camera.velocityLat *= camera.damping;
+          camera.velocityLng *= camera.damping;
+
+          camera.lat += camera.velocityLat;
+          camera.lng += camera.velocityLng;
+
+          // Also settle zoom back to default
+          const zoomDisplacement = 12 - camera.zoom; // Return to zoom 12
+          camera.zoomVelocity += camera.zoomSpringK * zoomDisplacement * 0.5; // Gentler zoom return
+          camera.zoomVelocity *= camera.zoomDamping;
+          camera.zoom += camera.zoomVelocity;
+
+          // Update view
+          setViewState({
+            latitude: camera.lat,
+            longitude: camera.lng,
+            zoom: camera.zoom
           });
-        }, 500);
+
+          // Continue settling if not close enough or still moving
+          const speed = Math.sqrt(camera.velocityLat ** 2 + camera.velocityLng ** 2);
+          if ((distance > 0.001 || speed > 0.0001) && settlingFrames < maxSettlingFrames) {
+            animationRef.current = requestAnimationFrame(cameraSettle);
+          } else {
+            // Final snap to exact position
+            camera.lat = targetLat;
+            camera.lng = targetLng;
+            setViewState({
+              latitude: targetLat,
+              longitude: targetLng,
+              zoom: camera.zoom
+            });
+
+            animationRef.current = null;
+
+            // Clear the arc line and dot
+            setTimeout(() => {
+              setAnimatedDotGeoJSON(null);
+              setArcTrajectoryGeoJSON({
+                type: 'Feature',
+                geometry: {
+                  type: 'LineString',
+                  coordinates: []
+                }
+              });
+            }, 200);
+          }
+        };
+
+        // Start camera settling
+        animationRef.current = requestAnimationFrame(cameraSettle);
       }
     };
 
