@@ -1200,9 +1200,31 @@
           const newSelection = newState.selection;
           if (!oldSelection.eq(newSelection)) {
             console.log('[WebView] Selection changed, empty:', newSelection.empty);
+
+            // Calculate selection coordinates for immediate line rendering
+            let selectionData = {
+              empty: newSelection.empty
+            };
+
+            if (!newSelection.empty) {
+              try {
+                const coordsStart = editorView.coordsAtPos(newSelection.from);
+                const coordsEnd = editorView.coordsAtPos(newSelection.to);
+                const editorContainer = document.querySelector('#editor-container');
+                const editorRect = editorContainer.getBoundingClientRect();
+                const midpointY = (coordsStart.top + coordsStart.bottom) / 2;
+                // coordsAtPos returns absolute coordinates, just subtract container position (not padding!)
+                selectionData.selectionTop = midpointY - editorRect.top;
+                selectionData.selectionLeft = coordsStart.left - editorRect.left;
+                selectionData.selectionWidth = coordsEnd.right - coordsStart.left;
+              } catch (e) {
+                console.warn('[WebView] Could not get selection coordinates:', e);
+              }
+            }
+
             sendMessageToNative({
               type: 'selectionChange',
-              empty: newSelection.empty
+              ...selectionData
             });
 
             // Send toolbar state update
@@ -1733,14 +1755,31 @@
                   }
 
                   // Interactive mode: Send request to show geo-mark editor
-                  // Calculate selection's y-offset relative to editor container
+                  // Calculate selection's position relative to editor container
                   let selectionTop = 200; // Default fallback
+                  let selectionLeft = 0; // Default fallback
+                  let selectionWidth = 0; // Default fallback
                   try {
-                    const coords = editorView.coordsAtPos(from);
+                    const coordsStart = editorView.coordsAtPos(from);
+                    const coordsEnd = editorView.coordsAtPos(to);
                     const editorContainer = document.querySelector('#editor-container');
                     const editorRect = editorContainer.getBoundingClientRect();
-                    selectionTop = coords.top - editorRect.top;
-                    console.log('[WebView] Selection y-offset:', selectionTop);
+                    // Calculate the exact midpoint between top and bottom coordinates
+                    const midpointY = (coordsStart.top + coordsStart.bottom) / 2;
+                    // coordsAtPos returns absolute coordinates, just subtract container position (not padding!)
+                    selectionTop = midpointY - editorRect.top;
+                    selectionLeft = coordsStart.left - editorRect.left;
+                    selectionWidth = coordsEnd.right - coordsStart.left; // Width of the selection
+                    console.log('[WebView] Selection position (adjusted for padding):', {
+                      selectionTop,
+                      selectionLeft,
+                      selectionWidth,
+                      coordsTop: coordsStart.top,
+                      coordsBottom: coordsStart.bottom,
+                      midpointY: midpointY,
+                      editorRectTop: editorRect.top,
+                      adjustedForPadding: true
+                    });
                   } catch (e) {
                     console.warn('[WebView] Could not get selection coordinates:', e);
                   }
@@ -1752,7 +1791,9 @@
                       placeName: selectedText,
                       from: selection.from,
                       to: selection.to,
-                      selectionTop: selectionTop
+                      selectionTop: selectionTop,
+                      selectionLeft: selectionLeft,
+                      selectionWidth: selectionWidth
                     },
                     existingLocations: []
                   });

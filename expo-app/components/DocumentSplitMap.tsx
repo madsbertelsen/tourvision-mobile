@@ -26,6 +26,7 @@ interface SearchResult {
 interface DocumentSplitMapProps {
   locations: Location[];
   sidebarContent?: ReactNode;
+  arrowContent?: ReactNode;
   searchResults?: SearchResult[];
   selectedSearchIndex?: number;
   onSearchResultSelect?: (index: number) => void;
@@ -40,6 +41,7 @@ const COLORS = [
 const DocumentSplitMap = memo(function DocumentSplitMap({
   locations,
   sidebarContent,
+  arrowContent,
   searchResults = [],
   selectedSearchIndex = 0,
   onSearchResultSelect,
@@ -211,6 +213,23 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     const PAN_DURATION = 0.4;       // 40% of animation
     const ZOOM_IN_DURATION = 0.3;   // 30% of animation
 
+    // Calculate animation speed based on distance
+    // Short distances (< 50km): 1.5s total
+    // Medium distances (100-500km): 2-3s total
+    // Long distances (> 1000km): 4s total
+    let animationSpeed;
+    if (distance < 50) {
+      animationSpeed = 0.011; // ~1.5s
+    } else if (distance < 100) {
+      animationSpeed = 0.008; // ~2s
+    } else if (distance < 500) {
+      animationSpeed = 0.006; // ~2.7s
+    } else if (distance < 1000) {
+      animationSpeed = 0.005; // ~3.3s
+    } else {
+      animationSpeed = 0.004; // ~4s
+    }
+
     animationStateRef.current = {
       phase: 'zoom-out',
       startViewState: { ...viewState },
@@ -235,7 +254,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       if (!animationStateRef.current) return;
 
       const state = animationStateRef.current;
-      state.progress += 0.005; // Slower animation (~3 seconds total)
+      state.progress += animationSpeed; // Distance-based animation speed
 
       const t = Math.min(1, state.progress);
 
@@ -288,6 +307,28 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
   // Track previous selected index to avoid unnecessary animations
   const prevSelectedIndexRef = useRef(selectedSearchIndex);
+  const prevSearchResultsLengthRef = useRef(0);
+
+  // Animate to first result when search results first appear
+  useEffect(() => {
+    // Check if search results just became available
+    if (searchResults && searchResults.length > 0 && prevSearchResultsLengthRef.current === 0) {
+      prevSearchResultsLengthRef.current = searchResults.length;
+
+      // Animate to the selected result (usually the first one)
+      const selected = searchResults[selectedSearchIndex];
+      if (selected && selected.lon && selected.lat) {
+        const lat = parseFloat(selected.lat);
+        const lng = parseFloat(selected.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          animateToLocation(lat, lng, 12);
+        }
+      }
+    } else if (!searchResults || searchResults.length === 0) {
+      // Reset when search results are cleared
+      prevSearchResultsLengthRef.current = 0;
+    }
+  }, [searchResults, selectedSearchIndex, animateToLocation]);
 
   // Update view when selected search result changes with animation
   useEffect(() => {
@@ -403,6 +444,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
       {/* Sidebar - rendered within map container */}
       {sidebarContent}
+
+      {/* Arrow segments - rendered within map container */}
+      {arrowContent}
     </View>
   );
 }, (prevProps, nextProps) => {
@@ -414,6 +458,11 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
   // Check if sidebar content changed
   if (prevProps.sidebarContent !== nextProps.sidebarContent) {
+    return false; // Re-render
+  }
+
+  // Check if arrow content changed
+  if (prevProps.arrowContent !== nextProps.arrowContent) {
     return false; // Re-render
   }
 

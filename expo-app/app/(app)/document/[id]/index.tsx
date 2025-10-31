@@ -18,7 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,9 +34,11 @@ import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(true);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(110); // Default fallback, will be measured
 
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
@@ -52,10 +54,32 @@ export default function TripDocumentView() {
     handleClose,
   } = useLocationModal({ webViewRef });
 
+  // Handle selection changes to update line position immediately
+  const handleSelectionChange = useCallback((empty: boolean, selectedText?: string, selectionData?: any) => {
+    if (empty || !selectionData) {
+      // Clear selection coordinates when selection is empty
+      setLocationModal({
+        selectionTop: undefined,
+        selectionLeft: undefined,
+        selectionWidth: undefined,
+      });
+    } else {
+      // Update selection coordinates for line rendering
+      setLocationModal({
+        selectionTop: selectionData.selectionTop,
+        selectionLeft: selectionData.selectionLeft,
+        selectionWidth: selectionData.selectionWidth,
+      });
+    }
+  }, [setLocationModal]);
+
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <View
+        style={[styles.header, { paddingTop: insets.top + 8 }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#3B82F6" />
         </TouchableOpacity>
@@ -99,7 +123,10 @@ export default function TripDocumentView() {
       </View>
 
       {/* Main Content - Split View */}
-      <View style={styles.contentWrapper}>
+      <View
+        style={styles.contentWrapper}
+        onLayout={(e) => setContentHeight(e.nativeEvent.layout.height)}
+      >
         {/* Chat Panel */}
         {showChat && (
           <View style={styles.chatContainer}>
@@ -119,7 +146,27 @@ export default function TripDocumentView() {
             disableAnimation={true}
             webViewRef={webViewRef}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
+            onSelectionChange={handleSelectionChange}
           />
+
+          {/* Horizontal line from selection for testing - shows immediately when text is selected */}
+          {showMap && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && (() => {
+            // Calculate the right edge of the selection (end of selected text)
+            const selectionRight = locationModal.selectionLeft + (locationModal.selectionWidth || 0);
+            const lineStart = selectionRight;
+            const lineWidth = 700 - lineStart;
+
+            return (
+              <View style={[styles.arrowSegment, {
+                left: lineStart,
+                top: headerHeight + locationModal.selectionTop - 1.5, // Header + midpoint - half line height
+                width: lineWidth,
+                height: 3,
+              }]}>
+                <View style={styles.arrowLine} />
+              </View>
+            );
+          })()}
         </View>
 
         {/* Map */}
@@ -150,6 +197,38 @@ export default function TripDocumentView() {
                   onAddLocation={handleAddLocation}
                   onFocusChange={handleSelectResult} // Update map when focus changes
                 />
+              }
+              arrowContent={
+                locationModal.visible && locationModal.selectionTop !== undefined && contentHeight > 0 ? (
+                  <>
+                    {/* Vertical segment from text midpoint to 200px from bottom */}
+                    <View style={[styles.arrowSegment, {
+                      left: -1.5,
+                      top: headerHeight + locationModal.selectionTop - 1.5,
+                      width: 3,
+                      height: contentHeight - (headerHeight + locationModal.selectionTop - 1.5) - 200,
+                    }]}>
+                      <View style={[styles.arrowLine, { width: 3, height: '100%' }]} />
+                    </View>
+
+                    {/* Horizontal segment to sidebar with arrowhead */}
+                    <View style={[styles.arrowSegment, {
+                      left: 0,
+                      top: contentHeight - 200,
+                      width: 20,
+                      height: 3,
+                    }]}>
+                      <View style={styles.arrowLine} />
+                      <View style={styles.arrowHead} />
+                    </View>
+
+                    {/* Corner dot at the bend */}
+                    <View style={[styles.cornerDot, {
+                      left: -4,
+                      top: contentHeight - 200 - 4,
+                    }]} />
+                  </>
+                ) : null
               }
             />
           </View>
@@ -210,15 +289,57 @@ const styles = StyleSheet.create({
   documentContainer: {
     flex: 1,
     maxWidth: 700,  // Set max width for document
+    overflow: 'hidden',  // Prevent arrow from extending outside
   },
   documentContainerSplit: {
     width: 700,  // Fixed width when split
     maxWidth: 700,  // Enforce max width
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
+    overflow: 'hidden',  // Prevent arrow from extending outside
   },
   mapContainer: {
     flex: 1,  // Let map take remaining space
     minWidth: 400,
+  },
+  arrowSegment: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1000,
+    pointerEvents: 'none',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+  },
+  arrowLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: '#3B82F6',
+    borderRadius: 1.5,
+  },
+  arrowHead: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderLeftColor: '#3B82F6',
+    borderTopWidth: 7,
+    borderTopColor: 'transparent',
+    borderBottomWidth: 7,
+    borderBottomColor: 'transparent',
+  },
+  cornerDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3B82F6',
+    zIndex: 1001,
+    pointerEvents: 'none',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 3,
   },
 });
