@@ -154,9 +154,9 @@ export default function TripDocumentView() {
             onSelectionChange={handleSelectionChange}
           />
 
-          {/* Z-shaped line from selection - only visible when location modal is open */}
+          {/* Smooth curved line from selection - only visible when location modal is open */}
           {showMap && locationModal.visible && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && contentHeight > 0 && documentWidth > 0 && (() => {
-            // Calculate positions for Z-shape
+            // Calculate positions for curved path
             const selectionRight = locationModal.selectionLeft + (locationModal.selectionWidth || 0);
 
             // Calculate the available horizontal space from selection end to document edge
@@ -173,6 +173,25 @@ export default function TripDocumentView() {
             const verticalEndY = contentHeight - 200; // Connect to where arrow ends
             const verticalHeight = verticalEndY - verticalStartY;
 
+            // Curve radius for smooth corners (proportional to available space, max 50px)
+            const curveRadius = Math.min(50, horizontalWidth * 0.3, verticalHeight * 0.15);
+
+            // Build smooth path with cubic Bézier curves
+            const pathData = [
+              // Start point
+              `M 0 1.5`,
+              // Horizontal line to first curve
+              `L ${horizontalWidth - curveRadius} 1.5`,
+              // First curve: horizontal → vertical (top-right corner)
+              `C ${horizontalWidth - curveRadius / 3} 1.5, ${horizontalWidth} ${1.5 + curveRadius / 3}, ${horizontalWidth} ${1.5 + curveRadius}`,
+              // Vertical line segment
+              `L ${horizontalWidth} ${verticalHeight + 1.5 - curveRadius}`,
+              // Second curve: vertical → horizontal (bottom-left corner)
+              `C ${horizontalWidth} ${verticalHeight + 1.5 - curveRadius / 3}, ${horizontalWidth + curveRadius / 3} ${verticalHeight + 1.5}, ${horizontalWidth + curveRadius} ${verticalHeight + 1.5}`,
+              // Final horizontal segment to end
+              `L ${totalWidth} ${verticalHeight + 1.5}`
+            ].join(' ');
+
             return (
               <Svg
                 style={{
@@ -185,27 +204,14 @@ export default function TripDocumentView() {
                   pointerEvents: 'none',
                 }}
               >
-                {/* Z-shaped path: horizontal, vertical, horizontal */}
+                {/* Smooth curved path with Bézier curves */}
                 <Path
-                  d={`M 0 1.5 L ${horizontalWidth} 1.5 L ${horizontalWidth} ${verticalHeight + 1.5} L ${totalWidth} ${verticalHeight + 1.5}`}
+                  d={pathData}
                   stroke="#3B82F6"
                   strokeWidth="3"
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                />
-                {/* Corner dots at the bends */}
-                <Circle
-                  cx={horizontalWidth}
-                  cy={1.5}
-                  r={4}
-                  fill="#3B82F6"
-                />
-                <Circle
-                  cx={horizontalWidth}
-                  cy={verticalHeight + 1.5}
-                  r={4}
-                  fill="#3B82F6"
                 />
               </Svg>
             );
