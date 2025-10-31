@@ -100,14 +100,15 @@ export default function LocationSidebarPanel({
   // Show all location search results (with safety check and filtering out null/undefined)
   const displayResults = (locationSearchResults || []).filter(result => result != null);
 
-  // Position box to align with arrow end position
-  // If arrowEndY is provided, use it directly (it's already relative to contentWrapper)
-  // Otherwise fall back to selectionTop calculation for backward compatibility
-  const adjustedTop = arrowEndY !== undefined ? arrowEndY : (selectionTop + 60 - 16);
-
   // Item height calculation: padding (16*2) + text height (~20) + number badge (26)
   // Approximate total: 58px per item + 12px gap = 70px
   const ITEM_HEIGHT = 82; // Item height + gap
+
+  // Position box to align with arrow end position
+  // If arrowEndY is provided, use it directly (it's already relative to contentWrapper)
+  // Otherwise fall back to selectionTop calculation for backward compatibility
+  // Move up by half an element (41px) so the curve connects to the middle of the first item
+  const adjustedTop = (arrowEndY !== undefined ? arrowEndY : (selectionTop + 60 - 16)) - (ITEM_HEIGHT / 2);
 
   const handleScroll = (event: any) => {
     const scrollOffset = event.nativeEvent.contentOffset.y;
@@ -168,7 +169,7 @@ export default function LocationSidebarPanel({
 const styles = StyleSheet.create({
   sidebar: {
     position: 'absolute',
-    left: 20,
+    left: -100, // Negative value to overlap the document panel
     width: 300,
     height: 300,
     zIndex: 100,
