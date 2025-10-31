@@ -23,6 +23,7 @@ import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Svg, { Path, Defs, Marker, Polygon, Circle } from 'react-native-svg';
 import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
@@ -39,6 +40,7 @@ export default function TripDocumentView() {
   const [showChat, setShowChat] = useState(true);
   const [contentHeight, setContentHeight] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(110); // Default fallback, will be measured
+  const [documentWidth, setDocumentWidth] = useState(700); // Track actual document container width
 
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
@@ -135,10 +137,13 @@ export default function TripDocumentView() {
         )}
 
         {/* Document */}
-        <View style={[
-          styles.documentContainer,
-          (showMap || showChat) && styles.documentContainerSplit
-        ]}>
+        <View
+          style={[
+            styles.documentContainer,
+            (showMap || showChat) && styles.documentContainerSplit
+          ]}
+          onLayout={(e) => setDocumentWidth(e.nativeEvent.layout.width)}
+        >
           <DynamicLandingDocumentProseMirror
             initialContent={currentDoc || EMPTY_DOCUMENT_CONTENT}
             onLocationsChange={setLocations}
@@ -149,22 +154,60 @@ export default function TripDocumentView() {
             onSelectionChange={handleSelectionChange}
           />
 
-          {/* Horizontal line from selection - only visible when location modal is open */}
-          {showMap && locationModal.visible && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && (() => {
-            // Calculate the right edge of the selection (end of selected text)
+          {/* Z-shaped line from selection - only visible when location modal is open */}
+          {showMap && locationModal.visible && locationModal.selectionLeft !== undefined && locationModal.selectionTop !== undefined && contentHeight > 0 && documentWidth > 0 && (() => {
+            // Calculate positions for Z-shape
             const selectionRight = locationModal.selectionLeft + (locationModal.selectionWidth || 0);
-            const lineStart = selectionRight;
-            const lineWidth = 700 - lineStart;
+
+            // Calculate the available horizontal space from selection end to document edge
+            const availableSpace = documentWidth - selectionRight;
+
+            // Position vertical line at midpoint of available space
+            const horizontalWidth = availableSpace / 2;
+
+            // Total width from selection end to document edge (for SVG container)
+            const totalWidth = availableSpace;
+
+            // Vertical segment height (from selection top to arrow connection point)
+            const verticalStartY = headerHeight + locationModal.selectionTop;
+            const verticalEndY = contentHeight - 200; // Connect to where arrow ends
+            const verticalHeight = verticalEndY - verticalStartY;
 
             return (
-              <View style={[styles.arrowSegment, {
-                left: lineStart,
-                top: headerHeight + locationModal.selectionTop - 1.5, // Header + midpoint - half line height
-                width: lineWidth,
-                height: 3,
-              }]}>
-                <View style={styles.arrowLine} />
-              </View>
+              <Svg
+                style={{
+                  position: 'absolute',
+                  left: selectionRight,
+                  top: verticalStartY - 1.5,
+                  width: totalWidth + 3,
+                  height: verticalHeight + 3,
+                  zIndex: 1000,
+                  pointerEvents: 'none',
+                }}
+              >
+                {/* Z-shaped path: horizontal, vertical, horizontal */}
+                <Path
+                  d={`M 0 1.5 L ${horizontalWidth} 1.5 L ${horizontalWidth} ${verticalHeight + 1.5} L ${totalWidth} ${verticalHeight + 1.5}`}
+                  stroke="#3B82F6"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* Corner dots at the bends */}
+                <Circle
+                  cx={horizontalWidth}
+                  cy={1.5}
+                  r={4}
+                  fill="#3B82F6"
+                />
+                <Circle
+                  cx={horizontalWidth}
+                  cy={verticalHeight + 1.5}
+                  r={4}
+                  fill="#3B82F6"
+                />
+              </Svg>
             );
           })()}
         </View>
@@ -198,38 +241,6 @@ export default function TripDocumentView() {
                   onAddLocation={handleAddLocation}
                   onFocusChange={handleSelectResult} // Update map when focus changes
                 />
-              }
-              arrowContent={
-                locationModal.visible && locationModal.selectionTop !== undefined && contentHeight > 0 ? (
-                  <>
-                    {/* Vertical segment from text midpoint to 200px from bottom */}
-                    <View style={[styles.arrowSegment, {
-                      left: -1.5,
-                      top: headerHeight + locationModal.selectionTop - 1.5,
-                      width: 3,
-                      height: contentHeight - (headerHeight + locationModal.selectionTop - 1.5) - 200,
-                    }]}>
-                      <View style={[styles.arrowLine, { width: 3, height: '100%' }]} />
-                    </View>
-
-                    {/* Horizontal segment to sidebar with arrowhead */}
-                    <View style={[styles.arrowSegment, {
-                      left: 0,
-                      top: contentHeight - 200,
-                      width: 20,
-                      height: 3,
-                    }]}>
-                      <View style={styles.arrowLine} />
-                      <View style={styles.arrowHead} />
-                    </View>
-
-                    {/* Corner dot at the bend */}
-                    <View style={[styles.cornerDot, {
-                      left: -4,
-                      top: contentHeight - 200 - 4,
-                    }]} />
-                  </>
-                ) : null
               }
             />
           </View>
