@@ -173,86 +173,15 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [viewState, setViewState] = useState(getInitialViewState());
   const animationRef = useRef<number | null>(null);
 
-  // State for animated dot and arc trajectory as GeoJSON
-  const [animatedDotGeoJSON, setAnimatedDotGeoJSON] = useState<any>(null);
-
-  const [arcTrajectoryGeoJSON, setArcTrajectoryGeoJSON] = useState<any>({
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: []
-    }
-  });
-
-  // Physics-based animation parameters
+  // Simple animation state
   const animationStateRef = useRef<{
-    startLat: number;
-    startLng: number;
-    targetLat: number;
-    targetLng: number;
-    velocity: number;
-    t: number; // progress from 0 to 1
-    arcHeight: number; // height of the arc
+    phase: 'zoom-out' | 'pan' | 'zoom-in';
+    startViewState: any;
+    targetViewState: any;
+    progress: number; // 0 to 1
   } | null>(null);
 
-  // Generate great circle arc trajectory using turf.js
-  const generateArcTrajectory = (start: {lat: number, lng: number}, end: {lat: number, lng: number}) => {
-    // Create a great circle arc between the two points
-    const startPoint = turf.point([start.lng, start.lat]);
-    const endPoint = turf.point([end.lng, end.lat]);
-
-    // Generate the great circle arc
-    const greatCircleArc = turf.greatCircle(startPoint, endPoint, {
-      npoints: 100  // Number of points along the arc for smooth animation
-    });
-
-    // Return the coordinates of the great circle
-    if (greatCircleArc.geometry.type === 'LineString') {
-      return greatCircleArc.geometry.coordinates;
-    } else if (greatCircleArc.geometry.type === 'MultiLineString') {
-      // For very long distances, turf might return MultiLineString
-      // Concatenate all the coordinates
-      return greatCircleArc.geometry.coordinates.flat();
-    }
-
-    return [[start.lng, start.lat], [end.lng, end.lat]];
-  };
-
-  // Get a point along the arc at position t (0 to 1)
-  const getPointAlongArc = (arcCoordinates: number[][], t: number) => {
-    if (!arcCoordinates || arcCoordinates.length === 0) {
-      return { lng: 0, lat: 0 };
-    }
-
-    // Create a line from the arc coordinates
-    const line = turf.lineString(arcCoordinates);
-    const length = turf.length(line);
-    const targetDistance = length * t;
-
-    // Get the point at the target distance along the line
-    const point = turf.along(line, targetDistance);
-
-    return {
-      lng: point.geometry.coordinates[0],
-      lat: point.geometry.coordinates[1]
-    };
-  };
-
-  // Store the last animated position in a ref to avoid recreating the animation function
-  const lastAnimatedPosition = useRef<{lat: number, lng: number} | null>(null);
-
-  // CAMERA ANIMATION DISABLED
-  // Keeping camera state ref for potential future use, but not actively using it
-  // The viewport remains static while only the red dot animates
-  /*
-  const cameraStateRef = useRef({
-    lat: viewState.latitude,
-    lng: viewState.longitude,
-    zoom: viewState.zoom,
-  });
-  */
-
-  // Physics-based animation with red dot
+  // Smooth camera animation: zoom out → pan → zoom in
   const animateToLocation = useCallback((targetLat: number, targetLng: number, targetZoom: number = 12) => {
     // Cancel any existing animation
     if (animationRef.current) {
@@ -260,102 +189,97 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       animationRef.current = null;
     }
 
-    // Get current position from the last animated position or view center
-    const currentLat = lastAnimatedPosition.current?.lat ?? viewState.latitude;
-    const currentLng = lastAnimatedPosition.current?.lng ?? viewState.longitude;
+    const currentLat = viewState.latitude;
+    const currentLng = viewState.longitude;
+    const currentZoom = viewState.zoom;
 
-    // Camera animation disabled - viewport remains static
+    // Calculate zoom level that fits both points
+    const startPoint = turf.point([currentLng, currentLat]);
+    const endPoint = turf.point([targetLng, targetLat]);
+    const distance = turf.distance(startPoint, endPoint, { units: 'kilometers' });
 
-    // Generate the arc trajectory
-    const arcCoordinates = generateArcTrajectory(
-      { lat: currentLat, lng: currentLng },
-      { lat: targetLat, lng: targetLng }
-    );
+    // Determine zoom-out level based on distance
+    let zoomOutLevel = currentZoom - 2;
+    if (distance > 1000) zoomOutLevel = Math.min(zoomOutLevel, 3);
+    else if (distance > 500) zoomOutLevel = Math.min(zoomOutLevel, 4);
+    else if (distance > 200) zoomOutLevel = Math.min(zoomOutLevel, 5);
+    else if (distance > 100) zoomOutLevel = Math.min(zoomOutLevel, 6);
+    zoomOutLevel = Math.max(1, zoomOutLevel); // Never zoom out too far
 
-    // Set the arc trajectory line
-    setArcTrajectoryGeoJSON({
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: arcCoordinates
-      }
-    });
+    // Animation phases with durations
+    const ZOOM_OUT_DURATION = 0.3; // 30% of animation
+    const PAN_DURATION = 0.4;       // 40% of animation
+    const ZOOM_IN_DURATION = 0.3;   // 30% of animation
 
-    // Initialize animation state
     animationStateRef.current = {
-      startLat: currentLat,
-      startLng: currentLng,
-      targetLat,
-      targetLng,
-      velocity: 0,
-      t: 0,
-      arcHeight: 0.3
+      phase: 'zoom-out',
+      startViewState: { ...viewState },
+      targetViewState: {
+        latitude: targetLat,
+        longitude: targetLng,
+        zoom: targetZoom
+      },
+      progress: 0
     };
 
-    const animate = (timestamp: number) => {
+    const easeInOutCubic = (t: number) => {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    };
+
+    // Smoother easing for pan - slower acceleration/deceleration
+    const easeInOutQuint = (t: number) => {
+      return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+    };
+
+    const animate = () => {
       if (!animationStateRef.current) return;
 
       const state = animationStateRef.current;
+      state.progress += 0.005; // Slower animation (~3 seconds total)
 
-      // Much simpler constant speed motion
-      // This prevents the camera from having to chase an accelerating target
-      if (state.t < 0.95) {
-        // Constant speed for most of the journey
-        state.velocity = 0.008;
+      const t = Math.min(1, state.progress);
+
+      let newViewState;
+
+      if (t < ZOOM_OUT_DURATION) {
+        // Phase 1: Zoom out
+        const phaseProgress = easeInOutCubic(t / ZOOM_OUT_DURATION);
+        newViewState = {
+          ...viewState,
+          latitude: currentLat,
+          longitude: currentLng,
+          zoom: currentZoom + (zoomOutLevel - currentZoom) * phaseProgress
+        };
+      } else if (t < ZOOM_OUT_DURATION + PAN_DURATION) {
+        // Phase 2: Pan to target (with smoother easing)
+        const rawProgress = (t - ZOOM_OUT_DURATION) / PAN_DURATION;
+        const phaseProgress = easeInOutQuint(rawProgress);
+        newViewState = {
+          ...viewState,
+          latitude: currentLat + (targetLat - currentLat) * phaseProgress,
+          longitude: currentLng + (targetLng - currentLng) * phaseProgress,
+          zoom: zoomOutLevel
+        };
       } else {
-        // Slow down at the very end to ensure arrival
-        state.velocity = Math.max(0.002, (1 - state.t) / 5);
+        // Phase 3: Zoom in
+        const rawProgress = (t - ZOOM_OUT_DURATION - PAN_DURATION) / ZOOM_IN_DURATION;
+        const phaseProgress = easeInOutCubic(rawProgress);
+        newViewState = {
+          ...viewState,
+          latitude: targetLat,
+          longitude: targetLng,
+          zoom: zoomOutLevel + (targetZoom - zoomOutLevel) * phaseProgress
+        };
       }
 
-      state.t = Math.min(1, state.t + state.velocity);
+      setViewState(newViewState);
 
-      // Get position along the arc
-      const position = getPointAlongArc(arcCoordinates, state.t);
-
-      // Update the dot position
-      setAnimatedDotGeoJSON({
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [position.lng, position.lat]
-        }
-      });
-
-      // Update last position ref
-      lastAnimatedPosition.current = { lat: position.lat, lng: position.lng };
-
-      // CAMERA ANIMATION DISABLED - Only visualizing with red dot and arc line
-      // The viewport stays static while the dot animates along the path
-
-      if (state.t < 0.999) {  // Use 0.999 to ensure we get very close
+      if (state.progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
       } else {
-        // Snap dot to final position
-        state.t = 1;
-        setAnimatedDotGeoJSON({
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [targetLng, targetLat]
-          }
-        });
-
-        // Update last position ref
-        lastAnimatedPosition.current = { lat: targetLat, lng: targetLng };
-
+        // Final position
+        setViewState(state.targetViewState);
         animationRef.current = null;
-
-        // Clear the arc line and dot after a short delay
-        setTimeout(() => {
-          setAnimatedDotGeoJSON(null);
-          setArcTrajectoryGeoJSON({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: []
-            }
-          });
-        }, 500);
       }
     };
 
@@ -475,45 +399,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
             </View>
           </Marker>
         ))}
-
-        {/* Arc trajectory line */}
-        <Source
-          id="arc-trajectory"
-          type="geojson"
-          data={arcTrajectoryGeoJSON}
-        >
-          <Layer
-            id="arc-trajectory-line"
-            type="line"
-            paint={{
-              'line-color': '#EF4444',
-              'line-width': 3,
-              'line-opacity': 0.8,
-              'line-dasharray': [3, 1]
-            }}
-          />
-        </Source>
-
-        {/* Animated red dot */}
-        {animatedDotGeoJSON && (
-          <Source
-            id="animated-dot"
-            type="geojson"
-            data={animatedDotGeoJSON}
-          >
-            <Layer
-              id="animated-dot-layer"
-              type="circle"
-              paint={{
-                'circle-radius': 10,
-                'circle-color': '#EF4444',
-                'circle-stroke-color': '#ffffff',
-                'circle-stroke-width': 2,
-                'circle-opacity': 1
-              }}
-            />
-          </Source>
-        )}
       </Map>
 
       {/* Sidebar - rendered within map container */}
