@@ -25,6 +25,7 @@ interface TripContextType {
     isLoadingLocation: boolean;
     selectedLocation: { placeName: string; lat: number; lng: number } | null;
     selectionRange: { from: number; to: number } | null;
+    selectionTop?: number;
     transportConfig: {
       from: { lat: number; lng: number; name: string } | null;
       mode: 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
@@ -65,6 +66,7 @@ export default function TripLayout() {
     isLoadingLocation: false,
     selectedLocation: null,
     selectionRange: null,
+    selectionTop: 200,
     transportConfig: {
       from: null,
       mode: 'walking',

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, memo, ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -16,9 +16,18 @@ interface Location {
   waypoints?: Array<{lat: number, lng: number}> | null;
 }
 
+interface SearchResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
 interface DocumentSplitMapProps {
   locations: Location[];
-  modalContent?: ReactNode;
+  sidebarContent?: ReactNode;
+  searchResults?: SearchResult[];
+  selectedSearchIndex?: number;
+  onSearchResultSelect?: (index: number) => void;
 }
 
 // Color array starting with Purple (to match expected first location color)
@@ -27,7 +36,13 @@ const COLORS = [
   // Purple,   Blue,     Green,    Orange,   Red
 ];
 
-const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalContent }: DocumentSplitMapProps) {
+const DocumentSplitMap = memo(function DocumentSplitMap({
+  locations,
+  sidebarContent,
+  searchResults = [],
+  selectedSearchIndex = 0,
+  onSearchResultSelect,
+}: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
 
@@ -100,8 +115,18 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalConten
     fetchRoutes();
   }, [locations]);
 
-  // Calculate initial view state to fit all locations
+  // Calculate initial view state to fit all locations and search results
   const getInitialViewState = () => {
+    // If we have search results, focus on the selected one
+    if (searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
+      const selected = searchResults[selectedSearchIndex];
+      return {
+        latitude: parseFloat(selected.lat),
+        longitude: parseFloat(selected.lon),
+        zoom: 12
+      };
+    }
+
     if (locations.length === 0) {
       return {
         latitude: 0,
@@ -144,6 +169,18 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalConten
 
   const [viewState, setViewState] = useState(getInitialViewState());
 
+  // Update view when selected search result changes
+  useEffect(() => {
+    if (searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
+      const selected = searchResults[selectedSearchIndex];
+      setViewState({
+        latitude: parseFloat(selected.lat),
+        longitude: parseFloat(selected.lon),
+        zoom: 12
+      });
+    }
+  }, [searchResults, selectedSearchIndex]);
+
   return (
     <View style={styles.container}>
       <Map
@@ -181,6 +218,29 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalConten
           );
         })}
 
+        {/* Search result markers - show in orange/yellow */}
+        {searchResults.map((result, index) => {
+          const isSelected = index === selectedSearchIndex;
+          return (
+            <Marker
+              key={`search-${index}`}
+              latitude={parseFloat(result.lat)}
+              longitude={parseFloat(result.lon)}
+              anchor="center"
+              onClick={() => onSearchResultSelect?.(index)}
+            >
+              <View style={[
+                styles.searchMarker,
+                isSelected && styles.searchMarkerSelected
+              ]}>
+                <View style={styles.searchMarkerInner}>
+                  <Text style={styles.searchMarkerText}>{index + 1}</Text>
+                </View>
+              </View>
+            </Marker>
+          );
+        })}
+
         {/* Location markers */}
         {locations.map((location, index) => (
           <Marker
@@ -199,8 +259,8 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalConten
         ))}
       </Map>
 
-      {/* Modal overlay - rendered within map container */}
-      {modalContent}
+      {/* Sidebar - rendered within map container */}
+      {sidebarContent}
     </View>
   );
 }, (prevProps, nextProps) => {
@@ -210,8 +270,14 @@ const DocumentSplitMap = memo(function DocumentSplitMap({ locations, modalConten
     return false; // Re-render
   }
 
-  // Check if modal content changed
-  if (prevProps.modalContent !== nextProps.modalContent) {
+  // Check if sidebar content changed
+  if (prevProps.sidebarContent !== nextProps.sidebarContent) {
+    return false; // Re-render
+  }
+
+  // Check if search results changed
+  if (prevProps.searchResults?.length !== nextProps.searchResults?.length ||
+      prevProps.selectedSearchIndex !== nextProps.selectedSearchIndex) {
     return false; // Re-render
   }
 
@@ -235,6 +301,7 @@ export default DocumentSplitMap;
 
 const styles = StyleSheet.create({
   container: {
+    position: 'relative',
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
@@ -256,5 +323,37 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: 'white',
+  },
+  searchMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: 'white',
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  searchMarkerSelected: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 4,
+    backgroundColor: '#F97316',
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+  },
+  searchMarkerInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchMarkerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });
