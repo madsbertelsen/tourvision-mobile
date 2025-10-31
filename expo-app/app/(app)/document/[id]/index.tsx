@@ -67,13 +67,17 @@ export default function TripDocumentView() {
       });
     } else {
       // Update selection coordinates for line rendering
-      setLocationModal({
-        selectionTop: selectionData.selectionTop,
-        selectionLeft: selectionData.selectionLeft,
-        selectionWidth: selectionData.selectionWidth,
-      });
+      // Only store coordinates if modal is already visible
+      // This prevents the line from appearing on text selection
+      if (locationModal.visible) {
+        setLocationModal({
+          selectionTop: selectionData.selectionTop,
+          selectionLeft: selectionData.selectionLeft,
+          selectionWidth: selectionData.selectionWidth,
+        });
+      }
     }
-  }, [setLocationModal]);
+  }, [locationModal.visible, setLocationModal]);
 
   return (
     <View style={styles.container}>
