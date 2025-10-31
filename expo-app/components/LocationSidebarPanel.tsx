@@ -116,12 +116,6 @@ export default function LocationSidebarPanel({
 
   return (
     <>
-      {/* Arrow pointing from selection to options */}
-      <View style={[styles.arrow, { top: adjustedTop + 26 }]}>
-        <View style={styles.arrowLine} />
-        <View style={styles.arrowHead} />
-      </View>
-
       <View style={[styles.sidebar, { top: adjustedTop }]}>
         <ScrollView
           ref={scrollViewRef}
@@ -171,30 +165,6 @@ export default function LocationSidebarPanel({
 }
 
 const styles = StyleSheet.create({
-  arrow: {
-    position: 'absolute',
-    left: -60,
-    width: 70,
-    height: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 99,
-  },
-  arrowLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#3B82F6',
-  },
-  arrowHead: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 8,
-    borderLeftColor: '#3B82F6',
-    borderTopWidth: 6,
-    borderTopColor: 'transparent',
-    borderBottomWidth: 6,
-    borderBottomColor: 'transparent',
-  },
   sidebar: {
     position: 'absolute',
     left: 20,

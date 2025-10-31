@@ -32,10 +32,12 @@ export function useLocationModal({ webViewRef, onLocationAdded }: UseLocationMod
       return;
     }
 
-    // Store selection range and y-offset
+    // Store selection range and position
     setLocationModal({
       selectionRange: { from: data.from, to: data.to },
       selectionTop: data.selectionTop || 200, // Use provided y-offset or default
+      selectionLeft: data.selectionLeft || 0, // Use provided x-offset or default
+      selectionWidth: data.selectionWidth || 0, // Use provided width or default
       visible: true,
       isLoadingLocation: true,
       locationSearchResults: [],

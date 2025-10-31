@@ -25,6 +25,7 @@ interface DynamicLandingDocumentProseMirrorProps {
   disableAnimation?: boolean;
   webViewRef?: React.RefObject<ProseMirrorWebViewRef>;
   onShowGeoMarkEditor?: (data: any, locations: Location[]) => void;
+  onSelectionChange?: (empty: boolean, selectedText?: string, selectionData?: { selectionTop?: number; selectionLeft?: number; selectionWidth?: number }) => void;
 }
 
 // Use the full landing page content
@@ -36,7 +37,8 @@ export default function DynamicLandingDocumentProseMirror({
   onContentChange,
   disableAnimation = false,
   webViewRef: externalWebViewRef,
-  onShowGeoMarkEditor: externalOnShowGeoMarkEditor
+  onShowGeoMarkEditor: externalOnShowGeoMarkEditor,
+  onSelectionChange: externalOnSelectionChange
 }: DynamicLandingDocumentProseMirrorProps) {
   const INITIAL_CONTENT = initialContent || DEFAULT_INITIAL_CONTENT;
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
@@ -432,7 +434,12 @@ export default function DynamicLandingDocumentProseMirror({
         setHasTextSelection(!empty);
       }, 0);
     }
-  }, []);
+
+    // Forward to external handler if provided
+    if (externalOnSelectionChange) {
+      externalOnSelectionChange(empty, selectedText, boundingRect);
+    }
+  }, [externalOnSelectionChange]);
 
   const handleReady = useCallback(() => {
     console.log('[Landing] ===== EDITOR ONREADY CALLBACK FIRED =====');

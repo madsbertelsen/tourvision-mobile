@@ -147,7 +147,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
   ) => {
     const webViewRef = useRef<WebView>(null);
     const [isReady, setIsReady] = useState(false);
-    // Force Metro reload after bundle rebuild - v5 (reduced logging)
+    // Force Metro reload after bundle rebuild - v6 (exact midpoint calculation)
     const lastProcessedGeoMarkRef = useRef<string | null>(null);
     const lastContentHashRef = useRef<string | null>(null);
     const isInternalChangeRef = useRef(false);
@@ -277,7 +277,13 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             case 'selectionChange':
               if (onSelectionChange) {
-                onSelectionChange(data.empty, data.selectedText, data.boundingRect);
+                // WebView sends individual fields: selectionTop, selectionLeft, selectionWidth
+                const selectionData = {
+                  selectionTop: data.selectionTop,
+                  selectionLeft: data.selectionLeft,
+                  selectionWidth: data.selectionWidth
+                };
+                onSelectionChange(data.empty, data.selectedText, selectionData);
               }
               break;
 
