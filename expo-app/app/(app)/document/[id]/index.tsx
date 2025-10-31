@@ -148,6 +148,7 @@ export default function TripDocumentView() {
                   selectionTop={locationModal.selectionTop}
                   onContinue={handleContinue}
                   onAddLocation={handleAddLocation}
+                  onFocusChange={handleSelectResult} // Update map when focus changes
                 />
               }
             />

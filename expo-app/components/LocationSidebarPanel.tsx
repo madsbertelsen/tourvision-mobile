@@ -54,6 +54,7 @@ interface LocationSidebarPanelProps {
   // Actions
   onContinue: () => void; // Move from Step 1 to Step 2
   onAddLocation: () => void; // Add location to document (Step 2)
+  onFocusChange?: (index: number) => void; // Called when focused item changes
 }
 
 export default function LocationSidebarPanel({
@@ -73,6 +74,7 @@ export default function LocationSidebarPanel({
   selectionTop = 200,
   onContinue,
   onAddLocation,
+  onFocusChange,
 }: LocationSidebarPanelProps) {
   const [focusedIndex, setFocusedIndex] = React.useState(0);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -84,10 +86,17 @@ export default function LocationSidebarPanel({
     }
   }, [visible]);
 
+  // Call onFocusChange when focused index changes
+  React.useEffect(() => {
+    if (visible && onFocusChange) {
+      onFocusChange(focusedIndex);
+    }
+  }, [focusedIndex, visible, onFocusChange]);
+
   if (!visible) return null;
 
-  // Show all location search results
-  const displayResults = locationSearchResults;
+  // Show all location search results (with safety check and filtering out null/undefined)
+  const displayResults = (locationSearchResults || []).filter(result => result != null);
 
   // Position box so first item aligns with selection
   // selectionTop is relative to editor content (below toolbar)
@@ -126,7 +135,16 @@ export default function LocationSidebarPanel({
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {displayResults.map((result, index) => (
+          {isLoadingLocation && displayResults.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text style={styles.loadingText}>Searching locations...</Text>
+            </View>
+          ) : displayResults.length === 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Text style={styles.noResultsText}>No locations found</Text>
+            </View>
+          ) : displayResults.map((result, index) => (
             <View
               key={index}
               style={[
@@ -139,7 +157,7 @@ export default function LocationSidebarPanel({
                 <Text style={[styles.resultNumberText, index === focusedIndex && styles.resultNumberTextFocused]}>{index + 1}</Text>
               </View>
               <Text style={styles.resultText} numberOfLines={1}>
-                {result.display_name}
+                {result?.display_name || 'Unknown location'}
               </Text>
             </View>
           ))}
@@ -214,6 +232,39 @@ const styles = StyleSheet.create({
   mockItemFocused: {
     borderColor: '#3B82F6',
     backgroundColor: '#EFF6FF',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  noResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
   },
   header: {
     flexDirection: 'row',

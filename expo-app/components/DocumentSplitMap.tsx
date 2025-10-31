@@ -118,13 +118,15 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   // Calculate initial view state to fit all locations and search results
   const getInitialViewState = () => {
     // If we have search results, focus on the selected one
-    if (searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
+    if (searchResults && searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
       const selected = searchResults[selectedSearchIndex];
-      return {
-        latitude: parseFloat(selected.lat),
-        longitude: parseFloat(selected.lon),
-        zoom: 12
-      };
+      if (selected && selected.lat && selected.lon) {
+        return {
+          latitude: parseFloat(selected.lat),
+          longitude: parseFloat(selected.lon),
+          zoom: 12
+        };
+      }
     }
 
     if (locations.length === 0) {
@@ -169,15 +171,17 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
   const [viewState, setViewState] = useState(getInitialViewState());
 
-  // Update view when selected search result changes
+  // Update view when selected search result changes - simple approach without animation
   useEffect(() => {
-    if (searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
+    if (searchResults && searchResults.length > 0 && selectedSearchIndex < searchResults.length) {
       const selected = searchResults[selectedSearchIndex];
-      setViewState({
-        latitude: parseFloat(selected.lat),
-        longitude: parseFloat(selected.lon),
-        zoom: 12
-      });
+      if (selected && selected.lon && selected.lat) {
+        setViewState({
+          longitude: parseFloat(selected.lon),
+          latitude: parseFloat(selected.lat),
+          zoom: 12
+        });
+      }
     }
   }, [searchResults, selectedSearchIndex]);
 
@@ -219,27 +223,29 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         })}
 
         {/* Search result markers - show in orange/yellow */}
-        {searchResults.map((result, index) => {
-          const isSelected = index === selectedSearchIndex;
-          return (
-            <Marker
-              key={`search-${index}`}
-              latitude={parseFloat(result.lat)}
-              longitude={parseFloat(result.lon)}
-              anchor="center"
-              onClick={() => onSearchResultSelect?.(index)}
-            >
-              <View style={[
-                styles.searchMarker,
-                isSelected && styles.searchMarkerSelected
-              ]}>
-                <View style={styles.searchMarkerInner}>
-                  <Text style={styles.searchMarkerText}>{index + 1}</Text>
+        {searchResults && searchResults.length > 0 && searchResults
+          .filter(result => result && result.lat && result.lon)
+          .map((result, index) => {
+            const isSelected = index === selectedSearchIndex;
+            return (
+              <Marker
+                key={`search-${index}`}
+                latitude={parseFloat(result.lat)}
+                longitude={parseFloat(result.lon)}
+                anchor="center"
+                onClick={() => onSearchResultSelect?.(index)}
+              >
+                <View style={[
+                  styles.searchMarker,
+                  isSelected && styles.searchMarkerSelected
+                ]}>
+                  <View style={styles.searchMarkerInner}>
+                    <Text style={styles.searchMarkerText}>{index + 1}</Text>
+                  </View>
                 </View>
-              </View>
-            </Marker>
-          );
-        })}
+              </Marker>
+            );
+          })}
 
         {/* Location markers */}
         {locations.map((location, index) => (

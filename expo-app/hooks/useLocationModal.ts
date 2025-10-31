@@ -74,13 +74,21 @@ export function useLocationModal({ webViewRef, onLocationAdded }: UseLocationMod
 
   // Handle location result selection
   const handleSelectResult = useCallback((index: number) => {
+    if (!locationModal.locationSearchResults || index >= locationModal.locationSearchResults.length) {
+      return;
+    }
+
     const result = locationModal.locationSearchResults[index];
+    if (!result) {
+      return;
+    }
+
     setLocationModal({
       selectedResultIndex: index,
       selectedLocation: {
-        placeName: result.display_name,
-        lat: parseFloat(result.lat),
-        lng: parseFloat(result.lon),
+        placeName: result.display_name || 'Unknown location',
+        lat: parseFloat(result.lat || '0'),
+        lng: parseFloat(result.lon || '0'),
       },
     });
   }, [locationModal.locationSearchResults, setLocationModal]);
