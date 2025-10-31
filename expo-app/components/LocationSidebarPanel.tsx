@@ -50,6 +50,7 @@ interface LocationSidebarPanelProps {
 
   // Positioning
   selectionTop?: number;
+  arrowEndY?: number; // Y position where the arrow ends (for alignment)
 
   // Actions
   onContinue: () => void; // Move from Step 1 to Step 2
@@ -72,6 +73,7 @@ export default function LocationSidebarPanel({
   onWaypointsChange,
   isLoadingRoute,
   selectionTop = 200,
+  arrowEndY,
   onContinue,
   onAddLocation,
   onFocusChange,
@@ -98,11 +100,10 @@ export default function LocationSidebarPanel({
   // Show all location search results (with safety check and filtering out null/undefined)
   const displayResults = (locationSearchResults || []).filter(result => result != null);
 
-  // Position box so first item aligns with selection
-  // selectionTop is relative to editor content (below toolbar)
-  // Map panel starts at toolbar level, so add toolbar height (60px)
-  // Also account for box padding (16px) so first item content aligns with text
-  const adjustedTop = selectionTop + 60 - 16;
+  // Position box to align with arrow end position
+  // If arrowEndY is provided, use it directly (it's already relative to contentWrapper)
+  // Otherwise fall back to selectionTop calculation for backward compatibility
+  const adjustedTop = arrowEndY !== undefined ? arrowEndY : (selectionTop + 60 - 16);
 
   // Item height calculation: padding (16*2) + text height (~20) + number badge (26)
   // Approximate total: 58px per item + 12px gap = 70px
