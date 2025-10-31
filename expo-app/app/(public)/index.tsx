@@ -73,7 +73,7 @@ export default function LandingPage() {
                   <>
                     <TouchableOpacity
                       style={styles.primaryCTA}
-                      onPress={() => router.push('/(auth)/register')}
+                      onPress={() => router.push('/(app)/dashboard')}
                     >
                       <Text style={styles.primaryCTAText}>Start Creating</Text>
                       <Ionicons name="arrow-forward-circle" size={20} color="#fff" />

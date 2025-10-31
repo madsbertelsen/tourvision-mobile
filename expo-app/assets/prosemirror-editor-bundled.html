@@ -1733,13 +1733,26 @@
                   }
 
                   // Interactive mode: Send request to show geo-mark editor
+                  // Calculate selection's y-offset relative to editor container
+                  let selectionTop = 200; // Default fallback
+                  try {
+                    const coords = editorView.coordsAtPos(from);
+                    const editorContainer = document.querySelector('#editor-container');
+                    const editorRect = editorContainer.getBoundingClientRect();
+                    selectionTop = coords.top - editorRect.top;
+                    console.log('[WebView] Selection y-offset:', selectionTop);
+                  } catch (e) {
+                    console.warn('[WebView] Could not get selection coordinates:', e);
+                  }
+
                   sendMessageToNative({
                     type: 'showGeoMarkEditor',
                     data: {
                       selectedText: selectedText,
                       placeName: selectedText,
                       from: selection.from,
-                      to: selection.to
+                      to: selection.to,
+                      selectionTop: selectionTop
                     },
                     existingLocations: []
                   });

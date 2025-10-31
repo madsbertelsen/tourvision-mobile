@@ -289,6 +289,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             case 'showGeoMarkEditor':
               if (onShowGeoMarkEditor) {
+                console.log('[ProseMirrorWebView] Received showGeoMarkEditor with selectionTop:', data.data.selectionTop);
                 onShowGeoMarkEditor(data.data, data.existingLocations || []);
               }
               break;

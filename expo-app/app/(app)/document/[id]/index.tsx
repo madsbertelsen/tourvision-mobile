@@ -27,7 +27,7 @@ import { useTripContext } from './_layout';
 import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
-import LocationModalPanel from '@/components/LocationModalPanel';
+import LocationSidebarPanel from '@/components/LocationSidebarPanel';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -127,8 +127,11 @@ export default function TripDocumentView() {
           <View style={styles.mapContainer}>
             <DocumentSplitMap
               locations={locations}
-              modalContent={
-                <LocationModalPanel
+              searchResults={locationModal.visible ? locationModal.locationSearchResults : []}
+              selectedSearchIndex={locationModal.selectedResultIndex}
+              onSearchResultSelect={handleSelectResult}
+              sidebarContent={
+                <LocationSidebarPanel
                   visible={locationModal.visible}
                   onClose={handleClose}
                   step={locationModal.step}
@@ -142,7 +145,7 @@ export default function TripDocumentView() {
                   onTransportModeChange={handleTransportModeChange}
                   onWaypointsChange={handleWaypointsChange}
                   isLoadingRoute={locationModal.isLoadingRoute}
-                  existingLocations={locations}
+                  selectionTop={locationModal.selectionTop}
                   onContinue={handleContinue}
                   onAddLocation={handleAddLocation}
                 />
