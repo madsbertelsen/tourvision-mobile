@@ -241,6 +241,54 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   // Store the last animated position in a ref to avoid recreating the animation function
   const lastAnimatedPosition = useRef<{lat: number, lng: number} | null>(null);
 
+  // Camera state for smooth following with physics
+  const cameraStateRef = useRef({
+    // Position
+    lat: viewState.latitude,
+    lng: viewState.longitude,
+    zoom: viewState.zoom,
+    targetZoom: viewState.zoom, // Target zoom for smooth transitions
+    zoomVelocity: 0,           // Zoom change velocity
+    // Velocity (geographic)
+    velocityLat: 0,
+    velocityLng: 0,
+    // Velocity (screen space)
+    screenVelocityX: 0,
+    screenVelocityY: 0,
+    screenSpeed: 0, // Magnitude in pixels/frame
+    // Physics parameters
+    isFollowing: true,
+    springK: 0.03,     // Spring constant (stiffness)
+    damping: 0.85,     // Damping factor (0-1)
+    maxVelocity: 2,    // Maximum velocity in degrees/frame
+    // Zoom control parameters
+    comfortableSpeed: 15,  // Comfortable screen speed in pixels/frame
+    maxScreenSpeed: 50,    // Maximum tolerable screen speed
+    zoomSpringK: 0.05,     // Zoom spring constant
+    zoomDamping: 0.9,      // Zoom damping factor
+    minZoom: 3,            // Don't zoom out beyond world view
+    maxZoom: 16            // Don't zoom in beyond street level
+  });
+
+  // Helper function to calculate screen-space velocity
+  const calculateScreenVelocity = (geoVelocityLat: number, geoVelocityLng: number, zoom: number, latitude: number) => {
+    // Web Mercator projection scale at given zoom
+    // At zoom level z, there are 2^z tiles, each 256 pixels
+    const pixelsPerDegreeAtEquator = (256 * Math.pow(2, zoom)) / 360;
+
+    // Adjust for latitude (Mercator projection stretches at higher latitudes)
+    const latRad = (latitude * Math.PI) / 180;
+    const pixelsPerDegreeLng = pixelsPerDegreeAtEquator * Math.cos(latRad);
+    const pixelsPerDegreeLat = pixelsPerDegreeAtEquator;
+
+    // Convert geographic velocity to screen velocity
+    const screenVelX = geoVelocityLng * pixelsPerDegreeLng;
+    const screenVelY = geoVelocityLat * pixelsPerDegreeLat;
+    const screenSpeed = Math.sqrt(screenVelX ** 2 + screenVelY ** 2);
+
+    return { screenVelX, screenVelY, screenSpeed };
+  };
+
   // Physics-based animation with red dot
   const animateToLocation = useCallback((targetLat: number, targetLng: number, targetZoom: number = 12) => {
     // Cancel any existing animation
@@ -252,6 +300,15 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     // Get current position from the last animated position or view center
     const currentLat = lastAnimatedPosition.current?.lat ?? viewState.latitude;
     const currentLng = lastAnimatedPosition.current?.lng ?? viewState.longitude;
+
+    // Reset camera to start following from current position
+    cameraStateRef.current.isFollowing = true;
+    // Reset velocities for new animation
+    cameraStateRef.current.velocityLat = 0;
+    cameraStateRef.current.velocityLng = 0;
+    cameraStateRef.current.zoomVelocity = 0;
+    // Keep current zoom but reset target
+    cameraStateRef.current.targetZoom = cameraStateRef.current.zoom;
 
     // Generate the arc trajectory
     const arcCoordinates = generateArcTrajectory(
@@ -314,6 +371,92 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       // Update last position ref
       lastAnimatedPosition.current = { lat: position.lat, lng: position.lng };
 
+      // Camera follow logic with spring physics
+      if (cameraStateRef.current.isFollowing) {
+        const camera = cameraStateRef.current;
+
+        // Calculate displacement from camera to dot
+        const displacementLat = position.lat - camera.lat;
+        const displacementLng = position.lng - camera.lng;
+
+        // Spring force: F = -k * displacement
+        const forceLat = camera.springK * displacementLat;
+        const forceLng = camera.springK * displacementLng;
+
+        // Update velocity: v = v + force
+        camera.velocityLat += forceLat;
+        camera.velocityLng += forceLng;
+
+        // Apply damping: v = v * damping
+        camera.velocityLat *= camera.damping;
+        camera.velocityLng *= camera.damping;
+
+        // Clamp velocity to maximum
+        const speed = Math.sqrt(camera.velocityLat ** 2 + camera.velocityLng ** 2);
+        if (speed > camera.maxVelocity) {
+          const scale = camera.maxVelocity / speed;
+          camera.velocityLat *= scale;
+          camera.velocityLng *= scale;
+        }
+
+        // Update position: pos = pos + velocity
+        camera.lat += camera.velocityLat;
+        camera.lng += camera.velocityLng;
+
+        // Calculate screen-space velocity
+        const screenVelocity = calculateScreenVelocity(
+          camera.velocityLat,
+          camera.velocityLng,
+          camera.zoom,
+          camera.lat
+        );
+
+        // Store screen velocity for debugging and future zoom adjustments
+        camera.screenVelocityX = screenVelocity.screenVelX;
+        camera.screenVelocityY = screenVelocity.screenVelY;
+        camera.screenSpeed = screenVelocity.screenSpeed;
+
+        // Dynamic zoom adjustment based on screen speed
+        if (camera.screenSpeed > camera.comfortableSpeed) {
+          // Calculate how much we need to zoom out
+          // Each zoom level halves the scale, so we use log2
+          const speedRatio = camera.screenSpeed / camera.comfortableSpeed;
+          const zoomReduction = Math.log2(speedRatio);
+
+          // Set target zoom (lower number = zoomed out more)
+          camera.targetZoom = Math.max(camera.minZoom, camera.zoom - zoomReduction);
+        } else {
+          // If we're moving slowly, gradually return to normal zoom
+          camera.targetZoom = Math.min(camera.maxZoom, 12); // Default zoom level
+        }
+
+        // Apply spring physics to zoom changes
+        const zoomDisplacement = camera.targetZoom - camera.zoom;
+        const zoomForce = camera.zoomSpringK * zoomDisplacement;
+
+        // Update zoom velocity
+        camera.zoomVelocity += zoomForce;
+        camera.zoomVelocity *= camera.zoomDamping;
+
+        // Update zoom position
+        camera.zoom += camera.zoomVelocity;
+
+        // Clamp zoom to valid range
+        camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, camera.zoom));
+
+        // Debug output (remove in production)
+        if (camera.screenSpeed > 10) {
+          console.log(`Speed: ${camera.screenSpeed.toFixed(1)} px/f | Zoom: ${camera.zoom.toFixed(1)} (target: ${camera.targetZoom.toFixed(1)})`);
+        }
+
+        // Update the map viewState
+        setViewState({
+          latitude: camera.lat,
+          longitude: camera.lng,
+          zoom: camera.zoom
+        });
+      }
+
       if (state.t < 0.999) {  // Use 0.999 to ensure we get very close
         animationRef.current = requestAnimationFrame(animate);
       } else {
@@ -329,6 +472,13 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
         // Update last position ref
         lastAnimatedPosition.current = { lat: targetLat, lng: targetLng };
+
+        // Continue camera spring physics to reach final position
+        if (cameraStateRef.current.isFollowing) {
+          // Let spring physics continue running for smooth arrival
+          // The spring will naturally settle at the target position
+          // We could add a separate settling animation here if needed
+        }
 
         animationRef.current = null;
         // Clear the arc line after animation completes
@@ -387,7 +537,21 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
         {...viewState}
-        onMove={(evt: any) => setViewState(evt.viewState)}
+        onMove={(evt: any) => {
+          // Update viewState for manual interactions
+          setViewState(evt.viewState);
+
+          // Update camera state to match user input
+          cameraStateRef.current.lat = evt.viewState.latitude;
+          cameraStateRef.current.lng = evt.viewState.longitude;
+          cameraStateRef.current.zoom = evt.viewState.zoom;
+          cameraStateRef.current.targetZoom = evt.viewState.zoom;
+          // Reset zoom velocity when user manually zooms
+          cameraStateRef.current.zoomVelocity = 0;
+
+          // Note: We keep isFollowing true for now
+          // In Phase 5, we'll detect user vs programmatic moves
+        }}
       >
         {/* Navigation controls */}
         <NavigationControl position="top-right" />
