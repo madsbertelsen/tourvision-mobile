@@ -56,6 +56,7 @@ interface LocationSidebarPanelProps {
   onContinue: () => void; // Move from Step 1 to Step 2
   onAddLocation: () => void; // Add location to document (Step 2)
   onFocusChange?: (index: number) => void; // Called when focused item changes
+  onLocationClick?: (index: number) => void; // Called when user clicks a location item
 }
 
 export default function LocationSidebarPanel({
@@ -77,6 +78,7 @@ export default function LocationSidebarPanel({
   onContinue,
   onAddLocation,
   onFocusChange,
+  onLocationClick,
 }: LocationSidebarPanelProps) {
   const [focusedIndex, setFocusedIndex] = React.useState(0);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -141,13 +143,20 @@ export default function LocationSidebarPanel({
               <Text style={styles.noResultsText}>No locations found</Text>
             </View>
           ) : displayResults.map((result, index) => (
-            <View
+            <TouchableOpacity
               key={index}
               style={[
                 styles.mockItem,
                 index === focusedIndex && styles.mockItemFocused,
                 index === displayResults.length - 1 && { marginBottom: 0 } // Remove margin from last item
               ]}
+              onPress={() => {
+                // Select this result and trigger location creation
+                if (onLocationClick) {
+                  onLocationClick(index);
+                }
+              }}
+              activeOpacity={0.7}
             >
               <View style={[styles.resultNumber, index === focusedIndex && styles.resultNumberFocused]}>
                 <Text style={[styles.resultNumberText, index === focusedIndex && styles.resultNumberTextFocused]}>{index + 1}</Text>
@@ -155,7 +164,7 @@ export default function LocationSidebarPanel({
               <Text style={styles.resultText} numberOfLines={1}>
                 {result?.display_name || 'Unknown location'}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
 
           {/* Add invisible spacers at the bottom so list can scroll */}
