@@ -59,12 +59,18 @@ export default function TripDocumentView() {
   // Handle selection changes to update line position immediately
   const handleSelectionChange = useCallback((empty: boolean, selectedText?: string, selectionData?: any) => {
     if (empty || !selectionData) {
-      // Clear selection coordinates when selection is empty
-      setLocationModal({
-        selectionTop: undefined,
-        selectionLeft: undefined,
-        selectionWidth: undefined,
-      });
+      // Selection cleared - close modal if it's open
+      if (locationModal.visible) {
+        console.log('[TripDocument] Selection cleared, closing location modal');
+        handleClose();
+      } else {
+        // Just clear coordinates if modal wasn't visible
+        setLocationModal({
+          selectionTop: undefined,
+          selectionLeft: undefined,
+          selectionWidth: undefined,
+        });
+      }
     } else {
       // Update selection coordinates for line rendering
       // Only store coordinates if modal is already visible
@@ -77,7 +83,7 @@ export default function TripDocumentView() {
         });
       }
     }
-  }, [locationModal.visible, setLocationModal]);
+  }, [locationModal.visible, handleClose, setLocationModal]);
 
   // Handle location click - select result and immediately create geomark
   const handleLocationClick = useCallback((index: number) => {
