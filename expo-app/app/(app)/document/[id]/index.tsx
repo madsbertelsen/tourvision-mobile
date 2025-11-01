@@ -79,6 +79,18 @@ export default function TripDocumentView() {
     }
   }, [locationModal.visible, setLocationModal]);
 
+  // Handle location click - select result and immediately create geomark
+  const handleLocationClick = useCallback((index: number) => {
+    console.log('[TripDocument] Location clicked, index:', index);
+    // First select the result to update the selected location state
+    handleSelectResult(index);
+    // Then immediately create the geomark
+    // Use setTimeout to ensure state update has completed
+    setTimeout(() => {
+      handleAddLocation();
+    }, 100);
+  }, [handleSelectResult, handleAddLocation]);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -250,6 +262,7 @@ export default function TripDocumentView() {
                   onContinue={handleContinue}
                   onAddLocation={handleAddLocation}
                   onFocusChange={handleSelectResult} // Update map when focus changes
+                  onLocationClick={handleLocationClick} // Handle location click to create geomark
                 />
               }
             />
