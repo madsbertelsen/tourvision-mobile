@@ -2201,12 +2201,12 @@
                     throw new Error('Authentication required - no token provided');
                   }
 
-                  // Get YPartyKitProvider from bundled modules
-                  if (!window.PM.YPartyKitProvider) {
-                    throw new Error('YPartyKitProvider not available in bundle');
+                  // Get YProvider from bundled modules (y-partyserver)
+                  if (!window.PM.YProvider) {
+                    throw new Error('YProvider not available in bundle');
                   }
-                  const YPartyKitProvider = window.PM.YPartyKitProvider;
-                  console.log('[WebView] Using YPartyKitProvider for PartyKit/Cloudflare Workers');
+                  const YProvider = window.PM.YProvider;
+                  console.log('[WebView] Using YProvider from y-partyserver for PartyKit/Cloudflare Workers');
 
                   // Create Y.Doc and fragment
                   ydoc = new window.PM.Y.Doc();
@@ -2270,17 +2270,24 @@
                   console.log('[WebView] Connecting to PartyKit server...');
 
                   // Extract host from WebSocket URL
-                  // Convert "wss://tourvision-collab.workers.dev/collab" to "tourvision-collab.workers.dev"
-                  const host = wsUrl.replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
+                  // Convert "wss://tourvision-collab.workers.dev" to just the host
+                  const urlMatch = wsUrl.match(/^wss?:\/\/([^\/]+)/);
+                  if (!urlMatch) {
+                    throw new Error('Invalid WebSocket URL format');
+                  }
+                  const host = urlMatch[1];  // e.g., "tourvision-collab.workers.dev"
+
                   console.log('[WebView] PartyKit host:', host);
 
-                  // Create YPartyKitProvider with token as query parameter
-                  // y-partykit API: new YPartyKitProvider(host, room, doc, { params, awareness, connect, ... })
-                  yProvider = new YPartyKitProvider(
+                  // Create YProvider from y-partyserver
+                  // Uses standard PartyKit routing: /parties/:party/:room
+                  // Our Durable Object binding is "YjsRoom" which becomes "yjs-room" in kebab-case
+                  yProvider = new YProvider(
                     host,  // e.g., "tourvision-collab.workers.dev"
                     documentId,  // Room name (document ID)
                     ydoc,
                     {
+                      party: "yjsroom",  // Durable Object binding name (kebab-case of "YjsRoom")
                       params: { token: token },  // Pass token as query parameter
                       awareness: awareness,
                       connect: true

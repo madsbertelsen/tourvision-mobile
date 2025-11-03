@@ -24,8 +24,8 @@ import { HocuspocusProvider } from '@hocuspocus/provider';
 // Import y-websocket provider for Cloudflare Workers (legacy)
 import { WebsocketProvider } from 'y-websocket';
 
-// Import PartyKit provider (NEW - production-ready)
-import YPartyKitProvider from 'y-partykit/provider';
+// Import y-partyserver provider (NEW - production-ready)
+import YProvider from 'y-partyserver/provider';
 
 // Import old collaboration plugin (will be deprecated)
 import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
@@ -203,10 +203,10 @@ window.PM = {
   HocuspocusProvider: HocuspocusProvider,
   // y-websocket provider for Cloudflare Workers (legacy)
   WebsocketProvider: WebsocketProvider,
-  // PartyKit provider (NEW - production-ready)
-  YPartyKitProvider: YPartyKitProvider,
+  // y-partyserver provider (NEW - production-ready)
+  YProvider: YProvider,
   // Custom Enter key handler for tool picker
   handleEnterWithSelection: handleEnterWithSelection
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, Cloudflare, and PartyKit support');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, and PartyKit support');
