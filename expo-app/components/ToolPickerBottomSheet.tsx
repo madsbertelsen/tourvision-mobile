@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Pressable, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import LocationResultsList from './LocationResultsList';
+import TransportConfigView from './TransportConfigView';
 
 interface ToolPickerBottomSheetProps {
   visible: boolean;
@@ -8,9 +10,36 @@ interface ToolPickerBottomSheetProps {
   onSelectLocation: () => void;
   onSelectComment: () => void;
   onClose: () => void;
+  // Edit mode props
+  isEditing?: boolean;
+  markType?: 'location' | 'comment' | null;
+  existingMarkAttrs?: any;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  // New props for location search
+  onCreateGeoMark?: (data: {
+    placeName: string;
+    lat: number;
+    lng: number;
+    transportMode?: string;
+  }) => void;
+  onSearchResultsChange?: (results: LocationResult[], selectedIndex: number) => void;
+}
+
+export interface LocationResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+  address?: {
+    city?: string;
+    country?: string;
+    state?: string;
+  };
 }
 
 type ToolType = 'location' | 'comment';
+type Step = 'picker' | 'location-search' | 'transport-config';
+type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
 export default function ToolPickerBottomSheet({
   visible,
@@ -18,22 +47,153 @@ export default function ToolPickerBottomSheet({
   onSelectLocation,
   onSelectComment,
   onClose,
+  isEditing = false,
+  markType = null,
+  existingMarkAttrs = null,
+  onEdit,
+  onDelete,
+  onCreateGeoMark,
+  onSearchResultsChange,
 }: ToolPickerBottomSheetProps) {
-  const [focusedTool, setFocusedTool] = useState<ToolType>('location');
+  const [focusedTool, setFocusedTool] = useState<ToolType>(markType || 'location');
+  const [currentStep, setCurrentStep] = useState<Step>('picker');
 
-  // Reset focus to location when modal opens
+  // Location search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<LocationResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(0);
+  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null);
+
+  // Transport config state
+  const [transportMode, setTransportMode] = useState<TransportMode>('walking');
+
+  // Reset to picker step when modal opens/closes
   useEffect(() => {
     if (visible) {
-      setFocusedTool('location');
+      setFocusedTool(markType || 'location');
+      setCurrentStep('picker');
+      // Pre-fill search with selected text
+      setSearchQuery(selectedText);
+      setSearchResults([]);
+      setSelectedResultIndex(0);
+      setSelectedLocation(null);
+      setTransportMode('walking');
     }
-  }, [visible]);
+  }, [visible, selectedText, markType]);
 
-  // Keyboard navigation handler
+  // Notify parent of search results changes
   useEffect(() => {
-    if (!visible || Platform.OS !== 'web') return;
+    if (onSearchResultsChange && currentStep === 'location-search') {
+      onSearchResultsChange(searchResults, selectedResultIndex);
+    }
+  }, [searchResults, selectedResultIndex, currentStep, onSearchResultsChange]);
+
+  // Auto-trigger search when in location-search step
+  useEffect(() => {
+    if (currentStep === 'location-search' && searchQuery.trim()) {
+      // Debounce search
+      const timeoutId = setTimeout(() => {
+        performSearch(searchQuery);
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentStep, searchQuery]);
+
+  // Perform Nominatim search
+  const performSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(query)}` +
+        `&format=jsonv2` +
+        `&limit=5` +
+        `&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'TourVision-App',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const results = await response.json();
+      setSearchResults(results || []);
+      setSelectedResultIndex(0);
+    } catch (error) {
+      console.error('[ToolPickerBottomSheet] Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle location selection clicked
+  const handleLocationButtonClick = () => {
+    console.log('[ToolPickerBottomSheet] Location button clicked');
+    setCurrentStep('location-search');
+  };
+
+  // Handle location result selected
+  const handleLocationResultSelected = (result: LocationResult, index: number) => {
+    console.log('[ToolPickerBottomSheet] Location selected:', result.display_name);
+    setSelectedLocation(result);
+    setSelectedResultIndex(index);
+    setCurrentStep('transport-config');
+  };
+
+  // Handle back from location search
+  const handleBackFromSearch = () => {
+    setCurrentStep('picker');
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  // Handle back from transport config
+  const handleBackFromTransport = () => {
+    setCurrentStep('location-search');
+  };
+
+  // Handle add to document
+  const handleAddToDocument = () => {
+    if (!selectedLocation || !onCreateGeoMark) {
+      console.error('[ToolPickerBottomSheet] Missing data for geo-mark creation');
+      return;
+    }
+
+    console.log('[ToolPickerBottomSheet] Creating geo-mark:', {
+      placeName: selectedLocation.display_name,
+      lat: parseFloat(selectedLocation.lat),
+      lng: parseFloat(selectedLocation.lon),
+      transportMode,
+    });
+
+    onCreateGeoMark({
+      placeName: selectedLocation.display_name,
+      lat: parseFloat(selectedLocation.lat),
+      lng: parseFloat(selectedLocation.lon),
+      transportMode,
+    });
+
+    onClose();
+  };
+
+  // Keyboard navigation handler for picker step
+  useEffect(() => {
+    if (!visible || currentStep !== 'picker' || Platform.OS !== 'web') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent event from bubbling to editor
       e.stopPropagation();
 
       switch (e.key) {
@@ -55,7 +215,7 @@ export default function ToolPickerBottomSheet({
         case 'l':
         case 'L':
           e.preventDefault();
-          onSelectLocation();
+          handleLocationButtonClick();
           break;
 
         case 'c':
@@ -67,7 +227,7 @@ export default function ToolPickerBottomSheet({
         case 'Enter':
           e.preventDefault();
           if (focusedTool === 'location') {
-            onSelectLocation();
+            handleLocationButtonClick();
           } else {
             onSelectComment();
           }
@@ -77,25 +237,22 @@ export default function ToolPickerBottomSheet({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, focusedTool, onSelectLocation, onSelectComment, onClose]);
-
-  // Truncate long selected text for preview
-  const truncatedText = selectedText.length > 50
-    ? selectedText.substring(0, 50) + '...'
-    : selectedText;
+  }, [visible, currentStep, focusedTool, onSelectComment, onClose]);
 
   if (!visible) return null;
 
-  return (
-    <>
-      {/* Backdrop - only covers document panel */}
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        {/* Bottom Sheet */}
-        <Pressable style={styles.bottomSheet} onPress={(e) => e.stopPropagation()}>
+  // Render different steps
+  const renderContent = () => {
+    // Step 1: Tool Picker
+    if (currentStep === 'picker') {
+      return (
+        <>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.dragHandle} />
-            <Text style={styles.headerTitle}>Add to Selection</Text>
+            <Text style={styles.headerTitle}>
+              {isEditing ? `Edit ${markType === 'location' ? 'Location' : 'Comment'}` : 'Add to Selection'}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#6B7280" />
             </TouchableOpacity>
@@ -105,75 +262,129 @@ export default function ToolPickerBottomSheet({
           <View style={styles.previewContainer}>
             <Text style={styles.previewLabel}>Selected text:</Text>
             <Text style={styles.previewText} numberOfLines={2}>
-              "{truncatedText}"
+              "{selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText}"
             </Text>
           </View>
 
           {/* Tool Buttons */}
           <View style={styles.toolsContainer}>
-            {/* Location Button */}
-            <TouchableOpacity
-              style={[
-                styles.toolButton,
-                focusedTool === 'location' && styles.toolButtonFocused
-              ]}
-              onPress={onSelectLocation}
-              onFocus={() => setFocusedTool('location')}
-            >
-              <View style={styles.toolIconContainer}>
-                <Ionicons
-                  name="location"
-                  size={32}
-                  color={focusedTool === 'location' ? '#3B82F6' : '#6B7280'}
-                />
-              </View>
-              <View style={styles.toolTextContainer}>
-                <Text style={[
-                  styles.toolTitle,
-                  focusedTool === 'location' && styles.toolTitleFocused
-                ]}>
-                  Location
-                </Text>
-                <Text style={styles.toolDescription}>
-                  Add a place or location marker
-                </Text>
-              </View>
-              <View style={styles.shortcutBadge}>
-                <Text style={styles.shortcutText}>L</Text>
-              </View>
-            </TouchableOpacity>
+            {isEditing ? (
+              // Edit mode buttons
+              <>
+                <TouchableOpacity
+                  style={[styles.toolButton, styles.toolButtonFocused]}
+                  onPress={onEdit || (markType === 'location' ? handleLocationButtonClick : onSelectComment)}
+                >
+                  <View style={styles.toolIconContainer}>
+                    <Ionicons
+                      name={markType === 'location' ? 'location' : 'chatbubble'}
+                      size={32}
+                      color="#3B82F6"
+                    />
+                  </View>
+                  <View style={styles.toolTextContainer}>
+                    <Text style={[styles.toolTitle, styles.toolTitleFocused]}>
+                      Edit {markType === 'location' ? 'Location' : 'Comment'}
+                    </Text>
+                    <Text style={styles.toolDescription}>
+                      {markType === 'location'
+                        ? existingMarkAttrs?.placeName || 'Update location details'
+                        : existingMarkAttrs?.content || 'Update comment'}
+                    </Text>
+                  </View>
+                  <View style={styles.shortcutBadge}>
+                    <Text style={styles.shortcutText}>E</Text>
+                  </View>
+                </TouchableOpacity>
 
-            {/* Comment Button */}
-            <TouchableOpacity
-              style={[
-                styles.toolButton,
-                focusedTool === 'comment' && styles.toolButtonFocused
-              ]}
-              onPress={onSelectComment}
-              onFocus={() => setFocusedTool('comment')}
-            >
-              <View style={styles.toolIconContainer}>
-                <Ionicons
-                  name="chatbubble"
-                  size={32}
-                  color={focusedTool === 'comment' ? '#3B82F6' : '#6B7280'}
-                />
-              </View>
-              <View style={styles.toolTextContainer}>
-                <Text style={[
-                  styles.toolTitle,
-                  focusedTool === 'comment' && styles.toolTitleFocused
-                ]}>
-                  Comment
-                </Text>
-                <Text style={styles.toolDescription}>
-                  Add a note or comment
-                </Text>
-              </View>
-              <View style={styles.shortcutBadge}>
-                <Text style={styles.shortcutText}>C</Text>
-              </View>
-            </TouchableOpacity>
+                {onDelete && (
+                  <TouchableOpacity
+                    style={[styles.toolButton, styles.toolButtonDelete]}
+                    onPress={onDelete}
+                  >
+                    <View style={styles.toolIconContainer}>
+                      <Ionicons name="trash" size={32} color="#EF4444" />
+                    </View>
+                    <View style={styles.toolTextContainer}>
+                      <Text style={[styles.toolTitle, { color: '#EF4444' }]}>
+                        Delete
+                      </Text>
+                      <Text style={styles.toolDescription}>
+                        Remove this {markType === 'location' ? 'location' : 'comment'}
+                      </Text>
+                    </View>
+                    <View style={styles.shortcutBadge}>
+                      <Text style={styles.shortcutText}>D</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              // Create mode buttons
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.toolButton,
+                    focusedTool === 'location' && styles.toolButtonFocused
+                  ]}
+                  onPress={handleLocationButtonClick}
+                  onFocus={() => setFocusedTool('location')}
+                >
+                  <View style={styles.toolIconContainer}>
+                    <Ionicons
+                      name="location"
+                      size={32}
+                      color={focusedTool === 'location' ? '#3B82F6' : '#6B7280'}
+                    />
+                  </View>
+                  <View style={styles.toolTextContainer}>
+                    <Text style={[
+                      styles.toolTitle,
+                      focusedTool === 'location' && styles.toolTitleFocused
+                    ]}>
+                      Location
+                    </Text>
+                    <Text style={styles.toolDescription}>
+                      Add a place or location marker
+                    </Text>
+                  </View>
+                  <View style={styles.shortcutBadge}>
+                    <Text style={styles.shortcutText}>L</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.toolButton,
+                    focusedTool === 'comment' && styles.toolButtonFocused
+                  ]}
+                  onPress={onSelectComment}
+                  onFocus={() => setFocusedTool('comment')}
+                >
+                  <View style={styles.toolIconContainer}>
+                    <Ionicons
+                      name="chatbubble"
+                      size={32}
+                      color={focusedTool === 'comment' ? '#3B82F6' : '#6B7280'}
+                    />
+                  </View>
+                  <View style={styles.toolTextContainer}>
+                    <Text style={[
+                      styles.toolTitle,
+                      focusedTool === 'comment' && styles.toolTitleFocused
+                    ]}>
+                      Comment
+                    </Text>
+                    <Text style={styles.toolDescription}>
+                      Add a note or comment
+                    </Text>
+                  </View>
+                  <View style={styles.shortcutBadge}>
+                    <Text style={styles.shortcutText}>C</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* Keyboard Hint */}
@@ -182,6 +393,79 @@ export default function ToolPickerBottomSheet({
               <Text style={styles.hintKey}>←→</Text> Navigate • <Text style={styles.hintKey}>Enter</Text> Select • <Text style={styles.hintKey}>Esc</Text> Close
             </Text>
           </View>
+        </>
+      );
+    }
+
+    // Step 2: Location Search
+    if (currentStep === 'location-search') {
+      return (
+        <View style={styles.searchContainer}>
+          {/* Header with back button */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={onClose} style={styles.backButton}>
+              <Ionicons name="close" size={24} color="#374151" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Search Location</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search for a location..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Results List */}
+          <LocationResultsList
+            results={searchResults}
+            isLoading={isSearching}
+            onSelectResult={handleLocationResultSelected}
+            selectedIndex={selectedResultIndex}
+          />
+        </View>
+      );
+    }
+
+    // Step 3: Transport Config
+    if (currentStep === 'transport-config' && selectedLocation) {
+      return (
+        <TransportConfigView
+          locationName={selectedLocation.display_name}
+          selectedMode={transportMode}
+          onSelectMode={setTransportMode}
+          onAddToDocument={handleAddToDocument}
+          onBack={handleBackFromTransport}
+        />
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable
+          style={[
+            styles.bottomSheet,
+            currentStep !== 'picker' && styles.bottomSheetExpanded
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          {renderContent()}
         </Pressable>
       </Pressable>
     </>
@@ -209,6 +493,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+    maxHeight: '60%',
+  },
+  bottomSheetExpanded: {
+    maxHeight: '80%',
   },
   header: {
     flexDirection: 'row',
@@ -242,6 +530,14 @@ const styles = StyleSheet.create({
     padding: 4,
     position: 'absolute',
     right: 16,
+  },
+  backButton: {
+    padding: 4,
+    position: 'absolute',
+    left: 16,
+  },
+  headerSpacer: {
+    width: 32,
   },
   previewContainer: {
     paddingHorizontal: 20,
@@ -284,6 +580,10 @@ const styles = StyleSheet.create({
   toolButtonFocused: {
     borderColor: '#3B82F6',
     backgroundColor: '#EFF6FF',
+  },
+  toolButtonDelete: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
   },
   toolIconContainer: {
     width: 48,
@@ -335,5 +635,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6B7280',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  searchContainer: {
+    flex: 1,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+    outlineStyle: 'none',
+  },
+  clearButton: {
+    padding: 4,
   },
 });

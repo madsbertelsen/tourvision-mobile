@@ -1,5 +1,5 @@
 import { useGlobalSearchParams, Stack } from 'expo-router';
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 // Context for sharing document state across nested routes
 interface TripContextType {
@@ -57,6 +57,10 @@ export default function TripLayout() {
   const [isEditMode, setIsEditMode] = useState(false); // Start in read mode
   const [locations, setLocations] = useState<any[]>([]);
 
+  // Ref to store the latest document for debounced saving
+  const latestDocRef = useRef<any>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Location modal state
   const [locationModal, setLocationModalState] = useState<TripContextType['locationModal']>({
     visible: false,
@@ -101,11 +105,8 @@ export default function TripLayout() {
     }
   }, [tripId]);
 
-  // Custom setCurrentDoc that also saves to localStorage
-  const setCurrentDoc = useCallback((doc: any) => {
-    setCurrentDocState(doc);
-
-    // Save to localStorage
+  // Function to save document to localStorage
+  const saveToLocalStorage = useCallback((doc: any) => {
     try {
       const stored = localStorage.getItem('@tourvision_documents');
       let documents = stored ? JSON.parse(stored) : [];
@@ -137,6 +138,40 @@ export default function TripLayout() {
       console.error('[TripLayout] Error saving to localStorage:', error);
     }
   }, [tripId]);
+
+  // Custom setCurrentDoc that also saves to localStorage (debounced)
+  const setCurrentDoc = useCallback((doc: any) => {
+    // Update state immediately
+    setCurrentDocState(doc);
+
+    // Store latest document in ref
+    latestDocRef.current = doc;
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Schedule save after 1 second of inactivity
+    saveTimeoutRef.current = setTimeout(() => {
+      if (latestDocRef.current) {
+        saveToLocalStorage(latestDocRef.current);
+      }
+    }, 1000);
+  }, [saveToLocalStorage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        // Save immediately on unmount if there's pending changes
+        if (latestDocRef.current) {
+          saveToLocalStorage(latestDocRef.current);
+        }
+      }
+    };
+  }, [saveToLocalStorage]);
 
   return (
     <TripContext.Provider

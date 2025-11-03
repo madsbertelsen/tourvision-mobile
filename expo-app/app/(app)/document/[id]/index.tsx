@@ -50,71 +50,28 @@ export default function TripDocumentView() {
   const [toolPickerVisible, setToolPickerVisible] = useState(false);
   const [toolPickerData, setToolPickerData] = useState<{
     selectedText: string;
-    from: number;
-    to: number;
+    from?: number;
+    to?: number;
+    markType?: 'location' | 'comment';
+    isEditing?: boolean;
+    existingMarkAttrs?: any;
   } | null>(null);
+
+  // Search results state (for map preview)
+  const [toolPickerSearchResults, setToolPickerSearchResults] = useState<any[]>([]);
+  const [toolPickerSelectedIndex, setToolPickerSelectedIndex] = useState(0);
 
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
 
-  // Enable collaboration on mount
+  // Collaboration disabled - Edge Function doesn't exist
+  // Y.js collaboration will be re-enabled once Cloudflare Worker persistence is set up
   useEffect(() => {
-    const enableCollaboration = async () => {
-      if (isCollabEnabled || isEnablingCollab) return;
-
-      setIsEnablingCollab(true);
-      console.log('[TripDocument] Starting collaboration setup...');
-
-      try {
-        // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.error('[TripDocument] No user found');
-          return;
-        }
-
-        // Get collaboration URL from environment
-        const collabUrl = process.env.EXPO_PUBLIC_COLLAB_URL;
-        if (!collabUrl) {
-          console.error('[TripDocument] EXPO_PUBLIC_COLLAB_URL not configured');
-          return;
-        }
-
-        console.log('[TripDocument] Requesting JWT token for document:', tripId);
-
-        // Request JWT token from Edge Function
-        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('generate-tiptap-token', {
-          body: { documentName: tripId }
-        });
-
-        if (tokenError || !tokenData?.token) {
-          console.error('[TripDocument] Failed to get token:', tokenError);
-          return;
-        }
-
-        console.log('[TripDocument] Got JWT token, starting collaboration...');
-        console.log('[TripDocument] Server URL:', collabUrl);
-
-        // Start collaboration
-        webViewRef.current?.startCollaboration(
-          collabUrl,
-          tripId,
-          user.id,
-          user.email || 'Anonymous',
-          tokenData.token
-        );
-
-        setIsCollabEnabled(true);
-        console.log('[TripDocument] Collaboration enabled successfully');
-      } catch (error) {
-        console.error('[TripDocument] Error enabling collaboration:', error);
-      } finally {
-        setIsEnablingCollab(false);
-      }
-    };
-
-    enableCollaboration();
-  }, [tripId, isCollabEnabled, isEnablingCollab]);
+    console.log('[TripDocument] Collaboration disabled - using localStorage persistence only');
+    console.log('[TripDocument] Cloudflare Worker URL:', process.env.EXPO_PUBLIC_COLLAB_URL);
+    // TODO: Set up Cloudflare Worker to persist Y.js document state
+    // TODO: Create button to manually enable collaboration when needed
+  }, [tripId]);
 
   // Location modal handlers
   const {
@@ -176,6 +133,9 @@ export default function TripDocumentView() {
         selectedText: data.data.selectedText,
         from: data.data.from,
         to: data.data.to,
+        markType: data.data.markType,
+        isEditing: data.data.isEditing || false,
+        existingMarkAttrs: data.data.existingMarkAttrs,
       });
       setToolPickerVisible(true);
     }
@@ -213,6 +173,50 @@ export default function TripDocumentView() {
     console.log('[TripDocument] Tool picker closed');
     setToolPickerVisible(false);
     setToolPickerData(null);
+  }, []);
+
+  // Handle geo-mark creation from tool picker
+  const handleCreateGeoMark = useCallback((data: {
+    placeName: string;
+    lat: number;
+    lng: number;
+    transportMode?: string;
+  }) => {
+    console.log('[TripDocument] Creating geo-mark from tool picker:', data);
+
+    if (!toolPickerData || !webViewRef.current) {
+      console.error('[TripDocument] Missing data for geo-mark creation');
+      return;
+    }
+
+    // Create geo-mark data
+    const geoMarkData = {
+      geoId: `loc-${Date.now()}`,
+      placeName: data.placeName,
+      lat: data.lat.toString(),
+      lng: data.lng.toString(),
+      colorIndex: 0, // Will be auto-assigned by ProseMirror
+      coordSource: 'nominatim',
+      transportProfile: data.transportMode || 'walking',
+    };
+
+    // Send command to WebView to create the geo-mark
+    webViewRef.current.sendCommand('createGeoMark', {
+      from: toolPickerData.from,
+      to: toolPickerData.to,
+      geoMarkData,
+    });
+
+    // Close tool picker
+    setToolPickerVisible(false);
+    setToolPickerData(null);
+  }, [toolPickerData]);
+
+  // Handle search results changes from tool picker
+  const handleSearchResultsChange = useCallback((results: any[], selectedIndex: number) => {
+    console.log('[TripDocument] Search results changed:', { numResults: results.length, selectedIndex });
+    setToolPickerSearchResults(results);
+    setToolPickerSelectedIndex(selectedIndex);
   }, []);
 
   return (
@@ -310,6 +314,11 @@ export default function TripDocumentView() {
             onSelectLocation={handleSelectLocation}
             onSelectComment={handleSelectComment}
             onClose={handleToolPickerClose}
+            isEditing={toolPickerData?.isEditing}
+            markType={toolPickerData?.markType}
+            existingMarkAttrs={toolPickerData?.existingMarkAttrs}
+            onCreateGeoMark={handleCreateGeoMark}
+            onSearchResultsChange={handleSearchResultsChange}
           />
 
           {/* Smooth curved line from selection - only visible when location modal is open */}
@@ -381,8 +390,18 @@ export default function TripDocumentView() {
           <View style={styles.mapContainer}>
             <DocumentSplitMap
               locations={locations}
-              searchResults={locationModal.visible ? locationModal.locationSearchResults : []}
-              selectedSearchIndex={locationModal.selectedResultIndex}
+              searchResults={
+                toolPickerVisible && toolPickerSearchResults.length > 0
+                  ? toolPickerSearchResults
+                  : locationModal.visible
+                    ? locationModal.locationSearchResults
+                    : []
+              }
+              selectedSearchIndex={
+                toolPickerVisible && toolPickerSearchResults.length > 0
+                  ? toolPickerSelectedIndex
+                  : locationModal.selectedResultIndex
+              }
               onSearchResultSelect={handleSelectResult}
               sidebarContent={
                 <LocationSidebarPanel

@@ -1229,16 +1229,18 @@
           }
 
           // Send document changes to native
-          // NOTE: Skip during Y.js collaboration - sync happens via Y.js, not local storage
-          if (transaction.docChanged && !yProvider) {
+          // NOTE: Even during Y.js collaboration, we need to persist to localStorage
+          if (transaction.docChanged) {
             const docJSON = newState.doc.toJSON();
-            console.log('[WebView] Document changed, sending to native:', JSON.stringify(docJSON));
+            if (yProvider) {
+              console.log('[WebView] Document changed via Y.js, sending to native for persistence');
+            } else {
+              console.log('[WebView] Document changed, sending to native');
+            }
             sendMessageToNative({
               type: 'documentChange',
               doc: docJSON
             });
-          } else if (transaction.docChanged && yProvider) {
-            console.log('[WebView] Document changed via Y.js, skipping native sync');
           }
 
           // Send selection changes to native
@@ -1297,10 +1299,17 @@
             colorIndex: parseInt(e.target.getAttribute('data-color-index') || '0'),
             coordSource: e.target.getAttribute('data-coord-source')
           };
-          console.log('[WebView] Geo-mark clicked:', attrs);
+          console.log('[WebView] Geo-mark clicked, showing tool picker:', attrs);
+
+          // Show tool picker for editing this geo-mark
           sendMessageToNative({
-            type: 'geoMarkNavigate',
-            attrs: attrs
+            type: 'showToolPicker',
+            data: {
+              selectedText: e.target.textContent || attrs.placeName,
+              markType: 'location',
+              isEditing: true,
+              existingMarkAttrs: attrs
+            }
           });
         }
 
@@ -1324,10 +1333,17 @@
             resolved: e.target.getAttribute('data-resolved') === 'true',
             replies: replies
           };
-          console.log('[WebView] Comment clicked:', attrs);
+          console.log('[WebView] Comment clicked, showing tool picker:', attrs);
+
+          // Show tool picker for editing this comment
           sendMessageToNative({
-            type: 'commentClick',
-            attrs: attrs
+            type: 'showToolPicker',
+            data: {
+              selectedText: e.target.textContent,
+              markType: 'comment',
+              isEditing: true,
+              existingMarkAttrs: attrs
+            }
           });
         }
       });
