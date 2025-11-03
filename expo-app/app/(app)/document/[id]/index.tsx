@@ -18,7 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,7 @@ import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { supabase } from '@/lib/supabase/client';
+import { parseDocumentIntoBlocks } from '@/utils/document-block-parser';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
@@ -61,8 +62,42 @@ export default function TripDocumentView() {
   const [toolPickerSearchResults, setToolPickerSearchResults] = useState<any[]>([]);
   const [toolPickerSelectedIndex, setToolPickerSelectedIndex] = useState(0);
 
+  // Preview route state (for transportation configuration)
+  const [previewRoute, setPreviewRoute] = useState<{
+    origin: { lat: number; lng: number } | null;
+    destination: { lat: number; lng: number };
+    geometry?: {
+      type: 'LineString';
+      coordinates: number[][];
+    };
+  } | null>(null);
+
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
+
+  // Extract geo-marks from currentDoc for route visualization
+  const existingGeoMarks = useMemo(() => {
+    if (!currentDoc) return [];
+
+    try {
+      const doc = typeof currentDoc === 'string' ? JSON.parse(currentDoc) : currentDoc;
+      const blocks = parseDocumentIntoBlocks(doc);
+
+      // Collect all geo-marks from all blocks
+      const allGeoMarks = blocks.flatMap(block => block.geoMarks);
+
+      // Return simplified format for ToolPickerBottomSheet
+      return allGeoMarks.map(gm => ({
+        geoId: gm.geoId,
+        placeName: gm.placeName,
+        lat: gm.lat,
+        lng: gm.lng,
+      }));
+    } catch (error) {
+      console.error('[TripDocument] Error extracting geo-marks:', error);
+      return [];
+    }
+  }, [currentDoc]);
 
   // Handle collaboration toggle
   const handleToggleCollaboration = useCallback(async () => {
@@ -380,6 +415,8 @@ export default function TripDocumentView() {
             existingMarkAttrs={toolPickerData?.existingMarkAttrs}
             onCreateGeoMark={handleCreateGeoMark}
             onSearchResultsChange={handleSearchResultsChange}
+            existingGeoMarks={existingGeoMarks}
+            onRouteChange={setPreviewRoute}
           />
 
           {/* Smooth curved line from selection - only visible when location modal is open */}
@@ -464,6 +501,7 @@ export default function TripDocumentView() {
                   : locationModal.selectedResultIndex
               }
               onSearchResultSelect={handleSelectResult}
+              previewRoute={previewRoute}
               sidebarContent={
                 <LocationSidebarPanel
                   visible={locationModal.visible}

@@ -30,6 +30,14 @@ interface DocumentSplitMapProps {
   searchResults?: SearchResult[];
   selectedSearchIndex?: number;
   onSearchResultSelect?: (index: number) => void;
+  previewRoute?: {
+    origin: { lat: number; lng: number } | null;
+    destination: { lat: number; lng: number };
+    geometry?: {
+      type: 'LineString';
+      coordinates: number[][];
+    };
+  } | null;
 }
 
 // Color array starting with Purple (to match expected first location color)
@@ -45,6 +53,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   searchResults = [],
   selectedSearchIndex = 0,
   onSearchResultSelect,
+  previewRoute,
 }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -375,6 +384,27 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         {/* Navigation controls */}
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
+
+        {/* Preview route (shown while configuring transportation) */}
+        {previewRoute && previewRoute.geometry && (
+          <Source
+            key="preview-route"
+            id="preview-route"
+            type="geojson"
+            data={previewRoute.geometry}
+          >
+            <Layer
+              id="preview-route-line"
+              type="line"
+              paint={{
+                'line-color': '#3B82F6',
+                'line-width': 4,
+                'line-opacity': 0.6,
+                'line-dasharray': [2, 2], // Dashed line to indicate it's a preview
+              }}
+            />
+          </Source>
+        )}
 
         {/* Route lines */}
         {routes.map((route, index) => {

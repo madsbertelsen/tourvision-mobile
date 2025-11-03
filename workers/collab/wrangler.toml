@@ -15,3 +15,4 @@ new_sqlite_classes = ["YjsRoom"]
 
 # Environment variables (set via wrangler secret)
 # JWT_SECRET - for verifying authentication tokens
+# MAPBOX_TOKEN - Mapbox API token for routing (set via: wrangler secret put MAPBOX_TOKEN)

@@ -24,6 +24,22 @@ interface ToolPickerBottomSheetProps {
     transportMode?: string;
   }) => void;
   onSearchResultsChange?: (results: LocationResult[], selectedIndex: number) => void;
+  // Existing geo-marks from document
+  existingGeoMarks?: Array<{
+    geoId: string;
+    placeName: string;
+    lat: number;
+    lng: number;
+  }>;
+  // Route preview callback
+  onRouteChange?: (route: {
+    origin: { lat: number; lng: number } | null;
+    destination: { lat: number; lng: number };
+    geometry?: {
+      type: 'LineString';
+      coordinates: number[][];
+    };
+  } | null) => void;
 }
 
 export interface LocationResult {
@@ -54,6 +70,8 @@ export default function ToolPickerBottomSheet({
   onDelete,
   onCreateGeoMark,
   onSearchResultsChange,
+  existingGeoMarks = [],
+  onRouteChange,
 }: ToolPickerBottomSheetProps) {
   const [focusedTool, setFocusedTool] = useState<ToolType>(markType || 'location');
   const [currentStep, setCurrentStep] = useState<Step>('picker');
@@ -441,13 +459,27 @@ export default function ToolPickerBottomSheet({
 
     // Step 3: Transport Config
     if (currentStep === 'transport-config' && selectedLocation) {
+      // Get the last geo-mark as default origin (most recently added location)
+      const defaultOrigin = existingGeoMarks.length > 0
+        ? {
+            lat: existingGeoMarks[existingGeoMarks.length - 1].lat,
+            lng: existingGeoMarks[existingGeoMarks.length - 1].lng,
+            name: existingGeoMarks[existingGeoMarks.length - 1].placeName,
+          }
+        : null;
+
       return (
         <TransportConfigView
           locationName={selectedLocation.display_name}
+          locationLat={parseFloat(selectedLocation.lat)}
+          locationLng={parseFloat(selectedLocation.lon)}
+          originLocation={defaultOrigin}
+          allOrigins={existingGeoMarks}
           selectedMode={transportMode}
           onSelectMode={setTransportMode}
           onAddToDocument={handleAddToDocument}
           onBack={handleBackFromTransport}
+          onRouteChange={onRouteChange}
         />
       );
     }

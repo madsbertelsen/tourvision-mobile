@@ -25,8 +25,10 @@ export interface Waypoint {
   lng: number;
 }
 
-// Use environment variable for local development, empty string for production (relative URLs)
-const API_BASE_URL = process.env.EXPO_PUBLIC_NEXTJS_API_URL || '';
+// Use environment variable for Cloudflare Worker URL
+// For local development, this should be the worker's dev URL
+// For production, this should be the deployed worker URL
+const WORKER_URL = process.env.EXPO_PUBLIC_WORKER_URL || 'https://tourvision-collab.mads-9b9.workers.dev';
 
 /**
  * Fetch transportation options between two locations
@@ -150,7 +152,7 @@ export async function fetchRoute(
     });
 
     const response = await fetch(
-      `${process.env.NODE_ENV === 'production' ? '' : API_BASE_URL}/api/route?${params}`,
+      `${WORKER_URL}/api/route?${params}`,
       {
         headers: {
           'Content-Type': 'application/json',

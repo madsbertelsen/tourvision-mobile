@@ -12,6 +12,7 @@ export { YjsRoom } from './YjsRoom';
 export interface Env extends Record<string, unknown> {
   YJS_ROOM: DurableObjectNamespace;
   JWT_SECRET?: string; // Optional: for JWT verification
+  MAPBOX_TOKEN?: string; // Mapbox API token for routing
 }
 
 /**
@@ -20,8 +21,21 @@ export interface Env extends Record<string, unknown> {
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Health check endpoint (before PartyKit routing)
     const url = new URL(request.url);
+
+    // CORS preflight handler
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Upgrade',
+        },
+      });
+    }
+
+    // Health check endpoint
     if (url.pathname === '/health') {
       return new Response(JSON.stringify({
         status: 'ok',
@@ -34,6 +48,99 @@ export default {
           'Access-Control-Allow-Origin': '*'
         }
       });
+    }
+
+    // Route API endpoint
+    if (url.pathname === '/api/route' && request.method === 'GET') {
+      try {
+        const searchParams = url.searchParams;
+
+        // Support both old 'coordinates' param and new 'waypoints' param
+        const coordinates = searchParams.get('coordinates');
+        const waypoints = searchParams.get('waypoints') || coordinates;
+        const profile = searchParams.get('profile') || searchParams.get('mode') || 'driving';
+
+        if (!waypoints) {
+          return new Response(JSON.stringify({ error: 'Waypoints are required' }), {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            }
+          });
+        }
+
+        // Map transport profiles to Mapbox profiles
+        const mapboxProfile = {
+          'walking': 'walking',
+          'driving': 'driving-traffic',
+          'cycling': 'cycling',
+          'transit': 'walking', // Use walking as approximation for transit
+          'car': 'driving-traffic',
+          'bike': 'cycling',
+        }[profile] || profile;
+
+        // Mapbox Directions API
+        const mapboxToken = env.MAPBOX_TOKEN;
+
+        if (!mapboxToken) {
+          return new Response(JSON.stringify({ error: 'Mapbox token not configured' }), {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            }
+          });
+        }
+
+        const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${waypoints}?geometries=geojson&access_token=${mapboxToken}`;
+
+        const mapboxResponse = await fetch(mapboxUrl);
+
+        if (!mapboxResponse.ok) {
+          throw new Error(`Mapbox API error: ${mapboxResponse.statusText}`);
+        }
+
+        const data = await mapboxResponse.json();
+
+        if (!data.routes || data.routes.length === 0) {
+          return new Response(JSON.stringify({ error: 'No route found' }), {
+            status: 404,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            }
+          });
+        }
+
+        // Return the first route with cache headers
+        const route = data.routes[0];
+
+        return new Response(JSON.stringify({
+          geometry: route.geometry,
+          distance: route.distance, // in meters
+          duration: route.duration, // in seconds
+          legs: route.legs, // detailed segments if there are waypoints
+          profile: profile, // Include the requested profile
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600, s-maxage=3600', // Cache for 1 hour
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        });
+      } catch (error) {
+        console.error('Route API error:', error);
+        return new Response(JSON.stringify({ error: 'Failed to fetch route' }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        });
+      }
     }
 
     // Use PartyKit's standard routing: /parties/:server/:room
