@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v60 - Fixed URL parsing for y-partyserver and removed /collab path
+// v62 - Added debug logging for URL parameters
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {

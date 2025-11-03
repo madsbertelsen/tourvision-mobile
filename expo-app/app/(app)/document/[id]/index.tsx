@@ -87,8 +87,16 @@ export default function TripDocumentView() {
         return;
       }
 
-      // Get Cloudflare Worker URL from env
-      const collabUrl = process.env.EXPO_PUBLIC_COLLAB_URL || 'wss://tourvision-collab.mads-9b9.workers.dev';
+      // Get Cloudflare Worker URL from env (must use wss:// protocol for WebSocket)
+      let collabUrl = process.env.EXPO_PUBLIC_COLLAB_URL || 'wss://tourvision-collab.mads-9b9.workers.dev';
+
+      // Ensure we're using wss:// protocol (convert https:// to wss:// if needed)
+      if (collabUrl.startsWith('https://')) {
+        collabUrl = collabUrl.replace('https://', 'wss://');
+      } else if (collabUrl.startsWith('http://')) {
+        collabUrl = collabUrl.replace('http://', 'ws://');
+      }
+
       console.log('[TripDocument] Using collaboration URL:', collabUrl);
 
       // Use a simple token (room name) for authentication

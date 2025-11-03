@@ -2186,6 +2186,8 @@
                   let wsUrl = serverUrl || hocuspocusUrl || 'ws://127.0.0.1:1234/collaboration';
 
                   console.log('[WebView] Starting Y.js collaboration for document:', documentId);
+                  console.log('[WebView] serverUrl:', serverUrl);
+                  console.log('[WebView] hocuspocusUrl:', hocuspocusUrl);
                   console.log('[WebView] WebSocket URL (raw):', wsUrl);
                   console.log('[WebView] Auth token:', token ? 'present' : 'missing');
 
@@ -2261,18 +2263,20 @@
                   // Create PartyKit provider for Cloudflare Workers
                   console.log('[WebView] Connecting to PartyKit server...');
 
-                  // Extract host from WebSocket URL
+                  // Extract host from WebSocket URL (WITHOUT protocol)
+                  // YProvider expects just the hostname, not wss:// or ws://
                   // Handle formats: "wss://host", "ws://host", or just "host"
                   let host;
                   const wsMatch = wsUrl.match(/^wss?:\/\/([^\/]+)/);
                   if (wsMatch) {
-                    host = wsMatch[1];  // e.g., "tourvision-collab.workers.dev"
+                    host = wsMatch[1];  // Extract just the host: "tourvision-collab.workers.dev"
                   } else {
                     // If no protocol, assume it's just the host
                     host = wsUrl.split('/')[0];
                   }
 
-                  console.log('[WebView] PartyKit host:', host);
+                  console.log('[WebView] Raw URL:', wsUrl);
+                  console.log('[WebView] Extracted host (no protocol):', host);
                   console.log('[WebView] Room (documentId):', documentId);
 
                   // Create YProvider from y-partyserver
