@@ -143,6 +143,43 @@ const mySchema = new Schema({
     })
 });
 
+// Custom Enter key handler for tool picker
+// When text is selected and Enter is pressed, show tool picker instead of inserting newline
+function handleEnterWithSelection(view) {
+  return (state, dispatch) => {
+    const { selection } = state;
+
+    // If there's selected text, show tool picker
+    if (!selection.empty) {
+      const selectedText = state.doc.textBetween(selection.from, selection.to, ' ');
+
+      // Get selection coordinates for positioning
+      const coordsStart = view.coordsAtPos(selection.from);
+      const coordsEnd = view.coordsAtPos(selection.to);
+
+      // This will be called from HTML, where sendMessageToNative is available
+      console.log('[handleEnterWithSelection] Selection detected, showing tool picker');
+      console.log('[handleEnterWithSelection] Selected text:', selectedText);
+      console.log('[handleEnterWithSelection] From:', selection.from, 'To:', selection.to);
+
+      // Return selection data for the HTML handler to use
+      return {
+        showToolPicker: true,
+        data: {
+          selectedText: selectedText,
+          from: selection.from,
+          to: selection.to,
+          coordsStart: coordsStart,
+          coordsEnd: coordsEnd
+        }
+      };
+    }
+
+    // No selection - return false to allow default Enter behavior
+    return false;
+  };
+}
+
 // Export everything to window.PM for the HTML to use
 window.PM = {
   state: { EditorState, TextSelection, Plugin, PluginKey },
@@ -162,7 +199,9 @@ window.PM = {
   // Hocuspocus provider for WebSocket collaboration
   HocuspocusProvider: HocuspocusProvider,
   // y-websocket provider for Cloudflare Workers
-  WebsocketProvider: WebsocketProvider
+  WebsocketProvider: WebsocketProvider,
+  // Custom Enter key handler for tool picker
+  handleEnterWithSelection: handleEnterWithSelection
 };
 
 console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, and Cloudflare support');

@@ -26,6 +26,7 @@ interface DynamicLandingDocumentProseMirrorProps {
   webViewRef?: React.RefObject<ProseMirrorWebViewRef>;
   onShowGeoMarkEditor?: (data: any, locations: Location[]) => void;
   onSelectionChange?: (empty: boolean, selectedText?: string, selectionData?: { selectionTop?: number; selectionLeft?: number; selectionWidth?: number }) => void;
+  onMessage?: (data: any) => void;
 }
 
 // Use the full landing page content
@@ -38,7 +39,8 @@ export default function DynamicLandingDocumentProseMirror({
   disableAnimation = false,
   webViewRef: externalWebViewRef,
   onShowGeoMarkEditor: externalOnShowGeoMarkEditor,
-  onSelectionChange: externalOnSelectionChange
+  onSelectionChange: externalOnSelectionChange,
+  onMessage: externalOnMessage
 }: DynamicLandingDocumentProseMirrorProps) {
   const INITIAL_CONTENT = initialContent || DEFAULT_INITIAL_CONTENT;
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
@@ -988,6 +990,10 @@ export default function DynamicLandingDocumentProseMirror({
           onMessage={(data) => {
             if (data.type === 'toggleViewMode') {
               setViewMode(viewMode === 'document' ? 'map' : 'document');
+            }
+            // Forward all messages to external handler if provided
+            if (externalOnMessage) {
+              externalOnMessage(data);
             }
           }}
           editable={true}

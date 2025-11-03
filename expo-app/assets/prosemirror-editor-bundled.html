@@ -521,6 +521,56 @@
       }
     }
 
+    // Wrapper for Enter key handler that sends tool picker message to React Native
+    function createEnterKeyHandler(view) {
+      return (state, dispatch) => {
+        const result = window.PM.handleEnterWithSelection(view)(state, dispatch);
+
+        if (result && result.showToolPicker) {
+          const { selectedText, from, to, coordsStart, coordsEnd } = result.data;
+
+          // Get editor container for coordinate calculation
+          const editorContainer = document.querySelector('#editor-container');
+          const editorRect = editorContainer.getBoundingClientRect();
+
+          // Calculate midpoint Y for consistent positioning
+          const midpointY = (coordsStart.top + coordsStart.bottom) / 2;
+
+          // Send message to React Native to show tool picker
+          sendMessageToNative({
+            type: 'showToolPicker',
+            data: {
+              selectedText: selectedText,
+              from: from,
+              to: to,
+              selectionTop: midpointY - editorRect.top,
+              selectionLeft: coordsStart.left - editorRect.left,
+              selectionWidth: coordsEnd.right - coordsStart.left
+            }
+          });
+
+          return true; // Prevent default Enter behavior
+        }
+
+        return false; // Allow default Enter behavior (line break)
+      };
+    }
+
+    // Helper to create standard plugins with Enter key handler
+    function createEditorPlugins() {
+      return [
+        window.PM.history.history(),
+        window.PM.keymap({ 'Mod-z': window.PM.history.undo, 'Mod-y': window.PM.history.redo }),
+        // Custom Enter key handler for tool picker (must be before baseKeymap to override)
+        window.PM.keymap({
+          'Enter': (state, dispatch, view) => {
+            return createEnterKeyHandler(view)(state, dispatch);
+          }
+        }),
+        window.PM.keymap(window.PM.commands.baseKeymap)
+      ];
+    }
+
     function setStatus(text, isError = false) {
       const statusEl = document.getElementById('status');
       statusEl.textContent = text;
@@ -1044,11 +1094,7 @@
       let editorState = EditorState.create({
         doc: doc,
         schema: schema,
-        plugins: [
-          history(),
-          keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-          keymap(baseKeymap)
-        ]
+        plugins: createEditorPlugins()
       });
 
       console.log('[WebView] Creating editor view...');
@@ -1467,11 +1513,7 @@
                   const newState = EditorState.create({
                     doc: doc,
                     schema: schema,
-                    plugins: [
-                      history(),
-                      keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                      keymap(baseKeymap)
-                    ]
+                    plugins: createEditorPlugins()
                   });
                   editorView.updateState(newState);
                   editorState = newState;
@@ -2125,7 +2167,15 @@
                   const { documentId, userId, userName, token, serverUrl, hocuspocusUrl } = data;
 
                   // Determine which URL to use (serverUrl takes priority for Tiptap Cloud)
-                  const wsUrl = serverUrl || hocuspocusUrl || 'ws://127.0.0.1:1234/collaboration';
+                  let wsUrl = serverUrl || hocuspocusUrl || 'ws://127.0.0.1:1234/collaboration';
+
+                  // For Cloudflare Workers, append /collab to match worker routing
+                  // y-websocket appends the room name (documentId) to the URL, so:
+                  // wsUrl = "wss://tourvision-collab.workers.dev/collab" + "/" + documentId
+                  // results in: "wss://tourvision-collab.workers.dev/collab/documentId"
+                  if (wsUrl.includes('workers.dev')) {
+                    wsUrl = wsUrl + '/collab';
+                  }
 
                   console.log('[WebView] Creating Hocuspocus collaboration for document:', documentId);
                   console.log('[WebView] WebSocket URL:', wsUrl);
@@ -2244,8 +2294,14 @@
                       window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
                       window.PM.yProsemirror.yCursorPlugin(awareness),
                       window.PM.yProsemirror.yUndoPlugin(),
-                      keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                      keymap(baseKeymap)
+                      window.PM.keymap({ 'Mod-z': window.PM.history.undo, 'Mod-y': window.PM.history.redo }),
+                      // Custom Enter key handler for tool picker (must be before baseKeymap to override)
+                      window.PM.keymap({
+                        'Enter': (state, dispatch, view) => {
+                          return createEnterKeyHandler(view)(state, dispatch);
+                        }
+                      }),
+                      window.PM.keymap(window.PM.commands.baseKeymap)
                     ]
                   });
 
@@ -2305,11 +2361,7 @@
                     const newState = EditorState.create({
                       schema: schema,
                       doc: currentDoc,
-                      plugins: [
-                        history(),
-                        keymap({ 'Mod-z': undo, 'Mod-y': redo }),
-                        keymap(baseKeymap)
-                      ]
+                      plugins: createEditorPlugins()
                     });
                     editorView.updateState(newState);
                     console.log('[WebView] Editor restored with basic plugins');

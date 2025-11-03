@@ -25,10 +25,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Svg, { Path, Defs, Marker, Polygon, Circle } from 'react-native-svg';
 import { useTripContext } from './_layout';
-import DynamicLandingDocumentProseMirror from '@/app/(public)/components/DynamicLandingDocumentProseMirror';
+import DynamicLandingDocumentProseMirror from '../../../(public)/components/DynamicLandingDocumentProseMirror';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
 import LocationSidebarPanel from '@/components/LocationSidebarPanel';
+import ToolPickerBottomSheet from '@/components/ToolPickerBottomSheet';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -44,6 +45,14 @@ export default function TripDocumentView() {
   const [documentWidth, setDocumentWidth] = useState(700); // Track actual document container width
   const [isCollabEnabled, setIsCollabEnabled] = useState(false);
   const [isEnablingCollab, setIsEnablingCollab] = useState(false);
+
+  // Tool picker state
+  const [toolPickerVisible, setToolPickerVisible] = useState(false);
+  const [toolPickerData, setToolPickerData] = useState<{
+    selectedText: string;
+    from: number;
+    to: number;
+  } | null>(null);
 
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
@@ -159,6 +168,53 @@ export default function TripDocumentView() {
     }, 100);
   }, [handleSelectResult, handleAddLocation]);
 
+  // Tool picker handlers
+  const handleToolPickerMessage = useCallback((data: any) => {
+    if (data.type === 'showToolPicker') {
+      console.log('[TripDocument] Showing tool picker with data:', data.data);
+      setToolPickerData({
+        selectedText: data.data.selectedText,
+        from: data.data.from,
+        to: data.data.to,
+      });
+      setToolPickerVisible(true);
+    }
+  }, []);
+
+  const handleSelectLocation = useCallback(() => {
+    console.log('[TripDocument] Tool picker - Location selected');
+    setToolPickerVisible(false);
+
+    // Trigger the location modal with the stored selection data
+    if (toolPickerData) {
+      handleShowGeoMarkEditor({
+        selectedText: toolPickerData.selectedText,
+        from: toolPickerData.from,
+        to: toolPickerData.to,
+      }, locations);
+    }
+  }, [toolPickerData, handleShowGeoMarkEditor, locations]);
+
+  const handleSelectComment = useCallback(() => {
+    console.log('[TripDocument] Tool picker - Comment selected');
+    setToolPickerVisible(false);
+
+    // Send command to WebView to add comment mark
+    if (toolPickerData && webViewRef.current) {
+      webViewRef.current.sendCommand('addComment', {
+        from: toolPickerData.from,
+        to: toolPickerData.to,
+        text: toolPickerData.selectedText,
+      });
+    }
+  }, [toolPickerData]);
+
+  const handleToolPickerClose = useCallback(() => {
+    console.log('[TripDocument] Tool picker closed');
+    setToolPickerVisible(false);
+    setToolPickerData(null);
+  }, []);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -244,6 +300,16 @@ export default function TripDocumentView() {
             webViewRef={webViewRef}
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             onSelectionChange={handleSelectionChange}
+            onMessage={handleToolPickerMessage}
+          />
+
+          {/* Tool Picker Bottom Sheet - overlays only document panel */}
+          <ToolPickerBottomSheet
+            visible={toolPickerVisible}
+            selectedText={toolPickerData?.selectedText || ''}
+            onSelectLocation={handleSelectLocation}
+            onSelectComment={handleSelectComment}
+            onClose={handleToolPickerClose}
           />
 
           {/* Smooth curved line from selection - only visible when location modal is open */}
@@ -420,6 +486,7 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 700,  // Set max width for document
     overflow: 'hidden',  // Prevent arrow from extending outside
+    position: 'relative',  // Positioning context for tool picker
   },
   documentContainerSplit: {
     width: 700,  // Fixed width when split
@@ -427,6 +494,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
     overflow: 'hidden',  // Prevent arrow from extending outside
+    position: 'relative',  // Positioning context for tool picker
   },
   mapContainer: {
     flex: 1,  // Let map take remaining space
