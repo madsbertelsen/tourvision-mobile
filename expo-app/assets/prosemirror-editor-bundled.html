@@ -2244,7 +2244,8 @@
                   // If the user has edited the document before enabling collaboration,
                   // we need to transfer that content to the Y.js CRDT structure.
                   // This prevents data loss when switching from local-only to collaborative mode.
-                  if (editorView && editorView.state.doc && yXmlFragment.length === 0) {
+                  // IMPORTANT: Only preserve if we haven't just loaded Y.js state from storage!
+                  if (editorView && editorView.state.doc && yXmlFragment.length === 0 && !data.yjsState) {
                     const currentDoc = editorView.state.doc;
                     const nodeCount = currentDoc.content.childCount;
 
@@ -2258,6 +2259,8 @@
                     } else {
                       console.error('[WebView] ❌ prosemirrorToYXmlFragment not available - content will be lost!');
                     }
+                  } else if (data.yjsState) {
+                    console.log('[WebView] ⏭️  Skipping content preservation - Y.js state loaded from storage');
                   }
 
                   // LOCAL-FIRST: Monitor Y.Doc updates and persist to AsyncStorage (debounced)
