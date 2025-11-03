@@ -1,7 +1,7 @@
 {
   "name": "tourvision-collab-worker",
-  "version": "1.0.0",
-  "description": "Cloudflare Worker for Y.js collaboration",
+  "version": "2.0.0",
+  "description": "Cloudflare Worker for Y.js collaboration with PartyKit",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
@@ -9,8 +9,9 @@
     "tail": "wrangler tail"
   },
   "dependencies": {
-    "lib0": "^0.2.114",
-    "y-protocols": "^1.0.6",
+    "partyserver": "^0.0.75",
+    "partysocket": "^1.1.6",
+    "y-partyserver": "^0.0.51",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
