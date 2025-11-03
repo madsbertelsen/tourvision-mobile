@@ -2244,23 +2244,54 @@
                   // If the user has edited the document before enabling collaboration,
                   // we need to transfer that content to the Y.js CRDT structure.
                   // This prevents data loss when switching from local-only to collaborative mode.
-                  // IMPORTANT: Only preserve if we haven't just loaded Y.js state from storage!
-                  if (editorView && editorView.state.doc && yXmlFragment.length === 0 && !data.yjsState) {
+                  if (editorView && editorView.state.doc) {
                     const currentDoc = editorView.state.doc;
-                    const nodeCount = currentDoc.content.childCount;
+                    const currentDocJSON = JSON.stringify(currentDoc.toJSON());
 
-                    console.log('[WebView] 📋 Preserving current document content (', nodeCount, 'nodes) into Y.js');
-
-                    // Convert ProseMirror document to Y.js format
-                    // Use the y-prosemirror library's conversion function
-                    if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorToYXmlFragment) {
-                      window.PM.yProsemirror.prosemirrorToYXmlFragment(currentDoc, yXmlFragment);
-                      console.log('[WebView] ✅ Document preserved. YXmlFragment now has', yXmlFragment.length, 'nodes');
-                    } else {
-                      console.error('[WebView] ❌ prosemirrorToYXmlFragment not available - content will be lost!');
+                    // Get the Y.js document content (if any)
+                    let yjsDocJSON = '{}';
+                    if (yXmlFragment.length > 0) {
+                      try {
+                        // Convert Y.js fragment to ProseMirror and then to JSON for comparison
+                        const yjsDoc = window.PM.yProsemirror.yXmlFragmentToProsemirrorJSON(yXmlFragment, schema);
+                        yjsDocJSON = JSON.stringify(yjsDoc);
+                      } catch (e) {
+                        console.warn('[WebView] Could not convert Y.js to JSON for comparison:', e);
+                      }
                     }
-                  } else if (data.yjsState) {
-                    console.log('[WebView] ⏭️  Skipping content preservation - Y.js state loaded from storage');
+
+                    // Only preserve if the current editor content differs from Y.js content
+                    const contentDiffers = currentDocJSON !== yjsDocJSON;
+                    const yjsIsEmpty = yXmlFragment.length === 0;
+                    const editorHasContent = currentDoc.content.childCount > 0;
+
+                    console.log('[WebView] Content comparison:', {
+                      yjsIsEmpty,
+                      editorHasContent,
+                      contentDiffers,
+                      currentDocLength: currentDocJSON.length,
+                      yjsDocLength: yjsDocJSON.length
+                    });
+
+                    if (yjsIsEmpty && editorHasContent) {
+                      // Y.js is empty, editor has content → Preserve editor content
+                      console.log('[WebView] 📋 Y.js empty, preserving editor content into Y.js');
+                      if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorToYXmlFragment) {
+                        window.PM.yProsemirror.prosemirrorToYXmlFragment(currentDoc, yXmlFragment);
+                        console.log('[WebView] ✅ Editor content preserved to Y.js');
+                      } else {
+                        console.error('[WebView] ❌ prosemirrorToYXmlFragment not available');
+                      }
+                    } else if (!yjsIsEmpty && editorHasContent && contentDiffers) {
+                      // Both have content but different → Y.js wins (loaded from storage or server)
+                      console.log('[WebView] ⚠️  Y.js and editor both have content but differ - Y.js takes precedence');
+                    } else if (!yjsIsEmpty) {
+                      // Y.js has content (same or different) → Use Y.js
+                      console.log('[WebView] ✅ Y.js has content - will use Y.js state');
+                    } else {
+                      // Both empty
+                      console.log('[WebView] ℹ️  Both Y.js and editor are empty - starting fresh');
+                    }
                   }
 
                   // LOCAL-FIRST: Monitor Y.Doc updates and persist to AsyncStorage (debounced)
