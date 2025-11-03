@@ -64,14 +64,55 @@ export default function TripDocumentView() {
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
 
-  // Collaboration disabled - Edge Function doesn't exist
-  // Y.js collaboration will be re-enabled once Cloudflare Worker persistence is set up
-  useEffect(() => {
-    console.log('[TripDocument] Collaboration disabled - using localStorage persistence only');
-    console.log('[TripDocument] Cloudflare Worker URL:', process.env.EXPO_PUBLIC_COLLAB_URL);
-    // TODO: Set up Cloudflare Worker to persist Y.js document state
-    // TODO: Create button to manually enable collaboration when needed
-  }, [tripId]);
+  // Handle collaboration toggle
+  const handleToggleCollaboration = useCallback(async () => {
+    if (isCollabEnabled) {
+      // Disable collaboration
+      console.log('[TripDocument] Disabling collaboration...');
+      webViewRef.current?.stopCollaboration();
+      setIsCollabEnabled(false);
+      return;
+    }
+
+    // Enable collaboration
+    setIsEnablingCollab(true);
+    try {
+      console.log('[TripDocument] Enabling collaboration...');
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('[TripDocument] No user found');
+        alert('You must be logged in to enable collaboration');
+        return;
+      }
+
+      // Get Cloudflare Worker URL from env
+      const collabUrl = process.env.EXPO_PUBLIC_COLLAB_URL || 'wss://tourvision-collab.mads-9b9.workers.dev';
+      console.log('[TripDocument] Using collaboration URL:', collabUrl);
+
+      // Use a simple token (room name) for authentication
+      // In production, you'd generate a JWT here
+      const token = tripId;
+
+      // Start collaboration via WebView ref
+      webViewRef.current?.startCollaboration(
+        collabUrl,
+        tripId,
+        user.id,
+        user.email || 'Anonymous',
+        token
+      );
+
+      setIsCollabEnabled(true);
+      console.log('[TripDocument] Collaboration enabled successfully');
+    } catch (error) {
+      console.error('[TripDocument] Failed to enable collaboration:', error);
+      alert('Failed to enable collaboration: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsEnablingCollab(false);
+    }
+  }, [isCollabEnabled, tripId]);
 
   // Location modal handlers
   const {
@@ -241,6 +282,18 @@ export default function TripDocumentView() {
         </View>
 
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handleToggleCollaboration}
+            style={[styles.iconButton, isCollabEnabled && styles.iconButtonActive]}
+            disabled={isEnablingCollab}
+          >
+            <Ionicons
+              name={isCollabEnabled ? "people" : "people-outline"}
+              size={22}
+              color={isCollabEnabled ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => setShowChat(!showChat)}
             style={[styles.iconButton, showChat && styles.iconButtonActive]}
