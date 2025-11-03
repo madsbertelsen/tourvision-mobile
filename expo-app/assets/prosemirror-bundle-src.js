@@ -21,6 +21,9 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 // Import Hocuspocus provider for WebSocket collaboration
 import { HocuspocusProvider } from '@hocuspocus/provider';
 
+// Import y-websocket provider for Cloudflare Workers
+import { WebsocketProvider } from 'y-websocket';
+
 // Import old collaboration plugin (will be deprecated)
 import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
 
@@ -157,7 +160,9 @@ window.PM = {
   Awareness: awarenessProtocol.Awareness,
   awarenessProtocol: awarenessProtocol,
   // Hocuspocus provider for WebSocket collaboration
-  HocuspocusProvider: HocuspocusProvider
+  HocuspocusProvider: HocuspocusProvider,
+  // y-websocket provider for Cloudflare Workers
+  WebsocketProvider: WebsocketProvider
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully with Y.js and Hocuspocus support');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, and Cloudflare support');

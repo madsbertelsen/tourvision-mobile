@@ -2135,12 +2135,12 @@
                     throw new Error('Authentication required - no token provided');
                   }
 
-                  // Get HocuspocusProvider from bundled modules
-                  if (!window.PM.HocuspocusProvider) {
-                    throw new Error('HocuspocusProvider not available in bundle');
+                  // Get WebsocketProvider from bundled modules (standard y-websocket library)
+                  if (!window.PM.WebsocketProvider) {
+                    throw new Error('WebsocketProvider not available in bundle');
                   }
-                  const HocuspocusProvider = window.PM.HocuspocusProvider;
-                  console.log('[WebView] Using bundled HocuspocusProvider');
+                  const WebsocketProvider = window.PM.WebsocketProvider;
+                  console.log('[WebView] Using y-websocket WebsocketProvider for Cloudflare Workers');
 
                   // Create Y.Doc and fragment
                   ydoc = new window.PM.Y.Doc();
@@ -2200,42 +2200,41 @@
                     }, 2000);
                   });
 
-                  // Create Hocuspocus provider for Tiptap Cloud or standalone server
-                  console.log('[WebView] Connecting to Hocuspocus server...');
+                  // Create WebSocket provider for Cloudflare Workers
+                  console.log('[WebView] Connecting to Cloudflare Worker...');
 
-                  // Create Hocuspocus provider
-                  yProvider = new HocuspocusProvider({
-                    url: wsUrl,
-                    name: documentId,
-                    document: ydoc,
-                    token: token,
-                    awareness: awareness,
-                    onConnect: () => {
-                      console.log('[WebView] ✅ Hocuspocus connected successfully');
-                    },
-                    onDisconnect: ({ event }) => {
-                      console.log('[WebView] ❌ Hocuspocus disconnected:', event);
-                    },
-                    onStatus: ({ status }) => {
-                      console.log('[WebView] 📡 Hocuspocus status:', status);
-                    },
-                    onSynced: ({ state }) => {
-                      console.log('[WebView] ✅ Hocuspocus synced:', state);
-                      // NOTE: We don't send stateResponse here anymore
-                      // The Y.Doc update observer will handle persistence to AsyncStorage
-                    },
-                    onAuthenticationFailed: ({ reason }) => {
-                      console.error('[WebView] ❌ Hocuspocus authentication failed:', reason);
-                      console.error('[WebView] Token was:', token ? `${token.substring(0, 50)}...` : 'missing');
-                      console.error('[WebView] Document ID:', documentId);
-                      console.error('[WebView] URL:', wsUrl);
-                    },
-                    onClose: ({ event }) => {
-                      console.error('[WebView] ❌ Hocuspocus connection closed:', event);
+                  // Create WebsocketProvider with token as query parameter
+                  // y-websocket API: new WebsocketProvider(serverUrl, roomName, ydoc, { connect, params, awareness })
+                  yProvider = new WebsocketProvider(
+                    wsUrl,  // e.g., wss://tourvision-collab.workers.dev
+                    documentId,  // Room name (document ID)
+                    ydoc,
+                    {
+                      params: { token: token },  // Pass token as query parameter
+                      awareness: awareness,
+                      connect: true
+                    }
+                  );
+
+                  // Listen to connection events
+                  yProvider.on('status', ({ status }) => {
+                    console.log('[WebView] 📡 WebSocket status:', status);
+                    if (status === 'connected') {
+                      console.log('[WebView] ✅ WebSocket connected successfully');
+                    } else if (status === 'disconnected') {
+                      console.log('[WebView] ❌ WebSocket disconnected');
                     }
                   });
 
-                  console.log('[WebView] Hocuspocus provider created and connecting...');
+                  yProvider.on('sync', (synced) => {
+                    if (synced) {
+                      console.log('[WebView] ✅ Document synced with server');
+                      // NOTE: We don't send stateResponse here anymore
+                      // The Y.Doc update observer will handle persistence to AsyncStorage
+                    }
+                  });
+
+                  console.log('[WebView] WebSocket provider created and connecting...');
 
                   // Recreate editor with Y.js plugins
                   // NOTE: Do NOT pass a doc parameter - ySyncPlugin will create the doc from YXmlFragment

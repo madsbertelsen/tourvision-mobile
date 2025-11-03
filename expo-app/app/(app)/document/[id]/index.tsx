@@ -18,7 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +32,7 @@ import LocationSidebarPanel from '@/components/LocationSidebarPanel';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
+import { supabase } from '@/lib/supabase/client';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
@@ -41,9 +42,70 @@ export default function TripDocumentView() {
   const [contentHeight, setContentHeight] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(110); // Default fallback, will be measured
   const [documentWidth, setDocumentWidth] = useState(700); // Track actual document container width
+  const [isCollabEnabled, setIsCollabEnabled] = useState(false);
+  const [isEnablingCollab, setIsEnablingCollab] = useState(false);
 
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
+
+  // Enable collaboration on mount
+  useEffect(() => {
+    const enableCollaboration = async () => {
+      if (isCollabEnabled || isEnablingCollab) return;
+
+      setIsEnablingCollab(true);
+      console.log('[TripDocument] Starting collaboration setup...');
+
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.error('[TripDocument] No user found');
+          return;
+        }
+
+        // Get collaboration URL from environment
+        const collabUrl = process.env.EXPO_PUBLIC_COLLAB_URL;
+        if (!collabUrl) {
+          console.error('[TripDocument] EXPO_PUBLIC_COLLAB_URL not configured');
+          return;
+        }
+
+        console.log('[TripDocument] Requesting JWT token for document:', tripId);
+
+        // Request JWT token from Edge Function
+        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('generate-tiptap-token', {
+          body: { documentName: tripId }
+        });
+
+        if (tokenError || !tokenData?.token) {
+          console.error('[TripDocument] Failed to get token:', tokenError);
+          return;
+        }
+
+        console.log('[TripDocument] Got JWT token, starting collaboration...');
+        console.log('[TripDocument] Server URL:', collabUrl);
+
+        // Start collaboration
+        webViewRef.current?.startCollaboration(
+          collabUrl,
+          tripId,
+          user.id,
+          user.email || 'Anonymous',
+          tokenData.token
+        );
+
+        setIsCollabEnabled(true);
+        console.log('[TripDocument] Collaboration enabled successfully');
+      } catch (error) {
+        console.error('[TripDocument] Error enabling collaboration:', error);
+      } finally {
+        setIsEnablingCollab(false);
+      }
+    };
+
+    enableCollaboration();
+  }, [tripId, isCollabEnabled, isEnablingCollab]);
 
   // Location modal handlers
   const {
@@ -108,7 +170,15 @@ export default function TripDocumentView() {
           <Ionicons name="arrow-back" size={24} color="#3B82F6" />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Trip Document (New)</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Trip Document (New)</Text>
+          {isCollabEnabled && (
+            <View style={styles.collabIndicator}>
+              <Ionicons name="people" size={14} color="#10B981" />
+              <Text style={styles.collabText}>Live</Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -297,12 +367,31 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  titleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
   title: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
-    flex: 1,
-    textAlign: 'center',
+  },
+  collabIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 12,
+  },
+  collabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
   },
   headerActions: {
     flexDirection: 'row',

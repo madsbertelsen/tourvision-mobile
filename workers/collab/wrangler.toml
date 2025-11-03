@@ -1,0 +1,17 @@
+name = "tourvision-collab"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Durable Object binding
+[[durable_objects.bindings]]
+name = "YJS_ROOM"
+class_name = "YjsRoom"
+script_name = "tourvision-collab"
+
+# Durable Object migration
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["YjsRoom"]
+
+# Environment variables (set via wrangler secret)
+# JWT_SECRET - for verifying authentication tokens
