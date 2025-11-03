@@ -2182,19 +2182,11 @@
                   // Connect to Tiptap Cloud or standalone Hocuspocus server
                   const { documentId, userId, userName, token, serverUrl, hocuspocusUrl } = data;
 
-                  // Determine which URL to use (serverUrl takes priority for Tiptap Cloud)
+                  // Determine which URL to use (serverUrl takes priority)
                   let wsUrl = serverUrl || hocuspocusUrl || 'ws://127.0.0.1:1234/collaboration';
 
-                  // For Cloudflare Workers, append /collab to match worker routing
-                  // y-websocket appends the room name (documentId) to the URL, so:
-                  // wsUrl = "wss://tourvision-collab.workers.dev/collab" + "/" + documentId
-                  // results in: "wss://tourvision-collab.workers.dev/collab/documentId"
-                  if (wsUrl.includes('workers.dev')) {
-                    wsUrl = wsUrl + '/collab';
-                  }
-
-                  console.log('[WebView] Creating Hocuspocus collaboration for document:', documentId);
-                  console.log('[WebView] WebSocket URL:', wsUrl);
+                  console.log('[WebView] Starting Y.js collaboration for document:', documentId);
+                  console.log('[WebView] WebSocket URL (raw):', wsUrl);
                   console.log('[WebView] Auth token:', token ? 'present' : 'missing');
 
                   if (!token) {
@@ -2270,14 +2262,18 @@
                   console.log('[WebView] Connecting to PartyKit server...');
 
                   // Extract host from WebSocket URL
-                  // Convert "wss://tourvision-collab.workers.dev" to just the host
-                  const urlMatch = wsUrl.match(/^wss?:\/\/([^\/]+)/);
-                  if (!urlMatch) {
-                    throw new Error('Invalid WebSocket URL format');
+                  // Handle formats: "wss://host", "ws://host", or just "host"
+                  let host;
+                  const wsMatch = wsUrl.match(/^wss?:\/\/([^\/]+)/);
+                  if (wsMatch) {
+                    host = wsMatch[1];  // e.g., "tourvision-collab.workers.dev"
+                  } else {
+                    // If no protocol, assume it's just the host
+                    host = wsUrl.split('/')[0];
                   }
-                  const host = urlMatch[1];  // e.g., "tourvision-collab.workers.dev"
 
                   console.log('[WebView] PartyKit host:', host);
+                  console.log('[WebView] Room (documentId):', documentId);
 
                   // Create YProvider from y-partyserver
                   // Uses standard PartyKit routing: /parties/:party/:room
