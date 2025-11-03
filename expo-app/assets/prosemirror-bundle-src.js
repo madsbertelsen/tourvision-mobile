@@ -18,11 +18,14 @@ import * as Y from 'yjs';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin, prosemirrorToYXmlFragment } from 'y-prosemirror';
 import * as awarenessProtocol from 'y-protocols/awareness';
 
-// Import Hocuspocus provider for WebSocket collaboration
+// Import Hocuspocus provider for WebSocket collaboration (legacy)
 import { HocuspocusProvider } from '@hocuspocus/provider';
 
-// Import y-websocket provider for Cloudflare Workers
+// Import y-websocket provider for Cloudflare Workers (legacy)
 import { WebsocketProvider } from 'y-websocket';
+
+// Import PartyKit provider (NEW - production-ready)
+import YPartyKitProvider from 'y-partykit/provider';
 
 // Import old collaboration plugin (will be deprecated)
 import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
@@ -196,12 +199,14 @@ window.PM = {
   yProsemirror: { ySyncPlugin, yCursorPlugin, yUndoPlugin, prosemirrorToYXmlFragment },
   Awareness: awarenessProtocol.Awareness,
   awarenessProtocol: awarenessProtocol,
-  // Hocuspocus provider for WebSocket collaboration
+  // Hocuspocus provider for WebSocket collaboration (legacy)
   HocuspocusProvider: HocuspocusProvider,
-  // y-websocket provider for Cloudflare Workers
+  // y-websocket provider for Cloudflare Workers (legacy)
   WebsocketProvider: WebsocketProvider,
+  // PartyKit provider (NEW - production-ready)
+  YPartyKitProvider: YPartyKitProvider,
   // Custom Enter key handler for tool picker
   handleEnterWithSelection: handleEnterWithSelection
 };
 
-console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, and Cloudflare support');
+console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, Cloudflare, and PartyKit support');

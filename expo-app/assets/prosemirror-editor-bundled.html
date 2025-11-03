@@ -2201,12 +2201,12 @@
                     throw new Error('Authentication required - no token provided');
                   }
 
-                  // Get WebsocketProvider from bundled modules (standard y-websocket library)
-                  if (!window.PM.WebsocketProvider) {
-                    throw new Error('WebsocketProvider not available in bundle');
+                  // Get YPartyKitProvider from bundled modules
+                  if (!window.PM.YPartyKitProvider) {
+                    throw new Error('YPartyKitProvider not available in bundle');
                   }
-                  const WebsocketProvider = window.PM.WebsocketProvider;
-                  console.log('[WebView] Using y-websocket WebsocketProvider for Cloudflare Workers');
+                  const YPartyKitProvider = window.PM.YPartyKitProvider;
+                  console.log('[WebView] Using YPartyKitProvider for PartyKit/Cloudflare Workers');
 
                   // Create Y.Doc and fragment
                   ydoc = new window.PM.Y.Doc();
@@ -2266,13 +2266,18 @@
                     }, 2000);
                   });
 
-                  // Create WebSocket provider for Cloudflare Workers
-                  console.log('[WebView] Connecting to Cloudflare Worker...');
+                  // Create PartyKit provider for Cloudflare Workers
+                  console.log('[WebView] Connecting to PartyKit server...');
 
-                  // Create WebsocketProvider with token as query parameter
-                  // y-websocket API: new WebsocketProvider(serverUrl, roomName, ydoc, { connect, params, awareness })
-                  yProvider = new WebsocketProvider(
-                    wsUrl,  // e.g., wss://tourvision-collab.workers.dev
+                  // Extract host from WebSocket URL
+                  // Convert "wss://tourvision-collab.workers.dev/collab" to "tourvision-collab.workers.dev"
+                  const host = wsUrl.replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
+                  console.log('[WebView] PartyKit host:', host);
+
+                  // Create YPartyKitProvider with token as query parameter
+                  // y-partykit API: new YPartyKitProvider(host, room, doc, { params, awareness, connect, ... })
+                  yProvider = new YPartyKitProvider(
+                    host,  // e.g., "tourvision-collab.workers.dev"
                     documentId,  // Room name (document ID)
                     ydoc,
                     {
@@ -2300,7 +2305,7 @@
                     }
                   });
 
-                  console.log('[WebView] WebSocket provider created and connecting...');
+                  console.log('[WebView] PartyKit provider created and connecting...');
 
                   // Recreate editor with Y.js plugins
                   // NOTE: Do NOT pass a doc parameter - ySyncPlugin will create the doc from YXmlFragment
