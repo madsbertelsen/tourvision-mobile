@@ -9,8 +9,8 @@ import { routePartykitRequest } from "partyserver";
 
 export { YjsRoom } from './YjsRoom';
 
-export interface Env {
-  YjsRoom: DurableObjectNamespace;
+export interface Env extends Record<string, unknown> {
+  YJS_ROOM: DurableObjectNamespace;
   JWT_SECRET?: string; // Optional: for JWT verification
 }
 

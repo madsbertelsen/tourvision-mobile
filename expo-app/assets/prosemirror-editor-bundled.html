@@ -2281,13 +2281,13 @@
 
                   // Create YProvider from y-partyserver
                   // Uses standard PartyKit routing: /parties/:party/:room
-                  // Our Durable Object binding is "YjsRoom" which becomes "yjs-room" in kebab-case
+                  // Our Durable Object binding is "YJS_ROOM" which becomes "yjs-room" in kebab-case
                   yProvider = new YProvider(
                     host,  // e.g., "tourvision-collab.workers.dev"
                     documentId,  // Room name (document ID)
                     ydoc,
                     {
-                      party: "yjsroom",  // Durable Object binding name (kebab-case of "YjsRoom")
+                      party: "yjs-room",  // Durable Object binding name (kebab-case of "YJS_ROOM")
                       params: { token: token },  // Pass token as query parameter
                       awareness: awareness,
                       connect: true
