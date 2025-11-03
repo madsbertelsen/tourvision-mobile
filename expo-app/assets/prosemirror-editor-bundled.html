@@ -2252,12 +2252,11 @@
 
                     // Convert ProseMirror document to Y.js format
                     // Use the y-prosemirror library's conversion function
-                    if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorJSONToYXmlFragment) {
-                      const docJSON = currentDoc.toJSON();
-                      window.PM.yProsemirror.prosemirrorJSONToYXmlFragment(schema, docJSON, yXmlFragment);
+                    if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorToYXmlFragment) {
+                      window.PM.yProsemirror.prosemirrorToYXmlFragment(currentDoc, yXmlFragment);
                       console.log('[WebView] ✅ Document preserved. YXmlFragment now has', yXmlFragment.length, 'nodes');
                     } else {
-                      console.error('[WebView] ❌ prosemirrorJSONToYXmlFragment not available - content will be lost!');
+                      console.error('[WebView] ❌ prosemirrorToYXmlFragment not available - content will be lost!');
                     }
                   }
 
