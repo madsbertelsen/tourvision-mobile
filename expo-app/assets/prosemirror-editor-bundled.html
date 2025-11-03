@@ -2240,6 +2240,27 @@
                     console.log('[WebView] No local Y.js state to load - will sync from server');
                   }
 
+                  // PRESERVE CURRENT DOCUMENT CONTENT
+                  // If the user has edited the document before enabling collaboration,
+                  // we need to transfer that content to the Y.js CRDT structure.
+                  // This prevents data loss when switching from local-only to collaborative mode.
+                  if (editorView && editorView.state.doc && yXmlFragment.length === 0) {
+                    const currentDoc = editorView.state.doc;
+                    const nodeCount = currentDoc.content.childCount;
+
+                    console.log('[WebView] 📋 Preserving current document content (', nodeCount, 'nodes) into Y.js');
+
+                    // Convert ProseMirror document to Y.js format
+                    // Use the y-prosemirror library's conversion function
+                    if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorJSONToYXmlFragment) {
+                      const docJSON = currentDoc.toJSON();
+                      window.PM.yProsemirror.prosemirrorJSONToYXmlFragment(schema, docJSON, yXmlFragment);
+                      console.log('[WebView] ✅ Document preserved. YXmlFragment now has', yXmlFragment.length, 'nodes');
+                    } else {
+                      console.error('[WebView] ❌ prosemirrorJSONToYXmlFragment not available - content will be lost!');
+                    }
+                  }
+
                   // LOCAL-FIRST: Monitor Y.Doc updates and persist to AsyncStorage (debounced)
                   let saveTimeout = null;
                   ydoc.on('update', (update, origin) => {
