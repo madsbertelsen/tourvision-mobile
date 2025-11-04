@@ -1,6 +1,7 @@
 interface PresentationBlock {
   id: string;
   content: string; // HTML content
+  pmContent: any; // ProseMirror node
   locations: Array<{
     name: string;
     lat: number;
@@ -9,61 +10,137 @@ interface PresentationBlock {
 }
 
 /**
- * Parse HTML message content into presentation blocks
- * Each block element (p, h1-h6, ul, ol) becomes a separate slide
+ * Parse ProseMirror document into presentation blocks
+ * Each top-level node becomes a separate slide
  */
-export function parsePresentationBlocks(htmlContent: string): PresentationBlock[] {
+export function parsePresentationBlocks(pmDoc: any): PresentationBlock[] {
   const blocks: PresentationBlock[] = [];
 
-  // Match block-level HTML elements
-  const blockRegex = /<(p|h[1-6]|ul|ol|blockquote)[^>]*>(.*?)<\/\1>/gis;
-  let match;
-  let blockIndex = 0;
+  console.log('[parsePresentationBlocks] Parsing ProseMirror document:', JSON.stringify(pmDoc, null, 2).substring(0, 500));
 
-  while ((match = blockRegex.exec(htmlContent)) !== null) {
-    const [fullMatch, tagName, innerContent] = match;
-
-    // Extract locations from geo-mark spans in this block
-    const locations = extractLocationsFromHTML(innerContent);
-
-    blocks.push({
-      id: `block-${blockIndex}`,
-      content: fullMatch, // Keep the full HTML for rendering
-      locations,
-    });
-
-    blockIndex++;
+  // Check if pmDoc has a content array (it's a ProseMirror doc)
+  if (!pmDoc || !pmDoc.content || !Array.isArray(pmDoc.content)) {
+    console.warn('[parsePresentationBlocks] Invalid ProseMirror document structure');
+    return [];
   }
 
+  // Each top-level node in the document becomes a block
+  pmDoc.content.forEach((node: any, index: number) => {
+    console.log(`[parsePresentationBlocks] Processing node ${index}:`, {
+      type: node.type,
+      hasContent: !!node.content,
+      contentLength: node.content?.length
+    });
+
+    // Extract locations from this node and its children
+    const locations = extractLocationsFromPMNode(node);
+
+    // Convert ProseMirror node back to HTML for rendering
+    const htmlContent = pmNodeToHTML(node);
+
+    blocks.push({
+      id: `block-${index}`,
+      content: htmlContent,
+      pmContent: node,
+      locations,
+    });
+  });
+
+  console.log(`[parsePresentationBlocks] Total blocks found: ${blocks.length}`);
   return blocks;
 }
 
 /**
- * Extract location data from geo-mark spans in HTML content
+ * Recursively extract locations from a ProseMirror node and its children
  */
-function extractLocationsFromHTML(html: string): Array<{
+function extractLocationsFromPMNode(node: any): Array<{
   name: string;
   lat: number;
   lng: number;
 }> {
   const locations: Array<{ name: string; lat: number; lng: number }> = [];
-  const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*data-place-name="([^"]*)"[^>]*data-lat="([^"]*)"[^>]*data-lng="([^"]*)"[^>]*>([^<]*)<\/span>/gi;
 
-  let match;
-  while ((match = geoMarkRegex.exec(html)) !== null) {
-    const [, placeName, lat, lng, text] = match;
+  // Recursive function to traverse the node tree
+  function traverse(n: any) {
+    // Check if this node has marks (inline formatting/annotations)
+    if (n.marks && Array.isArray(n.marks)) {
+      for (const mark of n.marks) {
+        if (mark.type === 'geoMark' && mark.attrs) {
+          const { placeName, lat, lng } = mark.attrs;
+          if (lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
+            locations.push({
+              name: placeName || n.text || '',
+              lat: parseFloat(lat),
+              lng: parseFloat(lng),
+            });
+          }
+        }
+      }
+    }
 
-    // Only add if we have valid coordinates
-    if (lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
-      locations.push({
-        name: placeName || text,
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
-      });
+    // Recursively traverse children
+    if (n.content && Array.isArray(n.content)) {
+      for (const child of n.content) {
+        traverse(child);
+      }
     }
   }
 
+  traverse(node);
   return locations;
+}
+
+/**
+ * Convert a ProseMirror node to HTML string
+ */
+function pmNodeToHTML(node: any): string {
+  if (!node) return '';
+
+  // Handle text nodes
+  if (node.type === 'text') {
+    let text = node.text || '';
+
+    // Apply marks (bold, italic, geo-mark, etc.)
+    if (node.marks && Array.isArray(node.marks)) {
+      for (const mark of node.marks) {
+        switch (mark.type) {
+          case 'bold':
+            text = `<strong>${text}</strong>`;
+            break;
+          case 'italic':
+            text = `<em>${text}</em>`;
+            break;
+          case 'geoMark':
+            const attrs = mark.attrs || {};
+            text = `<span class="geo-mark" data-place-name="${attrs.placeName || ''}" data-lat="${attrs.lat || ''}" data-lng="${attrs.lng || ''}" data-coord-source="${attrs.coordSource || 'llm'}">${text}</span>`;
+            break;
+        }
+      }
+    }
+
+    return text;
+  }
+
+  // Handle block nodes
+  const childrenHTML = (node.content || []).map((child: any) => pmNodeToHTML(child)).join('');
+
+  switch (node.type) {
+    case 'paragraph':
+      return `<p>${childrenHTML}</p>`;
+    case 'heading':
+      const level = node.attrs?.level || 1;
+      return `<h${level}>${childrenHTML}</h${level}>`;
+    case 'bulletList':
+      return `<ul>${childrenHTML}</ul>`;
+    case 'orderedList':
+      return `<ol>${childrenHTML}</ol>`;
+    case 'listItem':
+      return `<li>${childrenHTML}</li>`;
+    case 'blockquote':
+      return `<blockquote>${childrenHTML}</blockquote>`;
+    default:
+      return childrenHTML;
+  }
 }
 
 /**

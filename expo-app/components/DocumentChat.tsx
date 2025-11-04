@@ -187,7 +187,11 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                           <TouchableOpacity
                             style={styles.actionButton}
                             onPress={() => {
-                              const blocks = parsePresentationBlocks(message.content);
+                              // Parse HTML to ProseMirror first
+                              const pmDoc = htmlToProsemirror(message.content);
+                              console.log('[DocumentChat] Parsed PM doc:', JSON.stringify(pmDoc, null, 2).substring(0, 300));
+
+                              const blocks = parsePresentationBlocks(pmDoc);
                               console.log('[DocumentChat] Starting presentation with blocks:', blocks);
                               startPresentation(blocks);
                             }}
