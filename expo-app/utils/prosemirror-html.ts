@@ -111,7 +111,10 @@ export function htmlToProsemirror(html: string): JSONContent {
     let lastIndex = 0;
     let match;
 
+    console.log('[htmlToProsemirror] Parsing inline content:', html.substring(0, 200));
+
     while ((match = geoMarkRegex.exec(html)) !== null) {
+      console.log('[htmlToProsemirror] Found geo-mark:', match[0].substring(0, 150));
       // Add text before geo-mark
       if (match.index > lastIndex) {
         const textBefore = html.substring(lastIndex, match.index);

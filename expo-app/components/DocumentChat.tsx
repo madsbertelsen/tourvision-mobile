@@ -135,6 +135,13 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                   ? htmlToProsemirror(message.content)
                   : null;
 
+                // DEBUG: Log full message content
+                if (message.role === 'assistant') {
+                  console.log('[DocumentChat] Full AI message content:', message.content.substring(0, 500));
+                  console.log('[DocumentChat] Has geo-mark:', message.content.includes('geo-mark'));
+                  console.log('[DocumentChat] Parsed content:', JSON.stringify(parsedContent, null, 2).substring(0, 500));
+                }
+
                 return (
                   <View
                     key={message.id}
@@ -153,7 +160,8 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                     >
                       {message.role === 'assistant' && parsedContent ? (
                         Platform.OS === 'web' ? (
-                          <ChatMessageProseMirror content={parsedContent} />
+                          // Temporarily show raw HTML to debug
+                          <div dangerouslySetInnerHTML={{ __html: message.content }} />
                         ) : (
                           <ProseMirrorNativeRenderer content={parsedContent} />
                         )
@@ -191,6 +199,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             {isStreaming && streamingContent && (
               <View style={styles.messageWrapper}>
                 <View style={[styles.messageBubble, styles.messageBubbleAssistant]}>
+                  {/* Show raw HTML during streaming for debugging */}
                   <Text style={[styles.messageText, styles.messageTextAssistant]}>
                     {streamingContent}
                   </Text>
