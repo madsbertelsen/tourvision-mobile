@@ -394,13 +394,29 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   }, [isPresenting, currentBlockIndex, blocks, animateToLocation]);
 
   // Animate to focused geo-location during narration
+  const prevFocusedLocationRef = useRef<FocusedGeoLocation | null>(null);
+
   useEffect(() => {
     if (!focusedGeoLocation || !focusedGeoLocation.triggeredBySpeech) return;
+
+    const prevLocation = prevFocusedLocationRef.current;
+
+    // Only animate if the location actually changed (compare placeName to avoid duplicate animations)
+    const locationChanged =
+      !prevLocation ||
+      prevLocation.placeName !== focusedGeoLocation.placeName ||
+      prevLocation.lat !== focusedGeoLocation.lat ||
+      prevLocation.lng !== focusedGeoLocation.lng;
+
+    if (!locationChanged) return;
 
     console.log('[DocumentSplitMap] 🗺️ Animating to geo-location:', focusedGeoLocation.placeName, `(${focusedGeoLocation.lat}, ${focusedGeoLocation.lng})`);
 
     // Animate to the geo-marked location
     animateToLocation(focusedGeoLocation.lat, focusedGeoLocation.lng, 13);
+
+    // Track this location
+    prevFocusedLocationRef.current = focusedGeoLocation;
   }, [focusedGeoLocation, animateToLocation]);
 
   return (
