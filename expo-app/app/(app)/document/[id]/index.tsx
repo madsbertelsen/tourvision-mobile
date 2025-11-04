@@ -528,52 +528,6 @@ export default function TripDocumentView() {
             );
           })()}
         </View>
-
-        {/* Map */}
-        {showMap && (
-          <View style={styles.mapContainer}>
-            <DocumentSplitMap
-              locations={locations}
-              searchResults={
-                toolPickerVisible && toolPickerSearchResults.length > 0
-                  ? toolPickerSearchResults
-                  : locationModal.visible
-                    ? locationModal.locationSearchResults
-                    : []
-              }
-              selectedSearchIndex={
-                toolPickerVisible && toolPickerSearchResults.length > 0
-                  ? toolPickerSelectedIndex
-                  : locationModal.selectedResultIndex
-              }
-              onSearchResultSelect={handleSelectResult}
-              previewRoute={previewRoute}
-              sidebarContent={
-                <LocationSidebarPanel
-                  visible={locationModal.visible}
-                  onClose={handleClose}
-                  step={locationModal.step}
-                  onStepChange={(step) => {}}  // Handled by hook
-                  locationSearchResults={locationModal.locationSearchResults}
-                  selectedResultIndex={locationModal.selectedResultIndex}
-                  onSelectResult={handleSelectResult}
-                  isLoadingLocation={locationModal.isLoadingLocation}
-                  selectedLocation={locationModal.selectedLocation}
-                  transportConfig={locationModal.transportConfig}
-                  onTransportModeChange={handleTransportModeChange}
-                  onWaypointsChange={handleWaypointsChange}
-                  isLoadingRoute={locationModal.isLoadingRoute}
-                  selectionTop={locationModal.selectionTop}
-                  arrowEndY={contentHeight > 0 ? contentHeight - 200 : undefined}
-                  onContinue={handleContinue}
-                  onAddLocation={handleAddLocation}
-                  onFocusChange={handleSelectResult} // Update map when focus changes
-                  onLocationClick={handleLocationClick} // Handle location click to create geomark
-                />
-              }
-            />
-          </View>
-        )}
       </View>
     </View>
   );
