@@ -9,6 +9,7 @@ export default function PresentationOverlay() {
     currentBlockIndex,
     blocks,
     isNarrating,
+    currentWordPosition,
     nextBlock,
     previousBlock,
     stopPresentation,
@@ -22,8 +23,18 @@ export default function PresentationOverlay() {
   const isFirstBlock = currentBlockIndex === 0;
   const isLastBlock = currentBlockIndex === blocks.length - 1;
 
+  // Extract the current word being spoken
+  const currentWord = currentWordPosition?.wordInfo?.word || null;
+
   return (
-    <View style={styles.overlay}>
+    <View style={styles.overlay} pointerEvents="box-none">
+      {/* Currently Spoken Word Overlay */}
+      {currentWord && isNarrating && (
+        <View style={styles.wordOverlay} pointerEvents="none">
+          <Text style={styles.currentWord}>{currentWord}</Text>
+        </View>
+      )}
+
       {/* Floating Controls */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
@@ -82,7 +93,29 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // Transparent - only shows controls
+    // Transparent - only shows controls and word overlay
+  },
+  wordOverlay: {
+    position: 'absolute',
+    top: '40%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currentWord: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: '#ffffff',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(59, 130, 246, 0.85)',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   controlsContainer: {
     position: 'absolute',

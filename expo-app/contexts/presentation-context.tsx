@@ -100,7 +100,6 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
 
   const narrateBlock = (block: PresentationBlock) => {
     if (Platform.OS !== 'web' || !synthesisRef.current) {
-      console.log('[Narration] Speech synthesis not available');
       return;
     }
 
@@ -117,25 +116,20 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
 
     // Extract geo-marks for map synchronization
     const geoMarks = getGeoMarksFromCharMap(charMap);
-    console.log('[Narration] Found', geoMarks.length, 'geo-marks in block');
 
     // Strip HTML and create utterance
     const text = charMap.plainText;
     if (!text) return;
-
-    console.log('[Narration] Speaking:', text.substring(0, 100) + '...');
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.9; // Slightly slower for clarity
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // NEW: Word boundary tracking for karaoke highlighting
+    // Word boundary tracking for karaoke highlighting
     utterance.onboundary = (event: SpeechSynthesisEvent) => {
       if (event.name === 'word') {
         const wordInfo = getWordAtCharIndex(charMap, event.charIndex);
-
-        console.log('[Narration] Word boundary at char', event.charIndex, ':', text.substring(event.charIndex, event.charIndex + event.charLength));
 
         // Update word position for highlighting
         setCurrentWordPosition({
@@ -153,7 +147,6 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
           const lngNum = parseFloat(lng);
 
           if (!isNaN(latNum) && !isNaN(lngNum)) {
-            console.log('[Narration] Speaking geo-mark location:', placeName);
             setFocusedGeoLocation({
               placeName,
               lat: latNum,
@@ -167,8 +160,6 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
 
     // Auto-advance to next block when narration finishes
     utterance.onend = () => {
-      console.log('[Narration] Finished speaking block');
-
       // Clear word position
       setCurrentWordPosition(null);
       setFocusedGeoLocation(null);
@@ -186,7 +177,7 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     };
 
     utterance.onerror = (event) => {
-      console.error('[Narration] Error:', event);
+      console.error('[Presentation] Speech error:', event.error);
       setCurrentWordPosition(null);
       setFocusedGeoLocation(null);
     };

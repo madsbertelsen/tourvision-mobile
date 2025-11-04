@@ -7,7 +7,6 @@ import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'reac
 import * as turf from '@turf/turf';
 import { usePresentation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
-import PresentationOverlay from './PresentationOverlay';
 
 interface Location {
   geoId: string;
@@ -503,9 +502,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
       {/* Arrow segments - rendered within map container */}
       {arrowContent}
-
-      {/* Presentation overlay - shown when presenting */}
-      <PresentationOverlay />
     </View>
   );
 }, (prevProps, nextProps) => {
