@@ -10,11 +10,11 @@ const ws = new WebSocket(WS_URL);
 ws.on('open', () => {
   console.log('✅ Connected!');
 
-  // Send a test message
+  // Send a test message that should trigger geo-marks
   setTimeout(() => {
     const message = {
       type: 'chat_message',
-      content: 'Hello from test script',
+      content: 'Plan a 2-day trip to Paris. What should I visit?',
       user_id: 'test-user-123',
       metadata: {}
     };

@@ -211,8 +211,8 @@ Keep responses practical and well-structured.`
 
       console.log('[ChatRoom] Calling Cloudflare Workers AI...');
 
-      // Stream AI response
-      const response = await this.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+      // Stream AI response with Qwen 2.5 Coder 32B (better at structured output like HTML)
+      const response = await this.env.AI.run("@cf/qwen/qwen2.5-coder-32b-instruct", {
         messages,
         stream: true
       });
@@ -286,7 +286,7 @@ Keep responses practical and well-structured.`
         user_id: userId,
         role: "assistant",
         content: fullResponse,
-        metadata: { model: "llama-3.1-8b-instruct" },
+        metadata: { model: "qwen2.5-coder-32b-instruct" },
         created_at: new Date().toISOString()
       };
 
