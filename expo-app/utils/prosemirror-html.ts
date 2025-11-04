@@ -12,25 +12,30 @@ export function prosemirrorToHTML(content: JSONContent): string {
 
     // Handle text nodes
     if (node.type === 'text') {
-      return escapeHTML(node.text || '');
-    }
+      let text = escapeHTML(node.text || '');
 
-    // Handle geo-mark nodes
-    if (node.type === 'geoMark') {
-      const attrs: string[] = ['class="geo-mark"', 'data-geo="true"'];
-      if (node.attrs?.lat) attrs.push(`data-lat="${node.attrs.lat}"`);
-      if (node.attrs?.lng) attrs.push(`data-lng="${node.attrs.lng}"`);
-      if (node.attrs?.placeName) attrs.push(`data-place-name="${escapeHTML(node.attrs.placeName)}"`);
-      if (node.attrs?.geoId) attrs.push(`data-geo-id="${node.attrs.geoId}"`);
-      if (node.attrs?.transportFrom) attrs.push(`data-transport-from="${node.attrs.transportFrom}"`);
-      if (node.attrs?.transportProfile) attrs.push(`data-transport-profile="${node.attrs.transportProfile}"`);
-      if (node.attrs?.coordSource) attrs.push(`data-coord-source="${node.attrs.coordSource}"`);
-      if (node.attrs?.description) attrs.push(`data-description="${escapeHTML(node.attrs.description)}"`);
-      if (node.attrs?.photoName) attrs.push(`data-photo-name="${node.attrs.photoName}"`);
-      if (node.attrs?.colorIndex !== undefined) attrs.push(`data-color-index="${node.attrs.colorIndex}"`);
+      // Apply marks (including geo-marks)
+      if (node.marks && Array.isArray(node.marks)) {
+        for (const mark of node.marks) {
+          if (mark.type === 'geoMark') {
+            const attrs: string[] = ['class="geo-mark"', 'data-geo="true"'];
+            if (mark.attrs?.lat) attrs.push(`data-lat="${mark.attrs.lat}"`);
+            if (mark.attrs?.lng) attrs.push(`data-lng="${mark.attrs.lng}"`);
+            if (mark.attrs?.placeName) attrs.push(`data-place-name="${escapeHTML(mark.attrs.placeName)}"`);
+            if (mark.attrs?.geoId) attrs.push(`data-geo-id="${mark.attrs.geoId}"`);
+            if (mark.attrs?.transportFrom) attrs.push(`data-transport-from="${mark.attrs.transportFrom}"`);
+            if (mark.attrs?.transportProfile) attrs.push(`data-transport-profile="${mark.attrs.transportProfile}"`);
+            if (mark.attrs?.coordSource) attrs.push(`data-coord-source="${mark.attrs.coordSource}"`);
+            if (mark.attrs?.description) attrs.push(`data-description="${escapeHTML(mark.attrs.description)}"`);
+            if (mark.attrs?.photoName) attrs.push(`data-photo-name="${mark.attrs.photoName}"`);
+            if (mark.attrs?.colorIndex !== undefined) attrs.push(`data-color-index="${mark.attrs.colorIndex}"`);
 
-      const content = node.content?.map(nodeToHTML).join('') || node.attrs?.placeName || '';
-      return `<span ${attrs.join(' ')}>${content}</span>`;
+            text = `<span ${attrs.join(' ')}>${text}</span>`;
+          }
+        }
+      }
+
+      return text;
     }
 
     // Handle element nodes
@@ -146,13 +151,18 @@ export function htmlToProsemirror(html: string): JSONContent {
       const colorIndex = attrMatch('color-index');
       if (colorIndex) attrs.colorIndex = parseInt(colorIndex);
 
-      // Add geo-mark node with text content
+      // Add text node with geoMark mark
       const textContent = stripHTML(match[1]);
-      inlineNodes.push({
-        type: 'geoMark',
-        attrs,
-        content: textContent ? [{ type: 'text', text: textContent }] : []
-      });
+      if (textContent) {
+        inlineNodes.push({
+          type: 'text',
+          text: textContent,
+          marks: [{
+            type: 'geoMark',
+            attrs
+          }]
+        });
+      }
 
       lastIndex = match.index + match[0].length;
     }
