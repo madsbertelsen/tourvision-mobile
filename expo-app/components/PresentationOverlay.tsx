@@ -3,6 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from '
 import { Ionicons } from '@expo/vector-icons';
 import { usePresentation } from '@/contexts/presentation-context';
 
+// Color array matching DocumentSplitMap
+const COLORS = [
+  '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
+  // Purple,   Blue,     Green,    Orange,   Red
+];
+
 export default function PresentationOverlay() {
   const {
     isPresenting,
@@ -26,12 +32,24 @@ export default function PresentationOverlay() {
   // Extract the current word being spoken
   const currentWord = currentWordPosition?.wordInfo?.word || null;
 
+  // Check if current word is a geo-mark and get its color
+  const isGeoMark = currentWordPosition?.wordInfo?.isGeoMark || false;
+  const geoMarkColorIndex = currentWordPosition?.wordInfo?.geoMarkData?.colorIndex || 0;
+  const geoMarkColor = isGeoMark ? COLORS[geoMarkColorIndex % 5] : null;
+
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       {/* Currently Spoken Word Overlay */}
       {currentWord && isNarrating && (
         <View style={styles.wordOverlay} pointerEvents="none">
-          <Text style={styles.currentWord}>{currentWord}</Text>
+          <Text
+            style={[
+              styles.currentWord,
+              geoMarkColor && { backgroundColor: `${geoMarkColor}DD` } // DD = ~87% opacity
+            ]}
+          >
+            {currentWord}
+          </Text>
         </View>
       )}
 
