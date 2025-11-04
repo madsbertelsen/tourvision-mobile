@@ -8,9 +8,11 @@ export default function PresentationOverlay() {
     isPresenting,
     currentBlockIndex,
     blocks,
+    isNarrating,
     nextBlock,
     previousBlock,
     stopPresentation,
+    toggleNarration,
   } = usePresentation();
 
   if (!isPresenting || blocks.length === 0) {
@@ -63,6 +65,17 @@ export default function PresentationOverlay() {
             name="chevron-back"
             size={28}
             color={isFirstBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.playPauseButton}
+          onPress={toggleNarration}
+        >
+          <Ionicons
+            name={isNarrating ? 'pause' : 'play'}
+            size={28}
+            color="#ffffff"
           />
         </TouchableOpacity>
 
@@ -135,6 +148,11 @@ const styles = StyleSheet.create({
   navButton: {
     padding: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
+  },
+  playPauseButton: {
+    padding: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.8)', // Blue background for play/pause
     borderRadius: 8,
   },
   progressText: {
