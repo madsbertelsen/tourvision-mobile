@@ -5,6 +5,9 @@ import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/mapbox';
 import * as turf from '@turf/turf';
+import { usePresentation } from '@/contexts/presentation-context';
+import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
+import PresentationOverlay from './PresentationOverlay';
 
 interface Location {
   geoId: string;
@@ -57,6 +60,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
+
+  // Presentation mode
+  const { isPresenting, currentBlockIndex, blocks } = usePresentation();
 
   // Fetch routes between consecutive locations (only when transportation is defined)
   useEffect(() => {
@@ -368,6 +374,26 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     };
   }, []);
 
+  // Presentation mode: animate to locations in current block
+  useEffect(() => {
+    if (!isPresenting || blocks.length === 0) return;
+
+    const currentBlock = blocks[currentBlockIndex];
+    if (!currentBlock || currentBlock.locations.length === 0) {
+      console.log('[DocumentSplitMap] No locations in current block');
+      return;
+    }
+
+    console.log('[DocumentSplitMap] Presenting block', currentBlockIndex, 'with', currentBlock.locations.length, 'locations');
+
+    // Calculate bounds for all locations in this block
+    const bounds = calculateMapBounds(currentBlock.locations);
+    if (!bounds) return;
+
+    // Animate to the calculated bounds
+    animateToLocation(bounds.center.lat, bounds.center.lng, bounds.zoom);
+  }, [isPresenting, currentBlockIndex, blocks, animateToLocation]);
+
   return (
     <View style={styles.container}>
       <Map
@@ -477,6 +503,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
       {/* Arrow segments - rendered within map container */}
       {arrowContent}
+
+      {/* Presentation overlay - shown when presenting */}
+      <PresentationOverlay />
     </View>
   );
 }, (prevProps, nextProps) => {

@@ -16,6 +16,8 @@ import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import ProseMirrorNativeRenderer from './ProseMirrorNativeRenderer';
 import { ChatMessageProseMirror } from './ChatMessageProseMirror';
 import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { usePresentation } from '@/contexts/presentation-context';
+import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
 
 interface ChatMessage {
   id: string;
@@ -35,6 +37,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
   const [inputText, setInputText] = useState('');
   const [userId, setUserId] = useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const { startPresentation } = usePresentation();
 
   // Get user ID on mount
   useEffect(() => {
@@ -183,7 +186,11 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                         <View style={styles.messageActions}>
                           <TouchableOpacity
                             style={styles.actionButton}
-                            onPress={() => console.log('Play message:', message.id)}
+                            onPress={() => {
+                              const blocks = parsePresentationBlocks(message.content);
+                              console.log('[DocumentChat] Starting presentation with blocks:', blocks);
+                              startPresentation(blocks);
+                            }}
                           >
                             <Ionicons name="play" size={16} color="#6B7280" />
                           </TouchableOpacity>
