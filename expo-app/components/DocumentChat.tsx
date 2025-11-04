@@ -177,6 +177,37 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                           {message.content}
                         </Text>
                       )}
+
+                      {/* Action icons for assistant messages */}
+                      {message.role === 'assistant' && (
+                        <View style={styles.messageActions}>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => console.log('Play message:', message.id)}
+                          >
+                            <Ionicons name="play" size={16} color="#6B7280" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => console.log('Copy message:', message.id)}
+                          >
+                            <Ionicons name="copy-outline" size={16} color="#6B7280" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => console.log('Thumbs up:', message.id)}
+                          >
+                            <Ionicons name="thumbs-up-outline" size={16} color="#6B7280" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => console.log('Thumbs down:', message.id)}
+                          >
+                            <Ionicons name="thumbs-down-outline" size={16} color="#6B7280" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
                       <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
                     </View>
                   </View>
@@ -396,5 +427,21 @@ const styles = StyleSheet.create({
   connectionText: {
     fontSize: 12,
     color: '#F59E0B',
+  },
+  messageActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  actionButton: {
+    padding: 6,
+    borderRadius: 4,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
 });
