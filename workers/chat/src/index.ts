@@ -257,14 +257,17 @@ Keep responses practical and well-structured.`
         if (textChunk) {
           console.log(`[ChatRoom] Chunk ${chunkCount}:`, textChunk);
 
+          // Ensure textChunk is a string
+          const chunkStr = String(textChunk);
+
           // Skip metadata chunks (those that don't contain actual response text)
           // These are chunks like "data: [DONE]" or usage stats
-          if (!textChunk.startsWith('data: ')) {
-            fullResponse += textChunk;
+          if (!chunkStr.startsWith('data: ')) {
+            fullResponse += chunkStr;
             this.broadcast(JSON.stringify({
               type: "ai_chunk",
               message_id: messageId,
-              chunk: textChunk,
+              chunk: chunkStr,
               done: false
             }));
           }
