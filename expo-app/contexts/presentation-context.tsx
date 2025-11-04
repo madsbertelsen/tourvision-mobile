@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Platform } from 'react-native';
+import { buildCharacterMap, getWordAtCharIndex, getGeoMarksFromCharMap, type CharacterMap, type WordInfo } from '@/utils/char-to-word-mapper';
 
 interface PresentationBlock {
   id: string;
@@ -11,11 +12,36 @@ interface PresentationBlock {
   }>;
 }
 
+export interface WordPosition {
+  /** Character index in the plain text where the current word starts */
+  charIndex: number;
+  /** Length of the current word */
+  charLength: number;
+  /** Index of the current block being narrated */
+  blockIndex: number;
+  /** Elapsed time since speech started (milliseconds) */
+  elapsedTime: number;
+  /** Word information from character map */
+  wordInfo: WordInfo | null;
+}
+
+export interface FocusedGeoLocation {
+  placeName: string;
+  lat: number;
+  lng: number;
+  /** Triggered by speech narration */
+  triggeredBySpeech: boolean;
+}
+
 interface PresentationContextType {
   isPresenting: boolean;
   currentBlockIndex: number;
   blocks: PresentationBlock[];
   isNarrating: boolean;
+  /** Current word position during narration (for karaoke highlighting) */
+  currentWordPosition: WordPosition | null;
+  /** Focused geo-location (for map animation) */
+  focusedGeoLocation: FocusedGeoLocation | null;
   startPresentation: (blocks: PresentationBlock[]) => void;
   nextBlock: () => void;
   previousBlock: () => void;
@@ -41,9 +67,12 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
   const [blocks, setBlocks] = useState<PresentationBlock[]>([]);
   const [isNarrating, setIsNarrating] = useState(false);
+  const [currentWordPosition, setCurrentWordPosition] = useState<WordPosition | null>(null);
+  const [focusedGeoLocation, setFocusedGeoLocation] = useState<FocusedGeoLocation | null>(null);
 
   const synthesisRef = useRef<SpeechSynthesis | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const characterMapRef = useRef<CharacterMap | null>(null);
 
   // Initialize speech synthesis on web
   useEffect(() => {
@@ -78,8 +107,20 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     // Stop any ongoing narration
     synthesisRef.current.cancel();
 
+    // Clear previous word position
+    setCurrentWordPosition(null);
+    setFocusedGeoLocation(null);
+
+    // Build character map for karaoke highlighting
+    const charMap = buildCharacterMap(block.content);
+    characterMapRef.current = charMap;
+
+    // Extract geo-marks for map synchronization
+    const geoMarks = getGeoMarksFromCharMap(charMap);
+    console.log('[Narration] Found', geoMarks.length, 'geo-marks in block');
+
     // Strip HTML and create utterance
-    const text = stripHtml(block.content);
+    const text = charMap.plainText;
     if (!text) return;
 
     console.log('[Narration] Speaking:', text.substring(0, 100) + '...');
@@ -89,9 +130,49 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
+    // NEW: Word boundary tracking for karaoke highlighting
+    utterance.onboundary = (event: SpeechSynthesisEvent) => {
+      if (event.name === 'word') {
+        const wordInfo = getWordAtCharIndex(charMap, event.charIndex);
+
+        console.log('[Narration] Word boundary at char', event.charIndex, ':', text.substring(event.charIndex, event.charIndex + event.charLength));
+
+        // Update word position for highlighting
+        setCurrentWordPosition({
+          charIndex: event.charIndex,
+          charLength: event.charLength,
+          blockIndex: currentBlockIndex,
+          elapsedTime: event.elapsedTime,
+          wordInfo,
+        });
+
+        // Check if this word is a geo-mark location
+        if (wordInfo?.isGeoMark && wordInfo.geoMarkData) {
+          const { placeName, lat, lng } = wordInfo.geoMarkData;
+          const latNum = parseFloat(lat);
+          const lngNum = parseFloat(lng);
+
+          if (!isNaN(latNum) && !isNaN(lngNum)) {
+            console.log('[Narration] Speaking geo-mark location:', placeName);
+            setFocusedGeoLocation({
+              placeName,
+              lat: latNum,
+              lng: lngNum,
+              triggeredBySpeech: true,
+            });
+          }
+        }
+      }
+    };
+
     // Auto-advance to next block when narration finishes
     utterance.onend = () => {
       console.log('[Narration] Finished speaking block');
+
+      // Clear word position
+      setCurrentWordPosition(null);
+      setFocusedGeoLocation(null);
+
       // Auto-advance after a short pause
       setTimeout(() => {
         if (currentBlockIndex < blocks.length - 1) {
@@ -106,6 +187,8 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
 
     utterance.onerror = (event) => {
       console.error('[Narration] Error:', event);
+      setCurrentWordPosition(null);
+      setFocusedGeoLocation(null);
     };
 
     utteranceRef.current = utterance;
@@ -154,6 +237,9 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     setIsNarrating(false);
     setCurrentBlockIndex(0);
     setBlocks([]);
+    setCurrentWordPosition(null);
+    setFocusedGeoLocation(null);
+    characterMapRef.current = null;
   };
 
   const toggleNarration = () => {
@@ -176,6 +262,8 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
         currentBlockIndex,
         blocks,
         isNarrating,
+        currentWordPosition,
+        focusedGeoLocation,
         startPresentation,
         nextBlock,
         previousBlock,
