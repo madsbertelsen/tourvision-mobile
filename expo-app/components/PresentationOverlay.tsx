@@ -22,38 +22,8 @@ export default function PresentationOverlay() {
   const isFirstBlock = currentBlockIndex === 0;
   const isLastBlock = currentBlockIndex === blocks.length - 1;
 
-  // Get all blocks up to current index (progressive reveal)
-  const visibleBlocks = blocks.slice(0, currentBlockIndex + 1);
-
   return (
     <View style={styles.overlay}>
-      {/* Transparent ProseMirror-style content overlay */}
-      <ScrollView
-        style={styles.contentScrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {visibleBlocks.map((block, index) => (
-          <View key={block.id} style={styles.blockWrapper}>
-            {Platform.OS === 'web' ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: block.content }}
-                style={{
-                  fontSize: '24px',
-                  lineHeight: '2.5',
-                  color: '#ffffff',
-                  fontWeight: '600',
-                  textShadow: '0 2px 8px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 0, 0, 0.8)',
-                  marginBottom: '32px',
-                }}
-              />
-            ) : (
-              <Text style={styles.blockText}>{block.content}</Text>
-            )}
-          </View>
-        ))}
-      </ScrollView>
-
       {/* Floating Controls */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
@@ -112,27 +82,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // Fully transparent - map shows through
-  },
-  contentScrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 40,
-    paddingTop: 80,
-    paddingBottom: 120,
-  },
-  blockWrapper: {
-    marginBottom: 32,
-  },
-  blockText: {
-    fontSize: 24,
-    lineHeight: 60,
-    color: '#ffffff',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    // Transparent - only shows controls
   },
   controlsContainer: {
     position: 'absolute',
