@@ -374,8 +374,18 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   }, []);
 
   // Presentation mode: animate to locations in current block
+  const prevBlockIndexRef = useRef<number>(-1);
+
   useEffect(() => {
-    if (!isPresenting || blocks.length === 0) return;
+    if (!isPresenting || blocks.length === 0) {
+      prevBlockIndexRef.current = -1;
+      return;
+    }
+
+    // Only animate if block actually changed
+    if (prevBlockIndexRef.current === currentBlockIndex) {
+      return;
+    }
 
     const currentBlock = blocks[currentBlockIndex];
     if (!currentBlock || currentBlock.locations.length === 0) {
@@ -391,7 +401,10 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
     // Animate to the calculated bounds
     animateToLocation(bounds.center.lat, bounds.center.lng, bounds.zoom);
-  }, [isPresenting, currentBlockIndex, blocks, animateToLocation]);
+
+    // Track this block index
+    prevBlockIndexRef.current = currentBlockIndex;
+  }, [isPresenting, currentBlockIndex, blocks]);
 
   // Animate to focused geo-location during narration
   const prevFocusedLocationRef = useRef<FocusedGeoLocation | null>(null);
