@@ -289,8 +289,18 @@ Inline Formatting (marks):
 - <br> - Line break
 
 Location References (geo-marks):
-When mentioning specific locations, wrap them as:
-<span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-coord-source="llm">Eiffel Tower</span>
+CRITICAL: When mentioning specific locations, you MUST wrap them as geo-marks with approximate coordinates.
+You MUST provide approximate latitude and longitude values based on your knowledge of the location.
+
+Template:
+<span class="geo-mark" data-place-name="Full Place Name, City, Country" data-lat="LATITUDE" data-lng="LONGITUDE" data-coord-source="llm">Display Name</span>
+
+Requirements:
+- data-place-name: Full name including city and country (e.g., "Eiffel Tower, Paris, France")
+- data-lat: Approximate latitude as decimal (e.g., "48.8584")
+- data-lng: Approximate longitude as decimal (e.g., "2.2945")
+- data-coord-source: Always "llm" (these will be refined later)
+- Display Name: Short display text (e.g., "Eiffel Tower")
 
 Example response:
 <p>I'd recommend visiting <span class="geo-mark" data-place-name="Eiffel Tower, Paris, France" data-lat="48.8584" data-lng="2.2945" data-coord-source="llm">Eiffel Tower</span> in the morning.</p>
@@ -303,6 +313,8 @@ Example response:
 </ul>
 
 <p>Would you like me to add more details?</p>
+
+IMPORTANT: The coordinates don't need to be perfect - approximate values are fine. They help disambiguate between locations with similar names.
 
 FORBIDDEN:
 - DO NOT use plain text without HTML tags
