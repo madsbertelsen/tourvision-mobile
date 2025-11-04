@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePresentation } from '@/contexts/presentation-context';
 
@@ -17,30 +17,42 @@ export default function PresentationOverlay() {
     return null;
   }
 
-  const currentBlock = blocks[currentBlockIndex];
   const isFirstBlock = currentBlockIndex === 0;
   const isLastBlock = currentBlockIndex === blocks.length - 1;
 
+  // Get all blocks up to current index (progressive reveal)
+  const visibleBlocks = blocks.slice(0, currentBlockIndex + 1);
+
   return (
     <View style={styles.overlay}>
-      {/* Content Display - Like news captions */}
-      {Platform.OS === 'web' ? (
-        <div
-          dangerouslySetInnerHTML={{ __html: currentBlock.content }}
-          style={{
-            fontSize: '20px',
-            lineHeight: '1.5',
-            color: '#ffffff',
-            fontWeight: '600',
-            textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
-            marginBottom: '16px',
-          }}
-        />
-      ) : (
-        <Text style={styles.contentText}>{currentBlock.content}</Text>
-      )}
+      {/* Transparent ProseMirror-style content overlay */}
+      <ScrollView
+        style={styles.contentScrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {visibleBlocks.map((block, index) => (
+          <View key={block.id} style={styles.blockWrapper}>
+            {Platform.OS === 'web' ? (
+              <div
+                dangerouslySetInnerHTML={{ __html: block.content }}
+                style={{
+                  fontSize: '24px',
+                  lineHeight: '2.5',
+                  color: '#ffffff',
+                  fontWeight: '600',
+                  textShadow: '0 2px 8px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 0, 0, 0.8)',
+                  marginBottom: '32px',
+                }}
+              />
+            ) : (
+              <Text style={styles.blockText}>{block.content}</Text>
+            )}
+          </View>
+        ))}
+      </ScrollView>
 
-      {/* Minimal Controls Bar */}
+      {/* Floating Controls */}
       <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={styles.navButton}
@@ -49,7 +61,7 @@ export default function PresentationOverlay() {
         >
           <Ionicons
             name="chevron-back"
-            size={24}
+            size={28}
             color={isFirstBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
           />
         </TouchableOpacity>
@@ -65,7 +77,7 @@ export default function PresentationOverlay() {
         >
           <Ionicons
             name="chevron-forward"
-            size={24}
+            size={28}
             color={isLastBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
           />
         </TouchableOpacity>
@@ -73,7 +85,7 @@ export default function PresentationOverlay() {
         <View style={styles.divider} />
 
         <TouchableOpacity style={styles.stopButton} onPress={stopPresentation}>
-          <Ionicons name="close" size={24} color="#ffffff" />
+          <Ionicons name="close" size={28} color="#ffffff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -83,40 +95,59 @@ export default function PresentationOverlay() {
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
+    bottom: 0,
+    // Fully transparent - map shows through
   },
-  contentText: {
-    fontSize: 20,
-    lineHeight: 30,
+  contentScrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 40,
+    paddingTop: 80,
+    paddingBottom: 120,
+  },
+  blockWrapper: {
+    marginBottom: 32,
+  },
+  blockText: {
+    fontSize: 24,
+    lineHeight: 60,
     color: '#ffffff',
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-    marginBottom: 16,
+    textShadowRadius: 8,
   },
   controlsContainer: {
+    position: 'absolute',
+    bottom: 32,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 24,
+    paddingHorizontal: 24,
   },
   navButton: {
-    padding: 8,
+    padding: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
   },
   progressText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#ffffff',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.9)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
   },
   divider: {
     width: 1,
@@ -125,6 +156,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   stopButton: {
-    padding: 8,
+    padding: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
   },
 });
