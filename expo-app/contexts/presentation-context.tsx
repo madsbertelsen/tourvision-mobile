@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Platform } from 'react-native';
-import { buildCharacterMap, getWordAtCharIndex, getGeoMarksFromCharMap, type CharacterMap, type WordInfo } from '@/utils/char-to-word-mapper';
+import { buildCharacterMap, buildDOMCharacterMap, getWordAtCharIndex, getGeoMarksFromCharMap, type CharacterMap, type WordInfo } from '@/utils/char-to-word-mapper';
 
 interface PresentationBlock {
   id: string;
@@ -110,12 +110,13 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     setCurrentWordPosition(null);
     setFocusedGeoLocation(null);
 
-    // Build character map for karaoke highlighting
-    const charMap = buildCharacterMap(block.content);
+    // Build character map for karaoke highlighting (use DOM version to parse geo-marks)
+    const charMap = buildDOMCharacterMap(block.content) || buildCharacterMap(block.content);
     characterMapRef.current = charMap;
 
     // Extract geo-marks for map synchronization
     const geoMarks = getGeoMarksFromCharMap(charMap);
+    console.log('[Presentation] Found', geoMarks.length, 'geo-marks in block:', geoMarks.map(g => g.placeName));
 
     // Strip HTML and create utterance
     const text = charMap.plainText;
@@ -147,6 +148,7 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
           const lngNum = parseFloat(lng);
 
           if (!isNaN(latNum) && !isNaN(lngNum)) {
+            console.log('[Presentation] 🎯 Map focus requested:', placeName, `(${latNum}, ${lngNum})`);
             setFocusedGeoLocation({
               placeName,
               lat: latNum,
@@ -187,6 +189,11 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
   };
 
   const startPresentation = (presentationBlocks: PresentationBlock[]) => {
+    console.log('[Presentation] Starting with blocks:', presentationBlocks.map(b => ({
+      id: b.id,
+      contentPreview: b.content.substring(0, 200),
+      locationsCount: b.locations?.length || 0
+    })));
     setBlocks(presentationBlocks);
     setCurrentBlockIndex(0);
     setIsPresenting(true);

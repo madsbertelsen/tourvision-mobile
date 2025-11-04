@@ -61,7 +61,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [routes, setRoutes] = useState<any[]>([]);
 
   // Presentation mode
-  const { isPresenting, currentBlockIndex, blocks } = usePresentation();
+  const { isPresenting, currentBlockIndex, blocks, focusedGeoLocation } = usePresentation();
 
   // Fetch routes between consecutive locations (only when transportation is defined)
   useEffect(() => {
@@ -392,6 +392,16 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     // Animate to the calculated bounds
     animateToLocation(bounds.center.lat, bounds.center.lng, bounds.zoom);
   }, [isPresenting, currentBlockIndex, blocks, animateToLocation]);
+
+  // Animate to focused geo-location during narration
+  useEffect(() => {
+    if (!focusedGeoLocation || !focusedGeoLocation.triggeredBySpeech) return;
+
+    console.log('[DocumentSplitMap] 🗺️ Animating to geo-location:', focusedGeoLocation.placeName, `(${focusedGeoLocation.lat}, ${focusedGeoLocation.lng})`);
+
+    // Animate to the geo-marked location
+    animateToLocation(focusedGeoLocation.lat, focusedGeoLocation.lng, 13);
+  }, [focusedGeoLocation, animateToLocation]);
 
   return (
     <View style={styles.container}>

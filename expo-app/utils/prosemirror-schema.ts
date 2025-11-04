@@ -96,98 +96,6 @@ const nodes: { [key: string]: NodeSpec } = {
     selectable: false,
     parseDOM: [{ tag: "br" }],
     toDOM() { return ["br"]; }
-  },
-
-  // Custom inline node for geo-marked locations
-  geoMark: {
-    inline: true,
-    group: "inline",
-    content: "text*",
-    atom: true,
-    attrs: {
-      lat: { default: null },
-      lng: { default: null },
-      placeName: { default: "" },
-      geoId: { default: null },
-      transportFrom: { default: null },
-      transportProfile: { default: null },
-      coordSource: { default: null },
-      description: { default: null },
-      photoName: { default: null },
-      colorIndex: { default: 0 },
-      waypoints: { default: null }, // Array of {lat, lng} waypoints for route customization
-      visitDocument: { default: null } // ProseMirror document JSON for visit-specific notes
-    },
-    parseDOM: [{
-      tag: "span.geo-mark",
-      getAttrs(dom: any) {
-        const waypointsStr = dom.getAttribute("data-waypoints");
-        let waypoints = null;
-        if (waypointsStr) {
-          try {
-            waypoints = JSON.parse(waypointsStr);
-          } catch (e) {
-            console.error('Failed to parse waypoints:', e);
-          }
-        }
-
-        const visitDocStr = dom.getAttribute("data-visit-document");
-        let visitDocument = null;
-        if (visitDocStr) {
-          try {
-            visitDocument = JSON.parse(visitDocStr);
-          } catch (e) {
-            console.error('Failed to parse visitDocument:', e);
-          }
-        }
-
-        // Generate geoId if not present (e.g., when pasting from chat)
-        let geoId = dom.getAttribute("data-geo-id");
-        if (!geoId) {
-          // Use counter and random string to ensure uniqueness when pasting multiple locations at once
-          const counter = geoIdCounter++;
-          const random = Math.random().toString(36).substr(2, 9);
-          geoId = `geo-${Date.now()}-${counter}-${random}`;
-        }
-
-        return {
-          lat: dom.getAttribute("data-lat"),
-          lng: dom.getAttribute("data-lng"),
-          placeName: dom.getAttribute("data-place-name") || dom.textContent,
-          geoId: geoId,
-          transportFrom: dom.getAttribute("data-transport-from"),
-          transportProfile: dom.getAttribute("data-transport-profile"),
-          coordSource: dom.getAttribute("data-coord-source"),
-          description: dom.getAttribute("data-description"),
-          photoName: dom.getAttribute("data-photo-name"),
-          colorIndex: dom.getAttribute("data-color-index") ? parseInt(dom.getAttribute("data-color-index")) : 0,
-          waypoints,
-          visitDocument
-        };
-      }
-    }],
-    toDOM(node) {
-      const attrs: any = {
-        class: "geo-mark",
-        "data-geo": "true"
-      };
-
-      if (node.attrs.lat) attrs["data-lat"] = node.attrs.lat;
-      if (node.attrs.lng) attrs["data-lng"] = node.attrs.lng;
-      if (node.attrs.placeName) attrs["data-place-name"] = node.attrs.placeName;
-      // Always output geoId (it should always exist after parseDOM generates it)
-      attrs["data-geo-id"] = node.attrs.geoId || `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      if (node.attrs.transportFrom) attrs["data-transport-from"] = node.attrs.transportFrom;
-      if (node.attrs.transportProfile) attrs["data-transport-profile"] = node.attrs.transportProfile;
-      if (node.attrs.coordSource) attrs["data-coord-source"] = node.attrs.coordSource;
-      if (node.attrs.description) attrs["data-description"] = node.attrs.description;
-      if (node.attrs.photoName) attrs["data-photo-name"] = node.attrs.photoName;
-      if (node.attrs.colorIndex !== undefined) attrs["data-color-index"] = node.attrs.colorIndex;
-      if (node.attrs.waypoints) attrs["data-waypoints"] = JSON.stringify(node.attrs.waypoints);
-      if (node.attrs.visitDocument) attrs["data-visit-document"] = JSON.stringify(node.attrs.visitDocument);
-
-      return ["span", attrs, 0];
-    }
   }
 };
 
@@ -234,6 +142,93 @@ const marks: { [key: string]: MarkSpec } = {
       if (title) attrs.title = title;
       if (target) attrs.target = target;
       return ["a", attrs, 0];
+    }
+  },
+
+  // Custom mark for geo-locations
+  geoMark: {
+    attrs: {
+      geoId: { default: null },
+      placeName: { default: '' },
+      lat: { default: '' },
+      lng: { default: '' },
+      colorIndex: { default: 0 },
+      coordSource: { default: 'manual' },
+      description: { default: null },
+      transportFrom: { default: null },
+      transportProfile: { default: null },
+      waypoints: { default: null },
+      visitDocument: { default: null },
+      photoName: { default: null }
+    },
+    inclusive: false,
+    parseDOM: [{
+      tag: 'span.geo-mark',
+      getAttrs(dom: any) {
+        const waypointsStr = dom.getAttribute("data-waypoints");
+        let waypoints = null;
+        if (waypointsStr) {
+          try {
+            waypoints = JSON.parse(waypointsStr);
+          } catch (e) {
+            console.error('Failed to parse waypoints:', e);
+          }
+        }
+
+        const visitDocStr = dom.getAttribute("data-visit-document");
+        let visitDocument = null;
+        if (visitDocStr) {
+          try {
+            visitDocument = JSON.parse(visitDocStr);
+          } catch (e) {
+            console.error('Failed to parse visitDocument:', e);
+          }
+        }
+
+        // Generate geoId if not present (e.g., when pasting from chat)
+        let geoId = dom.getAttribute("data-geo-id");
+        if (!geoId) {
+          const counter = geoIdCounter++;
+          const random = Math.random().toString(36).substr(2, 9);
+          geoId = `geo-${Date.now()}-${counter}-${random}`;
+        }
+
+        return {
+          geoId: geoId,
+          placeName: dom.getAttribute("data-place-name"),
+          lat: dom.getAttribute("data-lat"),
+          lng: dom.getAttribute("data-lng"),
+          colorIndex: parseInt(dom.getAttribute("data-color-index") || '0'),
+          coordSource: dom.getAttribute("data-coord-source") || 'manual',
+          description: dom.getAttribute("data-description"),
+          transportFrom: dom.getAttribute("data-transport-from"),
+          transportProfile: dom.getAttribute("data-transport-profile"),
+          photoName: dom.getAttribute("data-photo-name"),
+          waypoints,
+          visitDocument
+        };
+      }
+    }],
+    toDOM(mark) {
+      const attrs: any = {
+        class: 'geo-mark',
+        'data-geo': 'true'
+      };
+
+      if (mark.attrs.lat) attrs['data-lat'] = mark.attrs.lat;
+      if (mark.attrs.lng) attrs['data-lng'] = mark.attrs.lng;
+      if (mark.attrs.placeName) attrs['data-place-name'] = mark.attrs.placeName;
+      attrs['data-geo-id'] = mark.attrs.geoId || `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      if (mark.attrs.transportFrom) attrs['data-transport-from'] = mark.attrs.transportFrom;
+      if (mark.attrs.transportProfile) attrs['data-transport-profile'] = mark.attrs.transportProfile;
+      if (mark.attrs.coordSource) attrs['data-coord-source'] = mark.attrs.coordSource;
+      if (mark.attrs.description) attrs['data-description'] = mark.attrs.description;
+      if (mark.attrs.photoName) attrs['data-photo-name'] = mark.attrs.photoName;
+      if (mark.attrs.colorIndex !== undefined) attrs['data-color-index'] = mark.attrs.colorIndex;
+      if (mark.attrs.waypoints) attrs['data-waypoints'] = JSON.stringify(mark.attrs.waypoints);
+      if (mark.attrs.visitDocument) attrs['data-visit-document'] = JSON.stringify(mark.attrs.visitDocument);
+
+      return ['span', attrs, 0];
     }
   },
 
@@ -295,9 +290,17 @@ const marks: { [key: string]: MarkSpec } = {
 // Create the schema
 export const schema = new Schema({ nodes, marks });
 
-// Helper to identify geo-mark nodes
-export function isGeoMarkNode(node: any): boolean {
-  return node.type === schema.nodes.geoMark;
+// Helper to check if a node has a geo-mark
+export function hasGeoMark(node: any): boolean {
+  if (!node.marks) return false;
+  return node.marks.some((mark: any) => mark.type === schema.marks.geoMark);
+}
+
+// Helper to get geo-mark from a node
+export function getGeoMark(node: any): any | null {
+  if (!node.marks) return null;
+  const geoMark = node.marks.find((mark: any) => mark.type === schema.marks.geoMark);
+  return geoMark || null;
 }
 
 // Helper to extract all geo-marks from a document
@@ -309,12 +312,16 @@ export function extractGeoMarks(doc: any): Array<{
   const geoMarks: Array<{ pos: number; text: string; attrs: any }> = [];
 
   doc.descendants((node: any, pos: number) => {
-    if (node.type === schema.nodes.geoMark) {
-      geoMarks.push({
-        pos,
-        text: node.textContent || node.attrs.placeName || '',
-        attrs: node.attrs
-      });
+    // Check if this text node has a geo-mark mark
+    if (node.isText && node.marks) {
+      const geoMark = node.marks.find((mark: any) => mark.type === schema.marks.geoMark);
+      if (geoMark) {
+        geoMarks.push({
+          pos,
+          text: node.text || geoMark.attrs.placeName || '',
+          attrs: geoMark.attrs
+        });
+      }
     }
   });
 

@@ -62,7 +62,7 @@ function extractLocationsFromPMNode(node: any): Array<{
 
   // Recursive function to traverse the node tree
   function traverse(n: any) {
-    // Check if this node has marks (inline formatting/annotations)
+    // Check if this node has geo-mark marks
     if (n.marks && Array.isArray(n.marks)) {
       for (const mark of n.marks) {
         if (mark.type === 'geoMark' && mark.attrs) {
@@ -112,7 +112,7 @@ function pmNodeToHTML(node: any): string {
             break;
           case 'geoMark':
             const attrs = mark.attrs || {};
-            text = `<span class="geo-mark" data-place-name="${attrs.placeName || ''}" data-lat="${attrs.lat || ''}" data-lng="${attrs.lng || ''}" data-coord-source="${attrs.coordSource || 'llm'}">${text}</span>`;
+            text = `<span class="geo-mark" data-place-name="${attrs.placeName || ''}" data-lat="${attrs.lat || ''}" data-lng="${attrs.lng || ''}" data-coord-source="${attrs.coordSource || 'llm'}" data-color-index="${attrs.colorIndex || 0}">${text}</span>`;
             break;
         }
       }
