@@ -17,7 +17,7 @@ This is a monorepo with the following structure:
 - Dashboard with user profile display
 - Database seeding with test data
 - Web platform support
-- **Document Chat System** - AI-powered chat with Mistral API via document-chat-listener.js
+- **Document Chat System** - Real-time WebSocket chat with Cloudflare Workers AI
 - **ProseMirror Editor** - Rich text editing with geo-marks for locations
 - **Real-time Collaboration** - Tiptap Cloud (Hocuspocus) with Y.js CRDT
 
@@ -733,6 +733,158 @@ The MCP tools allow direct database queries through natural language:
 - **Data validation**: Ensure seed data loaded correctly
 
 Using MCP tools provides accurate, real-time database information and significantly speeds up debugging compared to trial-and-error approaches.
+
+## Cloudflare Workers Chat System
+
+### Overview
+The document chat uses **Cloudflare Workers** with **Durable Objects** for real-time WebSocket communication and **Workers AI** (Llama-3.1-8b-instruct) for streaming AI responses.
+
+### Architecture
+
+**Components:**
+- **Cloudflare Worker** (`/workers/chat/src/index.ts`) - Main entry point with health check and WebSocket routing
+- **Durable Object** (`ChatRoomV2` class) - Manages WebSocket connections per document
+- **Workers AI Binding** - Provides LLM inference for chat responses
+- **Frontend Hook** (`/expo-app/hooks/useChatWebSocket.ts`) - React hook for WebSocket management
+- **UI Component** (`/expo-app/components/DocumentChat.tsx`) - Chat interface
+
+**Flow:**
+```
+User opens document
+    ↓
+Frontend connects to wss://tourvision-chat.mads-9b9.workers.dev/chat/{documentId}
+    ↓
+Worker routes to Durable Object for that documentId
+    ↓
+Durable Object creates WebSocket pair and accepts connection
+    ↓
+User sends chat_message
+    ↓
+Durable Object broadcasts message to all connected clients
+    ↓
+Durable Object generates AI response using Workers AI (streaming)
+    ↓
+AI response chunks broadcast to clients in real-time
+```
+
+### Durable Object Implementation
+
+The ChatRoomV2 class uses native Cloudflare Durable Objects API (not PartyKit):
+
+```typescript
+export class ChatRoomV2 {
+  constructor(private state: DurableObjectState, private env: Env) {}
+
+  async fetch(request: Request): Promise<Response> {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    this.state.acceptWebSocket(server);
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    // Handle incoming messages
+  }
+
+  private broadcast(message: string) {
+    for (const ws of this.state.getWebSockets()) {
+      ws.send(message);
+    }
+  }
+}
+```
+
+### Message Protocol
+
+**Client → Server:**
+```json
+{
+  "type": "chat_message",
+  "content": "User message text",
+  "user_id": "user-uuid",
+  "metadata": {}
+}
+```
+
+**Server → Client:**
+```json
+// History on connect
+{"type": "history", "messages": []}
+
+// User message broadcast
+{"type": "message", "message": {ChatMessage}}
+
+// AI streaming chunks
+{"type": "ai_chunk", "message_id": "uuid", "chunk": "text", "done": false}
+
+// AI completion
+{"type": "ai_chunk", "message_id": "uuid", "chunk": "", "done": true, "message": {ChatMessage}}
+
+// Errors
+{"type": "error", "error": "Error message"}
+```
+
+### Deployment
+
+**Deploy to Cloudflare:**
+```bash
+cd workers/chat
+npx wrangler deploy
+```
+
+**Monitor logs:**
+```bash
+npx wrangler tail --format pretty
+```
+
+**Test connection:**
+```bash
+node test-chat-connection.js
+```
+
+### Environment Variables
+
+Frontend (`/expo-app/.env.local`):
+```bash
+EXPO_PUBLIC_CHAT_WS_URL=wss://tourvision-chat.mads-9b9.workers.dev
+```
+
+### Configuration
+
+Worker configuration in `/workers/chat/wrangler.toml`:
+```toml
+name = "tourvision-chat"
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoomV2"
+script_name = "tourvision-chat"
+
+[[migrations]]
+tag = "v2"
+renamed_classes = [{from = "ChatRoom", "to" = "ChatRoomV2"}]
+```
+
+### Troubleshooting
+
+**Connection Issues:**
+- Check worker logs with `npx wrangler tail`
+- Verify WebSocket URL in `.env.local`
+- Test with `node test-chat-connection.js`
+
+**Empty AI Responses:**
+- Cloudflare Workers AI models sometimes return empty responses for simple queries
+- Try more detailed prompts
+- Check worker logs for AI generation errors
+
+**WebSocket Closes Immediately:**
+- Normal browser behavior - connections are maintained while page is open
+- Code 1005/1006 closures are expected on page unload
 
 ## Tiptap Cloud Collaboration
 

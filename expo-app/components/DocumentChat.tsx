@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
-import { RealtimeChannel } from '@supabase/supabase-js';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import ProseMirrorNativeRenderer from './ProseMirrorNativeRenderer';
 import { ChatMessageProseMirror } from './ChatMessageProseMirror';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
 
 interface ChatMessage {
   id: string;
@@ -32,115 +32,51 @@ interface DocumentChatProps {
 }
 
 export default function DocumentChat({ documentId }: DocumentChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSending, setIsSending] = useState(false);
+  const [userId, setUserId] = useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Load existing messages
+  // Get user ID on mount
   useEffect(() => {
-    loadMessages();
-
-    // Subscribe to new messages and updates (for streaming)
-    const channel = supabase
-      .channel(`document-chat-${documentId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'document_chats',
-          filter: `document_id=eq.${documentId}`,
-        },
-        (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setMessages((prev) => [...prev, newMessage]);
-          // Scroll to bottom when new message arrives
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'document_chats',
-          filter: `document_id=eq.${documentId}`,
-        },
-        (payload) => {
-          const updatedMessage = payload.new as ChatMessage;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === updatedMessage.id ? updatedMessage : msg
-            )
-          );
-          // Auto-scroll if we're near the bottom (within 100px)
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 50);
-        }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      channel.unsubscribe();
+    const getUserId = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
     };
-  }, [documentId]);
+    getUserId();
+  }, []);
 
-  const loadMessages = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('document_chats')
-        .select('*')
-        .eq('document_id', documentId)
-        .order('created_at', { ascending: true });
+  // Use WebSocket hook for chat
+  const {
+    messages,
+    sendMessage: sendWebSocketMessage,
+    isConnected,
+    isStreaming,
+    streamingContent,
+    error: wsError,
+  } = useChatWebSocket({
+    documentId,
+    userId,
+    enabled: !!userId, // Only connect when we have a user ID
+    url: process.env.EXPO_PUBLIC_CHAT_WS_URL || 'http://localhost:8787',
+  });
 
-      if (error) throw error;
-
-      setMessages(data || []);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Auto-scroll when messages or streaming content changes
+  useEffect(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages, streamingContent]);
 
   const sendMessage = async () => {
-    if (!inputText.trim() || isSending) return;
+    if (!inputText.trim() || !isConnected) return;
 
     const messageContent = inputText.trim();
     setInputText('');
-    setIsSending(true);
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase.from('document_chats').insert({
-        document_id: documentId,
-        user_id: user.id,
-        role: 'user',
-        content: messageContent,
-        metadata: {},
-      });
-
-      if (error) throw error;
-
-      // The realtime subscription will add the message to the list
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Restore the input on error
-      setInputText(messageContent);
-    } finally {
-      setIsSending(false);
-    }
+    // Send via WebSocket
+    sendWebSocketMessage(messageContent);
   };
 
   const formatTime = (dateString: string) => {
@@ -148,7 +84,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (isLoading) {
+  if (!userId) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -190,80 +126,116 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             </Text>
           </View>
         ) : (
-          messages.map((message) => {
-            // Parse assistant messages as ProseMirror HTML
-            const parsedContent = message.role === 'assistant'
-              ? htmlToProsemirror(message.content)
-              : null;
+          <>
+            {messages
+              .filter(msg => !msg.metadata?.processing) // Filter out processing messages
+              .map((message) => {
+                // Parse assistant messages as ProseMirror HTML
+                const parsedContent = message.role === 'assistant'
+                  ? htmlToProsemirror(message.content)
+                  : null;
 
-            return (
-              <View
-                key={message.id}
-                style={[
-                  styles.messageWrapper,
-                  message.role === 'user' && styles.messageWrapperUser,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.messageBubble,
-                    message.role === 'user'
-                      ? styles.messageBubbleUser
-                      : styles.messageBubbleAssistant,
-                  ]}
-                >
-                  {message.role === 'assistant' && parsedContent ? (
-                    Platform.OS === 'web' ? (
-                      <ChatMessageProseMirror content={parsedContent} />
-                    ) : (
-                      <ProseMirrorNativeRenderer content={parsedContent} />
-                    )
-                  ) : (
-                    <Text
+                return (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.messageWrapper,
+                      message.role === 'user' && styles.messageWrapperUser,
+                    ]}
+                  >
+                    <View
                       style={[
-                        styles.messageText,
+                        styles.messageBubble,
                         message.role === 'user'
-                          ? styles.messageTextUser
-                          : styles.messageTextAssistant,
+                          ? styles.messageBubbleUser
+                          : styles.messageBubbleAssistant,
                       ]}
                     >
-                      {message.content}
-                    </Text>
-                  )}
-                  <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
+                      {message.role === 'assistant' && parsedContent ? (
+                        Platform.OS === 'web' ? (
+                          <ChatMessageProseMirror content={parsedContent} />
+                        ) : (
+                          <ProseMirrorNativeRenderer content={parsedContent} />
+                        )
+                      ) : (
+                        <Text
+                          style={[
+                            styles.messageText,
+                            message.role === 'user'
+                              ? styles.messageTextUser
+                              : styles.messageTextAssistant,
+                          ]}
+                        >
+                          {message.content}
+                        </Text>
+                      )}
+                      <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+            {/* Show loading indicator if there's a processing message */}
+            {messages.some(msg => msg.metadata?.processing) && !isStreaming && (
+              <View style={styles.messageWrapper}>
+                <View style={[styles.messageBubble, styles.messageBubbleAssistant]}>
+                  <View style={styles.streamingIndicator}>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.streamingText}>AI is thinking...</Text>
+                  </View>
                 </View>
               </View>
-            );
-          })
+            )}
+
+            {/* Streaming AI response */}
+            {isStreaming && streamingContent && (
+              <View style={styles.messageWrapper}>
+                <View style={[styles.messageBubble, styles.messageBubbleAssistant]}>
+                  <Text style={[styles.messageText, styles.messageTextAssistant]}>
+                    {streamingContent}
+                  </Text>
+                  <View style={styles.streamingIndicator}>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.streamingText}>AI is typing...</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
       {/* Input */}
       <View style={styles.inputContainer}>
+        {wsError && (
+          <Text style={styles.errorText}>Connection error: {wsError}</Text>
+        )}
+        {!isConnected && !wsError && (
+          <View style={styles.connectionStatus}>
+            <ActivityIndicator size="small" color="#F59E0B" />
+            <Text style={styles.connectionText}>Connecting...</Text>
+          </View>
+        )}
         <TextInput
           style={styles.input}
           value={inputText}
           onChangeText={setInputText}
-          placeholder="Type a message..."
+          placeholder={isConnected ? "Type a message..." : "Connecting to chat..."}
           placeholderTextColor="#9CA3AF"
           multiline
           maxLength={500}
-          editable={!isSending}
+          editable={isConnected}
           onSubmitEditing={sendMessage}
         />
         <TouchableOpacity
           onPress={sendMessage}
-          disabled={!inputText.trim() || isSending}
+          disabled={!inputText.trim() || !isConnected}
           style={[
             styles.sendButton,
-            (!inputText.trim() || isSending) && styles.sendButtonDisabled,
+            (!inputText.trim() || !isConnected) && styles.sendButtonDisabled,
           ]}
         >
-          {isSending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="send" size={20} color="#fff" />
-          )}
+          <Ionicons name="send" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -389,5 +361,31 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#9CA3AF',
     opacity: 0.6,
+  },
+  streamingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  streamingText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  connectionText: {
+    fontSize: 12,
+    color: '#F59E0B',
   },
 });

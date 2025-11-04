@@ -1,0 +1,27 @@
+name = "tourvision-chat"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Workers AI binding for LLM inference
+[ai]
+binding = "AI"
+
+# Durable Object binding for chat rooms
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoomV2"
+script_name = "tourvision-chat"
+
+# Durable Object migration
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+renamed_classes = [{from = "ChatRoom", to = "ChatRoomV2"}]
+
+# Environment variables (set via wrangler secret)
+# SUPABASE_URL - Supabase project URL
+# SUPABASE_KEY - Supabase anon/service key
+# JWT_SECRET - for verifying Supabase JWT tokens (optional)
