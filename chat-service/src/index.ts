@@ -458,7 +458,10 @@ async function generateAIResponseStreaming(
 
       if (shouldUpdate) {
         // Update the assistant message with accumulated content
-        const formattedText = buffer;//ensureProseMirrorHTML(buffer);
+        let formattedText = buffer;//ensureProseMirrorHTML(buffer);
+        // Assign sequential color indices to geo-marks during streaming
+        formattedText = assignColorIndicesToGeoMarks(formattedText);
+
         await supabaseAdmin
           .from('document_chats')
           .update({

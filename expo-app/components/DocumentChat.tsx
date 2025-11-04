@@ -13,11 +13,57 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
 import { htmlToProsemirror } from '@/utils/prosemirror-html';
-import ProseMirrorNativeRenderer from './ProseMirrorNativeRenderer';
-import { ChatMessageProseMirror } from './ChatMessageProseMirror';
 import { useChatWebSocket } from '@/hooks/useChatWebSocket';
 import { usePresentation } from '@/contexts/presentation-context';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
+
+// Inject CSS for geo-mark colors on web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const styleId = 'geo-mark-colors';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .geo-mark {
+        padding: 2px 4px;
+        border-radius: 3px;
+        cursor: pointer;
+        border-bottom: 1px solid;
+        user-select: text;
+      }
+
+      .geo-mark[data-color-index="0"] {
+        background-color: rgba(59, 130, 246, 0.2);
+        border-bottom-color: rgba(59, 130, 246, 0.6);
+      }
+
+      .geo-mark[data-color-index="1"] {
+        background-color: rgba(139, 92, 246, 0.2);
+        border-bottom-color: rgba(139, 92, 246, 0.6);
+      }
+
+      .geo-mark[data-color-index="2"] {
+        background-color: rgba(16, 185, 129, 0.2);
+        border-bottom-color: rgba(16, 185, 129, 0.6);
+      }
+
+      .geo-mark[data-color-index="3"] {
+        background-color: rgba(245, 158, 11, 0.2);
+        border-bottom-color: rgba(245, 158, 11, 0.6);
+      }
+
+      .geo-mark[data-color-index="4"] {
+        background-color: rgba(239, 68, 68, 0.2);
+        border-bottom-color: rgba(239, 68, 68, 0.6);
+      }
+
+      .geo-mark:hover {
+        opacity: 0.8;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 interface ChatMessage {
   id: string;
@@ -161,8 +207,25 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                           : styles.messageBubbleAssistant,
                       ]}
                     >
-                      {message.role === 'assistant' && parsedContent ? (
-                        <ChatMessageProseMirror content={parsedContent} />
+                      {message.role === 'assistant' ? (
+                        // Render HTML directly to allow text selection
+                        Platform.OS === 'web' ? (
+                          <div
+                            dangerouslySetInnerHTML={{ __html: message.content }}
+                            style={{
+                              userSelect: 'text',
+                              WebkitUserSelect: 'text',
+                              cursor: 'text',
+                              fontSize: '15px',
+                              lineHeight: '20px',
+                              color: '#111827'
+                            }}
+                          />
+                        ) : (
+                          <Text style={[styles.messageText, styles.messageTextAssistant]}>
+                            {message.content}
+                          </Text>
+                        )
                       ) : (
                         <Text
                           style={[
@@ -236,8 +299,24 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             {isStreaming && streamingContent && (
               <View style={styles.messageWrapper}>
                 <View style={[styles.messageBubble, styles.messageBubbleAssistant]}>
-                  {/* Parse streaming HTML as ProseMirror document */}
-                  <ChatMessageProseMirror content={htmlToProsemirror(streamingContent)} />
+                  {/* Render HTML directly to allow text selection */}
+                  {Platform.OS === 'web' ? (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: streamingContent }}
+                      style={{
+                        userSelect: 'text',
+                        WebkitUserSelect: 'text',
+                        cursor: 'text',
+                        fontSize: '15px',
+                        lineHeight: '20px',
+                        color: '#111827'
+                      }}
+                    />
+                  ) : (
+                    <Text style={[styles.messageText, styles.messageTextAssistant]}>
+                      {streamingContent}
+                    </Text>
+                  )}
                   <View style={styles.streamingIndicator}>
                     <ActivityIndicator size="small" color="#3B82F6" />
                     <Text style={styles.streamingText}>AI is typing...</Text>

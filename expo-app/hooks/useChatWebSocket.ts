@@ -79,12 +79,7 @@ export function useChatWebSocket({
   }, []);
 
   // Helper function to enrich assistant messages with Nominatim coordinates
-  // TEMPORARILY DISABLED to test highlighting
   const enrichMessage = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
-    // Skip enrichment - just return message as-is
-    return message;
-
-    /* DISABLED FOR TESTING
     if (message.role !== 'assistant' || !message.content.includes('geo-mark')) {
       return message;
     }
@@ -97,7 +92,6 @@ export function useChatWebSocket({
       console.error('[ChatWebSocket] Failed to enrich message:', error);
       return message; // Return original on error
     }
-    */
   }, []);
 
   // Helper to enrich multiple messages
