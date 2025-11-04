@@ -23,61 +23,57 @@ export default function PresentationOverlay() {
 
   return (
     <View style={styles.overlay}>
-      {/* Content Display */}
-      <View style={styles.contentContainer}>
-        {Platform.OS === 'web' ? (
-          <div
-            dangerouslySetInnerHTML={{ __html: currentBlock.content }}
-            style={{
-              fontSize: '18px',
-              lineHeight: '1.6',
-              color: '#ffffff',
-            }}
-          />
-        ) : (
-          <Text style={styles.contentText}>{currentBlock.content}</Text>
-        )}
-      </View>
+      {/* Content Display - Like news captions */}
+      {Platform.OS === 'web' ? (
+        <div
+          dangerouslySetInnerHTML={{ __html: currentBlock.content }}
+          style={{
+            fontSize: '20px',
+            lineHeight: '1.5',
+            color: '#ffffff',
+            fontWeight: '600',
+            textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
+            marginBottom: '16px',
+          }}
+        />
+      ) : (
+        <Text style={styles.contentText}>{currentBlock.content}</Text>
+      )}
 
-      {/* Navigation Controls */}
+      {/* Minimal Controls Bar */}
       <View style={styles.controlsContainer}>
-        {/* Navigation buttons */}
-        <View style={styles.buttonsContainer}>
-          <TouchableOpacity
-            style={[styles.navButton, isFirstBlock && styles.navButtonDisabled]}
-            onPress={previousBlock}
-            disabled={isFirstBlock}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={isFirstBlock ? '#9CA3AF' : '#ffffff'}
-            />
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={previousBlock}
+          disabled={isFirstBlock}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={isFirstBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
+          />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.navButton, isLastBlock && styles.navButtonDisabled]}
-            onPress={nextBlock}
-            disabled={isLastBlock}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={isLastBlock ? '#9CA3AF' : '#ffffff'}
-            />
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.progressText}>
+          {currentBlockIndex + 1} / {blocks.length}
+        </Text>
 
-        {/* Progress indicator */}
-        <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>
-            {currentBlockIndex + 1} / {blocks.length}
-          </Text>
-        </View>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={nextBlock}
+          disabled={isLastBlock}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={isLastBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
 
         <TouchableOpacity style={styles.stopButton} onPress={stopPresentation}>
-          <Ionicons name="stop" size={16} color="#ffffff" />
-          <Text style={styles.stopButtonText}>Stop</Text>
+          <Ionicons name="close" size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -87,79 +83,48 @@ export default function PresentationOverlay() {
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(17, 24, 39, 0.85)',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    maxHeight: 200,
-  },
-  contentContainer: {
-    marginBottom: 12,
-    maxHeight: 100,
-    overflow: 'hidden',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
   },
   contentText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 20,
+    lineHeight: 30,
     color: '#ffffff',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    marginBottom: 16,
   },
   controlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  progressContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#D1D5DB',
-    fontWeight: '600',
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    gap: 24,
   },
   navButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(59, 130, 246, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    padding: 8,
   },
-  navButtonDisabled: {
-    backgroundColor: 'rgba(75, 85, 99, 0.5)',
+  progressText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  divider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginHorizontal: 8,
   },
   stopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  stopButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
+    padding: 8,
   },
 });
