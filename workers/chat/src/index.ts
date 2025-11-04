@@ -282,13 +282,55 @@ Keep responses practical and well-structured.`
         fullResponse = "I apologize, but I'm having trouble generating a response right now. Please try again.";
       }
 
+      // Post-process: Wrap plain text response in HTML if model didn't follow format
+      let processedResponse = fullResponse;
+      if (!fullResponse.includes('<p>') && !fullResponse.includes('<h')) {
+        console.log('[ChatRoom] Response is plain text, wrapping in HTML paragraphs');
+        // Split by double newlines (paragraph breaks)
+        const paragraphs = fullResponse.split(/\n\n+/).filter(p => p.trim());
+        processedResponse = paragraphs.map(p => {
+          // Handle headings (lines that end with colon or are all caps)
+          if (p.trim().endsWith(':') && p.trim().length < 50) {
+            return `<h3>${p.trim()}</h3>`;
+          }
+          // Regular paragraphs
+          return `<p>${p.trim().replace(/\n/g, '<br>')}</p>`;
+        }).join('\n');
+      }
+
+      // Auto-detect and wrap location names in geo-marks
+      // Common location patterns: proper nouns, landmarks, places ending in common suffixes
+      const locationPatterns = [
+        // Named landmarks/buildings
+        /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Palace|Castle|Museum|Gardens?|Park|Square|Tower|Cathedral|Church|Bridge|Statue|Harbor?|Street|Avenue|Center|Centre|Hall|Market|Temple)))\b/g,
+        // City districts/neighborhoods
+        /\b((?:Old\s+Town|Downtown|[A-Z][a-z]+(?:town|borg|ville|berg)))\b/g,
+      ];
+
+      let enhancedResponse = processedResponse;
+      for (const pattern of locationPatterns) {
+        enhancedResponse = enhancedResponse.replace(pattern, (match) => {
+          // Skip if already wrapped in a geo-mark or HTML tag
+          const beforeMatch = enhancedResponse.substring(0, enhancedResponse.indexOf(match));
+          if (beforeMatch.lastIndexOf('<span class="geo-mark"') > beforeMatch.lastIndexOf('</span>')) {
+            return match;
+          }
+          if (beforeMatch.lastIndexOf('<') > beforeMatch.lastIndexOf('>')) {
+            return match;
+          }
+
+          // Wrap in geo-mark span (without coordinates - will be enriched client-side if needed)
+          return `<span class="geo-mark" data-place-name="${match}" data-coord-source="llm">${match}</span>`;
+        });
+      }
+
       // Create complete AI message
       const aiMessage: ChatMessage = {
         id: messageId,
         document_id: documentId,
         user_id: userId,
         role: "assistant",
-        content: fullResponse,
+        content: enhancedResponse,
         metadata: { model: "qwen2.5-coder-32b-instruct" },
         created_at: new Date().toISOString()
       };
