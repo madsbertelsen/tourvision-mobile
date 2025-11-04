@@ -30,6 +30,7 @@ import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
 import LocationSidebarPanel from '@/components/LocationSidebarPanel';
 import ToolPickerBottomSheet from '@/components/ToolPickerBottomSheet';
+import PresentationOverlay from '@/components/PresentationOverlay';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -529,6 +530,9 @@ export default function TripDocumentView() {
           })()}
         </View>
       </View>
+
+      {/* Presentation Overlay - shows controls when presentation is active */}
+      <PresentationOverlay />
     </View>
   );
 }
