@@ -162,12 +162,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                       ]}
                     >
                       {message.role === 'assistant' && parsedContent ? (
-                        Platform.OS === 'web' ? (
-                          // Temporarily show raw HTML to debug
-                          <div dangerouslySetInnerHTML={{ __html: message.content }} />
-                        ) : (
-                          <ProseMirrorNativeRenderer content={parsedContent} />
-                        )
+                        <ChatMessageProseMirror content={parsedContent} />
                       ) : (
                         <Text
                           style={[
@@ -241,10 +236,8 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             {isStreaming && streamingContent && (
               <View style={styles.messageWrapper}>
                 <View style={[styles.messageBubble, styles.messageBubbleAssistant]}>
-                  {/* Show raw HTML during streaming for debugging */}
-                  <Text style={[styles.messageText, styles.messageTextAssistant]}>
-                    {streamingContent}
-                  </Text>
+                  {/* Parse streaming HTML as ProseMirror document */}
+                  <ChatMessageProseMirror content={htmlToProsemirror(streamingContent)} />
                   <View style={styles.streamingIndicator}>
                     <ActivityIndicator size="small" color="#3B82F6" />
                     <Text style={styles.streamingText}>AI is typing...</Text>

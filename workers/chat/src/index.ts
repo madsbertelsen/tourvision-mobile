@@ -220,6 +220,7 @@ Keep responses practical and well-structured.`
       let fullResponse = "";
       const messageId = crypto.randomUUID();
       let chunkCount = 0;
+      let buffer = ""; // Buffer for incomplete tags/words
 
       // Send streaming chunks
       for await (const chunk of response) {
@@ -264,14 +265,35 @@ Keep responses practical and well-structured.`
           // These are chunks like "data: [DONE]" or usage stats
           if (!chunkStr.startsWith('data: ')) {
             fullResponse += chunkStr;
-            this.broadcast(JSON.stringify({
-              type: "ai_chunk",
-              message_id: messageId,
-              chunk: chunkStr,
-              done: false
-            }));
+            buffer += chunkStr;
+
+            // Extract complete units (HTML tags or words) from buffer
+            const units = this.extractCompleteUnits(buffer);
+
+            if (units.toSend) {
+              // Send complete units
+              this.broadcast(JSON.stringify({
+                type: "ai_chunk",
+                message_id: messageId,
+                chunk: units.toSend,
+                done: false
+              }));
+            }
+
+            // Keep incomplete portion in buffer
+            buffer = units.remaining;
           }
         }
+      }
+
+      // Send any remaining buffer content at the end
+      if (buffer) {
+        this.broadcast(JSON.stringify({
+          type: "ai_chunk",
+          message_id: messageId,
+          chunk: buffer,
+          done: false
+        }));
       }
 
       console.log(`[ChatRoom] AI complete. Total chunks: ${chunkCount}, Response length: ${fullResponse.length}`);
@@ -324,6 +346,21 @@ Keep responses practical and well-structured.`
         });
       }
 
+      // Assign sequential color indices to all geo-marks (using modulo 5 for color cycling)
+      let colorIndex = 0;
+      enhancedResponse = enhancedResponse.replace(
+        /<span class="geo-mark"([^>]*)>/g,
+        (match, attributes) => {
+          // Only add color-index if not already present
+          if (!attributes.includes('data-color-index')) {
+            const index = colorIndex % 5; // Cycle through 5 colors
+            colorIndex++;
+            return `<span class="geo-mark"${attributes} data-color-index="${index}">`;
+          }
+          return match;
+        }
+      );
+
       // Create complete AI message
       const aiMessage: ChatMessage = {
         id: messageId,
@@ -350,6 +387,80 @@ Keep responses practical and well-structured.`
         error: "Failed to generate AI response"
       }));
     }
+  }
+
+  /**
+   * Extract complete HTML tags and words from buffer
+   * Returns what can be sent immediately and what should remain buffered
+   */
+  private extractCompleteUnits(buffer: string): { toSend: string; remaining: string } {
+    let toSend = "";
+    let i = 0;
+
+    while (i < buffer.length) {
+      const char = buffer[i];
+
+      // Check if we're starting an HTML tag
+      if (char === '<') {
+        // Find the closing >
+        const closeTagIndex = buffer.indexOf('>', i);
+
+        if (closeTagIndex === -1) {
+          // Incomplete tag, keep in buffer
+          break;
+        }
+
+        // Complete tag found, extract it
+        const tag = buffer.substring(i, closeTagIndex + 1);
+        toSend += tag;
+        i = closeTagIndex + 1;
+      }
+      // Regular text (not inside a tag)
+      else {
+        // Find the next tag start or whitespace
+        let wordEnd = i;
+        while (
+          wordEnd < buffer.length &&
+          buffer[wordEnd] !== '<' &&
+          buffer[wordEnd] !== ' ' &&
+          buffer[wordEnd] !== '\n' &&
+          buffer[wordEnd] !== '\t'
+        ) {
+          wordEnd++;
+        }
+
+        // If we hit a tag or whitespace, we have a complete word
+        if (wordEnd > i && (
+          wordEnd >= buffer.length ||
+          buffer[wordEnd] === '<' ||
+          buffer[wordEnd] === ' ' ||
+          buffer[wordEnd] === '\n' ||
+          buffer[wordEnd] === '\t'
+        )) {
+          // Extract word and include trailing whitespace if present
+          const word = buffer.substring(i, wordEnd);
+          toSend += word;
+          i = wordEnd;
+
+          // Include trailing whitespace
+          if (i < buffer.length && (buffer[i] === ' ' || buffer[i] === '\n' || buffer[i] === '\t')) {
+            toSend += buffer[i];
+            i++;
+          }
+        } else if (wordEnd === i) {
+          // Just whitespace, include it
+          toSend += buffer[i];
+          i++;
+        } else {
+          // Incomplete word at end of buffer, keep for next iteration
+          break;
+        }
+      }
+    }
+
+    const remaining = buffer.substring(i);
+
+    return { toSend, remaining };
   }
 
   private broadcast(message: string) {

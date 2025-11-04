@@ -61,6 +61,7 @@
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-web-browser": "~15.0.7",
+    "fast-xml-parser": "^5.3.1",
     "lib0": "^0.2.114",
     "lodash": "^4.17.21",
     "mapbox-gl": "^3.15.0",
@@ -75,7 +76,7 @@
     "prosemirror-schema-basic": "^1.2.4",
     "prosemirror-state": "^1.4.4",
     "prosemirror-transform": "^1.10.4",
-    "prosemirror-view": "^1.39.2",
+    "prosemirror-view": "^1.41.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-map-gl": "^8.0.4",
@@ -105,6 +106,7 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "esbuild": "^0.25.11",
+    "jsdom": "^27.1.0",
     "playwright": "^1.56.1",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"

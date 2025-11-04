@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { enrichGeoMarksInHTML } from '@/utils/enrich-geo-marks';
 
 interface ChatMessage {
   id: string;
@@ -39,6 +40,7 @@ export function useChatWebSocket({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const colorIndexCounter = useRef(0); // Track color indices for streaming geo-marks
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -46,6 +48,65 @@ export function useChatWebSocket({
 
   const MAX_RECONNECT_ATTEMPTS = 5;
   const RECONNECT_DELAY = 2000;
+
+  // Helper to assign color indices to geo-marks in streaming content
+  const assignColorIndices = useCallback((html: string): string => {
+    if (!html.includes('geo-mark')) {
+      return html;
+    }
+
+    let result = html;
+    let currentIndex = 0;
+
+    // Find all geo-marks and assign sequential color indices
+    result = result.replace(
+      /<span class="geo-mark"([^>]*)>/g,
+      (match, attributes) => {
+        // If already has color-index, keep it
+        if (attributes.includes('data-color-index')) {
+          return match;
+        }
+
+        // Assign new color index (0-4, cycling through 5 colors)
+        const index = currentIndex % 5;
+        currentIndex++;
+
+        return `<span class="geo-mark"${attributes} data-color-index="${index}">`;
+      }
+    );
+
+    return result;
+  }, []);
+
+  // Helper function to enrich assistant messages with Nominatim coordinates
+  // TEMPORARILY DISABLED to test highlighting
+  const enrichMessage = useCallback(async (message: ChatMessage): Promise<ChatMessage> => {
+    // Skip enrichment - just return message as-is
+    return message;
+
+    /* DISABLED FOR TESTING
+    if (message.role !== 'assistant' || !message.content.includes('geo-mark')) {
+      return message;
+    }
+
+    try {
+      console.log('[ChatWebSocket] Enriching geo-marks in assistant message...');
+      const enrichedContent = await enrichGeoMarksInHTML(message.content);
+      return { ...message, content: enrichedContent };
+    } catch (error) {
+      console.error('[ChatWebSocket] Failed to enrich message:', error);
+      return message; // Return original on error
+    }
+    */
+  }, []);
+
+  // Helper to enrich multiple messages
+  const enrichMessages = useCallback(async (messages: ChatMessage[]): Promise<ChatMessage[]> => {
+    const enrichedMessages = await Promise.all(
+      messages.map(msg => enrichMessage(msg))
+    );
+    return enrichedMessages;
+  }, [enrichMessage]);
 
   const connect = useCallback(() => {
     if (!enabled || !documentId || wsRef.current?.readyState === WebSocket.OPEN) {
@@ -72,32 +133,64 @@ export function useChatWebSocket({
 
           switch (data.type) {
             case 'history':
-              // Initial chat history
-              setMessages(data.messages);
+              // Initial chat history - enrich geo-marks
+              enrichMessages(data.messages).then(enriched => {
+                setMessages(enriched);
+              });
               break;
 
             case 'message':
-              // New message from another user
-              setMessages((prev) => [...prev, data.message]);
+              // New message from another user - enrich if assistant
+              enrichMessage(data.message).then(enriched => {
+                setMessages((prev) => [...prev, enriched]);
+              });
               break;
 
             case 'ai_chunk':
               // AI response streaming
               if (data.done) {
-                // Streaming complete
+                // Streaming complete - add the final message WITHOUT enrichment first
                 setIsStreaming(false);
                 setStreamingContent('');
+                colorIndexCounter.current = 0; // Reset for next message
                 if (data.message) {
-                  // Remove any processing messages and add the final AI message
+                  // First, add the unenriched message immediately
                   setMessages((prev) => [
                     ...prev.filter(msg => !msg.metadata?.processing),
                     data.message
                   ]);
+
+                  // Then enrich asynchronously and update in-place
+                  enrichMessage(data.message).then(enriched => {
+                    setMessages((prev) =>
+                      prev.map(msg =>
+                        msg.id === enriched.id ? enriched : msg
+                      )
+                    );
+                  });
                 }
               } else {
                 // Streaming in progress
                 setIsStreaming(true);
-                setStreamingContent((prev) => prev + data.chunk);
+                setStreamingContent((prev) => {
+                  const newContent = prev + data.chunk;
+                  // Assign color indices to geo-marks in real-time
+                  const withColors = assignColorIndices(newContent);
+
+                  // Debug logging
+                  if (newContent.includes('geo-mark')) {
+                    if (newContent !== withColors) {
+                      console.log('[ChatWebSocket] Added color indices to streaming content');
+                    }
+                    // Show a sample of geo-marks
+                    const geoMarkMatch = withColors.match(/<span class="geo-mark"[^>]*>[^<]*<\/span>/);
+                    if (geoMarkMatch) {
+                      console.log('[ChatWebSocket] Geo-mark sample:', geoMarkMatch[0]);
+                    }
+                  }
+
+                  return withColors;
+                });
               }
               break;
 

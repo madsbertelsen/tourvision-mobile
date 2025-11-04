@@ -1,4 +1,6 @@
 import { JSONContent } from '@tiptap/react';
+import { DOMParser } from 'prosemirror-model';
+import { schema } from './prosemirror-schema';
 
 /**
  * Convert a ProseMirror document (JSONContent) to HTML string with element IDs
@@ -90,11 +92,9 @@ export function prosemirrorToHTML(content: JSONContent): string {
 
 /**
  * Convert HTML string back to ProseMirror document (JSONContent)
- * This is a simplified parser that handles basic HTML without DOM dependencies
+ * Uses ProseMirror's native DOMParser for reliable HTML parsing
  */
 export function htmlToProsemirror(html: string): JSONContent {
-  const content: any[] = [];
-
   // Strip <itinerary> wrapper if present
   let cleanHtml = html;
   const itineraryMatch = html.match(/<itinerary[^>]*>(.*)<\/itinerary>/is);
@@ -108,243 +108,32 @@ export function htmlToProsemirror(html: string): JSONContent {
     }
   }
 
-  // Helper function to parse inline content (text and geo-marks)
-  const parseInlineContent = (html: string): any[] => {
-    const inlineNodes: any[] = [];
-    const geoMarkRegex = /<span[^>]*class="geo-mark"[^>]*>(.*?)<\/span>/gi;
-
-    let lastIndex = 0;
-    let match;
-
-    while ((match = geoMarkRegex.exec(html)) !== null) {
-      // Add text before geo-mark
-      if (match.index > lastIndex) {
-        const textBefore = html.substring(lastIndex, match.index);
-        const stripped = stripHTML(textBefore).trim();
-        if (stripped) {
-          inlineNodes.push({ type: 'text', text: stripped });
-        }
-      }
-
-      // Extract attributes from the span tag
-      const spanTag = html.substring(match.index, match.index + match[0].indexOf('>') + 1);
-      const attrs: any = {};
-
-      const attrMatch = (name: string) => {
-        const regex = new RegExp(`data-${name}="([^"]*)"`, 'i');
-        const m = spanTag.match(regex);
-        return m ? m[1] : null;
-      };
-
-      attrs.lat = attrMatch('lat');
-      attrs.lng = attrMatch('lng');
-      attrs.placeName = attrMatch('place-name');
-      attrs.geoId = attrMatch('geo-id');
-      attrs.transportFrom = attrMatch('transport-from');
-      attrs.transportProfile = attrMatch('transport-profile');
-      attrs.coordSource = attrMatch('coord-source');
-      attrs.description = attrMatch('description');
-      attrs.photoName = attrMatch('photo-name');
-      const colorIndex = attrMatch('color-index');
-      if (colorIndex) attrs.colorIndex = parseInt(colorIndex);
-
-      // Add text node with geoMark mark
-      const textContent = stripHTML(match[1]);
-      if (textContent) {
-        inlineNodes.push({
-          type: 'text',
-          text: textContent,
-          marks: [{
-            type: 'geoMark',
-            attrs
-          }]
-        });
-      }
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Add remaining text after last geo-mark
-    if (lastIndex < html.length) {
-      const textAfter = html.substring(lastIndex);
-      const stripped = stripHTML(textAfter).trim();
-      if (stripped) {
-        inlineNodes.push({ type: 'text', text: stripped });
-      }
-    }
-
-    // If no geo-marks found, return plain text
-    if (inlineNodes.length === 0) {
-      const stripped = stripHTML(html).trim();
-      if (stripped) {
-        return [{ type: 'text', text: stripped }];
-      }
-    }
-
-    return inlineNodes;
-  };
-
-  // Helper function to parse list items
-  const parseListItems = (listHtml: string): any[] => {
-    const items: any[] = [];
-    const itemRegex = /<li[^>]*>(.*?)<\/li>/gis;
-    let match;
-
-    while ((match = itemRegex.exec(listHtml)) !== null) {
-      items.push({
-        type: 'listItem',
-        content: [{
-          type: 'paragraph',
-          content: parseInlineContent(match[1])
-        }]
-      });
-    }
-
-    return items;
-  };
-
-  // Simple regex-based parsing for complete elements only
-  const paragraphs = cleanHtml.match(/<p[^>]*>(.*?)<\/p>/gis) || [];
-  const headings = cleanHtml.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/gis) || [];
-  const bulletLists = cleanHtml.match(/<ul[^>]*>(.*?)<\/ul>/gis) || [];
-  const orderedLists = cleanHtml.match(/<ol[^>]*>(.*?)<\/ol>/gis) || [];
-
-  // Combine and sort by position in cleanHtml
-  const elements: { pos: number; node: any; length: number }[] = [];
-
-  paragraphs.forEach(p => {
-    const pos = cleanHtml.indexOf(p);
-    const textMatch = p.match(/<p[^>]*>(.*?)<\/p>/is);
-    if (textMatch) {
-      elements.push({
-        pos,
-        length: p.length,
-        node: {
-          type: 'paragraph',
-          content: parseInlineContent(textMatch[1])
-        }
-      });
-    }
-  });
-
-  headings.forEach(h => {
-    const pos = cleanHtml.indexOf(h);
-    const match = h.match(/<h([1-6])[^>]*>(.*?)<\/h\1>/is);
-    if (match) {
-      elements.push({
-        pos,
-        length: h.length,
-        node: {
-          type: 'heading',
-          attrs: { level: parseInt(match[1]) },
-          content: parseInlineContent(match[2])
-        }
-      });
-    }
-  });
-
-  bulletLists.forEach(ul => {
-    const pos = cleanHtml.indexOf(ul);
-    const match = ul.match(/<ul[^>]*>(.*?)<\/ul>/is);
-    if (match) {
-      elements.push({
-        pos,
-        length: ul.length,
-        node: {
-          type: 'bulletList',
-          content: parseListItems(match[1])
-        }
-      });
-    }
-  });
-
-  orderedLists.forEach(ol => {
-    const pos = cleanHtml.indexOf(ol);
-    const match = ol.match(/<ol[^>]*>(.*?)<\/ol>/is);
-    if (match) {
-      elements.push({
-        pos,
-        length: ol.length,
-        node: {
-          type: 'orderedList',
-          content: parseListItems(match[1])
-        }
-      });
-    }
-  });
-
-  // Sort by position
-  elements.sort((a, b) => a.pos - b.pos);
-
-  // Build content array and track what we've processed
-  let lastProcessedPos = 0;
-  elements.forEach(el => {
-    // Add any text between elements
-    if (el.pos > lastProcessedPos) {
-      const betweenText = cleanHtml.substring(lastProcessedPos, el.pos);
-      const stripped = stripHTML(betweenText).trim();
-      if (stripped) {
-        content.push({
-          type: 'paragraph',
-          content: [{ type: 'text', text: stripped }]
-        });
-      }
-    }
-
-    // Add the element
-    content.push(el.node);
-    lastProcessedPos = el.pos + el.length;
-  });
-
-  // Add any remaining text after the last element
-  if (lastProcessedPos < cleanHtml.length) {
-    const remainingText = cleanHtml.substring(lastProcessedPos);
-    const stripped = stripHTML(remainingText).trim();
-    if (stripped) {
-      content.push({
-        type: 'paragraph',
-        content: [{ type: 'text', text: stripped }]
-      });
+  // Get or create DOM environment (supports both browser and Node.js with jsdom)
+  let dom: Document;
+  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+    // Browser/React Native Web environment
+    dom = window.document;
+  } else {
+    // Node.js environment - dynamically require jsdom (not bundled for web)
+    try {
+      const { JSDOM } = require('jsdom');
+      const jsdom = new JSDOM();
+      dom = jsdom.window.document;
+    } catch (error) {
+      throw new Error('DOM environment not available. This function requires a browser environment or jsdom in Node.js.');
     }
   }
 
-  // If no content found, create a default paragraph with all text
-  if (content.length === 0) {
-    const stripped = stripHTML(cleanHtml).trim();
-    if (stripped) {
-      content.push({
-        type: 'paragraph',
-        content: [{ type: 'text', text: stripped }]
-      });
-    } else {
-      // Return empty document
-      content.push({
-        type: 'paragraph',
-        content: []
-      });
-    }
-  }
+  // Create a temporary DOM element to parse the HTML
+  const tempDiv = dom.createElement('div');
+  tempDiv.innerHTML = cleanHtml;
 
-  return {
-    type: 'doc',
-    content
-  };
-}
+  // Use ProseMirror's DOMParser to parse the HTML
+  const parser = DOMParser.fromSchema(schema);
+  const doc = parser.parse(tempDiv);
 
-function stripHTML(html: string): string {
-  return html
-    // Remove complete tags
-    .replace(/<[^>]*>/g, '')
-    // Remove incomplete opening tags (e.g., "<h1" or "<span class=")
-    .replace(/<[^<]*/g, '')
-    // Decode HTML entities
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .trim();
+  // Convert to JSON
+  return doc.toJSON();
 }
 
 /**
