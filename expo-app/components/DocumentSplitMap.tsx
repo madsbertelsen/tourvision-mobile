@@ -534,6 +534,21 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
             </View>
           </Marker>
         ))}
+
+        {/* Focused location marker during presentation */}
+        {focusedGeoLocation && focusedGeoLocation.triggeredBySpeech && (
+          <Marker
+            key={`focused-${focusedGeoLocation.placeName}`}
+            latitude={focusedGeoLocation.lat}
+            longitude={focusedGeoLocation.lng}
+            anchor="center"
+          >
+            <View style={styles.focusedMarker}>
+              <View style={styles.focusedMarkerPulse} />
+              <View style={styles.focusedMarkerInner} />
+            </View>
+          </Marker>
+        )}
       </Map>
 
       {/* Sidebar - rendered within map container */}
@@ -578,6 +593,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       return false; // Re-render
     }
   }
+
+  // Note: focusedGeoLocation comes from context hook, not props,
+  // so it will trigger re-renders automatically when it changes
 
   return true; // Skip re-render
 });
@@ -640,5 +658,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  focusedMarker: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 4,
+    borderColor: 'white',
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+  },
+  focusedMarkerPulse: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#3B82F6',
+    opacity: 0.3,
+  },
+  focusedMarkerInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'white',
   },
 });

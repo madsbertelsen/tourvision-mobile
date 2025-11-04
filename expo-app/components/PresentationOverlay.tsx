@@ -29,13 +29,23 @@ export default function PresentationOverlay() {
   const isFirstBlock = currentBlockIndex === 0;
   const isLastBlock = currentBlockIndex === blocks.length - 1;
 
-  // Extract the current word being spoken
-  const currentWord = currentWordPosition?.wordInfo?.word || null;
-
   // Check if current word is a geo-mark and get its color
   const isGeoMark = currentWordPosition?.wordInfo?.isGeoMark || false;
   const geoMarkColorIndex = currentWordPosition?.wordInfo?.geoMarkData?.colorIndex || 0;
   const geoMarkColor = isGeoMark ? COLORS[geoMarkColorIndex % 5] : null;
+
+  // For geo-marks, show just the location name (before first comma)
+  const getLocationName = (placeName: string | undefined) => {
+    if (!placeName) return null;
+    const firstComma = placeName.indexOf(',');
+    return firstComma > 0 ? placeName.substring(0, firstComma).trim() : placeName;
+  };
+
+  const displayText = isGeoMark
+    ? (getLocationName(currentWordPosition?.wordInfo?.geoMarkData?.placeName) || currentWordPosition?.wordInfo?.word)
+    : currentWordPosition?.wordInfo?.word;
+
+  const currentWord = displayText || null;
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
