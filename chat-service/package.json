@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@ai-sdk/openai": "^2.0.58",
+    "@mendable/firecrawl-js": "^4.5.0",
     "ai": "^5.0.82",
     "ollama-ai-provider-v2": "^1.5.2"
   }

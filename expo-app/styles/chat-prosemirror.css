@@ -2,17 +2,23 @@
 .chat-prosemirror-readonly .ProseMirror {
   padding: 0;
   outline: none;
-  cursor: default;
+  cursor: text;
   caret-color: transparent;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
-/* Disable cursor/caret completely in readonly mode */
+/* Disable cursor/caret completely in readonly mode but keep text selection */
 .chat-prosemirror-readonly .ProseMirror[contenteditable="false"] {
-  cursor: default;
+  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .chat-prosemirror-readonly .ProseMirror * {
-  cursor: default;
+  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .ProseMirror p {

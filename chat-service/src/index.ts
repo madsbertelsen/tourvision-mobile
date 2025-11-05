@@ -5,9 +5,14 @@ import { streamText } from 'ai';
 import { config } from 'dotenv';
 import { ollama } from 'ollama-ai-provider-v2';
 import { openai } from '@ai-sdk/openai';
+import FirecrawlApp from '@mendable/firecrawl-js';
 
 // Load environment variables from .env.local
 config();
+
+// Firecrawl configuration
+const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || 'fc-fff1567d504f41ffa9d5cb4a3a36756f';
+const firecrawl = new FirecrawlApp({ apiKey: FIRECRAWL_API_KEY });
 
 // Configuration
 const SUPABASE_URL = 'https://unocjfiipormnaujsuhk.supabase.co';
@@ -234,6 +239,29 @@ async function processRegularMessage(message: ChatMessage): Promise<void> {
   try {
     console.log(`\n🤖 Generating AI response for: "${content}"`);
 
+    // Check if message contains URLs
+    const urls = extractURLs(content);
+    let webContent: { url: string; content: string; title?: string }[] = [];
+
+    if (urls.length > 0) {
+      console.log(`   🔍 Detected ${urls.length} URL(s) in message`);
+
+      // Scrape all URLs in parallel
+      const scrapeResults = await Promise.all(
+        urls.map(async (url) => {
+          const result = await scrapeURL(url);
+          return result ? { url, ...result } : null;
+        })
+      );
+
+      // Filter out failed scrapes
+      webContent = scrapeResults.filter((r): r is { url: string; content: string; title?: string } => r !== null);
+
+      if (webContent.length > 0) {
+        console.log(`   ✅ Successfully scraped ${webContent.length} URL(s)`);
+      }
+    }
+
     // Get recent chat history for context
     const { data: chatHistory, error: historyError } = await supabaseAdmin
       .from('document_chats')
@@ -268,6 +296,9 @@ Your role is to:
 - Provide helpful suggestions and recommendations
 - Help them refine their travel plans
 - Be concise and friendly
+- When the user shares a web page URL, analyze the content and extract relevant travel information
+- Summarize key details from web pages (attractions, restaurants, hotels, events, etc.)
+- Suggest adding locations mentioned in web content to the trip itinerary
 
 CRITICAL OUTPUT FORMAT REQUIREMENT:
 You MUST format ALL responses as valid ProseMirror HTML. The schema supports these elements:
@@ -336,10 +367,21 @@ Keep responses practical and well-structured.`
       });
     }
 
-    // Add current user message
+    // Add current user message with scraped web content if available
+    let userMessageContent = content;
+
+    if (webContent.length > 0) {
+      // Append scraped web content to the user's message
+      const webContentSummary = webContent.map((item) => {
+        return `\n\n--- Web Page Content from ${item.url} ---\nTitle: ${item.title || 'Untitled'}\n\n${item.content.substring(0, 3000)}${item.content.length > 3000 ? '...' : ''}`;
+      }).join('\n');
+
+      userMessageContent = `${content}${webContentSummary}`;
+    }
+
     messages.push({
       role: 'user',
-      content: content
+      content: userMessageContent
     });
 
     // Create placeholder assistant message first (for streaming updates)
@@ -396,6 +438,42 @@ Keep responses practical and well-structured.`
     } catch (insertError) {
       console.error('   ❌ Failed to insert error message:', insertError);
     }
+  }
+}
+
+/**
+ * Detect URLs in text
+ */
+function extractURLs(text: string): string[] {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+}
+
+/**
+ * Scrape a URL using Firecrawl and extract clean content
+ */
+async function scrapeURL(url: string): Promise<{ content: string; title?: string } | null> {
+  try {
+    console.log(`   🔗 Scraping URL: ${url}`);
+
+    const result = await firecrawl.scrape(url, {
+      formats: ['markdown'],
+      onlyMainContent: true,
+    }) as any;
+
+    if (result.success && result.markdown) {
+      console.log(`   ✅ Successfully scraped: ${result.metadata?.title || url}`);
+      return {
+        content: result.markdown,
+        title: result.metadata?.title,
+      };
+    }
+
+    console.warn(`   ⚠️ Failed to scrape URL: ${url}`);
+    return null;
+  } catch (error: any) {
+    console.error(`   ❌ Error scraping URL ${url}:`, error.message);
+    return null;
   }
 }
 
