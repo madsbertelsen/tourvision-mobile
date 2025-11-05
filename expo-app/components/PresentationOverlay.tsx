@@ -1,113 +1,74 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePresentation } from '@/contexts/presentation-context';
 
-// Color array matching DocumentSplitMap
-const COLORS = [
-  '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
-  // Purple,   Blue,     Green,    Orange,   Red
-];
-
+/**
+ * PresentationOverlay - Shows presentation controls when a presentation is active
+ *
+ * Features:
+ * - Block navigation (previous/next)
+ * - Play/pause narration toggle
+ * - Stop presentation
+ * - Shows current block index
+ */
 export default function PresentationOverlay() {
   const {
     isPresenting,
     currentBlockIndex,
     blocks,
     isNarrating,
-    currentWordPosition,
     nextBlock,
     previousBlock,
     stopPresentation,
     toggleNarration,
   } = usePresentation();
 
-  if (!isPresenting || blocks.length === 0) {
+  // Don't render if not presenting
+  if (!isPresenting) {
     return null;
   }
 
-  const isFirstBlock = currentBlockIndex === 0;
-  const isLastBlock = currentBlockIndex === blocks.length - 1;
-
-  // Check if current word is a geo-mark and get its color
-  const isGeoMark = currentWordPosition?.wordInfo?.isGeoMark || false;
-  const geoMarkColorIndex = currentWordPosition?.wordInfo?.geoMarkData?.colorIndex || 0;
-  const geoMarkColor = isGeoMark ? COLORS[geoMarkColorIndex % 5] : null;
-
-  // For geo-marks, show just the location name (before first comma)
-  const getLocationName = (placeName: string | undefined) => {
-    if (!placeName) return null;
-    const firstComma = placeName.indexOf(',');
-    return firstComma > 0 ? placeName.substring(0, firstComma).trim() : placeName;
-  };
-
-  const displayText = isGeoMark
-    ? (getLocationName(currentWordPosition?.wordInfo?.geoMarkData?.placeName) || currentWordPosition?.wordInfo?.word)
-    : currentWordPosition?.wordInfo?.word;
-
-  const currentWord = displayText || null;
-
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
-      {/* Currently Spoken Word Overlay */}
-      {currentWord && isNarrating && (
-        <View style={styles.wordOverlay} pointerEvents="none">
-          <Text
-            style={[
-              styles.currentWord,
-              geoMarkColor && { backgroundColor: `${geoMarkColor}DD` } // DD = ~87% opacity
-            ]}
-          >
-            {currentWord}
-          </Text>
-        </View>
-      )}
-
-      {/* Floating Controls */}
-      <View style={styles.controlsContainer}>
+    <View style={styles.overlay}>
+      <View style={styles.controls}>
+        {/* Previous block button */}
         <TouchableOpacity
-          style={styles.navButton}
           onPress={previousBlock}
-          disabled={isFirstBlock}
+          style={[styles.button, currentBlockIndex === 0 && styles.buttonDisabled]}
+          disabled={currentBlockIndex === 0}
         >
-          <Ionicons
-            name="chevron-back"
-            size={28}
-            color={isFirstBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
-          />
+          <Ionicons name="play-back" size={24} color={currentBlockIndex === 0 ? "#9CA3AF" : "#fff"} />
         </TouchableOpacity>
 
+        {/* Play/pause narration */}
         <TouchableOpacity
-          style={styles.playPauseButton}
           onPress={toggleNarration}
+          style={[styles.button, styles.primaryButton]}
         >
-          <Ionicons
-            name={isNarrating ? 'pause' : 'play'}
-            size={28}
-            color="#ffffff"
-          />
+          <Ionicons name={isNarrating ? "pause" : "play"} size={28} color="#fff" />
         </TouchableOpacity>
 
-        <Text style={styles.progressText}>
+        {/* Next block button */}
+        <TouchableOpacity
+          onPress={nextBlock}
+          style={[styles.button, currentBlockIndex === blocks.length - 1 && styles.buttonDisabled]}
+          disabled={currentBlockIndex === blocks.length - 1}
+        >
+          <Ionicons name="play-forward" size={24} color={currentBlockIndex === blocks.length - 1 ? "#9CA3AF" : "#fff"} />
+        </TouchableOpacity>
+
+        {/* Block counter */}
+        <Text style={styles.counter}>
           {currentBlockIndex + 1} / {blocks.length}
         </Text>
 
+        {/* Stop presentation button */}
         <TouchableOpacity
-          style={styles.navButton}
-          onPress={nextBlock}
-          disabled={isLastBlock}
+          onPress={stopPresentation}
+          style={[styles.button, styles.stopButton]}
         >
-          <Ionicons
-            name="chevron-forward"
-            size={28}
-            color={isLastBlock ? 'rgba(255, 255, 255, 0.3)' : '#ffffff'}
-          />
-        </TouchableOpacity>
-
-        <View style={styles.divider} />
-
-        <TouchableOpacity style={styles.stopButton} onPress={stopPresentation}>
-          <Ionicons name="close" size={28} color="#ffffff" />
+          <Ionicons name="stop" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -117,76 +78,54 @@ export default function PresentationOverlay() {
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    // Transparent - only shows controls and word overlay
-  },
-  wordOverlay: {
-    position: 'absolute',
-    top: '40%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  currentWord: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#ffffff',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 8,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(59, 130, 246, 0.85)',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  controlsContainer: {
-    position: 'absolute',
     bottom: 32,
     left: 0,
     right: 0,
+    alignItems: 'center',
+    zIndex: 1000,
+    pointerEvents: 'box-none', // Allow touches to pass through except for controls
+  },
+  controls: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(17, 24, 39, 0.95)', // Dark semi-transparent background
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 50,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    pointerEvents: 'auto', // Ensure controls receive touches
+  },
+  button: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
-    paddingHorizontal: 24,
   },
-  navButton: {
-    padding: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 8,
-  },
-  playPauseButton: {
-    padding: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.8)', // Blue background for play/pause
-    borderRadius: 8,
-  },
-  progressText: {
-    fontSize: 18,
-    color: '#ffffff',
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 8,
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 8,
+  primaryButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3B82F6',
   },
   stopButton: {
-    padding: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 8,
+    backgroundColor: '#EF4444',
+  },
+  buttonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    opacity: 0.5,
+  },
+  counter: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    minWidth: 60,
+    textAlign: 'center',
   },
 });

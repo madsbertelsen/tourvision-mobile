@@ -36,10 +36,13 @@ import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
 import { supabase } from '@/lib/supabase/client';
 import { parseDocumentIntoBlocks } from '@/utils/document-block-parser';
+import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
+import { usePresentation } from '@/contexts/presentation-context';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
+  const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(true);
   const [contentHeight, setContentHeight] = useState(0);
@@ -304,6 +307,35 @@ export default function TripDocumentView() {
     setToolPickerSelectedIndex(selectedIndex);
   }, []);
 
+  // Handle play button click - start presentation of document content
+  const handlePlayDocument = useCallback(() => {
+    if (!currentDoc) {
+      console.warn('[TripDocument] No document content to present');
+      return;
+    }
+
+    try {
+      console.log('[TripDocument] Starting document presentation...');
+
+      // Parse document content (string or object) to ProseMirror format
+      const pmDoc = typeof currentDoc === 'string'
+        ? JSON.parse(currentDoc)
+        : currentDoc;
+
+      console.log('[TripDocument] Parsed PM doc:', JSON.stringify(pmDoc, null, 2).substring(0, 300));
+
+      // Parse into presentation blocks
+      const blocks = parsePresentationBlocks(pmDoc);
+      console.log('[TripDocument] Starting presentation with blocks:', blocks);
+
+      // Start the presentation
+      startPresentation(blocks);
+    } catch (error) {
+      console.error('[TripDocument] Failed to start presentation:', error);
+      alert('Failed to start presentation: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }, [currentDoc, startPresentation]);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -326,6 +358,18 @@ export default function TripDocumentView() {
         </View>
 
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={handlePlayDocument}
+            style={[styles.iconButton, isPresenting && styles.iconButtonActive]}
+            disabled={!currentDoc}
+          >
+            <Ionicons
+              name={isPresenting ? "pause" : "play"}
+              size={22}
+              color={isPresenting ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={handleToggleCollaboration}
             style={[styles.iconButton, isCollabEnabled && styles.iconButtonActive]}
