@@ -161,7 +161,10 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   // Fetch routes between consecutive locations (only when transportation is defined)
   useEffect(() => {
     const fetchRoutes = async () => {
+      console.log('[DocumentSplitMap] Starting route fetch for locations:', locations);
+
       if (locations.length < 2) {
+        console.log('[DocumentSplitMap] Not enough locations for routes (need at least 2)');
         setRoutes([]);
         return;
       }
@@ -169,59 +172,112 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
       const routePromises = [];
 
-      // Only fetch routes for locations that have transportFrom defined
-      for (let i = 0; i < locations.length; i++) {
-        const to = locations[i];
+      // Toggle this to show routes between ALL consecutive locations vs only those with transportFrom
+      const SHOW_ALL_ROUTES = true; // Set to false to only show routes where transportFrom is defined
 
-        // Skip if no transport connection is defined
-        if (!to.transportFrom) {
-          continue;
+      if (SHOW_ALL_ROUTES) {
+        // OPTION 2: Create routes between ALL consecutive locations
+        for (let i = 1; i < locations.length; i++) {
+          const from = locations[i - 1];
+          const to = locations[i];
+          console.log(`[DocumentSplitMap] Creating route from ${from.placeName} to ${to.placeName}`);
+
+          // Use waypoints if defined, otherwise direct route
+          let coordinates;
+          if (to.waypoints && to.waypoints.length > 0) {
+            // Include waypoints in the route
+            const waypointCoords = to.waypoints.map((wp: {lng: number, lat: number}) => `${wp.lng},${wp.lat}`).join(';');
+            coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+          } else {
+            coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+          }
+
+          // Determine transport profile (default to walking)
+          const profile = to.transportProfile || 'walking';
+          const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+          routePromises.push(
+            fetch(url)
+              .then(res => res.json())
+              .then(data => {
+                if (data.routes && data.routes[0]) {
+                  return {
+                    id: `route-${from.geoId}-${to.geoId}`,
+                    fromLocationId: from.geoId,
+                    toLocationId: to.geoId,
+                    geometry: data.routes[0].geometry,
+                    from: from.geoId,
+                    to: to.geoId,
+                    colorIndex: from.colorIndex || 0,
+                    waypoints: to.waypoints
+                  };
+                }
+                return null;
+              })
+              .catch(err => {
+                console.error('Error fetching route:', err);
+                return null;
+              })
+          );
         }
+      } else {
+        // OPTION 1: Only fetch routes for locations that have transportFrom defined
+        for (let i = 0; i < locations.length; i++) {
+          const to = locations[i];
+          console.log(`[DocumentSplitMap] Checking location ${i}: ${to.placeName}, transportFrom: ${to.transportFrom}`);
 
-        // Find the "from" location by geoId
-        const from = locations.find(loc => loc.geoId === to.transportFrom);
-        if (!from) {
-          console.warn(`Transport from location ${to.transportFrom} not found for ${to.placeName}`);
-          continue;
+          // Skip if no transport connection is defined
+          if (!to.transportFrom) {
+            console.log(`[DocumentSplitMap] Skipping ${to.placeName} - no transportFrom defined`);
+            continue;
+          }
+
+          // Find the "from" location by geoId
+          const from = locations.find(loc => loc.geoId === to.transportFrom);
+          if (!from) {
+            console.warn(`Transport from location ${to.transportFrom} not found for ${to.placeName}`);
+            continue;
+          }
+
+          // Use waypoints if defined, otherwise direct route
+          let coordinates;
+          if (to.waypoints && to.waypoints.length > 0) {
+            // Include waypoints in the route
+            const waypointCoords = to.waypoints.map((wp: {lng: number, lat: number}) => `${wp.lng},${wp.lat}`).join(';');
+            coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+          } else {
+            coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+          }
+
+          // Determine transport profile (default to walking)
+          const profile = to.transportProfile || 'walking';
+          const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+          console.log('[DocumentSplitMap] Fetching route with waypoints:', url);
+
+          routePromises.push(
+            fetch(url)
+              .then(res => res.json())
+              .then(data => {
+                if (data.routes && data.routes[0]) {
+                  return {
+                    id: `route-${from.geoId}-${to.geoId}`,
+                    fromLocationId: from.geoId,
+                    toLocationId: to.geoId,
+                    geometry: data.routes[0].geometry,
+                    from: from.geoId,
+                    to: to.geoId,
+                    colorIndex: from.colorIndex || 0,
+                    waypoints: to.waypoints
+                  };
+                }
+                return null;
+              })
+              .catch(err => {
+                console.error('Error fetching route:', err);
+                return null;
+              })
+          );
         }
-
-        // Use waypoints if defined, otherwise direct route
-        let coordinates;
-        if (to.waypoints && to.waypoints.length > 0) {
-          // Include waypoints in the route
-          const waypointCoords = to.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-          coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
-        } else {
-          coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-        }
-
-        // Determine transport profile (default to walking)
-        const profile = to.transportProfile || 'walking';
-        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
-
-        routePromises.push(
-          fetch(url)
-            .then(res => res.json())
-            .then(data => {
-              if (data.routes && data.routes[0]) {
-                return {
-                  id: `route-${from.geoId}-${to.geoId}`,
-                  fromLocationId: from.geoId,
-                  toLocationId: to.geoId,
-                  geometry: data.routes[0].geometry,
-                  from: from.geoId,
-                  to: to.geoId,
-                  colorIndex: from.colorIndex || 0,
-                  waypoints: to.waypoints
-                };
-              }
-              return null;
-            })
-            .catch(err => {
-              console.error('Error fetching route:', err);
-              return null;
-            })
-        );
       }
 
       const fetchedRoutes = await Promise.all(routePromises);
