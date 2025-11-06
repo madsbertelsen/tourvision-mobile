@@ -74,9 +74,14 @@ export function MapboxRouteLayers({
       }
     });
 
-    // Much more generous threshold since we have a wide hit area
-    // This should match the visual hit area width (50px ≈ 0.05 in geographic units at typical zoom)
-    const threshold = 0.05; // Very generous to match the 50px hit area
+    // Debug logging
+    if (closestPoint) {
+      console.log('[MapboxRouteLayers] Closest point distance:', closestPoint.distance);
+    }
+
+    // Use a very generous fixed threshold
+    // At zoom level 10-15, this should give us approximately 50-100px hit area
+    const threshold = 0.1; // VERY generous threshold for easy interaction
     if (closestPoint && closestPoint.distance < threshold) {
       setNearestPoint({
         lng: closestPoint.lng,
@@ -182,8 +187,8 @@ export function MapboxRouteLayers({
               }}
               paint={{
                 'line-color': color,
-                'line-width': isHovered ? 40 : 50, // Very wide hit area, slightly smaller when hovered
-                'line-opacity': isHovered ? 0.1 : 0.05 // Slightly visible, more visible on hover
+                'line-width': 80, // EXTRA wide hit area for testing
+                'line-opacity': isHovered ? 0.3 : 0.15 // More visible for debugging
               }}
             />
 
