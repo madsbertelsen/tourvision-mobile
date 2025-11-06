@@ -18,26 +18,26 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import Svg, { Path, Defs, Marker, Polygon, Circle } from 'react-native-svg';
-import { useTripContext } from './_layout';
-import DynamicLandingDocumentProseMirror from '../../../(public)/components/DynamicLandingDocumentProseMirror';
-import DocumentSplitMap from '@/components/DocumentSplitMap';
 import DocumentChat from '@/components/DocumentChat';
+import DocumentSplitMap from '@/components/DocumentSplitMap';
 import LocationSidebarPanel from '@/components/LocationSidebarPanel';
-import ToolPickerBottomSheet from '@/components/ToolPickerBottomSheet';
 import PresentationOverlay from '@/components/PresentationOverlay';
-import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
-import { useLocationModal } from '@/hooks/useLocationModal';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
+import ToolPickerBottomSheet from '@/components/ToolPickerBottomSheet';
+import { usePresentation } from '@/contexts/presentation-context';
+import { useLocationModal } from '@/hooks/useLocationModal';
 import { supabase } from '@/lib/supabase/client';
 import { parseDocumentIntoBlocks } from '@/utils/document-block-parser';
+import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
-import { usePresentation } from '@/contexts/presentation-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
+import DynamicLandingDocumentProseMirror from '../../../(public)/components/DynamicLandingDocumentProseMirror';
+import { useTripContext } from './_layout';
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
@@ -269,6 +269,8 @@ export default function TripDocumentView() {
     lat: number;
     lng: number;
     transportMode?: string;
+    transportFrom?: string;  // geoId of origin location
+    waypoints?: Array<{ lat: number; lng: number }>;  // route coordinates
   }) => {
     console.log('[TripDocument] Creating geo-mark from tool picker:', data);
 
@@ -279,13 +281,15 @@ export default function TripDocumentView() {
 
     // Create geo-mark data
     const geoMarkData = {
-      geoId: `loc-${Date.now()}`,
+      geoId: `loc-${Date.now()}-msb`,
       placeName: data.placeName,
       lat: data.lat.toString(),
       lng: data.lng.toString(),
       colorIndex: 0, // Will be auto-assigned by ProseMirror
       coordSource: 'nominatim',
       transportProfile: data.transportMode || 'walking',
+      transportFrom: data.transportFrom || null,
+      waypoints: data.waypoints || null,
     };
 
     // Send command to WebView to create the geo-mark
