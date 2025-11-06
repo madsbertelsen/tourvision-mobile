@@ -1857,6 +1857,45 @@
                   });
                   break;
 
+                case 'updateGeoMarkWaypoints':
+                  // Update a geo-mark's waypoints attribute
+                  console.log('[WebView] Updating geo-mark waypoints:', data.params?.geoId, data.params?.waypoints);
+                  if (data.params?.geoId && data.params?.waypoints && schema.marks.geoMark) {
+                    let geoMarkFound = false;
+                    const updateTr = state.tr;
+
+                    // Find all geo-marks and update the one with matching geoId
+                    state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
+                      if (node.marks && node.marks.length > 0) {
+                        const geoMark = node.marks.find(m => m.type === schema.marks.geoMark && m.attrs.geoId === data.params.geoId);
+                        if (geoMark) {
+                          console.log('[WebView] Found geo-mark to update at pos:', pos);
+                          // Create updated mark with new waypoints
+                          const updatedMark = schema.marks.geoMark.create({
+                            ...geoMark.attrs,
+                            waypoints: data.params.waypoints
+                          });
+                          // Remove old mark and add updated one
+                          updateTr.removeMark(pos, pos + node.nodeSize, geoMark);
+                          updateTr.addMark(pos, pos + node.nodeSize, updatedMark);
+                          geoMarkFound = true;
+                        }
+                      }
+                    });
+
+                    if (geoMarkFound) {
+                      dispatch(updateTr);
+                      console.log('[WebView] Geo-mark waypoints updated successfully');
+                      sendMessageToNative({
+                        type: 'documentChanged',
+                        content: editorView.state.doc.toJSON()
+                      });
+                    } else {
+                      console.warn('[WebView] Geo-mark with ID not found:', data.params.geoId);
+                    }
+                  }
+                  break;
+
                 case 'addComment':
                   // Check if there's selected text
                   if (selection.empty) {
@@ -1906,6 +1945,7 @@
                     editorView.focus();
                   }
                   break;
+
 
                 case 'updateCommentAIReply':
                   // Update a comment mark's aiReply attribute

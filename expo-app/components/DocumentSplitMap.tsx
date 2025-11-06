@@ -1,13 +1,16 @@
-import React, { useRef, useState, useEffect, useCallback, memo, ReactNode } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import React, { useRef, useState, useEffect, useCallback, memo, useMemo, ReactNode } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/mapbox';
+import { Marker, NavigationControl, GeolocateControl, Source, Layer, useControl } from 'react-map-gl/mapbox';
+import { MapboxOverlay } from '@deck.gl/mapbox';
 import * as turf from '@turf/turf';
 import { usePresentation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
 import CurrentWordOverlay from './CurrentWordOverlay';
+import { createSimpleEditableRouteLayers, findNearestPointOnRoute } from './EditableRouteOverlay';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Location {
   geoId: string;
@@ -41,6 +44,7 @@ interface DocumentSplitMapProps {
       coordinates: number[][];
     };
   } | null;
+  onWaypointsChange?: (locationId: string, waypoints: Array<{lat: number, lng: number}>) => void;
 }
 
 // Color array starting with Purple (to match expected first location color)
@@ -48,6 +52,16 @@ const COLORS = [
   '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
   // Purple,   Blue,     Green,    Orange,   Red
 ];
+
+// Same threshold as in EditableRouteOverlay
+const PROXIMITY_THRESHOLD = 0.002;
+
+// DeckGL overlay component
+function DeckGLOverlay(props: { layers: any[] }) {
+  const overlay = useControl<any>(() => new MapboxOverlay({}));
+  overlay.setProps({ layers: props.layers });
+  return null;
+}
 
 const DocumentSplitMap = memo(function DocumentSplitMap({
   locations,
@@ -57,12 +71,97 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   selectedSearchIndex = 0,
   onSearchResultSelect,
   previewRoute,
+  onWaypointsChange,
 }: DocumentSplitMapProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
+  // Edit mode is always enabled - users can always add waypoints
+  const editMode = true;
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null); // Auto-select based on proximity
+  const [cursorPosition, setCursorPosition] = useState<[number, number] | null>(null);
+  const [proximityPoint, setProximityPoint] = useState<[number, number] | null>(null);
+  const [isDraggingWaypoint, setIsDraggingWaypoint] = useState(false);
+  const [draggedWaypoint, setDraggedWaypoint] = useState<{position: [number, number], routeIndex: number, segmentIndex?: number} | null>(null);
 
   // Presentation mode
   const { isPresenting, currentBlockIndex, blocks, focusedGeoLocation } = usePresentation();
+
+  // Handle route waypoint updates from dragging
+  const handleRouteUpdate = useCallback(async (toLocationId: string, waypoints: Array<{lat: number, lng: number}>, insertAtSegment?: number) => {
+    console.log('[DocumentSplitMap] Route updated for location:', toLocationId, 'waypoints:', waypoints, 'segment:', insertAtSegment);
+
+    // Find the route and its start/end locations
+    const route = routes.find(r => r.toLocationId === toLocationId);
+    if (!route) return;
+
+    const fromLocation = locations.find(l => l.geoId === route.fromLocationId);
+    const toLocation = locations.find(l => l.geoId === route.toLocationId);
+
+    if (!fromLocation || !toLocation) return;
+
+    // Update the location's waypoints in the document
+    if (onWaypointsChange && toLocation) {
+      // Update waypoints for this location
+      const updatedLocation = {
+        ...toLocation,
+        waypoints: waypoints
+      };
+
+      console.log('[DocumentSplitMap] Updating waypoints in document for location:', toLocation.placeName);
+      onWaypointsChange(toLocation.geoId, waypoints);
+    }
+
+    // Recalculate route through waypoints using Mapbox API
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+    if (!mapboxToken) {
+      console.error('[DocumentSplitMap] No Mapbox token found');
+      return;
+    }
+
+    try {
+      // Build coordinates string: origin;waypoint1;waypoint2;...;destination
+      let coordinates = `${fromLocation.lng},${fromLocation.lat}`;
+
+      // Add waypoints
+      waypoints.forEach(wp => {
+        coordinates += `;${wp.lng},${wp.lat}`;
+      });
+
+      // Add destination
+      coordinates += `;${toLocation.lng},${toLocation.lat}`;
+
+      const url = `https://api.mapbox.com/directions/v5/mapbox/${route.transportProfile || 'driving'}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+      console.log('[DocumentSplitMap] Fetching route with waypoints:', url);
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.routes && data.routes[0]) {
+        const updatedRoute = {
+          ...route,
+          geometry: data.routes[0].geometry,
+          duration: data.routes[0].duration,
+          distance: data.routes[0].distance,
+          waypoints: waypoints
+        };
+
+        // Update the routes state with the new geometry
+        setRoutes(prevRoutes => {
+          return prevRoutes.map(r => {
+            if (r.toLocationId === toLocationId) {
+              return updatedRoute;
+            }
+            return r;
+          });
+        });
+
+        console.log('[DocumentSplitMap] Route recalculated with waypoints successfully');
+      }
+    } catch (error) {
+      console.error('[DocumentSplitMap] Error recalculating route:', error);
+    }
+  }, [routes, locations]);
 
   // Fetch routes between consecutive locations (only when transportation is defined)
   useEffect(() => {
@@ -111,10 +210,14 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
             .then(data => {
               if (data.routes && data.routes[0]) {
                 return {
+                  id: `route-${from.geoId}-${to.geoId}`,
+                  fromLocationId: from.geoId,
+                  toLocationId: to.geoId,
                   geometry: data.routes[0].geometry,
                   from: from.geoId,
                   to: to.geoId,
-                  colorIndex: from.colorIndex || 0
+                  colorIndex: from.colorIndex || 0,
+                  waypoints: to.waypoints
                 };
               }
               return null;
@@ -462,6 +565,126 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     prevFocusedLocationRef.current = focusedGeoLocation;
   }, [focusedGeoLocation, animateToLocation]);
 
+  // Handle mouse/touch movement to track cursor position
+  const handleMapMouseMove = useCallback((event: any) => {
+    // Get the coordinates from the event
+    const { lngLat } = event;
+    if (lngLat) {
+      setCursorPosition([lngLat.lng, lngLat.lat]);
+      // console.log('[DocumentSplitMap] Cursor position:', lngLat.lng, lngLat.lat); // Too spammy
+    }
+  }, []);
+
+  // Handle proximity point updates from the overlay
+  const handleProximityPoint = useCallback((point: [number, number] | null, routeIndex: number | null) => {
+    setProximityPoint(point);
+    // Auto-select the route when cursor is near it
+    if (routeIndex !== null && routeIndex !== selectedRouteIndex) {
+      setSelectedRouteIndex(routeIndex);
+      console.log('[DocumentSplitMap] Auto-selected route:', routeIndex);
+    }
+  }, [selectedRouteIndex]);
+
+  // Handle drag start
+  const handleDragStart = useCallback((waypoint: {position: [number, number], routeIndex: number, segmentIndex?: number}) => {
+    console.log('[DocumentSplitMap] Starting waypoint drag from segment', waypoint.segmentIndex);
+    setIsDraggingWaypoint(true);
+    setDraggedWaypoint(waypoint);
+
+    // Disable map dragging - try different approaches for react-map-gl
+    if (mapRef.current) {
+      const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (map && map.dragPan) {
+        map.dragPan.disable();
+      }
+    }
+  }, []);
+
+  // Handle drag end
+  const handleDragEnd = useCallback(() => {
+    console.log('[DocumentSplitMap] Ending waypoint drag');
+
+    // Add waypoint at the final position
+    if (draggedWaypoint && cursorPosition) {
+      const route = routes[draggedWaypoint.routeIndex];
+      if (route && route.toLocationId) {
+        const newWaypoint = {
+          lat: cursorPosition[1],
+          lng: cursorPosition[0]
+        };
+
+        const existingWaypoints = route.waypoints || [];
+
+        // Calculate insertion index based on segment position
+        let insertIndex = existingWaypoints.length; // Default to end
+
+        if (draggedWaypoint.segmentIndex !== undefined && route.geometry) {
+          const totalSegments = route.geometry.coordinates.length - 1;
+          const newWaypointProgress = draggedWaypoint.segmentIndex / totalSegments;
+
+          // Find the correct position to insert based on route progress
+          // We need to estimate the progress of existing waypoints along the route
+          insertIndex = 0;
+
+          for (let i = 0; i < existingWaypoints.length; i++) {
+            const wp = existingWaypoints[i];
+            // Find which segment this waypoint is closest to
+            const wpNearestInfo = findNearestPointOnRoute(
+              [wp.lng, wp.lat],
+              route.geometry.coordinates
+            );
+
+            if (wpNearestInfo) {
+              const wpProgress = wpNearestInfo.segmentIndex / totalSegments;
+              if (newWaypointProgress > wpProgress) {
+                insertIndex = i + 1;
+              }
+            }
+          }
+        }
+
+        // Insert waypoint at calculated position
+        const updatedWaypoints = [...existingWaypoints];
+        updatedWaypoints.splice(insertIndex, 0, newWaypoint);
+
+        handleRouteUpdate(route.toLocationId, updatedWaypoints, draggedWaypoint.segmentIndex);
+        console.log('[DocumentSplitMap] Inserted waypoint at index', insertIndex, 'for segment', draggedWaypoint.segmentIndex);
+      }
+    }
+
+    setIsDraggingWaypoint(false);
+    setDraggedWaypoint(null);
+
+    // Re-enable map dragging - try different approaches for react-map-gl
+    if (mapRef.current) {
+      const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (map && map.dragPan) {
+        map.dragPan.enable();
+      }
+    }
+  }, [draggedWaypoint, cursorPosition, routes, handleRouteUpdate]);
+
+  // Create deck.gl layers for editable routes
+  const deckLayers = useMemo(() => {
+    if (routes.length === 0) {
+      return [];
+    }
+
+    return createSimpleEditableRouteLayers({
+      locations,
+      routes,
+      onRouteUpdate: handleRouteUpdate,
+      editingEnabled: editMode,
+      selectedRouteIndex: selectedRouteIndex,
+      cursorPosition: cursorPosition,
+      onProximityPoint: handleProximityPoint,
+      isDragging: isDraggingWaypoint,
+      draggedWaypoint: draggedWaypoint,
+      onDragStart: handleDragStart,
+      onDragEnd: handleDragEnd
+    });
+  }, [locations, routes, editMode, selectedRouteIndex, handleRouteUpdate, cursorPosition, handleProximityPoint, isDraggingWaypoint, draggedWaypoint, handleDragStart, handleDragEnd]);
+
   return (
     <View style={styles.container}>
       <Map
@@ -471,13 +694,63 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         style={{ width: '100%', height: '100%' }}
         {...viewState}
         onMove={(evt: any) => {
-          // Update viewState for manual user interactions
-          setViewState(evt.viewState);
+          // Only update viewState if not dragging a waypoint
+          if (!isDraggingWaypoint) {
+            setViewState(evt.viewState);
+          }
+        }}
+        dragPan={!isDraggingWaypoint} // Disable pan when dragging waypoint
+        scrollZoom={!isDraggingWaypoint} // Also disable zoom when dragging
+        onMouseMove={handleMapMouseMove}
+        onTouchMove={handleMapMouseMove}
+        onMouseDown={(evt: any) => {
+          // Check if clicking on proximity indicator
+          if (proximityPoint && editMode && !isDraggingWaypoint) {
+            const { lngLat } = evt;
+            if (lngLat) {
+              const dist = Math.sqrt(
+                Math.pow(lngLat.lng - proximityPoint[0], 2) +
+                Math.pow(lngLat.lat - proximityPoint[1], 2)
+              );
+
+              // If clicking near the proximity point, start dragging
+              if (dist < PROXIMITY_THRESHOLD) {
+                const routeIdx = selectedRouteIndex ?? 0;
+                const route = routes[routeIdx];
+                if (route && route.geometry && route.geometry.coordinates) {
+                  // Find the segment index for this proximity point
+                  const nearestInfo = findNearestPointOnRoute(
+                    [lngLat.lng, lngLat.lat],
+                    route.geometry.coordinates
+                  );
+
+                  handleDragStart({
+                    position: proximityPoint,
+                    routeIndex: routeIdx,
+                    segmentIndex: nearestInfo?.segmentIndex || 0
+                  });
+                }
+              }
+            }
+          }
+        }}
+        onMouseUp={() => {
+          if (isDraggingWaypoint) {
+            handleDragEnd();
+          }
+        }}
+        onTouchEnd={() => {
+          if (isDraggingWaypoint) {
+            handleDragEnd();
+          }
         }}
       >
         {/* Navigation controls */}
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
+
+        {/* DeckGL overlay for editable routes */}
+        <DeckGLOverlay layers={deckLayers} />
 
         {/* Preview route (shown while configuring transportation) */}
         {previewRoute && previewRoute.geometry && (
@@ -500,8 +773,8 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           </Source>
         )}
 
-        {/* Route lines */}
-        {routes.map((route, index) => {
+        {/* Route lines - now rendered via deck.gl overlay, keeping this as fallback */}
+        {false && routes.map((route, index) => {
           const routeColor = COLORS[(route.colorIndex || 0) % 5];
           return (
             <Source
@@ -640,6 +913,38 @@ const styles = StyleSheet.create({
     position: 'relative',
     flex: 1,
     backgroundColor: '#f3f4f6',
+  },
+  editModeButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  editModeButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  editModeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  editModeButtonTextActive: {
+    color: '#fff',
   },
   marker: {
     width: 32,

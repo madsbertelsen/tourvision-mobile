@@ -329,6 +329,23 @@ export default function TripDocumentView() {
     setToolPickerSelectedIndex(selectedIndex);
   }, []);
 
+  // Handle waypoints change from map editing
+  const handleMapWaypointsChange = useCallback((geoId: string, waypoints: Array<{ lat: number; lng: number }>) => {
+    console.log('[TripDocument] Map waypoints changed for geo-mark:', geoId, 'waypoints:', waypoints);
+    console.log('[TripDocument] webViewRef.current:', webViewRef.current);
+
+    // Send command to WebView to update the geo-mark's waypoints
+    if (webViewRef.current) {
+      console.log('[TripDocument] Sending updateGeoMarkWaypoints command to WebView');
+      webViewRef.current.sendCommand('updateGeoMarkWaypoints', {
+        geoId,
+        waypoints
+      });
+    } else {
+      console.error('[TripDocument] webViewRef.current is null, cannot update waypoints');
+    }
+  }, []);
+
   // Handle play button click - start presentation of document content
   const handlePlayDocument = useCallback(() => {
     if (!currentDoc) {
@@ -473,6 +490,7 @@ export default function TripDocumentView() {
               }
               onSearchResultSelect={handleSelectResult}
               previewRoute={previewRoute}
+              onWaypointsChange={handleMapWaypointsChange}
               sidebarContent={
                 <LocationSidebarPanel
                   visible={locationModal.visible}
