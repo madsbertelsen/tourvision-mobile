@@ -28,7 +28,11 @@ import { WebsocketProvider } from 'y-websocket';
 import YProvider from 'y-partyserver/provider';
 
 // Import old collaboration plugin (will be deprecated)
-import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
+// import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
+// Stub for missing collab plugin
+const CollabConnection = null;
+const createCollabPlugin = null;
+const initializeCollaboration = null;
 
 // Create a custom schema with list support and geo-mark
 const mySchema = new Schema({
@@ -59,7 +63,10 @@ const mySchema = new Schema({
             lat: dom.getAttribute('data-lat'),
             lng: dom.getAttribute('data-lng'),
             colorIndex: parseInt(dom.getAttribute('data-color-index') || '0'),
-            coordSource: dom.getAttribute('data-coord-source') || 'manual'
+            coordSource: dom.getAttribute('data-coord-source') || 'manual',
+            transportFrom: dom.getAttribute('data-transport-from') || null,
+            transportProfile: dom.getAttribute('data-transport-profile') || null,
+            waypoints: dom.getAttribute('data-waypoints') ? JSON.parse(dom.getAttribute('data-waypoints')) : null
           };
         }
       }],
@@ -73,7 +80,7 @@ const mySchema = new Schema({
         const color = colors[colorIndex % colors.length];
         const backgroundColor = color + '33'; // 33 = 20% opacity
 
-        return ['span', {
+        const attrs = {
           class: 'geo-mark',
           'data-geo-id': mark.attrs.geoId,
           'data-place-name': mark.attrs.placeName,
@@ -82,7 +89,14 @@ const mySchema = new Schema({
           'data-color-index': mark.attrs.colorIndex,
           'data-coord-source': mark.attrs.coordSource,
           style: `background-color: ${backgroundColor}; padding: 2px 4px; border-radius: 3px; cursor: pointer; transition: all 0.2s ease;`
-        }, 0];
+        };
+
+        // Add transport attributes if they exist
+        if (mark.attrs.transportFrom) attrs['data-transport-from'] = mark.attrs.transportFrom;
+        if (mark.attrs.transportProfile) attrs['data-transport-profile'] = mark.attrs.transportProfile;
+        if (mark.attrs.waypoints) attrs['data-waypoints'] = JSON.stringify(mark.attrs.waypoints);
+
+        return ['span', attrs, 0];
       }
     })
     .addToEnd('comment', {

@@ -21,6 +21,10 @@ new_sqlite_classes = ["ChatRoom"]
 tag = "v2"
 renamed_classes = [{from = "ChatRoom", to = "ChatRoomV2"}]
 
+[[migrations]]
+tag = "v3"
+durable_object_namespaces = [{class_name = "ChatRoomV2", script_name = "tourvision-chat"}]
+
 # Environment variables (set via wrangler secret)
 # SUPABASE_URL - Supabase project URL
 # SUPABASE_KEY - Supabase anon/service key

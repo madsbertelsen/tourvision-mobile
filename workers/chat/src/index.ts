@@ -1,3 +1,5 @@
+import { CLIENT_TOOLS } from "./client-tools";
+
 export interface Env {
   AI: any; // Cloudflare Workers AI binding
   CHAT_ROOM: DurableObjectNamespace;
@@ -217,191 +219,147 @@ export class ChatRoomV2 {
       const messages = [
         {
           role: "system",
-          content: `You are a helpful travel planning assistant with access to location geocoding tools.
+          content: `You are a helpful travel planning assistant. When users mention specific locations, use the geocode tool to get accurate coordinates.
 
-Your role is to:
-- Answer questions about their trip
-- Provide helpful suggestions and recommendations
-- Help them refine their travel plans
-- Be concise and friendly
+Format your responses as HTML paragraphs. After getting coordinates from the geocode tool, wrap location names in geo-mark spans with unique geo-ids:
 
-AVAILABLE TOOLS:
-1. "geocode" - Get accurate coordinates for any location name
-   Use this whenever you mention a place that should be shown on the map.
+For single locations:
+<p>Here is <span class="geo-mark" data-geo-id="loc1" data-place-name="Paris, France" data-lat="48.8588897" data-lng="2.320041" data-color-index="0">Paris</span>.</p>
 
-2. "route" - Calculate travel route between two locations with waypoints
-   Use this when user asks about directions, travel routes, or "how to get from X to Y".
-   Profiles: walking, driving, car, cycling, bike, transit, bus, train
+For routes between locations, geocode both locations and add transport attributes to the DESTINATION:
+<p>Route from <span class="geo-mark" data-geo-id="loc1" data-place-name="Copenhagen, Denmark" data-lat="55.67" data-lng="12.56" data-color-index="0">Copenhagen</span> to <span class="geo-mark" data-geo-id="loc2" data-place-name="Roskilde, Denmark" data-lat="55.64" data-lng="12.08" data-color-index="1" data-transport-from="Copenhagen" data-transport-profile="driving">Roskilde</span> by car.</p>
 
-TOOL CALL FORMAT (CRITICAL - FOLLOW EXACTLY):
-<!-- TOOL:tool_name:{"key":"value"} -->
+IMPORTANT:
+- Use SHORT display names inside the span (just "Copenhagen", not "Copenhagen, Denmark")
+- Keep the full place name in data-place-name attribute
+- For data-transport-from, you can use either the geo-id OR the simple display name (the system will match it)
+- Add data-color-index incrementing from 0 for each unique location
 
-JSON MUST BE VALID:
-- Use double quotes around BOTH keys and values
-- Correct: {"location":"Paris, France"}
-- WRONG: {"location:Paris, France"} (missing quote after key)
-- WRONG: {location:"Paris"} (missing quotes around key)
-
-Examples:
-<!-- TOOL:geocode:{"location":"Eiffel Tower, Paris, France"} -->
-<!-- TOOL:route:{"fromLocation":"Lejre, Denmark","toLocation":"Copenhagen, Denmark","profile":"driving"} -->
-
-The tool will be executed and results provided. Then continue your response.
-
-CRITICAL OUTPUT FORMAT REQUIREMENT:
-You MUST format ALL responses as valid ProseMirror HTML. The schema supports these elements:
-
-Block Elements:
-- <p>Paragraph text</p> - Standard paragraph
-- <h1>, <h2>, <h3>, <h4>, <h5>, <h6> - Headings (level 1-6)
-- <blockquote> - Quoted text
-- <ul><li>Item</li></ul> - Bullet list with list items
-- <ol><li>Item</li></ol> - Numbered list with list items
-- <pre><code>Code</code></pre> - Code block
-- <hr> - Horizontal rule
-
-Inline Formatting (marks):
-- <strong>Bold</strong> or <b>Bold</b> - Bold text
-- <em>Italic</em> or <i>Italic</i> - Italic text
-- <code>inline code</code> - Inline code
-- <a href="url">Link text</a> - Hyperlink
-- <br> - Line break
-
-Location References:
-When mentioning locations, use geocode tool FIRST, then wrap in geo-mark span.
-When user asks about routes/directions, use route tool and add transportation attributes to the destination geo-mark.
-
-Example - Simple Location:
-User: "Tell me about visiting Paris"
-You:
-  1. Call: <!-- TOOL:geocode:{"location":"Paris, France"} -->
-  2. Receive: {"place_name":"Paris, France","lat":48.8566,"lng":2.3522}
-  3. Generate:
-     <p>I'd recommend <span class="geo-mark" data-place-name="Paris, France" data-lat="48.8566" data-lng="2.3522" data-coord-source="geocode">Paris</span> in spring!</p>
-
-Example - Route with Transportation:
-User: "Show me route by car from Lejre to Copenhagen"
-You:
-  1. Call: <!-- TOOL:route:{"fromLocation":"Lejre, Denmark","toLocation":"Copenhagen, Denmark","profile":"driving"} -->
-  2. Receive: {"from":{...},"to":{...},"profile":"driving","waypoints":[...],"distance":42000,"duration":2400}
-  3. Generate destination geo-mark WITH transportation attributes:
-     <p>Here's your driving route from <span class="geo-mark" data-place-name="Lejre, Denmark" data-lat="55.6" data-lng="11.9" data-coord-source="geocode">Lejre</span> to <span class="geo-mark" data-place-name="Copenhagen, Denmark" data-lat="55.67" data-lng="12.56" data-coord-source="geocode" data-transport-from="Lejre, Denmark" data-transport-profile="driving" data-waypoints='[{"lng":11.9,"lat":55.6},{"lng":12.56,"lat":55.67}]'>Copenhagen</span>.</p>
-     <p>Distance: 42 km | Duration: 40 minutes</p>
-
-CRITICAL - Transportation Attributes:
-When route tool is used, the DESTINATION geo-mark must include:
-- data-transport-from="StartLocationName"
-- data-transport-profile="driving|walking|cycling|transit"
-- data-waypoints='[{"lng":X,"lat":Y},...]' (JSON array of route coordinates)
-
-FORBIDDEN:
-- DO NOT use plain text without HTML tags
-- DO NOT use markdown syntax
-- DO NOT use <think> tags or reasoning tags
-- DO NOT skip wrapping text in <p> tags
-
-Keep responses practical and well-structured.`
+Transport profiles: "driving" for car, "walking" for on foot, "cycling" for bike, "transit" for public transport.`
         },
         { role: "user", content: userMessage }
       ];
 
       console.log('[ChatRoom] Calling Cloudflare Workers AI...');
 
-      // Stream AI response with Hermes 2 Pro Mistral 7B (fine-tuned for function calling and JSON)
-      const response = await this.env.AI.run("@hf/nousresearch/hermes-2-pro-mistral-7b", {
-        messages,
-        stream: true
-      });
+      // Convert CLIENT_TOOLS to tools format (Hermes model doesn't need type/function wrapper)
+      const tools = CLIENT_TOOLS.map(({ name, description, parameters }) => ({
+        name,
+        description,
+        parameters
+      }));
 
-      let fullResponse = "";
+      // Traditional function calling approach with loop
+      let currentMessages = [...messages];
+      const maxIterations = 5; // Prevent infinite loops
+      let iterations = 0;
+      let finalResponse = "";
       const messageId = crypto.randomUUID();
-      let chunkCount = 0;
-      let buffer = ""; // Buffer for incomplete tags/words
 
-      // Send streaming chunks
-      for await (const chunk of response) {
-        chunkCount++;
+      while (iterations < maxIterations) {
+        iterations++;
+        console.log(`[ChatRoom] AI call iteration ${iterations}`);
 
-        // Handle different response formats
-        let textChunk = "";
-
-        // Check if chunk has 'response' property (old format)
-        if (chunk.response) {
-          textChunk = chunk.response;
-        }
-        // Check if chunk is a Uint8Array or similar (new format)
-        else if (typeof chunk === 'object' && chunk !== null) {
-          // Convert object with numeric keys to string
-          const bytes = Object.values(chunk).filter(v => typeof v === 'number');
-          if (bytes.length > 0) {
-            textChunk = new TextDecoder().decode(new Uint8Array(bytes));
-
-            // Extract actual response from SSE format "data: {json}\n\n"
-            const match = textChunk.match(/data: ({.*})\n/);
-            if (match) {
-              try {
-                const parsed = JSON.parse(match[1]);
-                if (parsed.response) {
-                  textChunk = parsed.response;
-                }
-              } catch (e) {
-                console.warn('[ChatRoom] Failed to parse SSE data:', e);
-              }
-            }
+        // Call AI with current messages and tools
+        const response = await this.env.AI.run(
+          "@hf/nousresearch/hermes-2-pro-mistral-7b",
+          {
+            messages: currentMessages,
+            tools: tools
           }
+        );
+
+        console.log('[ChatRoom] AI response:', response);
+
+        // Check if there are tool calls
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          console.log(`[ChatRoom] Processing ${response.tool_calls.length} tool calls`);
+
+          // Add assistant's message with tool calls
+          currentMessages.push({
+            role: "assistant",
+            content: JSON.stringify(response.tool_calls)
+          });
+
+          // Execute all tool calls in parallel
+          const toolPromises = response.tool_calls.map(async (toolCall) => {
+            console.log(`[ChatRoom] Executing tool: ${toolCall.name}`, toolCall.arguments);
+
+            try {
+              // Request tool execution from client
+              const toolResult = await this.requestClientTool(
+                toolCall.name,
+                toolCall.arguments
+              );
+
+              console.log(`[ChatRoom] Tool ${toolCall.name} result:`, toolResult);
+
+              return {
+                role: "tool",
+                name: toolCall.name,
+                content: JSON.stringify(toolResult)
+              };
+            } catch (error) {
+              console.error(`[ChatRoom] Tool ${toolCall.name} error:`, error);
+              return {
+                role: "tool",
+                name: toolCall.name,
+                content: JSON.stringify({ error: error.message || String(error) })
+              };
+            }
+          });
+
+          // Wait for all tool results
+          const toolResults = await Promise.all(toolPromises);
+
+          // Add all tool results to messages
+          for (const result of toolResults) {
+            currentMessages.push(result);
+          }
+
+          // Continue loop to get final response with tool results
+          continue;
         }
 
-        if (textChunk) {
-          console.log(`[ChatRoom] Chunk ${chunkCount}:`, textChunk);
-
-          // Ensure textChunk is a string
-          const chunkStr = String(textChunk);
-
-          // Skip metadata chunks (those that don't contain actual response text)
-          // These are chunks like "data: [DONE]" or usage stats
-          if (!chunkStr.startsWith('data: ')) {
-            fullResponse += chunkStr;
-            buffer += chunkStr;
-
-            // Extract complete units (HTML tags or words) from buffer
-            const units = this.extractCompleteUnits(buffer);
-
-            if (units.toSend) {
-              // Send complete units
-              this.broadcast(JSON.stringify({
-                type: "ai_chunk",
-                message_id: messageId,
-                chunk: units.toSend,
-                done: false
-              }));
-            }
-
-            // Keep incomplete portion in buffer
-            buffer = units.remaining;
-          }
+        // No tool calls, we have the final response
+        if (response.response) {
+          finalResponse = response.response;
+          console.log('[ChatRoom] Final response received');
+          break;
+        } else {
+          console.warn('[ChatRoom] No response or tool_calls in AI response');
+          break;
         }
       }
 
-      // Send any remaining buffer content at the end
-      if (buffer) {
-        this.broadcast(JSON.stringify({
+      if (iterations >= maxIterations) {
+        console.error('[ChatRoom] Max iterations reached, stopping');
+        finalResponse = "I apologize, but I encountered an issue processing your request. Please try again.";
+      }
+
+      console.log('[ChatRoom] Full AI response:', finalResponse);
+
+      // Send the complete response
+      if (finalResponse) {
+        const chunkMessage = {
           type: "ai_chunk",
           message_id: messageId,
-          chunk: buffer,
+          chunk: finalResponse,
           done: false
-        }));
+        };
+        console.log('[ChatRoom] Sending chunk to client:', JSON.stringify(chunkMessage));
+        this.broadcast(JSON.stringify(chunkMessage));
       }
-
-      console.log(`[ChatRoom] AI complete. Total chunks: ${chunkCount}, Response length: ${fullResponse.length}`);
 
       // Fallback if AI returned empty response
-      if (!fullResponse.trim()) {
+      if (!finalResponse.trim()) {
         console.warn('[ChatRoom] AI returned empty response, using fallback');
-        fullResponse = "I apologize, but I'm having trouble generating a response right now. Please try again.";
+        finalResponse = "I apologize, but I'm having trouble generating a response right now. Please try again.";
       }
 
-      // Process tool calls in the response
-      let processedResponse = await this.processToolCalls(fullResponse);
+      // Also process HTML comment tool calls (fallback for models that don't use native function calling)
+      let processedResponse = await this.processToolCalls(finalResponse);
+      console.log('[ChatRoom] Response after processToolCalls:', processedResponse);
 
       // Post-process: Wrap plain text response in HTML if model didn't follow format
       if (!processedResponse.includes('<p>') && !processedResponse.includes('<h')) {
@@ -459,6 +417,8 @@ Keep responses practical and well-structured.`
         }
       );
 
+      console.log('[ChatRoom] Final enhanced response being sent:', enhancedResponse);
+
       // Create complete AI message
       const aiMessage: ChatMessage = {
         id: messageId,
@@ -466,18 +426,20 @@ Keep responses practical and well-structured.`
         user_id: userId,
         role: "assistant",
         content: enhancedResponse,
-        metadata: { model: "qwen2.5-coder-32b-instruct" },
+        metadata: { model: "hermes-2-pro-mistral-7b" },
         created_at: new Date().toISOString()
       };
 
       // Send completion
-      this.broadcast(JSON.stringify({
+      const completionMessage = {
         type: "ai_chunk",
         message_id: messageId,
         chunk: "",
         done: true,
         message: aiMessage
-      }));
+      };
+      console.log('[ChatRoom] Sending completion to client:', JSON.stringify(completionMessage));
+      this.broadcast(JSON.stringify(completionMessage));
     } catch (error) {
       console.error("[ChatRoom] Error generating AI response:", error);
       this.broadcast(JSON.stringify({

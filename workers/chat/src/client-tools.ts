@@ -27,7 +27,7 @@ export interface ClientTool {
 export const CLIENT_TOOLS: ClientTool[] = [
   {
     name: 'geocode',
-    description: 'Get accurate geographic coordinates (latitude, longitude) for any location name. Use this whenever the user mentions a place that should be shown on the map. Returns the full place name, coordinates, and source.',
+    description: 'Get accurate geographic coordinates (latitude, longitude) for any location name. Use this whenever the user mentions a specific place. Returns the full place name, coordinates, and source.',
     parameters: {
       type: 'object',
       properties: {
@@ -43,32 +43,10 @@ export const CLIENT_TOOLS: ClientTool[] = [
       required: ['location']
     },
     delegateToClient: true
-  },
-
-  {
-    name: 'route',
-    description: 'Calculate a route between two locations with waypoints and transportation details. Use this when the user asks about travel routes, directions, or how to get from one place to another. Returns route geometry, distance, duration, and waypoints that can be used to populate geo-mark transportation attributes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        fromLocation: {
-          type: 'string',
-          description: 'Starting location name. Examples: "Lejre, Denmark", "Central Station, Copenhagen"'
-        },
-        toLocation: {
-          type: 'string',
-          description: 'Destination location name. Examples: "Copenhagen, Denmark", "Tivoli Gardens"'
-        },
-        profile: {
-          type: 'string',
-          description: 'Transportation mode',
-          enum: ['walking', 'driving', 'car', 'cycling', 'bike', 'transit', 'bus', 'train']
-        }
-      },
-      required: ['fromLocation', 'toLocation', 'profile']
-    },
-    delegateToClient: true
   }
+
+  // Route tool removed - routing is handled by setting transport attributes on geo-marks
+  // The frontend will automatically calculate routes when it sees transport attributes
 
   // Future tool schemas:
   //

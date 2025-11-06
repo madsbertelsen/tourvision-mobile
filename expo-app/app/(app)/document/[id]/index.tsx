@@ -20,6 +20,7 @@
 
 import DocumentChat from '@/components/DocumentChat';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
+import type { GeoMark } from '@/utils/parse-geo-marks';
 import LocationSidebarPanel from '@/components/LocationSidebarPanel';
 import PresentationOverlay from '@/components/PresentationOverlay';
 import { ProseMirrorWebViewRef } from '@/components/ProseMirrorWebView';
@@ -50,6 +51,23 @@ export default function TripDocumentView() {
   const [documentWidth, setDocumentWidth] = useState(700); // Track actual document container width
   const [isCollabEnabled, setIsCollabEnabled] = useState(false);
   const [isEnablingCollab, setIsEnablingCollab] = useState(false);
+
+  // Chat geo-marks state
+  const [chatGeoMarks, setChatGeoMarks] = useState<GeoMark[]>([]);
+
+  // Convert chat geo-marks to location format for the map
+  const chatLocations = useMemo(() => {
+    return chatGeoMarks.map(mark => ({
+      geoId: mark.geoId || mark.id, // Use data-geo-id if available, fallback to generated id
+      placeName: mark.placeName,
+      lat: mark.lat,
+      lng: mark.lng,
+      colorIndex: mark.colorIndex,
+      transportFrom: mark.transportFrom || null,
+      transportProfile: mark.transportProfile || null,
+      waypoints: null, // Will be calculated by the map if needed
+    }));
+  }, [chatGeoMarks]);
 
   // Tool picker state
   const [toolPickerVisible, setToolPickerVisible] = useState(false);
@@ -429,7 +447,10 @@ export default function TripDocumentView() {
         {/* Chat Panel */}
         {showChat && (
           <View style={styles.chatContainer}>
-            <DocumentChat documentId={tripId} />
+            <DocumentChat
+              documentId={tripId}
+              onGeoMarksChange={setChatGeoMarks}
+            />
           </View>
         )}
 
@@ -437,7 +458,7 @@ export default function TripDocumentView() {
         {showMap && (
           <View style={styles.mapContainer}>
             <DocumentSplitMap
-              locations={locations}
+              locations={[...locations, ...chatLocations]}
               searchResults={
                 toolPickerVisible && toolPickerSearchResults.length > 0
                   ? toolPickerSearchResults

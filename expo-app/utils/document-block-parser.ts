@@ -145,6 +145,41 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
     }
   }
 
+  // Post-process all geo-marks to resolve transport-from references with fuzzy matching
+  const allGeoMarks = blocks.flatMap(block => block.geoMarks);
+
+  for (const mark of allGeoMarks) {
+    if (mark.transportFrom) {
+      // First try exact geo-id match
+      let originMark = allGeoMarks.find(m => m.geoId === mark.transportFrom);
+
+      // If not found, try case-insensitive text match (the visible text)
+      if (!originMark) {
+        const transportFromLower = mark.transportFrom.toLowerCase().trim();
+        originMark = allGeoMarks.find(m => {
+          const textLower = (m.text || '').toLowerCase().trim();
+          return textLower === transportFromLower ||
+                 textLower.includes(transportFromLower) ||
+                 transportFromLower.includes(textLower);
+        });
+
+        // If still not found, try against placeName as fallback
+        if (!originMark) {
+          originMark = allGeoMarks.find(m => {
+            const placeNameLower = m.placeName.toLowerCase();
+            return placeNameLower.includes(transportFromLower) ||
+                   transportFromLower.includes(placeNameLower);
+          });
+        }
+
+        // If we found a match, update transportFrom to use the geo-id
+        if (originMark) {
+          mark.transportFrom = originMark.geoId;
+        }
+      }
+    }
+  }
+
   return blocks;
 }
 

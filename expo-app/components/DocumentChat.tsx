@@ -16,6 +16,7 @@ import { htmlToProsemirror } from '@/utils/prosemirror-html';
 import { useChatWebSocket } from '@/hooks/useChatWebSocket';
 import { usePresentation } from '@/contexts/presentation-context';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
+import { getLatestAssistantGeoMarks, type GeoMark } from '@/utils/parse-geo-marks';
 
 // Inject CSS for geo-mark colors on web
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -77,9 +78,10 @@ interface ChatMessage {
 
 interface DocumentChatProps {
   documentId: string;
+  onGeoMarksChange?: (geoMarks: GeoMark[]) => void;
 }
 
-export default function DocumentChat({ documentId }: DocumentChatProps) {
+export default function DocumentChat({ documentId, onGeoMarksChange }: DocumentChatProps) {
   const [inputText, setInputText] = useState('');
   const [userId, setUserId] = useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
@@ -117,6 +119,17 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages, streamingContent]);
+
+  // Extract and notify about geo-marks when messages change
+  useEffect(() => {
+    if (onGeoMarksChange && messages.length > 0) {
+      const geoMarks = getLatestAssistantGeoMarks(messages);
+      if (geoMarks.length > 0) {
+        console.log('[DocumentChat] Found geo-marks:', geoMarks);
+        onGeoMarksChange(geoMarks);
+      }
+    }
+  }, [messages, onGeoMarksChange]);
 
   const sendMessage = async () => {
     if (!inputText.trim() || !isConnected) return;
