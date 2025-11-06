@@ -51,9 +51,6 @@ const COLORS = [
   '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
 ];
 
-// Same threshold as in EditableRouteOverlay
-const PROXIMITY_THRESHOLD = 0.002;
-
 const DocumentSplitMap = memo(function DocumentSplitMap({
   locations,
   sidebarContent,
@@ -815,30 +812,41 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         onTouchMove={handleMapMouseMove}
         onMouseDown={(evt: any) => {
           // Check if clicking on proximity indicator
-          if (proximityPoint && editMode && !isDraggingWaypoint) {
-            const { lngLat } = evt;
-            if (lngLat) {
-              const dist = Math.sqrt(
-                Math.pow(lngLat.lng - proximityPoint[0], 2) +
-                Math.pow(lngLat.lat - proximityPoint[1], 2)
-              );
+          if (proximityPoint && editMode && !isDraggingWaypoint && mapRef.current) {
+            const { point } = evt; // Use pixel coordinates instead of lngLat
+            if (point) {
+              // Convert proximity point from lng/lat to pixel coordinates
+              const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+              if (map && map.project) {
+                const proximityPixel = map.project(proximityPoint);
 
-              // If clicking near the proximity point, start dragging
-              if (dist < PROXIMITY_THRESHOLD) {
-                const routeIdx = selectedRouteIndex ?? 0;
-                const route = routes[routeIdx];
-                if (route && route.geometry && route.geometry.coordinates) {
-                  // Find the segment index for this proximity point
-                  const nearestInfo = findNearestPointOnRoute(
-                    [lngLat.lng, lngLat.lat],
-                    route.geometry.coordinates
-                  );
+                // Calculate distance in pixels
+                const pixelDist = Math.sqrt(
+                  Math.pow(point.x - proximityPixel.x, 2) +
+                  Math.pow(point.y - proximityPixel.y, 2)
+                );
 
-                  handleDragStart({
-                    position: proximityPoint,
-                    routeIndex: routeIdx,
-                    segmentIndex: nearestInfo?.segmentIndex || 0
-                  });
+                // Use a pixel threshold that matches the visual circle size (radius 12 + some margin)
+                const CLICK_THRESHOLD_PX = 15; // Slightly larger than the 12px radius for easier clicking
+
+                // If clicking on the proximity circle, start dragging
+                if (pixelDist <= CLICK_THRESHOLD_PX) {
+                  const routeIdx = selectedRouteIndex ?? 0;
+                  const route = routes[routeIdx];
+                  if (route && route.geometry && route.geometry.coordinates) {
+                    const { lngLat } = evt;
+                    // Find the segment index for this proximity point
+                    const nearestInfo = findNearestPointOnRoute(
+                      [lngLat.lng, lngLat.lat],
+                      route.geometry.coordinates
+                    );
+
+                    handleDragStart({
+                      position: proximityPoint,
+                      routeIndex: routeIdx,
+                      segmentIndex: nearestInfo?.segmentIndex || 0
+                    });
+                  }
                 }
               }
             }
