@@ -3,13 +3,11 @@ import { StyleSheet, View, Text } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker, NavigationControl, GeolocateControl, Source, Layer, useControl } from 'react-map-gl/mapbox';
-import { MapboxOverlay } from '@deck.gl/mapbox';
+import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/mapbox';
 import * as turf from '@turf/turf';
 import { usePresentation, FocusedGeoLocation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
 import CurrentWordOverlay from './CurrentWordOverlay';
-import { createSimpleEditableRouteLayers, findNearestPointOnRoute } from './EditableRouteOverlay';
 import { MapboxRouteLayers } from './MapboxRouteLayers';
 
 interface Location {
@@ -56,13 +54,6 @@ const COLORS = [
 // Same threshold as in EditableRouteOverlay
 const PROXIMITY_THRESHOLD = 0.002;
 
-// DeckGL overlay component
-function DeckGLOverlay(props: { layers: any[] }) {
-  const overlay = useControl<any>(() => new MapboxOverlay({}));
-  overlay.setProps({ layers: props.layers });
-  return null;
-}
-
 const DocumentSplitMap = memo(function DocumentSplitMap({
   locations,
   sidebarContent,
@@ -82,7 +73,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [proximityPoint, setProximityPoint] = useState<[number, number] | null>(null);
   const [isDraggingWaypoint, setIsDraggingWaypoint] = useState(false);
   const [draggedWaypoint, setDraggedWaypoint] = useState<{position: [number, number], routeIndex: number, segmentIndex?: number} | null>(null);
-  const [useMapboxLayers, setUseMapboxLayers] = useState(true); // Toggle between Mapbox and deck.gl
 
   // Presentation mode
   const { isPresenting, currentBlockIndex, blocks, focusedGeoLocation } = usePresentation();
@@ -717,26 +707,67 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     }
   }, [draggedWaypoint, cursorPosition, routes, handleRouteUpdate]);
 
-  // Create deck.gl layers for editable routes
-  const deckLayers = useMemo(() => {
-    if (routes.length === 0) {
-      return [];
+  // Helper function to find the nearest point on a route
+  const findNearestPointOnRoute = (
+    point: [number, number],
+    routeCoordinates: [number, number][]
+  ): { point: [number, number]; distance: number; segmentIndex: number } | null => {
+    if (!routeCoordinates || routeCoordinates.length < 2) return null;
+
+    let minDistance = Infinity;
+    let nearestPoint: [number, number] = routeCoordinates[0];
+    let nearestSegmentIndex = 0;
+
+    for (let i = 0; i < routeCoordinates.length - 1; i++) {
+      const nearPoint = nearestPointOnSegment(
+        point,
+        routeCoordinates[i],
+        routeCoordinates[i + 1]
+      );
+      const dist = geoDistance(point, nearPoint);
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestPoint = nearPoint;
+        nearestSegmentIndex = i;
+      }
     }
 
-    return createSimpleEditableRouteLayers({
-      locations,
-      routes,
-      onRouteUpdate: handleRouteUpdate,
-      editingEnabled: editMode,
-      selectedRouteIndex: selectedRouteIndex,
-      cursorPosition: cursorPosition,
-      onProximityPoint: handleProximityPoint,
-      isDragging: isDraggingWaypoint,
-      draggedWaypoint: draggedWaypoint,
-      onDragStart: handleDragStart,
-      onDragEnd: handleDragEnd
-    });
-  }, [locations, routes, editMode, selectedRouteIndex, handleRouteUpdate, cursorPosition, handleProximityPoint, isDraggingWaypoint, draggedWaypoint, handleDragStart, handleDragEnd]);
+    return {
+      point: nearestPoint,
+      distance: minDistance,
+      segmentIndex: nearestSegmentIndex
+    };
+  };
+
+  // Find the nearest point on a line segment
+  const nearestPointOnSegment = (
+    point: [number, number],
+    segStart: [number, number],
+    segEnd: [number, number]
+  ): [number, number] => {
+    const dx = segEnd[0] - segStart[0];
+    const dy = segEnd[1] - segStart[1];
+    const lengthSquared = dx * dx + dy * dy;
+
+    if (lengthSquared === 0) return segStart;
+
+    const t = Math.max(0, Math.min(1,
+      ((point[0] - segStart[0]) * dx + (point[1] - segStart[1]) * dy) / lengthSquared
+    ));
+
+    return [
+      segStart[0] + t * dx,
+      segStart[1] + t * dy
+    ];
+  };
+
+  // Calculate distance between two geographic points
+  const geoDistance = (p1: [number, number], p2: [number, number]): number => {
+    const dx = p1[0] - p2[0];
+    const dy = p1[1] - p2[1];
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
   return (
     <View style={styles.container}>
@@ -802,47 +833,14 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
 
-        {/* Toggle between Mapbox and deck.gl implementations */}
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'white',
-          padding: '8px 16px',
-          borderRadius: '4px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          zIndex: 1
-        }}>
-          <button
-            onClick={() => setUseMapboxLayers(!useMapboxLayers)}
-            style={{
-              border: 'none',
-              background: useMapboxLayers ? '#3B82F6' : '#8B5CF6',
-              color: 'white',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            {useMapboxLayers ? 'Mapbox Layers' : 'Deck.gl Overlay'}
-          </button>
-        </div>
-
-        {/* Route rendering - toggle between Mapbox native and deck.gl */}
-        {useMapboxLayers ? (
-          <MapboxRouteLayers
-            routes={routes}
-            onWaypointUpdate={handleRouteUpdate}
-            editingEnabled={editMode}
-            cursorPosition={cursorPosition}
-            onProximityPoint={handleProximityPoint}
-          />
-        ) : (
-          <DeckGLOverlay layers={deckLayers} />
-        )}
+        {/* Route rendering using Mapbox layers */}
+        <MapboxRouteLayers
+          routes={routes}
+          onWaypointUpdate={handleRouteUpdate}
+          editingEnabled={editMode}
+          cursorPosition={cursorPosition}
+          onProximityPoint={handleProximityPoint}
+        />
 
         {/* Preview route (shown while configuring transportation) */}
         {previewRoute && previewRoute.geometry && (
