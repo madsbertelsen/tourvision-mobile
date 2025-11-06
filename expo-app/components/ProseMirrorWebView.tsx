@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v63 - Fixed party name to match wrangler.toml binding (yjs-room)
+// v64 - Bundle reloaded after fixing waypoints transport data bug
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {

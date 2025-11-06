@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Pressable, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LocationResultsList from './LocationResultsList';
 import TransportConfigView from './TransportConfigView';
 
@@ -22,6 +22,8 @@ interface ToolPickerBottomSheetProps {
     lat: number;
     lng: number;
     transportMode?: string;
+    transportFrom?: string;  // geoId of origin location
+    waypoints?: Array<{ lat: number; lng: number }>;  // route coordinates
   }) => void;
   onSearchResultsChange?: (results: LocationResult[], selectedIndex: number) => void;
   // Existing geo-marks from document
@@ -85,6 +87,10 @@ export default function ToolPickerBottomSheet({
 
   // Transport config state
   const [transportMode, setTransportMode] = useState<TransportMode>('walking');
+  const [currentRoute, setCurrentRoute] = useState<{
+    origin: { lat: number; lng: number; geoId?: string } | null;
+    geometry?: { type: 'LineString'; coordinates: number[][] };
+  } | null>(null);
 
   // Reset to picker step when modal opens/closes
   useEffect(() => {
@@ -97,6 +103,7 @@ export default function ToolPickerBottomSheet({
       setSelectedResultIndex(0);
       setSelectedLocation(null);
       setTransportMode('walking');
+      setCurrentRoute(null);
     }
   }, [visible, selectedText, markType]);
 
@@ -183,6 +190,39 @@ export default function ToolPickerBottomSheet({
     setCurrentStep('location-search');
   };
 
+  // Handle route change from TransportConfigView
+  const handleRouteChange = useCallback((route: {
+    origin: { lat: number; lng: number } | null;
+    destination: { lat: number; lng: number };
+    geometry?: { type: 'LineString'; coordinates: number[][] };
+  } | null) => {
+    console.log('[ToolPickerBottomSheet] Route changed:', route);
+
+    // Store route data with geoId if origin exists
+    if (route && route.origin) {
+      // Find the geoId of the origin by matching coordinates
+      const originGeoMark = existingGeoMarks.find(
+        mark => mark.lat === route.origin!.lat && mark.lng === route.origin!.lng
+      );
+
+      setCurrentRoute({
+        origin: {
+          lat: route.origin.lat,
+          lng: route.origin.lng,
+          geoId: originGeoMark?.geoId,
+        },
+        geometry: route.geometry,
+      });
+    } else {
+      setCurrentRoute(null);
+    }
+
+    // Also forward to parent's onRouteChange if it exists
+    if (onRouteChange) {
+      onRouteChange(route);
+    }
+  }, [existingGeoMarks, onRouteChange]);
+
   // Handle add to document
   const handleAddToDocument = () => {
     if (!selectedLocation || !onCreateGeoMark) {
@@ -190,19 +230,23 @@ export default function ToolPickerBottomSheet({
       return;
     }
 
-    console.log('[ToolPickerBottomSheet] Creating geo-mark:', {
-      placeName: selectedLocation.display_name,
-      lat: parseFloat(selectedLocation.lat),
-      lng: parseFloat(selectedLocation.lon),
-      transportMode,
-    });
+    // Waypoints should only be stored if the user has customized the route
+    // For now, we don't have UI for adding custom waypoints, so always undefined
+    // The route can be recalculated from transportFrom + transportProfile
+    const waypoints = undefined;
 
-    onCreateGeoMark({
+    const geoMarkData = {
       placeName: selectedLocation.display_name,
       lat: parseFloat(selectedLocation.lat),
       lng: parseFloat(selectedLocation.lon),
       transportMode,
-    });
+      transportFrom: currentRoute?.origin?.geoId,
+      waypoints,
+    };
+
+    console.log('[ToolPickerBottomSheet] Creating geo-mark with transport config:', geoMarkData);
+
+    onCreateGeoMark(geoMarkData);
 
     onClose();
   };
@@ -479,7 +523,7 @@ export default function ToolPickerBottomSheet({
           onSelectMode={setTransportMode}
           onAddToDocument={handleAddToDocument}
           onBack={handleBackFromTransport}
-          onRouteChange={onRouteChange}
+          onRouteChange={handleRouteChange}
         />
       );
     }

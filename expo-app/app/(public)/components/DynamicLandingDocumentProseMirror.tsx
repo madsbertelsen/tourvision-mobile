@@ -16,6 +16,9 @@ interface Location {
   lat: number;
   lng: number;
   colorIndex?: number;
+  transportFrom?: string | null;
+  transportProfile?: string | null;
+  waypoints?: Array<{lat: number, lng: number}> | null;
 }
 
 interface DynamicLandingDocumentProseMirrorProps {
@@ -99,7 +102,10 @@ export default function DynamicLandingDocumentProseMirror({
       placeName: gm.placeName,
       lat: gm.lat,
       lng: gm.lng,
-      colorIndex: gm.colorIndex
+      colorIndex: gm.colorIndex,
+      transportFrom: gm.transportFrom || null,
+      transportProfile: gm.transportProfile || null,
+      waypoints: gm.waypoints || null
     }));
 
     console.log('[Landing] Initial locations extracted:', locationsList);
@@ -404,7 +410,10 @@ export default function DynamicLandingDocumentProseMirror({
       placeName: gm.placeName,
       lat: gm.lat,
       lng: gm.lng,
-      colorIndex: gm.colorIndex
+      colorIndex: gm.colorIndex,
+      transportFrom: gm.transportFrom || null,
+      transportProfile: gm.transportProfile || null,
+      waypoints: gm.waypoints || null
     }));
 
     setLocations(prevLocations => {

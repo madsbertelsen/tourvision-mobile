@@ -751,7 +751,7 @@
                   colorIndex: geoMarkData.colorIndex || 0,
                   transportFrom: geoMarkData.transportFrom || null,
                   transportProfile: geoMarkData.transportProfile || 'walking',
-                  waypoints: null
+                  waypoints: geoMarkData.waypoints || null
                 }, [schema.text(geoMarkData.placeName)]);
 
                 tr = tr.replaceWith(from, to, geoMarkNode);
@@ -770,7 +770,7 @@
                   colorIndex: geoMarkData.colorIndex || 0,
                   transportFrom: geoMarkData.transportFrom || null,
                   transportProfile: geoMarkData.transportProfile || 'walking',
-                  waypoints: null
+                  waypoints: geoMarkData.waypoints || null
                 }, [schema.text(geoMarkData.placeName)]);
 
                 const lastNode = state.doc.lastChild;
