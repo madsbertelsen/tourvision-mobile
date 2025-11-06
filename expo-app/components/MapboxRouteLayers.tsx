@@ -39,17 +39,20 @@ export function MapboxRouteLayers({
 }: MapboxRouteLayersProps) {
   // console.log('[MapboxRouteLayers] Rendering with routes:', routes);
 
-  // Create GeoJSON features for waypoints
+  // Create GeoJSON features for all waypoints (always render them)
   const waypointFeatures = useMemo(() => {
     const features: any[] = [];
-    routes.forEach(route => {
+    routes.forEach((route, routeIndex) => {
       if (route.waypoints && route.waypoints.length > 0) {
         route.waypoints.forEach((wp, index) => {
           features.push({
             type: 'Feature',
             properties: {
               routeId: route.id,
-              waypointIndex: index
+              routeIndex: routeIndex,
+              waypointIndex: index,
+              // Mark if this waypoint should be visible (belongs to selected route)
+              isVisible: selectedRouteIndex === routeIndex
             },
             geometry: {
               type: 'Point',
@@ -60,7 +63,7 @@ export function MapboxRouteLayers({
       }
     });
     return features;
-  }, [routes]);
+  }, [routes, selectedRouteIndex]);
 
   // Create proximity indicator feature
   const proximityFeature = useMemo(() => {
@@ -115,7 +118,7 @@ export function MapboxRouteLayers({
               paint={{
                 'line-color': color,
                 'line-width': 40, // Moderate hit area width
-                'line-opacity': isHovered ? 0.15 : 0.05 // Subtle visibility
+                'line-opacity': 0.01 // Nearly invisible
               }}
             />
 
@@ -130,6 +133,7 @@ export function MapboxRouteLayers({
               paint={{
                 'line-color': color,
                 'line-width': isHovered ? 6 : 4,
+                'line-width-transition': { duration: 250 }, // Smooth hover animation
                 'line-opacity': 0.8
               }}
             />
@@ -137,24 +141,38 @@ export function MapboxRouteLayers({
         );
       })}
 
-      {/* Waypoint markers */}
-      {waypointFeatures.length > 0 && (
+      {/* Waypoint markers - always rendered with opacity/size transitions */}
+      {routes.some(r => r.waypoints && r.waypoints.length > 0) && (
         <Source
           id="waypoints"
           type="geojson"
           data={{
             type: 'FeatureCollection',
-            features: waypointFeatures
+            features: waypointFeatures // Include all waypoints, control visibility with opacity
           }}
         >
           <Layer
             id="waypoint-circles"
             type="circle"
             paint={{
-              'circle-radius': 8,
+              // Fixed size and appearance for all waypoints
+              'circle-radius': 6,
               'circle-color': '#FFC800', // Orange for waypoints
               'circle-stroke-color': '#FFFFFF',
-              'circle-stroke-width': 2
+              'circle-stroke-width': 1.5,
+              // Simple opacity control
+              'circle-opacity': [
+                'case',
+                ['get', 'isVisible'],
+                1,    // Fully visible when route is hovered
+                0.25  // Quarter opacity when not hovered
+              ],
+              'circle-stroke-opacity': [
+                'case',
+                ['get', 'isVisible'],
+                1,    // Fully visible stroke when hovered
+                0.25  // Quarter opacity stroke when not hovered
+              ]
             }}
           />
         </Source>
@@ -172,10 +190,15 @@ export function MapboxRouteLayers({
             type="circle"
             paint={{
               'circle-radius': 12, // Larger for better visibility
+              'circle-radius-transition': { duration: 200 }, // Smooth size changes
               'circle-color': '#2ECC71', // Green for proximity
               'circle-stroke-color': '#FFFFFF',
               'circle-stroke-width': 3,
-              'circle-opacity': 1 // Fully opaque for better visibility
+              'circle-stroke-width-transition': { duration: 200 },
+              'circle-opacity': 1, // Fully opaque for better visibility
+              'circle-opacity-transition': { duration: 200 }, // Smooth fade in
+              'circle-stroke-opacity': 1,
+              'circle-stroke-opacity-transition': { duration: 200 }
             }}
           />
         </Source>

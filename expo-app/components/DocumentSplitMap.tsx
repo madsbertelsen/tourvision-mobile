@@ -647,6 +647,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           } else {
             // Not over any hit area
             setProximityPoint(null);
+            setSelectedRouteIndex(null);
           }
         }
       }
