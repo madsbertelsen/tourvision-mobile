@@ -20,6 +20,7 @@ interface MapboxRouteLayersProps {
   editingEnabled?: boolean;
   cursorPosition?: [number, number] | null;
   onProximityPoint?: (point: [number, number] | null, routeIndex: number | null) => void;
+  zoom?: number;
 }
 
 // Color array matching the main map
@@ -36,7 +37,8 @@ export function MapboxRouteLayers({
   onWaypointUpdate,
   editingEnabled = true,
   cursorPosition,
-  onProximityPoint
+  onProximityPoint,
+  zoom = 10
 }: MapboxRouteLayersProps) {
   const [nearestPoint, setNearestPoint] = useState<{ lng: number; lat: number; routeIndex: number } | null>(null);
 
@@ -74,14 +76,18 @@ export function MapboxRouteLayers({
       }
     });
 
+    // Calculate zoom-dependent threshold
+    // At low zoom (zoomed out), we need a smaller threshold in degrees
+    // At high zoom (zoomed in), we need a larger threshold in degrees
+    // This formula converts approximately 80 pixels to geographic units based on zoom
+    const pixelThreshold = 80; // Desired hit area in pixels
+    const degreesPerPixel = 360 / (256 * Math.pow(2, zoom)); // Approximate conversion
+    const threshold = pixelThreshold * degreesPerPixel;
+
     // Debug logging
     if (closestPoint) {
-      console.log('[MapboxRouteLayers] Closest point distance:', closestPoint.distance);
+      console.log('[MapboxRouteLayers] Zoom:', zoom, 'Threshold:', threshold, 'Distance:', closestPoint.distance);
     }
-
-    // Use a very generous fixed threshold
-    // At zoom level 10-15, this should give us approximately 50-100px hit area
-    const threshold = 0.1; // VERY generous threshold for easy interaction
     if (closestPoint && closestPoint.distance < threshold) {
       setNearestPoint({
         lng: closestPoint.lng,
@@ -97,7 +103,7 @@ export function MapboxRouteLayers({
         onProximityPoint(null, null);
       }
     }
-  }, [cursorPosition, routes, editingEnabled, onProximityPoint]);
+  }, [cursorPosition, routes, editingEnabled, onProximityPoint, zoom]);
 
   // Create GeoJSON features for routes
   const routeFeatures = useMemo(() => {

@@ -840,6 +840,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           editingEnabled={editMode}
           cursorPosition={cursorPosition}
           onProximityPoint={handleProximityPoint}
+          zoom={viewState.zoom}
         />
 
         {/* Preview route (shown while configuring transportation) */}
