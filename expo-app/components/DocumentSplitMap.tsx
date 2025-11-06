@@ -7,6 +7,7 @@ import { Marker, NavigationControl, GeolocateControl, Source, Layer } from 'reac
 import * as turf from '@turf/turf';
 import { usePresentation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
+import CurrentWordOverlay from './CurrentWordOverlay';
 
 interface Location {
   geoId: string;
@@ -550,6 +551,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           </Marker>
         )}
       </Map>
+
+      {/* Current word overlay - displayed during presentation */}
+      <CurrentWordOverlay />
 
       {/* Sidebar - rendered within map container */}
       {sidebarContent}
