@@ -1,8 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 // @ts-ignore
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
-// @ts-ignore
-import { IconLayer } from '@deck.gl/layers';
 
 interface Location {
   geoId: string;
@@ -25,7 +23,7 @@ interface EditableRouteOverlayProps {
   onProximityPoint?: (point: [number, number] | null, routeIndex: number | null) => void;
   isDragging?: boolean;
   draggedWaypoint?: {position: [number, number], routeIndex: number} | null;
-  onDragStart?: (waypoint: {position: [number, number], routeIndex: number}) => void;
+  onDragStart?: (waypoint: {position: [number, number], routeIndex: number, segmentIndex?: number}) => void;
   onDragEnd?: () => void;
 }
 
@@ -44,12 +42,13 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   } : { r: 0, g: 0, b: 0 };
 }
 
-// Calculate distance between two points
-function distance(p1: [number, number], p2: [number, number]): number {
+// Calculate distance between two points in geographic coordinates
+function geoDistance(p1: [number, number], p2: [number, number]): number {
   const dx = p1[0] - p2[0];
   const dy = p1[1] - p2[1];
   return Math.sqrt(dx * dx + dy * dy);
 }
+
 
 // Find the nearest point on a line segment
 function nearestPointOnSegment(
@@ -92,7 +91,7 @@ export function findNearestPointOnRoute(
       routeCoordinates[i],
       routeCoordinates[i + 1]
     );
-    const dist = distance(point, nearPoint);
+    const dist = geoDistance(point, nearPoint);
 
     if (dist < minDistance) {
       minDistance = dist;
@@ -108,22 +107,23 @@ export function findNearestPointOnRoute(
   };
 }
 
-// Proximity threshold in map units (adjust based on zoom level)
-const PROXIMITY_THRESHOLD = 0.002; // About 200 meters at equator - increased for easier testing
+// Proximity threshold in pixels - consistent regardless of zoom level
+const PROXIMITY_THRESHOLD_PX = 30; // 30 pixels from the route
 
 export function createSimpleEditableRouteLayers({
-  locations,
+  locations: _locations,
   routes,
   onRouteUpdate,
   editingEnabled = false,
-  selectedRouteIndex = 0,
+  selectedRouteIndex: _selectedRouteIndex = 0,
   cursorPosition = null,
   onProximityPoint,
   isDragging = false,
   draggedWaypoint = null,
   onDragStart,
-  onDragEnd
-}: EditableRouteOverlayProps) {
+  onDragEnd,
+  viewport = null
+}: EditableRouteOverlayProps & { viewport?: any }) {
   const layers = [];
 
   // Track proximity point with segment info
@@ -132,6 +132,15 @@ export function createSimpleEditableRouteLayers({
 
   // Check proximity to routes if in edit mode and cursor position is available
   if (editingEnabled && cursorPosition) {
+    // Calculate dynamic threshold based on zoom level (if viewport available)
+    // At zoom 10: ~0.01 degrees, at zoom 15: ~0.0003 degrees
+    let proximityThreshold = 0.002; // Default fallback
+    if (viewport && viewport.zoom !== undefined) {
+      // Convert pixel threshold to geographic units based on zoom
+      // This approximation works well for web mercator projection
+      proximityThreshold = PROXIMITY_THRESHOLD_PX / Math.pow(2, viewport.zoom + 8);
+    }
+
     // Find the closest route to the cursor
     routes.forEach((route, index) => {
       if (!route || !route.geometry || !route.geometry.coordinates) {
@@ -157,17 +166,22 @@ export function createSimpleEditableRouteLayers({
     });
 
     // Only show proximity for the closest route if it's within threshold
-    if (closestRoute && closestRoute.distance < PROXIMITY_THRESHOLD) {
-      proximityData = closestRoute;
-      console.log('[EditableRoute] ✅ Proximity detected on route', closestRoute.routeIndex, '! Click to add waypoint at segment', closestRoute.segmentIndex);
+    if (closestRoute) {
+      const route = closestRoute as typeof closestRoute & { distance: number; point: [number, number]; routeIndex: number; segmentIndex: number };
+      if (route.distance < proximityThreshold) {
+        proximityData = route;
+        console.log('[EditableRoute] ✅ Proximity detected on route', proximityData.routeIndex, '! Click to add waypoint at segment', proximityData.segmentIndex);
+      }
     }
 
     // Notify parent component about proximity point
-    if (onProximityPoint) {
+    if (onProximityPoint && proximityData) {
       onProximityPoint(
-        proximityData?.point || null,
-        proximityData?.routeIndex ?? null
+        proximityData.point,
+        proximityData.routeIndex
       );
+    } else if (onProximityPoint) {
+      onProximityPoint(null, null);
     }
   }
 
@@ -179,7 +193,7 @@ export function createSimpleEditableRouteLayers({
     const color = COLORS[colorIndex % COLORS.length];
     const rgb = hexToRgb(color);
     // Highlight the route when it has proximity (auto-selected)
-    const isSelected = editingEnabled && proximityData && index === proximityData.routeIndex;
+    const isSelected = editingEnabled && proximityData && index === (proximityData as any).routeIndex;
 
     // Route path layer
     layers.push(
@@ -199,12 +213,13 @@ export function createSimpleEditableRouteLayers({
         pickable: editingEnabled,
         autoHighlight: editingEnabled,
         highlightColor: [255, 255, 255, 100],
-        onClick: (info: any) => {
+        onClick: (_info: any) => {
           if (editingEnabled && onRouteUpdate && proximityData) {
             // Add new waypoint at proximity point
+            const pd = proximityData as any;
             const newWaypoint = {
-              lat: proximityData.point[1],
-              lng: proximityData.point[0]
+              lat: pd.point[1],
+              lng: pd.point[0]
             };
 
             // Get existing waypoints or initialize empty array
@@ -224,7 +239,13 @@ export function createSimpleEditableRouteLayers({
 
     // Add waypoint handles for selected route - only show custom user-added waypoints
     if (isSelected && editingEnabled && route.waypoints && route.waypoints.length > 0) {
-      const waypointData = [];
+      const waypointData: Array<{
+        position: [number, number];
+        index: number;
+        routeId: string;
+        waypointIndex: number;
+        isCustom: boolean;
+      }> = [];
 
       // Add existing custom waypoints only
       route.waypoints.forEach((wp: any, idx: number) => {
@@ -288,8 +309,7 @@ export function createSimpleEditableRouteLayers({
         id: 'dragged-waypoint',
         data: [{
           position: cursorPosition || draggedWaypoint.position,
-          routeIndex: draggedWaypoint.routeIndex,
-          segmentIndex: draggedWaypoint.segmentIndex || 0
+          routeIndex: draggedWaypoint.routeIndex
         }],
         getPosition: (d: any) => d.position,
         getFillColor: [255, 165, 0, 255], // Orange color for dragging
@@ -304,13 +324,14 @@ export function createSimpleEditableRouteLayers({
     );
   } else if (proximityData && editingEnabled) {
     // Show proximity indicator when not dragging
+    const pd = proximityData as any;
     layers.push(
       new ScatterplotLayer({
         id: 'proximity-indicator',
         data: [{
-          position: proximityData.point,
-          routeIndex: proximityData.routeIndex,
-          segmentIndex: proximityData.segmentIndex
+          position: pd.point,
+          routeIndex: pd.routeIndex,
+          segmentIndex: pd.segmentIndex
         }],
         getPosition: (d: any) => d.position,
         getFillColor: [46, 204, 113, 200], // Green color for proximity indicator
@@ -331,7 +352,7 @@ export function createSimpleEditableRouteLayers({
           }
         },
         getCursor: () => 'grab',
-        onDragStart: (info: any, event: any) => {
+        onDragStart: (info: any, _event: any) => {
           console.log('[Proximity] Starting drag from segment', info.object.segmentIndex);
           if (onDragStart) {
             onDragStart({
@@ -343,18 +364,18 @@ export function createSimpleEditableRouteLayers({
           // Return false to prevent default deck.gl drag behavior
           return false;
         },
-        onDrag: (info: any, event: any) => {
+        onDrag: (_info: any, _event: any) => {
           // This will be handled by mouse move + isDragging state
           return false;
         },
-        onDragEnd: (info: any, event: any) => {
+        onDragEnd: (_info: any, _event: any) => {
           console.log('[Proximity] Ending drag');
           if (onDragEnd) {
             onDragEnd();
           }
           return false;
         },
-        onClick: (info: any, event: any) => {
+        onClick: (info: any, _event: any) => {
           // Only add waypoint on click if not dragging
           if (!isDragging && onRouteUpdate && info.object) {
             // Find the route and add waypoint
@@ -407,26 +428,9 @@ export function createSimpleEditableRouteLayers({
     );
   }
 
-  // Add debug cursor position indicator (red dot)
-  if (editingEnabled && cursorPosition) {
-    layers.push(
-      new ScatterplotLayer({
-        id: 'cursor-debug',
-        data: [{
-          position: cursorPosition
-        }],
-        getPosition: (d: any) => d.position,
-        getFillColor: [255, 0, 0, 100], // Semi-transparent red
-        getRadius: 5,
-        radiusMinPixels: 5,
-        radiusMaxPixels: 5,
-        pickable: false,
-      })
-    );
-  }
 
   // Add location markers
-  const markerData = locations.map(loc => ({
+  const markerData = _locations.map((loc: Location) => ({
     position: [loc.lng, loc.lat],
     color: COLORS[(loc.colorIndex || 0) % COLORS.length],
     name: loc.placeName,
@@ -459,7 +463,7 @@ export function createSimpleEditableRouteLayers({
 }
 
 // Simplified hook for managing route editing
-export function useSimpleRouteEditor(locations: Location[], initialRoutes: any[]) {
+export function useSimpleRouteEditor(_locations: Location[], initialRoutes: any[]) {
   const [routes, setRoutes] = useState(initialRoutes);
   const [editingEnabled, setEditingEnabled] = useState(false);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(0);

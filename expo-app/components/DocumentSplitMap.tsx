@@ -82,6 +82,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [proximityPoint, setProximityPoint] = useState<[number, number] | null>(null);
   const [isDraggingWaypoint, setIsDraggingWaypoint] = useState(false);
   const [draggedWaypoint, setDraggedWaypoint] = useState<{position: [number, number], routeIndex: number, segmentIndex?: number} | null>(null);
+  const [mapViewport, setMapViewport] = useState<any>(null);
 
   // Presentation mode
   const { isPresenting, currentBlockIndex, blocks, focusedGeoLocation } = usePresentation();
@@ -822,21 +823,32 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           })}
 
         {/* Location markers */}
-        {locations.map((location, index) => (
-          <Marker
-            key={location.geoId || `marker-${index}-${location.lat}-${location.lng}`}
-            latitude={location.lat}
-            longitude={location.lng}
-            anchor="center"
-          >
-            <View style={[
-              styles.marker,
-              { backgroundColor: COLORS[(location.colorIndex || 0) % 5] }
-            ]}>
-              <View style={styles.markerInner} />
-            </View>
-          </Marker>
-        ))}
+        {locations
+          .filter(location => {
+            // Filter out invalid coordinates
+            const validLat = location.lat && !isNaN(location.lat) && location.lat >= -90 && location.lat <= 90;
+            const validLng = location.lng && !isNaN(location.lng) && location.lng >= -180 && location.lng <= 180;
+            if (!validLat || !validLng) {
+              console.warn('[DocumentSplitMap] Invalid location coordinates:', location);
+              return false;
+            }
+            return true;
+          })
+          .map((location, index) => (
+            <Marker
+              key={location.geoId || `marker-${index}-${location.lat}-${location.lng}`}
+              latitude={location.lat}
+              longitude={location.lng}
+              anchor="center"
+            >
+              <View style={[
+                styles.marker,
+                { backgroundColor: COLORS[(location.colorIndex || 0) % 5] }
+              ]}>
+                <View style={styles.markerInner} />
+              </View>
+            </Marker>
+          ))}
 
         {/* Focused location marker during presentation */}
         {focusedGeoLocation && focusedGeoLocation.triggeredBySpeech && (
