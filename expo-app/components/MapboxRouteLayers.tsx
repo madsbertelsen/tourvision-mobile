@@ -74,8 +74,9 @@ export function MapboxRouteLayers({
       }
     });
 
-    // Check if within proximity threshold (simplified - would need viewport for accurate pixel conversion)
-    const threshold = 0.02; // Extra generous threshold for very easy hovering
+    // Much more generous threshold since we have a wide hit area
+    // This should match the visual hit area width (50px ≈ 0.05 in geographic units at typical zoom)
+    const threshold = 0.05; // Very generous to match the 50px hit area
     if (closestPoint && closestPoint.distance < threshold) {
       setNearestPoint({
         lng: closestPoint.lng,
@@ -238,11 +239,11 @@ export function MapboxRouteLayers({
             id="proximity-circle"
             type="circle"
             paint={{
-              'circle-radius': 10,
+              'circle-radius': 12, // Larger for better visibility
               'circle-color': '#2ECC71', // Green for proximity
               'circle-stroke-color': '#FFFFFF',
-              'circle-stroke-width': 2,
-              'circle-opacity': 0.9
+              'circle-stroke-width': 3,
+              'circle-opacity': 1 // Fully opaque for better visibility
             }}
           />
         </Source>
