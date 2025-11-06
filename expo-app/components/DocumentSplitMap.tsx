@@ -1,17 +1,16 @@
 import React, { useRef, useState, useEffect, useCallback, memo, useMemo, ReactNode } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Marker, NavigationControl, GeolocateControl, Source, Layer, useControl } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import * as turf from '@turf/turf';
-import { usePresentation } from '@/contexts/presentation-context';
+import { usePresentation, FocusedGeoLocation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
 import CurrentWordOverlay from './CurrentWordOverlay';
 import { createSimpleEditableRouteLayers, findNearestPointOnRoute } from './EditableRouteOverlay';
-import { MapboxRouteLayer } from './MapboxRouteLayer';
-import { Ionicons } from '@expo/vector-icons';
+import { MapboxRouteLayers } from './MapboxRouteLayers';
 
 interface Location {
   geoId: string;
@@ -83,7 +82,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [proximityPoint, setProximityPoint] = useState<[number, number] | null>(null);
   const [isDraggingWaypoint, setIsDraggingWaypoint] = useState(false);
   const [draggedWaypoint, setDraggedWaypoint] = useState<{position: [number, number], routeIndex: number, segmentIndex?: number} | null>(null);
-  const [mapViewport, setMapViewport] = useState<any>(null);
   const [useMapboxLayers, setUseMapboxLayers] = useState(true); // Toggle between Mapbox and deck.gl
 
   // Presentation mode
@@ -104,12 +102,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
     // Update the location's waypoints in the document
     if (onWaypointsChange && toLocation) {
-      // Update waypoints for this location
-      const updatedLocation = {
-        ...toLocation,
-        waypoints: waypoints
-      };
-
       console.log('[DocumentSplitMap] Updating waypoints in document for location:', toLocation.placeName);
       onWaypointsChange(toLocation.geoId, waypoints);
     }
@@ -783,11 +775,12 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
         {/* Route rendering - toggle between Mapbox native and deck.gl */}
         {useMapboxLayers ? (
-          <MapboxRouteLayer
-            map={mapRef.current}
+          <MapboxRouteLayers
             routes={routes}
             onWaypointUpdate={handleRouteUpdate}
             editingEnabled={editMode}
+            cursorPosition={cursorPosition}
+            onProximityPoint={handleProximityPoint}
           />
         ) : (
           <DeckGLOverlay layers={deckLayers} />
