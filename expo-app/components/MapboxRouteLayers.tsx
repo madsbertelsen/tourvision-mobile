@@ -79,8 +79,8 @@ export function MapboxRouteLayers({
     // Calculate zoom-dependent threshold
     // At low zoom (zoomed out), we need a smaller threshold in degrees
     // At high zoom (zoomed in), we need a larger threshold in degrees
-    // This formula converts approximately 80 pixels to geographic units based on zoom
-    const pixelThreshold = 80; // Desired hit area in pixels
+    // This formula converts approximately 40 pixels to geographic units based on zoom
+    const pixelThreshold = 40; // Desired hit area in pixels
     const degreesPerPixel = 360 / (256 * Math.pow(2, zoom)); // Approximate conversion
     const threshold = pixelThreshold * degreesPerPixel;
 
@@ -193,8 +193,8 @@ export function MapboxRouteLayers({
               }}
               paint={{
                 'line-color': color,
-                'line-width': 80, // EXTRA wide hit area for testing
-                'line-opacity': isHovered ? 0.3 : 0.15 // More visible for debugging
+                'line-width': 40, // Moderate hit area width
+                'line-opacity': isHovered ? 0.15 : 0.05 // Subtle visibility
               }}
             />
 
