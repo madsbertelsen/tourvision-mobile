@@ -1291,10 +1291,10 @@ The edit-visit screen (`/expo-app/app/(mock)/trip/[id]/location/[locationId]/edi
 
 #### Read Mode Rendering
 
-In read mode, geo-marks are rendered by `ProseMirrorNativeRenderer.tsx`:
-- Parses the document JSON
-- Renders geo-mark nodes with background colors
-- Makes them clickable to navigate to location details
+In read mode, geo-marks are rendered with:
+- Parsed document JSON
+- Background colors for visual distinction
+- Clickable navigation to location details
 
 **Background color formula**:
 ```typescript
