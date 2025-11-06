@@ -198,6 +198,35 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     progress: number; // 0 to 1
   } | null>(null);
 
+  // Update map view when locations change
+  useEffect(() => {
+    // Skip if in presentation mode (presentation handles its own map focus)
+    if (isPresenting) return;
+
+    // Skip if there are search results (they take priority)
+    if (searchResults && searchResults.length > 0) return;
+
+    // Skip if there's a preview route (user is actively adding a location)
+    if (previewRoute) return;
+
+    // Calculate new view state based on current locations
+    const newViewState = getInitialViewState();
+
+    // Only update if the view state actually changed significantly
+    const hasSignificantChange =
+      Math.abs(newViewState.latitude - viewState.latitude) > 0.01 ||
+      Math.abs(newViewState.longitude - viewState.longitude) > 0.01 ||
+      Math.abs(newViewState.zoom - viewState.zoom) > 0.5;
+
+    if (hasSignificantChange) {
+      console.log('[DocumentSplitMap] Locations changed, updating map view:', {
+        locationsCount: locations.length,
+        newView: newViewState,
+      });
+      setViewState(newViewState);
+    }
+  }, [locations, isPresenting, searchResults, previewRoute]);
+
   // Smooth camera animation: zoom out → pan → zoom in
   const animateToLocation = useCallback((targetLat: number, targetLng: number, targetZoom: number = 12) => {
     // Cancel any existing animation

@@ -822,9 +822,75 @@ export class ChatRoomV2 {
 // AI completion
 {"type": "ai_chunk", "message_id": "uuid", "chunk": "", "done": true, "message": {ChatMessage}}
 
+// Tool execution request (NEW)
+{"type": "tool_request", "tool_id": "uuid", "tool_name": "geocode", "args": {"location": "Paris, France"}}
+
 // Errors
 {"type": "error", "error": "Error message"}
 ```
+
+**Client → Server (Tool Results):**
+```json
+// Tool result success
+{
+  "type": "tool_result",
+  "tool_id": "uuid",
+  "result": {
+    "place_name": "Paris, France",
+    "lat": 48.8566,
+    "lng": 2.3522,
+    "source": "nominatim"
+  }
+}
+
+// Tool result error
+{
+  "type": "tool_result",
+  "tool_id": "uuid",
+  "error": "Location not found"
+}
+```
+
+### Frontend Tool Delegation (NEW)
+
+The chat system now supports **client-delegated tool execution**, allowing the LLM to request actions from the frontend. This avoids rate limits and leverages browser capabilities.
+
+**Architecture:**
+```
+User: "We'll meet in Lejre and drive to Copenhagen"
+    ↓
+Worker: LLM detects locations
+    ↓
+Worker → Frontend: tool_request (geocode Lejre)
+    ↓
+Frontend: Executes Nominatim geocoding (with rate limiting & caching)
+    ↓
+Frontend → Worker: tool_result (coordinates)
+    ↓
+Worker: LLM continues with accurate coordinates
+    ↓
+Worker → Frontend: Streaming response with geo-marks
+```
+
+**Available Tools:**
+- `geocode` - Get accurate coordinates for location names using Nominatim API
+
+**Frontend Tool Registry:** `/expo-app/utils/tool-registry.ts`
+**Worker Tool Schemas:** `/workers/chat/src/client-tools.ts`
+**Rate Limiting:** `/expo-app/utils/rate-limiter.ts` (1 req/sec for Nominatim)
+**Caching:** LRU cache (100 entries, 1 hour TTL)
+
+**How It Works:**
+1. LLM outputs tool call as HTML comment: `<!-- TOOL:geocode:{"location":"Paris, France"} -->`
+2. Worker parses tool call, sends `tool_request` to frontend via WebSocket
+3. Frontend executes tool using `tool-registry.ts`
+4. Frontend sends `tool_result` back to worker
+5. Worker removes tool comment and continues streaming
+
+**Adding New Tools:**
+1. Add schema to `/workers/chat/src/client-tools.ts`
+2. Implement handler in `/expo-app/utils/tool-registry.ts`
+3. Update system prompt in worker to describe tool usage
 
 ### Deployment
 

@@ -2,7 +2,11 @@
  * Nominatim Geocoding Service
  * Uses OpenStreetMap's Nominatim API to geocode location names
  * Free and no API key required!
+ *
+ * Includes rate limiting (1 req/sec) and LRU caching to respect Nominatim usage policy
  */
+
+import { RateLimiter, LRUCache } from './rate-limiter';
 
 export interface NominatimResult {
   lat: string;
@@ -19,6 +23,16 @@ export interface GeocodeResult {
   lng: number;
   displayName: string;
   source: 'nominatim';
+}
+
+// Global rate limiter and cache (shared across all requests)
+const rateLimiter = new RateLimiter<NominatimRequestArgs, GeocodeResult | null>(1000, 50); // 1 req/sec, max 50 queued
+const geocodeCache = new LRUCache<string, GeocodeResult>(100, 3600000); // 100 entries, 1 hour TTL
+
+interface NominatimRequestArgs {
+  placeName: string;
+  biasCoords?: { lat: number; lng: number };
+  language?: string;
 }
 
 /**
@@ -42,43 +56,29 @@ function calculateDistance(
 }
 
 /**
- * Geocode a location name using Nominatim
- * @param placeName - The location to geocode (e.g., "Copenhagen, Denmark" or "Tivoli Gardens, Copenhagen")
- * @param options - Optional configuration
- * @returns Geocoded coordinates or null if not found
+ * Internal function that actually makes the Nominatim API request
+ * Called by the rate limiter
  */
-export async function geocodeWithNominatim(
-  placeName: string,
-  options: {
-    /**
-     * Approximate coordinates to bias the search toward a specific region
-     * Useful for disambiguating common place names
-     * When provided with multiple results, picks the closest match
-     */
-    biasCoords?: { lat: number; lng: number };
-    /**
-     * Language for the result (ISO 639-1 code)
-     */
-    language?: string;
-  } = {}
-): Promise<GeocodeResult | null> {
+async function geocodeRequest(args: NominatimRequestArgs): Promise<GeocodeResult | null> {
+  const { placeName, biasCoords, language } = args;
+
   try {
     // Build query parameters
     const params = new URLSearchParams({
       q: placeName,
       format: 'json',
-      limit: options.biasCoords ? '10' : '1', // Get multiple results if we have bias coords to disambiguate
+      limit: biasCoords ? '10' : '1', // Get multiple results if we have bias coords to disambiguate
       addressdetails: '1',
       namedetails: '1'
     });
 
-    if (options.language) {
-      params.set('accept-language', options.language);
+    if (language) {
+      params.set('accept-language', language);
     }
 
     // Add viewbox bias if coordinates provided
-    if (options.biasCoords) {
-      const { lat, lng } = options.biasCoords;
+    if (biasCoords) {
+      const { lat, lng } = biasCoords;
       // Create a ~50km box around the coordinates
       const delta = 0.5; // Approximately 50km
       params.set('viewbox', `${lng - delta},${lat + delta},${lng + delta},${lat - delta}`);
@@ -88,7 +88,7 @@ export async function geocodeWithNominatim(
     // Make request to Nominatim
     const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
 
-    console.log('[Nominatim] Geocoding:', placeName, options.biasCoords ? `(biased toward ${options.biasCoords.lat}, ${options.biasCoords.lng})` : '');
+    console.log('[Nominatim] Geocoding:', placeName, biasCoords ? `(biased toward ${biasCoords.lat}, ${biasCoords.lng})` : '');
 
     const response = await fetch(url, {
       headers: {
@@ -110,14 +110,14 @@ export async function geocodeWithNominatim(
 
     // If we have bias coordinates, pick the closest result
     let best: NominatimResult;
-    if (options.biasCoords && results.length > 1) {
-      console.log(`[Nominatim] Found ${results.length} results, selecting closest to LLM coordinates`);
+    if (biasCoords && results.length > 1) {
+      console.log(`[Nominatim] Found ${results.length} results, selecting closest to bias coordinates`);
 
       // Calculate distance from bias coords to each result
       const resultsWithDistance = results.map(result => {
         const distance = calculateDistance(
-          options.biasCoords!.lat,
-          options.biasCoords!.lng,
+          biasCoords!.lat,
+          biasCoords!.lng,
           parseFloat(result.lat),
           parseFloat(result.lon)
         );
@@ -128,7 +128,7 @@ export async function geocodeWithNominatim(
       resultsWithDistance.sort((a, b) => a.distance - b.distance);
       best = resultsWithDistance[0].result;
 
-      console.log(`[Nominatim] Selected: ${best.display_name} (${resultsWithDistance[0].distance.toFixed(2)} km from LLM coords)`);
+      console.log(`[Nominatim] Selected: ${best.display_name} (${resultsWithDistance[0].distance.toFixed(2)} km from bias coords)`);
     } else {
       best = results[0];
     }
@@ -145,6 +145,61 @@ export async function geocodeWithNominatim(
     return result;
   } catch (error) {
     console.error('[Nominatim] Geocoding error:', error);
+    return null;
+  }
+}
+
+/**
+ * Geocode a location name using Nominatim with rate limiting and caching
+ * @param placeName - The location to geocode (e.g., "Copenhagen, Denmark" or "Tivoli Gardens, Copenhagen")
+ * @param options - Optional configuration
+ * @returns Geocoded coordinates or null if not found
+ */
+export async function geocodeWithNominatim(
+  placeName: string,
+  options: {
+    /**
+     * Approximate coordinates to bias the search toward a specific region
+     * Useful for disambiguating common place names
+     * When provided with multiple results, picks the closest match
+     */
+    biasCoords?: { lat: number; lng: number };
+    /**
+     * Language for the result (ISO 639-1 code)
+     */
+    language?: string;
+  } = {}
+): Promise<GeocodeResult | null> {
+  // Generate cache key (includes bias coords for uniqueness)
+  const cacheKey = options.biasCoords
+    ? `${placeName}|${options.biasCoords.lat.toFixed(2)},${options.biasCoords.lng.toFixed(2)}`
+    : placeName;
+
+  // Check cache first
+  const cached = geocodeCache.get(cacheKey);
+  if (cached) {
+    console.log('[Nominatim] Cache hit:', placeName);
+    return cached;
+  }
+
+  console.log('[Nominatim] Cache miss, queueing request:', placeName);
+  console.log('[Nominatim] Queue length:', rateLimiter.getQueueLength());
+
+  // Enqueue with rate limiter
+  try {
+    const result = await rateLimiter.enqueue(
+      { placeName, biasCoords: options.biasCoords, language: options.language },
+      geocodeRequest
+    );
+
+    // Cache successful results
+    if (result) {
+      geocodeCache.set(cacheKey, result);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[Nominatim] Rate limiter error:', error);
     return null;
   }
 }

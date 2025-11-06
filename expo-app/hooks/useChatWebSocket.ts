@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { enrichGeoMarksInHTML } from '@/utils/enrich-geo-marks';
+import { executeTool } from '@/utils/tool-registry';
 
 interface ChatMessage {
   id: string;
@@ -186,6 +187,33 @@ export function useChatWebSocket({
                   return withColors;
                 });
               }
+              break;
+
+            case 'tool_request':
+              // Worker is requesting tool execution
+              console.log('[ChatWebSocket] Tool request:', data.tool_name, data.args);
+              executeTool(data.tool_name, data.args).then(result => {
+                // Send tool result back to worker
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'tool_result',
+                    tool_id: data.tool_id,
+                    result: result.success ? result.data : undefined,
+                    error: result.success ? undefined : result.error
+                  }));
+                  console.log('[ChatWebSocket] Tool result sent:', result);
+                }
+              }).catch(error => {
+                console.error('[ChatWebSocket] Tool execution error:', error);
+                // Send error back to worker
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'tool_result',
+                    tool_id: data.tool_id,
+                    error: error.message || String(error)
+                  }));
+                }
+              });
               break;
 
             case 'error':
