@@ -75,7 +75,7 @@ export function MapboxRouteLayers({
     });
 
     // Check if within proximity threshold (simplified - would need viewport for accurate pixel conversion)
-    const threshold = 0.002; // Approximate geographic threshold
+    const threshold = 0.005; // Increased threshold to match wider hit area (~20px equivalent)
     if (closestPoint && closestPoint.distance < threshold) {
       setNearestPoint({
         lng: closestPoint.lng,
@@ -171,6 +171,22 @@ export function MapboxRouteLayers({
             type="geojson"
             data={geoJsonData}
           >
+            {/* Invisible hit area layer - wider for easier hovering */}
+            <Layer
+              id={`route-hit-area-${route.id}`}
+              type="line"
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round'
+              }}
+              paint={{
+                'line-color': color,
+                'line-width': 30, // Much wider for easier hover detection
+                'line-opacity': 0.01 // Nearly invisible but still interactive
+              }}
+            />
+
+            {/* Visible route line - rendered on top */}
             <Layer
               id={`route-line-${route.id}`}
               type="line"
