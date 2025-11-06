@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, memo, useMemo, ReactNode } from 'react';
+import React, { useRef, useState, useEffect, useCallback, memo, ReactNode } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
