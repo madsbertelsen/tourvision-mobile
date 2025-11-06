@@ -47,10 +47,10 @@ interface DocumentSplitMapProps {
   onWaypointsChange?: (locationId: string, waypoints: Array<{lat: number, lng: number}>) => void;
 }
 
-// Color array starting with Purple (to match expected first location color)
+// Color array - Blue first to match location marker colors
 const COLORS = [
-  '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'
-  // Purple,   Blue,     Green,    Orange,   Red
+  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
 ];
 
 // Same threshold as in EditableRouteOverlay
@@ -225,7 +225,9 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       }
 
       const fetchedRoutes = await Promise.all(routePromises);
-      setRoutes(fetchedRoutes.filter(r => r !== null));
+      const validRoutes = fetchedRoutes.filter(r => r !== null);
+      console.log('[DocumentSplitMap] Fetched routes:', validRoutes);
+      setRoutes(validRoutes);
     };
 
     fetchRoutes();
@@ -809,7 +811,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
 
         {/* Route lines - now rendered via deck.gl overlay, keeping this as fallback */}
         {false && routes.map((route, index) => {
-          const routeColor = COLORS[(route.colorIndex || 0) % 5];
+          const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
           return (
             <Source
               key={`route-${index}`}

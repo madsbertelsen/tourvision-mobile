@@ -40,6 +40,8 @@ export function MapboxRouteLayers({
 }: MapboxRouteLayersProps) {
   const [nearestPoint, setNearestPoint] = useState<{ lng: number; lat: number; routeIndex: number } | null>(null);
 
+  console.log('[MapboxRouteLayers] Rendering with routes:', routes);
+
   // Calculate proximity when cursor moves
   useEffect(() => {
     if (!cursorPosition || !editingEnabled || routes.length === 0) {
@@ -147,26 +149,39 @@ export function MapboxRouteLayers({
         const color = COLORS[route.colorIndex % COLORS.length];
         const isHovered = nearestPoint?.routeIndex === index;
 
+        // Debug log the route structure
+        console.log(`[MapboxRouteLayers] Route ${index}:`, route);
+
+        // Ensure we have valid geometry
+        if (!route.geometry || !route.geometry.coordinates) {
+          console.warn(`[MapboxRouteLayers] Skipping route ${index} - no valid geometry`);
+          return null;
+        }
+
+        const geoJsonData = {
+          type: 'Feature' as const,
+          properties: { routeId: route.id },
+          geometry: route.geometry
+        };
+
         return (
           <Source
             key={`route-${route.id}`}
             id={`route-${route.id}`}
             type="geojson"
-            data={{
-              type: 'Feature',
-              properties: { routeId: route.id },
-              geometry: route.geometry
-            }}
+            data={geoJsonData}
           >
             <Layer
               id={`route-line-${route.id}`}
               type="line"
+              layout={{
+                'line-join': 'round',
+                'line-cap': 'round'
+              }}
               paint={{
                 'line-color': color,
                 'line-width': isHovered ? 6 : 4,
-                'line-opacity': 0.8,
-                'line-join': 'round',
-                'line-cap': 'round'
+                'line-opacity': 0.8
               }}
             />
           </Source>
