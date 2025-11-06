@@ -42,7 +42,7 @@ export function MapboxRouteLayers({
 }: MapboxRouteLayersProps) {
   const [nearestPoint, setNearestPoint] = useState<{ lng: number; lat: number; routeIndex: number } | null>(null);
 
-  console.log('[MapboxRouteLayers] Rendering with routes:', routes);
+  // console.log('[MapboxRouteLayers] Rendering with routes:', routes);
 
   // Calculate proximity when cursor moves
   useEffect(() => {
@@ -79,15 +79,16 @@ export function MapboxRouteLayers({
     // Calculate zoom-dependent threshold
     // At low zoom (zoomed out), we need a smaller threshold in degrees
     // At high zoom (zoomed in), we need a larger threshold in degrees
-    // This formula converts approximately 40 pixels to geographic units based on zoom
-    const pixelThreshold = 40; // Desired hit area in pixels
+    // This formula converts approximately 20 pixels to geographic units based on zoom
+    // (reduced from 40 to better match the visual hit area)
+    const pixelThreshold = 20; // Reduced to better match visual area
     const degreesPerPixel = 360 / (256 * Math.pow(2, zoom)); // Approximate conversion
     const threshold = pixelThreshold * degreesPerPixel;
 
-    // Debug logging
-    if (closestPoint) {
-      console.log('[MapboxRouteLayers] Zoom:', zoom, 'Threshold:', threshold, 'Distance:', closestPoint.distance);
-    }
+    // Debug logging (commented out for production)
+    // if (closestPoint) {
+    //   console.log('[MapboxRouteLayers] Zoom:', zoom, 'Threshold:', threshold, 'Distance:', closestPoint.distance);
+    // }
     if (closestPoint && closestPoint.distance < threshold) {
       setNearestPoint({
         lng: closestPoint.lng,
