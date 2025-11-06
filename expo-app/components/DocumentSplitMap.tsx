@@ -10,6 +10,7 @@ import { usePresentation } from '@/contexts/presentation-context';
 import { calculateMapBounds } from '@/utils/parse-presentation-blocks';
 import CurrentWordOverlay from './CurrentWordOverlay';
 import { createSimpleEditableRouteLayers, findNearestPointOnRoute } from './EditableRouteOverlay';
+import { MapboxRouteLayer } from './MapboxRouteLayer';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Location {
@@ -83,6 +84,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   const [isDraggingWaypoint, setIsDraggingWaypoint] = useState(false);
   const [draggedWaypoint, setDraggedWaypoint] = useState<{position: [number, number], routeIndex: number, segmentIndex?: number} | null>(null);
   const [mapViewport, setMapViewport] = useState<any>(null);
+  const [useMapboxLayers, setUseMapboxLayers] = useState(true); // Toggle between Mapbox and deck.gl
 
   // Presentation mode
   const { isPresenting, currentBlockIndex, blocks, focusedGeoLocation } = usePresentation();
@@ -750,8 +752,46 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
 
-        {/* DeckGL overlay for editable routes */}
-        <DeckGLOverlay layers={deckLayers} />
+        {/* Toggle between Mapbox and deck.gl implementations */}
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'white',
+          padding: '8px 16px',
+          borderRadius: '4px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          zIndex: 1
+        }}>
+          <button
+            onClick={() => setUseMapboxLayers(!useMapboxLayers)}
+            style={{
+              border: 'none',
+              background: useMapboxLayers ? '#3B82F6' : '#8B5CF6',
+              color: 'white',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            {useMapboxLayers ? 'Mapbox Layers' : 'Deck.gl Overlay'}
+          </button>
+        </div>
+
+        {/* Route rendering - toggle between Mapbox native and deck.gl */}
+        {useMapboxLayers ? (
+          <MapboxRouteLayer
+            map={mapRef.current}
+            routes={routes}
+            onWaypointUpdate={handleRouteUpdate}
+            editingEnabled={editMode}
+          />
+        ) : (
+          <DeckGLOverlay layers={deckLayers} />
+        )}
 
         {/* Preview route (shown while configuring transportation) */}
         {previewRoute && previewRoute.geometry && (
