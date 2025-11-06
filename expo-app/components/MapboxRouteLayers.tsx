@@ -1,6 +1,5 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { Source, Layer } from 'react-map-gl/mapbox';
-import type { LayerProps } from 'react-map-gl/mapbox';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Layer, Source } from 'react-map-gl/mapbox';
 
 interface RouteData {
   id: string;
@@ -18,9 +17,8 @@ interface MapboxRouteLayersProps {
   routes: RouteData[];
   onWaypointUpdate?: (routeId: string, waypoints: Array<{ lat: number; lng: number }>) => void;
   editingEnabled?: boolean;
-  cursorPosition?: [number, number] | null;
-  onProximityPoint?: (point: [number, number] | null, routeIndex: number | null) => void;
-  zoom?: number;
+  proximityPoint?: [number, number] | null;
+  selectedRouteIndex?: number | null;
 }
 
 // Color array matching the main map
@@ -36,88 +34,10 @@ export function MapboxRouteLayers({
   routes,
   onWaypointUpdate,
   editingEnabled = true,
-  cursorPosition,
-  onProximityPoint,
-  zoom = 10
+  proximityPoint,
+  selectedRouteIndex
 }: MapboxRouteLayersProps) {
-  const [nearestPoint, setNearestPoint] = useState<{ lng: number; lat: number; routeIndex: number } | null>(null);
-
   // console.log('[MapboxRouteLayers] Rendering with routes:', routes);
-
-  // Calculate proximity when cursor moves
-  useEffect(() => {
-    if (!cursorPosition || !editingEnabled || routes.length === 0) {
-      setNearestPoint(null);
-      if (onProximityPoint) {
-        onProximityPoint(null, null);
-      }
-      return;
-    }
-
-    let closestPoint: { lng: number; lat: number; routeIndex: number; distance: number } | null = null;
-
-    routes.forEach((route, index) => {
-      if (!route.geometry || !route.geometry.coordinates) return;
-
-      const nearest = findNearestPointOnRoute(
-        cursorPosition,
-        route.geometry.coordinates as [number, number][]
-      );
-
-      if (nearest) {
-        if (!closestPoint || nearest.distance < closestPoint.distance) {
-          closestPoint = {
-            lng: nearest.point[0],
-            lat: nearest.point[1],
-            routeIndex: index,
-            distance: nearest.distance
-          };
-        }
-      }
-    });
-
-    // Calculate zoom-dependent threshold
-    // At low zoom (zoomed out), we need a smaller threshold in degrees
-    // At high zoom (zoomed in), we need a larger threshold in degrees
-    // This formula converts approximately 20 pixels to geographic units based on zoom
-    // (reduced from 40 to better match the visual hit area)
-    const pixelThreshold = 20; // Reduced to better match visual area
-    const degreesPerPixel = 360 / (256 * Math.pow(2, zoom)); // Approximate conversion
-    const threshold = pixelThreshold * degreesPerPixel;
-
-    // Debug logging (commented out for production)
-    // if (closestPoint) {
-    //   console.log('[MapboxRouteLayers] Zoom:', zoom, 'Threshold:', threshold, 'Distance:', closestPoint.distance);
-    // }
-    if (closestPoint && closestPoint.distance < threshold) {
-      setNearestPoint({
-        lng: closestPoint.lng,
-        lat: closestPoint.lat,
-        routeIndex: closestPoint.routeIndex
-      });
-      if (onProximityPoint) {
-        onProximityPoint([closestPoint.lng, closestPoint.lat], closestPoint.routeIndex);
-      }
-    } else {
-      setNearestPoint(null);
-      if (onProximityPoint) {
-        onProximityPoint(null, null);
-      }
-    }
-  }, [cursorPosition, routes, editingEnabled, onProximityPoint, zoom]);
-
-  // Create GeoJSON features for routes
-  const routeFeatures = useMemo(() => {
-    return routes.map(route => ({
-      type: 'Feature' as const,
-      id: route.id,
-      properties: {
-        routeId: route.id,
-        colorIndex: route.colorIndex
-      },
-      geometry: route.geometry
-    }));
-  }, [routes]);
 
   // Create GeoJSON features for waypoints
   const waypointFeatures = useMemo(() => {
@@ -144,23 +64,23 @@ export function MapboxRouteLayers({
 
   // Create proximity indicator feature
   const proximityFeature = useMemo(() => {
-    if (!nearestPoint) return null;
+    if (!proximityPoint) return null;
     return {
       type: 'Feature' as const,
       properties: {},
       geometry: {
         type: 'Point' as const,
-        coordinates: [nearestPoint.lng, nearestPoint.lat]
+        coordinates: proximityPoint
       }
     };
-  }, [nearestPoint]);
+  }, [proximityPoint]);
 
   return (
     <>
       {/* Route lines */}
       {routes.map((route, index) => {
         const color = COLORS[route.colorIndex % COLORS.length];
-        const isHovered = nearestPoint?.routeIndex === index;
+        const isHovered = selectedRouteIndex === index;
 
         // Debug log the route structure
         console.log(`[MapboxRouteLayers] Route ${index}:`, route);
@@ -262,66 +182,4 @@ export function MapboxRouteLayers({
       )}
     </>
   );
-}
-
-// Helper function to find the nearest point on a route
-function findNearestPointOnRoute(
-  point: [number, number],
-  routeCoordinates: [number, number][]
-): { point: [number, number]; distance: number; segmentIndex: number } | null {
-  if (!routeCoordinates || routeCoordinates.length < 2) return null;
-
-  let minDistance = Infinity;
-  let nearestPoint: [number, number] = routeCoordinates[0];
-  let nearestSegmentIndex = 0;
-
-  for (let i = 0; i < routeCoordinates.length - 1; i++) {
-    const nearPoint = nearestPointOnSegment(
-      point,
-      routeCoordinates[i],
-      routeCoordinates[i + 1]
-    );
-    const dist = geoDistance(point, nearPoint);
-
-    if (dist < minDistance) {
-      minDistance = dist;
-      nearestPoint = nearPoint;
-      nearestSegmentIndex = i;
-    }
-  }
-
-  return {
-    point: nearestPoint,
-    distance: minDistance,
-    segmentIndex: nearestSegmentIndex
-  };
-}
-
-// Find the nearest point on a line segment
-function nearestPointOnSegment(
-  point: [number, number],
-  segStart: [number, number],
-  segEnd: [number, number]
-): [number, number] {
-  const dx = segEnd[0] - segStart[0];
-  const dy = segEnd[1] - segStart[1];
-  const lengthSquared = dx * dx + dy * dy;
-
-  if (lengthSquared === 0) return segStart;
-
-  const t = Math.max(0, Math.min(1,
-    ((point[0] - segStart[0]) * dx + (point[1] - segStart[1]) * dy) / lengthSquared
-  ));
-
-  return [
-    segStart[0] + t * dx,
-    segStart[1] + t * dy
-  ];
-}
-
-// Calculate distance between two geographic points
-function geoDistance(p1: [number, number], p2: [number, number]): number {
-  const dx = p1[0] - p2[0];
-  const dy = p1[1] - p2[1];
-  return Math.sqrt(dx * dx + dy * dy);
 }

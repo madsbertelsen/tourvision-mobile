@@ -611,22 +611,47 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   // Handle mouse/touch movement to track cursor position
   const handleMapMouseMove = useCallback((event: any) => {
     // Get the coordinates from the event
-    const { lngLat } = event;
+    const { lngLat, point } = event;
     if (lngLat) {
       setCursorPosition([lngLat.lng, lngLat.lat]);
-      // console.log('[DocumentSplitMap] Cursor position:', lngLat.lng, lngLat.lat); // Too spammy
-    }
-  }, []);
 
-  // Handle proximity point updates from the overlay
-  const handleProximityPoint = useCallback((point: [number, number] | null, routeIndex: number | null) => {
-    setProximityPoint(point);
-    // Auto-select the route when cursor is near it
-    if (routeIndex !== null && routeIndex !== selectedRouteIndex) {
-      setSelectedRouteIndex(routeIndex);
-      console.log('[DocumentSplitMap] Auto-selected route:', routeIndex);
+      // Check if we're over any route hit area layers
+      if (mapRef.current && point) {
+        const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+        if (map) {
+          // Query for features under the cursor from hit area layers
+          const hitAreaLayers = routes.map(r => `route-hit-area-${r.id}`);
+          const features = map.queryRenderedFeatures(point, {
+            layers: hitAreaLayers
+          });
+
+          // If we're over a hit area, find the nearest point on that route
+          if (features.length > 0 && editMode) {
+            const routeId = features[0].properties?.routeId;
+            const route = routes.find(r => r.id === routeId);
+            const routeIndex = routes.findIndex(r => r.id === routeId);
+
+            if (route && route.geometry && route.geometry.coordinates) {
+              const nearest = findNearestPointOnRoute(
+                [lngLat.lng, lngLat.lat],
+                route.geometry.coordinates
+              );
+
+              if (nearest) {
+                setProximityPoint([nearest.point[0], nearest.point[1]]);
+                if (routeIndex !== selectedRouteIndex) {
+                  setSelectedRouteIndex(routeIndex);
+                }
+              }
+            }
+          } else {
+            // Not over any hit area
+            setProximityPoint(null);
+          }
+        }
+      }
     }
-  }, [selectedRouteIndex]);
+  }, [routes, editMode, selectedRouteIndex]);
 
   // Handle drag start
   const handleDragStart = useCallback((waypoint: {position: [number, number], routeIndex: number, segmentIndex?: number}) => {
@@ -838,9 +863,8 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           routes={routes}
           onWaypointUpdate={handleRouteUpdate}
           editingEnabled={editMode}
-          cursorPosition={cursorPosition}
-          onProximityPoint={handleProximityPoint}
-          zoom={viewState.zoom}
+          proximityPoint={proximityPoint}
+          selectedRouteIndex={selectedRouteIndex}
         />
 
         {/* Preview route (shown while configuring transportation) */}
