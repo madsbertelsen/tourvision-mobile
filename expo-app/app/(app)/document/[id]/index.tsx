@@ -36,7 +36,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import DynamicLandingDocumentProseMirror from '../../../(public)/components/DynamicLandingDocumentProseMirror';
+import DocumentEditorWithMap from '@/components/DocumentEditorWithMap';
 import { useTripContext } from './_layout';
 
 export default function TripDocumentView() {
@@ -487,7 +487,7 @@ export default function TripDocumentView() {
           ]}
           onLayout={(e) => setDocumentWidth(e.nativeEvent.layout.width)}
         >
-          <DynamicLandingDocumentProseMirror
+          <DocumentEditorWithMap
             initialContent={currentDoc || EMPTY_DOCUMENT_CONTENT}
             onLocationsChange={setLocations}
             onContentChange={setCurrentDoc}
