@@ -35,6 +35,33 @@ interface DynamicLandingDocumentProseMirrorProps {
 // Use the full landing page content
 const DEFAULT_INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
+// Helper function to get the next color index that avoids recent colors
+function getNextColorIndex(locations: Location[]): number {
+  const TOTAL_COLORS = 10; // We have 10 colors in our palette
+
+  // If no locations yet, start with 0
+  if (!locations || locations.length === 0) {
+    return 0;
+  }
+
+  // Get the last few color indices used (up to 3)
+  const recentColors = locations
+    .slice(-3)
+    .map(loc => loc.colorIndex ?? 0);
+
+  // Find a color that hasn't been used recently
+  for (let i = 0; i < TOTAL_COLORS; i++) {
+    const candidateColor = (locations.length + i) % TOTAL_COLORS;
+    if (!recentColors.includes(candidateColor)) {
+      return candidateColor;
+    }
+  }
+
+  // Fallback: if all colors were recently used (shouldn't happen with 10 colors and checking last 3)
+  // Just use the next sequential color
+  return locations.length % TOTAL_COLORS;
+}
+
 export default function DynamicLandingDocumentProseMirror({
   initialContent,
   onLocationsChange,
@@ -333,7 +360,7 @@ export default function DynamicLandingDocumentProseMirror({
       selectedText: selectedText,
       lat: 0, // Will be filled by Nominatim
       lng: 0,
-      colorIndex: locations.length % 5,  // Match 5-color palette
+      colorIndex: getNextColorIndex(locations),  // Use helper to avoid recent colors
       coordSource: 'manual',
     };
 
@@ -564,7 +591,7 @@ export default function DynamicLandingDocumentProseMirror({
       placeName: selectedLocation.placeName,
       lat: selectedLocation.lat,
       lng: selectedLocation.lng,
-      colorIndex: locations.length % 5,  // Match 5-color palette
+      colorIndex: getNextColorIndex(locations),  // Use helper to avoid recent colors
       coordSource: 'nominatim',
       transportFrom: transportFrom,
       transportProfile: transportMode,
