@@ -68,7 +68,7 @@ function getNextColorIndex(locations: any[]): number {
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow, clearLocationFlow } = useTripContext();
   const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(false);
@@ -435,16 +435,13 @@ export default function TripDocumentView() {
       // Use the geoId that was generated when the flow started
       const geoId = locationFlowState.geoId;
 
-      // Get next color index
-      const colorIndex = getNextColorIndex(locations);
-
       // Prepare geo-mark data
       const geoMarkData = {
         geoId,
         placeName,
         lat,
         lng,
-        colorIndex,
+        colorIndex: 0, // Will be recalculated in functional update
         coordSource: 'manual' as const,
         description: null,
         visitDocument: null,
@@ -456,23 +453,32 @@ export default function TripDocumentView() {
 
       // Send createGeoMark command to WebView using sendCommand
       webViewRef.current.sendCommand('createGeoMark', {
-        geoMarkData,
+        geoMarkData: {
+          ...geoMarkData,
+          colorIndex: getNextColorIndex(locations), // Get color index before update
+        },
         selectionFrom: locationFlowState.selectionFrom,
         selectionTo: locationFlowState.selectionTo,
       });
 
-      // Add to locations list
-      setLocations([...locations, {
-        geoId,
-        placeName,
-        lat,
-        lng,
-        colorIndex,
-      }]);
+      // Add to locations list using functional update to avoid circular dependency
+      setLocations(prev => {
+        const colorIndex = getNextColorIndex(prev);
+        return [...prev, {
+          geoId,
+          placeName,
+          lat,
+          lng,
+          colorIndex,
+        }];
+      });
 
       console.log('[TripDocument] Geo-mark created successfully');
+
+      // Clear the flow result to prevent re-triggering this effect
+      clearLocationFlow();
     }
-  }, [locationFlowState.result, locations, setLocations]);
+  }, [locationFlowState.result, locationFlowState.geoId, locationFlowState.selectionFrom, locationFlowState.selectionTo, locations, setLocations, clearLocationFlow]);
 
   return (
     <View style={styles.container}>
