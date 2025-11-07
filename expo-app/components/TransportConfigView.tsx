@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import { fetchRouteWithCache, type RouteDetails } from '../utils/transportation-api';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
@@ -181,75 +182,36 @@ export default function TransportConfigView({
       {allOrigins.length > 0 && (
         <View style={styles.originSection}>
           <Text style={styles.sectionLabel}>Route from (optional):</Text>
-
-          {/* No origin option */}
-          <TouchableOpacity
-            style={[
-              styles.originCard,
-              !selectedOrigin && styles.originCardSelected,
-            ]}
-            onPress={() => setSelectedOrigin(null)}
-          >
-            <View style={styles.originIconContainer}>
-              <Ionicons
-                name="close-circle"
-                size={24}
-                color={!selectedOrigin ? '#3B82F6' : '#6B7280'}
-              />
-            </View>
-            <Text style={[
-              styles.originLabel,
-              !selectedOrigin && styles.originLabelSelected,
-            ]}>
-              No starting point
-            </Text>
-            {!selectedOrigin && (
-              <View style={styles.checkmarkContainer}>
-                <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* Origin location options */}
-          {allOrigins.map((origin) => {
-            const isSelected = selectedOrigin?.lat === origin.lat && selectedOrigin?.lng === origin.lng;
-            return (
-              <TouchableOpacity
-                key={origin.geoId}
-                style={[
-                  styles.originCard,
-                  isSelected && styles.originCardSelected,
-                ]}
-                onPress={() => setSelectedOrigin({
-                  lat: origin.lat,
-                  lng: origin.lng,
-                  name: origin.placeName,
-                })}
-              >
-                <View style={styles.originIconContainer}>
-                  <Ionicons
-                    name="location"
-                    size={24}
-                    color={isSelected ? '#3B82F6' : '#6B7280'}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.originLabel,
-                    isSelected && styles.originLabelSelected,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {origin.placeName}
-                </Text>
-                {isSelected && (
-                  <View style={styles.checkmarkContainer}>
-                    <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={selectedOrigin ? `${selectedOrigin.lat},${selectedOrigin.lng}` : null}
+              onValueChange={(value) => {
+                if (value === null) {
+                  setSelectedOrigin(null);
+                } else {
+                  const [lat, lng] = value.split(',').map(Number);
+                  const origin = allOrigins.find(o => o.lat === lat && o.lng === lng);
+                  if (origin) {
+                    setSelectedOrigin({
+                      lat: origin.lat,
+                      lng: origin.lng,
+                      name: origin.placeName,
+                    });
+                  }
+                }
+              }}
+              style={styles.picker}
+            >
+              <Picker.Item label="No starting point" value={null} />
+              {allOrigins.map((origin) => (
+                <Picker.Item
+                  key={origin.geoId}
+                  label={origin.placeName}
+                  value={`${origin.lat},${origin.lng}`}
+                />
+              ))}
+            </Picker>
+          </View>
         </View>
       )}
 
@@ -404,36 +366,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
     gap: 8,
   },
-  originCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
+  pickerContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    gap: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    overflow: 'hidden',
   },
-  originCardSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-  },
-  originIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  originLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
+  picker: {
+    height: 50,
     color: '#111827',
-  },
-  originLabelSelected: {
-    color: '#1E40AF',
   },
   routeInfoContainer: {
     margin: 16,
