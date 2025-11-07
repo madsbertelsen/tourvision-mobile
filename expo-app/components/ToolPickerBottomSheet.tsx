@@ -104,6 +104,17 @@ export default function ToolPickerBottomSheet({
       setSelectedLocation(null);
       setTransportMode('walking');
       setCurrentRoute(null);
+
+      // Move focus out of iframe to enable keyboard navigation
+      // Use setTimeout to ensure the DOM is ready
+      setTimeout(() => {
+        // Blur any active element (likely the iframe)
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        // Focus on the window to capture keyboard events
+        window.focus();
+      }, 0);
     }
   }, [visible, selectedText, markType]);
 
@@ -256,6 +267,7 @@ export default function ToolPickerBottomSheet({
     if (!visible || currentStep !== 'picker' || Platform.OS !== 'web') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      console.log('[ToolPickerBottomSheet] Key pressed:', e.key, 'focusedTool:', focusedTool);
       e.stopPropagation();
 
       switch (e.key) {
@@ -299,7 +311,7 @@ export default function ToolPickerBottomSheet({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, currentStep, focusedTool, onSelectComment, onClose]);
+  }, [visible, currentStep, focusedTool, onSelectComment, onClose, handleLocationButtonClick]);
 
   if (!visible) return null;
 
