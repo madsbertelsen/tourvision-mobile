@@ -1,20 +1,22 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useTripContext } from '../../app/(app)/document/[id]/_layout';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTripContext } from '../../_layout';
 
-export default function LocationPickerModal() {
+export default function ToolPickerRoute() {
   const router = useRouter();
-  const { tripId, locationFlowState, clearLocationFlow } = useTripContext();
+  const params = useLocalSearchParams();
+  const { id: tripId, geoId } = params as { id: string; geoId: string };
+  const { locationFlowState, clearLocationFlow } = useTripContext();
 
   const handleClose = () => {
     clearLocationFlow();
-    router.back();
+    router.push(`/document/${tripId}`);
   };
 
   const handleLocationClick = () => {
-    router.push(`/document/${tripId}?modal=search`);
+    router.push(`/document/${tripId}/geo/${geoId}/search`);
   };
 
   const handleCommentClick = () => {

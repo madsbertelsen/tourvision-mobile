@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useTripContext } from '../../app/(app)/document/[id]/_layout';
-import TransportConfigView from '../TransportConfigView';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTripContext } from '../../_layout';
+import TransportConfigView from '@/components/TransportConfigView';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
-export default function TransportConfigModal() {
+export default function TransportConfigRoute() {
   const router = useRouter();
-  const { tripId, locationFlowState, updateLocationFlow, setLocationFlowResult, clearLocationFlow, locations } = useTripContext();
+  const params = useLocalSearchParams();
+  const { id: tripId, geoId } = params as { id: string; geoId: string };
+  const { locationFlowState, updateLocationFlow, setLocationFlowResult, clearLocationFlow, locations } = useTripContext();
 
   const [selectedMode, setSelectedMode] = useState<TransportMode>(locationFlowState.transportMode || 'walking');
   const [routeGeometry, setRouteGeometry] = useState<any>(null);

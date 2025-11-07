@@ -17,6 +17,7 @@ interface GeoMarkData {
 // Location flow state for route-based navigation
 interface LocationFlowState {
   active: boolean;
+  geoId: string; // Generated upfront when flow starts
   selectedText: string;
   selectionFrom: number;
   selectionTo: number;
@@ -124,6 +125,7 @@ export default function TripLayout() {
   // Location flow state (new route-based approach)
   const [locationFlowState, setLocationFlowState] = useState<LocationFlowState>({
     active: false,
+    geoId: '',
     selectedText: '',
     selectionFrom: 0,
     selectionTo: 0,
@@ -137,8 +139,12 @@ export default function TripLayout() {
 
   // Start location flow
   const startLocationFlow = useCallback((selectedText: string, from: number, to: number) => {
+    // Generate geoId upfront when starting the flow
+    const geoId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
     setLocationFlowState({
       active: true,
+      geoId,
       selectedText,
       selectionFrom: from,
       selectionTo: to,
@@ -149,6 +155,8 @@ export default function TripLayout() {
       transportOriginGeoId: null,
       result: null,
     });
+
+    return geoId; // Return the generated geoId
   }, []);
 
   // Update location flow state
@@ -165,6 +173,7 @@ export default function TripLayout() {
   const clearLocationFlow = useCallback(() => {
     setLocationFlowState({
       active: false,
+      geoId: '',
       selectedText: '',
       selectionFrom: 0,
       selectionTo: 0,

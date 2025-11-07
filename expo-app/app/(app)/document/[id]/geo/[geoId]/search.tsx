@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useTripContext } from '../../app/(app)/document/[id]/_layout';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTripContext } from '../../_layout';
 
 interface SearchResult {
   place_id: string;
@@ -11,9 +11,11 @@ interface SearchResult {
   lon: string;
 }
 
-export default function LocationSearchModal() {
+export default function LocationSearchRoute() {
   const router = useRouter();
-  const { tripId, locationFlowState, updateLocationFlow, clearLocationFlow } = useTripContext();
+  const params = useLocalSearchParams();
+  const { id: tripId, geoId } = params as { id: string; geoId: string };
+  const { locationFlowState, updateLocationFlow, clearLocationFlow } = useTripContext();
 
   const [searchQuery, setSearchQuery] = useState(locationFlowState.searchQuery || '');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -95,7 +97,7 @@ export default function LocationSearchModal() {
     });
 
     // Navigate to transport config
-    router.push(`/document/${tripId}?modal=transport`);
+    router.push(`/document/${tripId}/geo/${geoId}/transport`);
   };
 
   const handleContinue = () => {
