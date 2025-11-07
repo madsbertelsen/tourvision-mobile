@@ -177,6 +177,47 @@ export default function DynamicLandingDocumentProseMirror({
     console.log('[Landing] Initial locations extracted:', locationsList);
     setLocations(locationsList);
 
+    // Check if any geo-marks need color reassignment
+    const colorMap = new Map(allGeoMarks.map(gm => [gm.geoId, gm.colorIndex]));
+    const needsColorUpdate = allGeoMarks.some(gm => {
+      // Find original color in document
+      const findOriginalColor = (node: any): number | undefined => {
+        if (node.type === 'geoMark' && node.attrs?.geoId === gm.geoId) {
+          return node.attrs.colorIndex;
+        }
+        if (node.content && Array.isArray(node.content)) {
+          for (const child of node.content) {
+            const result = findOriginalColor(child);
+            if (result !== undefined) return result;
+          }
+        }
+        return undefined;
+      };
+      const originalColor = findOriginalColor(INITIAL_CONTENT);
+      return originalColor !== gm.colorIndex;
+    });
+
+    if (needsColorUpdate) {
+      console.log('[Landing] Colors need updating, applying reassigned colors to document');
+      const updatedDoc = updateGeoMarkColors(INITIAL_CONTENT, colorMap);
+
+      // Update the document in WebView with reassigned colors
+      setTimeout(() => {
+        if (webViewRef.current) {
+          console.log('[Landing] Sending updated document to WebView with reassigned colors');
+          webViewRef.current.postMessage({
+            type: 'setContent',
+            content: updatedDoc
+          });
+        }
+
+        // Also update parent component with the corrected document
+        if (onContentChange) {
+          onContentChange(updatedDoc);
+        }
+      }, 200); // Delay to ensure WebView is ready
+    }
+
     // Notify parent component of initial locations
     // Use setTimeout to avoid updating parent state during render
     if (onLocationsChange && locationsList.length > 0) {
@@ -184,7 +225,7 @@ export default function DynamicLandingDocumentProseMirror({
         onLocationsChange(locationsList);
       }, 0);
     }
-  }, [INITIAL_CONTENT, onLocationsChange]);
+  }, [INITIAL_CONTENT, onLocationsChange, onContentChange]);
 
   // Initialize animator
   useEffect(() => {
