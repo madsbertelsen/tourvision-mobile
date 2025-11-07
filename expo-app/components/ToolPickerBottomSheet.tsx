@@ -313,6 +313,46 @@ export default function ToolPickerBottomSheet({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visible, currentStep, focusedTool, onSelectComment, onClose, handleLocationButtonClick]);
 
+  // Keyboard navigation handler for location-search step
+  useEffect(() => {
+    if (!visible || currentStep !== 'location-search' || Platform.OS !== 'web') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      console.log('[ToolPickerBottomSheet] Location search key:', e.key, 'selectedIndex:', selectedResultIndex);
+
+      switch (e.key) {
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          if (searchResults.length > 0) {
+            setSelectedResultIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+          }
+          break;
+
+        case 'ArrowDown':
+          e.preventDefault();
+          if (searchResults.length > 0) {
+            setSelectedResultIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+          }
+          break;
+
+        case 'Enter':
+          e.preventDefault();
+          if (searchResults.length > 0 && searchResults[selectedResultIndex]) {
+            handleLocationResultSelected(searchResults[selectedResultIndex], selectedResultIndex);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [visible, currentStep, searchResults, selectedResultIndex, onClose, handleLocationResultSelected]);
+
   if (!visible) return null;
 
   // Render different steps
