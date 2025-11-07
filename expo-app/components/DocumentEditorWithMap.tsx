@@ -153,6 +153,9 @@ export default function DynamicLandingDocumentProseMirror({
   // Track text selection for geo-mark creation
   const pendingGeoMarkRef = useRef<{ start: number; end: number; data: any } | null>(null);
 
+  // Track if we've already updated colors for this document to prevent infinite loops
+  const colorsUpdatedRef = useRef(false);
+
   // Parse initial document on mount and extract locations
   useEffect(() => {
     console.log('[Landing] Initial content to parse:', INITIAL_CONTENT);
@@ -497,6 +500,14 @@ export default function DynamicLandingDocumentProseMirror({
     const blocks = parseDocumentIntoBlocks(doc);
     setDocumentBlocks(blocks);
 
+    // Update current document
+    setCurrentDocument(doc);
+
+    // Call the onContentChange prop
+    if (onContentChange) {
+      onContentChange(doc);
+    }
+
     // Update locations list from all geo-marks
     const allGeoMarks = blocks.flatMap(block => block.geoMarks);
     const locationsList = allGeoMarks.map(gm => ({
@@ -509,18 +520,6 @@ export default function DynamicLandingDocumentProseMirror({
       transportProfile: gm.transportProfile || null,
       waypoints: gm.waypoints || null
     }));
-
-    // Update document with reassigned colors
-    const colorMap = new Map(allGeoMarks.map(gm => [gm.geoId, gm.colorIndex]));
-    const updatedDoc = updateGeoMarkColors(doc, colorMap);
-
-    // Update current document with reassigned colors
-    setCurrentDocument(updatedDoc);
-
-    // Call the onContentChange prop with the updated document
-    if (onContentChange) {
-      onContentChange(updatedDoc);
-    }
 
     setLocations(prevLocations => {
       // Only update if locations actually changed
