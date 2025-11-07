@@ -78,7 +78,37 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
   }
 
   function traverse(n: any) {
-    // Check if this node is a text node with geo-mark marks
+    // Check if this is a geoMark node (inline node)
+    if (n.type === 'geoMark' && n.attrs) {
+      // Only add each geo-mark once (by geoId) to avoid duplicates
+      if (!seenGeoIds.has(n.attrs.geoId)) {
+        seenGeoIds.add(n.attrs.geoId);
+
+        // Always reassign colors to avoid sequential duplicates
+        const colorIndex = getNextColorIndex(geoMarks);
+
+        console.log('[Parser] Geo-mark node:', n.attrs.placeName,
+          'stored:', n.attrs.colorIndex,
+          'reassigned:', colorIndex);
+
+        // Extract text from content
+        const text = n.content && Array.isArray(n.content) && n.content[0]?.text || '';
+
+        geoMarks.push({
+          geoId: n.attrs.geoId,
+          placeName: n.attrs.placeName,
+          lat: n.attrs.lat,
+          lng: n.attrs.lng,
+          colorIndex: colorIndex,
+          text: text,
+          transportFrom: n.attrs.transportFrom || null,
+          transportProfile: n.attrs.transportProfile || null,
+          waypoints: n.attrs.waypoints || null
+        });
+      }
+    }
+
+    // Also check if this node is a text node with geo-mark marks (legacy support)
     if (n.type === 'text' && n.marks && Array.isArray(n.marks)) {
       for (const mark of n.marks) {
         if (mark.type === 'geoMark' && mark.attrs) {
@@ -89,7 +119,7 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
             // Always reassign colors to avoid sequential duplicates
             const colorIndex = getNextColorIndex(geoMarks);
 
-            console.log('[Parser] Geo-mark:', mark.attrs.placeName,
+            console.log('[Parser] Geo-mark mark:', mark.attrs.placeName,
               'stored:', mark.attrs.colorIndex,
               'reassigned:', colorIndex);
 
