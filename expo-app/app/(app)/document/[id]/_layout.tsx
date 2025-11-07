@@ -141,6 +141,11 @@ export default function TripLayout() {
 
   // Custom setCurrentDoc that also saves to localStorage (debounced)
   const setCurrentDoc = useCallback((doc: any) => {
+    // Check if document actually changed (avoid unnecessary updates)
+    if (latestDocRef.current === doc) {
+      return;
+    }
+
     // Update state immediately
     setCurrentDocState(doc);
 

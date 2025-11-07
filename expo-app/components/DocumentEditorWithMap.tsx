@@ -218,7 +218,8 @@ export default function DynamicLandingDocumentProseMirror({
         onLocationsChange(locationsList);
       }, 0);
     }
-  }, [INITIAL_CONTENT, onLocationsChange, onContentChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount to avoid infinite loop
 
   // Initialize animator
   useEffect(() => {
