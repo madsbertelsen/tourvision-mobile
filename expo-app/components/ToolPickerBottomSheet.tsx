@@ -276,12 +276,12 @@ export default function ToolPickerBottomSheet({
           onClose();
           break;
 
-        case 'ArrowLeft':
+        case 'ArrowUp':
           e.preventDefault();
           setFocusedTool('location');
           break;
 
-        case 'ArrowRight':
+        case 'ArrowDown':
           e.preventDefault();
           setFocusedTool('comment');
           break;
