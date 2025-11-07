@@ -930,7 +930,11 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           .map((location, index) => {
             const colorIndex = (location.colorIndex || 0) % COLORS.length;
             const bgColor = COLORS[colorIndex];
-            console.log('[DocumentSplitMap] Rendering marker', index, ':', location.placeName, 'colorIndex:', location.colorIndex, 'color:', bgColor);
+            console.log('[DocumentSplitMap] Rendering marker', index, ':', location.placeName,
+              'colorIndex:', location.colorIndex,
+              'color:', bgColor,
+              'lat:', location.lat,
+              'lng:', location.lng);
             return (
               <Marker
                 key={location.geoId || `marker-${index}-${location.lat}-${location.lng}`}
