@@ -69,13 +69,6 @@ function getNextColorIndex(locations: any[]): number {
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
-
-  // Log locations received from context
-  console.log('[index.tsx] Locations from context:', locations.map(l => ({
-    placeName: l.placeName,
-    colorIndex: l.colorIndex
-  })));
-
   const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(true);

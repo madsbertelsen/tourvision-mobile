@@ -171,37 +171,22 @@ export default function DynamicLandingDocumentProseMirror({
     // Store this content as the last parsed
     lastParsedContentRef.current = currentContentStr;
 
-    console.log('[Landing] Initial content to parse:', INITIAL_CONTENT);
     const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
     setDocumentBlocks(blocks);
-    console.log('[Landing] Initial document blocks:', blocks.length);
 
     // Extract and set initial locations from geo-marks
     const allGeoMarks = blocks.flatMap(block => block.geoMarks);
-    console.log('[Landing] All geo-marks from blocks:', allGeoMarks.map(gm => ({
+
+    const locationsList = allGeoMarks.map((gm) => ({
+      geoId: gm.geoId,
       placeName: gm.placeName,
-      colorIndex: gm.colorIndex
-    })));
-
-    const locationsList = allGeoMarks.map((gm, index) => {
-      const location = {
-        geoId: gm.geoId,
-        placeName: gm.placeName,
-        lat: gm.lat,
-        lng: gm.lng,
-        colorIndex: gm.colorIndex,
-        transportFrom: gm.transportFrom || null,
-        transportProfile: gm.transportProfile || null,
-        waypoints: gm.waypoints || null
-      };
-      console.log(`[Landing] Mapping geo-mark ${index}:`, gm.placeName, 'colorIndex:', gm.colorIndex, '→', location.colorIndex);
-      return location;
-    });
-
-    console.log('[Landing] Initial locations list:', locationsList.map(l => ({
-      placeName: l.placeName,
-      colorIndex: l.colorIndex
-    })));
+      lat: gm.lat,
+      lng: gm.lng,
+      colorIndex: gm.colorIndex,
+      transportFrom: gm.transportFrom || null,
+      transportProfile: gm.transportProfile || null,
+      waypoints: gm.waypoints || null
+    }));
     setLocations(locationsList);
 
     // Check if any geo-marks need color reassignment

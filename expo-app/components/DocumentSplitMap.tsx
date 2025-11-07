@@ -61,14 +61,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   previewRoute,
   onWaypointsChange,
 }: DocumentSplitMapProps) {
-  // Log locations received by map component
-  console.log('[DocumentSplitMap] Received locations:', locations.map((l, idx) => ({
-    index: idx,
-    placeName: l.placeName,
-    colorIndex: l.colorIndex,
-    expectedColor: COLORS[(l.colorIndex || 0) % COLORS.length]
-  })));
-
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
   // Edit mode is always enabled - users can always add waypoints
@@ -930,11 +922,6 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
           .map((location, index) => {
             const colorIndex = (location.colorIndex || 0) % COLORS.length;
             const bgColor = COLORS[colorIndex];
-            console.log('[DocumentSplitMap] Rendering marker', index, ':', location.placeName,
-              'colorIndex:', location.colorIndex,
-              'color:', bgColor,
-              'lat:', location.lat,
-              'lng:', location.lng);
             return (
               <Marker
                 key={location.geoId || `marker-${index}-${location.lat}-${location.lng}`}

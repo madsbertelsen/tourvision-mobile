@@ -92,11 +92,6 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
         const storedColorIndex = n.attrs.colorIndex;
         const colorIndex = storedColorIndex !== undefined ? storedColorIndex : getNextColorIndex(geoMarks);
 
-        console.log('[Parser] Geo-mark node:', n.attrs.placeName,
-          'stored:', storedColorIndex,
-          'using:', colorIndex,
-          'existingMarksLength:', geoMarks.length,
-          'startingColorIndex:', startingColorIndex);
 
         // Extract text from content
         const text = n.content && Array.isArray(n.content) && n.content[0]?.text || '';
@@ -112,7 +107,6 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
           transportProfile: n.attrs.transportProfile || null,
           waypoints: n.attrs.waypoints || null
         };
-        console.log('[Parser] Pushing geo-mark:', geoMark);
         geoMarks.push(geoMark);
       }
     }
@@ -129,9 +123,6 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
             const storedColorIndex = mark.attrs.colorIndex;
             const colorIndex = storedColorIndex !== undefined ? storedColorIndex : getNextColorIndex(geoMarks);
 
-            console.log('[Parser] Geo-mark mark:', mark.attrs.placeName,
-              'stored:', storedColorIndex,
-              'using:', colorIndex);
 
             geoMarks.push({
               geoId: mark.attrs.geoId,
@@ -157,11 +148,6 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 
   node.content.forEach((child: any) => traverse(child));
 
-  console.log('[Parser] extractGeoMarks returning:', geoMarks.map(gm => ({
-    placeName: gm.placeName,
-    colorIndex: gm.colorIndex
-  })));
-
   return geoMarks;
 }
 
@@ -172,34 +158,17 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
   if (!doc || !doc.content) return [];
 
-  console.log('[ParseDocumentIntoBlocks] Starting parse, doc structure:', {
-    type: doc.type,
-    contentLength: doc.content?.length,
-    firstNode: doc.content?.[0]
-  });
 
   const blocks: DocumentBlock[] = [];
   let globalColorIndex = 0;
 
   for (const node of doc.content) {
-    console.log('[ParseDocumentIntoBlocks] Processing node:', {
-      type: node.type,
-      hasContent: !!node.content,
-      contentLength: node.content?.length
-    });
     if (node.type === 'paragraph' || node.type === 'heading') {
       const text = extractTextContent(node);
-      console.log('[ParseDocumentIntoBlocks] Calling extractGeoMarks with globalColorIndex:', globalColorIndex);
       const geoMarks = extractGeoMarks(node, globalColorIndex);
-      console.log('[ParseDocumentIntoBlocks] Extracted geoMarks:', geoMarks.map(gm => ({
-        placeName: gm.placeName,
-        colorIndex: gm.colorIndex
-      })));
 
       // Increment globalColorIndex by number of geo-marks found
-      console.log('[ParseDocumentIntoBlocks] Incrementing globalColorIndex from', globalColorIndex, 'by', geoMarks.length);
       globalColorIndex += geoMarks.length;
-      console.log('[ParseDocumentIntoBlocks] New globalColorIndex:', globalColorIndex);
 
       blocks.push({
         type: node.type,
