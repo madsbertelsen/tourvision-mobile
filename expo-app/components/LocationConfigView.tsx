@@ -7,7 +7,8 @@ import LocationPickerMap from './LocationPickerMap';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
-interface TransportConfigViewProps {
+interface LocationConfigViewProps {
+  selectedText: string; // The text that was selected/clicked (used as title)
   locationName: string;
   locationLat: number;
   locationLng: number;
@@ -72,7 +73,8 @@ const TRANSPORT_MODES: Array<{
   },
 ];
 
-export default function TransportConfigView({
+export default function LocationConfigView({
+  selectedText,
   locationName,
   locationLat,
   locationLng,
@@ -84,7 +86,7 @@ export default function TransportConfigView({
   onBack,
   onRouteChange,
   onLocationChange,
-}: TransportConfigViewProps) {
+}: LocationConfigViewProps) {
   const [routeData, setRouteData] = useState<RouteDetails | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -173,7 +175,7 @@ export default function TransportConfigView({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transportation</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{selectedText}</Text>
         <View style={styles.headerSpacer} />
       </View>
 

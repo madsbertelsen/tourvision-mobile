@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTripContext } from './_layout';
-import TransportConfigView from '@/components/TransportConfigView';
+import LocationConfigView from '@/components/LocationConfigView';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
@@ -100,7 +100,8 @@ export default function TransportConfigRoute() {
       />
 
       <View style={styles.container}>
-        <TransportConfigView
+        <LocationConfigView
+          selectedText={locationFlowState.selectedText}
           locationName={locationFlowState.selectedLocation.placeName}
           locationLat={locationFlowState.selectedLocation.lat}
           locationLng={locationFlowState.selectedLocation.lng}

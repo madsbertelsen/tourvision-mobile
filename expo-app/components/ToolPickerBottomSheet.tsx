@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LocationResultsList from './LocationResultsList';
-import TransportConfigView from './TransportConfigView';
+import LocationConfigView from './LocationConfigView';
 
 interface ToolPickerBottomSheetProps {
   visible: boolean;
@@ -318,7 +318,7 @@ export default function ToolPickerBottomSheet({
     setCurrentStep('location-search');
   };
 
-  // Handle route change from TransportConfigView
+  // Handle route change from LocationConfigView
   const handleRouteChange = useCallback((route: {
     origin: { lat: number; lng: number } | null;
     destination: { lat: number; lng: number };
@@ -724,7 +724,8 @@ export default function ToolPickerBottomSheet({
         : null;
 
       return (
-        <TransportConfigView
+        <LocationConfigView
+          selectedText={selectedText}
           locationName={selectedLocation.display_name}
           locationLat={parseFloat(selectedLocation.lat)}
           locationLng={parseFloat(selectedLocation.lon)}

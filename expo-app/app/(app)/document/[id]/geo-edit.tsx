@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTripContext } from './_layout';
-import TransportConfigView from '@/components/TransportConfigView';
+import LocationConfigView from '@/components/LocationConfigView';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
@@ -14,6 +14,7 @@ export default function GeoEdit() {
   // Extract query parameters
   const geoId = params.geoId as string;
   const placeName = params.placeName as string;
+  const selectedText = params.selectedText as string;
   const lat = parseFloat(params.lat as string);
   const lng = parseFloat(params.lng as string);
 
@@ -57,7 +58,8 @@ export default function GeoEdit() {
       />
 
       <View style={styles.container}>
-        <TransportConfigView
+        <LocationConfigView
+          selectedText={selectedText}
           locationName={placeName}
           locationLat={lat}
           locationLng={lng}
