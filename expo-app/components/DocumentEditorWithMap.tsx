@@ -124,12 +124,14 @@ export default function DynamicLandingDocumentProseMirror({
 
   // Parse initial document on mount and extract locations
   useEffect(() => {
+    console.log('[Landing] Initial content to parse:', INITIAL_CONTENT);
     const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
     setDocumentBlocks(blocks);
     console.log('[Landing] Initial document blocks:', blocks.length);
 
     // Extract and set initial locations from geo-marks
     const allGeoMarks = blocks.flatMap(block => block.geoMarks);
+    console.log('[Landing] All geo-marks extracted:', allGeoMarks);
     const locationsList = allGeoMarks.map(gm => ({
       geoId: gm.geoId,
       placeName: gm.placeName,

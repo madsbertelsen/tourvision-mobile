@@ -157,13 +157,25 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
   if (!doc || !doc.content) return [];
 
+  console.log('[ParseDocumentIntoBlocks] Starting parse, doc structure:', {
+    type: doc.type,
+    contentLength: doc.content?.length,
+    firstNode: doc.content?.[0]
+  });
+
   const blocks: DocumentBlock[] = [];
   let globalColorIndex = 0;
 
   for (const node of doc.content) {
+    console.log('[ParseDocumentIntoBlocks] Processing node:', {
+      type: node.type,
+      hasContent: !!node.content,
+      contentLength: node.content?.length
+    });
     if (node.type === 'paragraph' || node.type === 'heading') {
       const text = extractTextContent(node);
       const geoMarks = extractGeoMarks(node, globalColorIndex);
+      console.log('[ParseDocumentIntoBlocks] Extracted geoMarks:', geoMarks);
 
       // Increment globalColorIndex by number of geo-marks found
       globalColorIndex += geoMarks.length;
