@@ -330,7 +330,15 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     };
   };
 
-  const [viewState, setViewState] = useState(getInitialViewState());
+  // Initialize viewport with a default view
+  const [viewState, setViewState] = useState(() => {
+    // Default view of Europe
+    return {
+      latitude: 50,
+      longitude: 10,
+      zoom: 4
+    };
+  });
   const animationRef = useRef<number | null>(null);
 
   // Simple animation state
@@ -341,7 +349,10 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     progress: number; // 0 to 1
   } | null>(null);
 
-  // Update map view when locations change
+  // Disabled auto-update of viewport when locations change
+  // Users can manually use "Fit to locations" button when they want to reset the view
+  // This preserves the viewport when switching documents or updating locations
+  /*
   useEffect(() => {
     // Skip if in presentation mode (presentation handles its own map focus)
     if (isPresenting) return;
@@ -369,6 +380,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       setViewState(newViewState);
     }
   }, [locations, isPresenting, searchResults, previewRoute]);
+  */
 
   // Smooth camera animation: zoom out → pan → zoom in
   const animateToLocation = useCallback((targetLat: number, targetLng: number, targetZoom: number = 12) => {
@@ -612,6 +624,13 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
     if (lngLat) {
       setCursorPosition([lngLat.lng, lngLat.lat]);
 
+      // During dragging, keep the proximity point at the cursor position
+      if (isDraggingWaypoint) {
+        setProximityPoint([lngLat.lng, lngLat.lat]);
+        // Keep the selected route index during dragging
+        return;
+      }
+
       // Check if we're over any route hit area layers
       if (mapRef.current && point) {
         const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
@@ -649,7 +668,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         }
       }
     }
-  }, [routes, editMode, selectedRouteIndex]);
+  }, [routes, editMode, selectedRouteIndex, isDraggingWaypoint]);
 
   // Handle drag start
   const handleDragStart = useCallback((waypoint: {position: [number, number], routeIndex: number, segmentIndex?: number}) => {
@@ -866,6 +885,31 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
         {/* Navigation controls */}
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
+
+        {/* Fit to locations button */}
+        {locations.length > 0 && (
+          <button
+            onClick={() => {
+              const bounds = getInitialViewState();
+              setViewState(bounds);
+            }}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              padding: '8px 12px',
+              backgroundColor: 'white',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              zIndex: 1000,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.1)'
+            }}
+          >
+            Fit to locations
+          </button>
+        )}
 
         {/* Route rendering using Mapbox layers */}
         <MapboxRouteLayers

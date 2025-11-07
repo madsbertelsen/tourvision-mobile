@@ -471,10 +471,9 @@ export default function TripDocumentView() {
           </View>
         )}
 
-        {/* Map */}
-        {showMap && (
-          <View style={styles.mapContainer}>
-            <DocumentSplitMap
+        {/* Map - Always mounted but hidden when not shown to preserve state */}
+        <View style={[styles.mapContainer, { display: showMap ? 'flex' : 'none' }]}>
+          <DocumentSplitMap
               locations={[...locations, ...chatLocations]}
               searchResults={
                 toolPickerVisible && toolPickerSearchResults.length > 0
@@ -515,8 +514,7 @@ export default function TripDocumentView() {
                 />
               }
             />
-          </View>
-        )}
+        </View>
 
         {/* Document */}
         <View

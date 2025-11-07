@@ -85,9 +85,6 @@ export function MapboxRouteLayers({
         const color = COLORS[route.colorIndex % COLORS.length];
         const isHovered = selectedRouteIndex === index;
 
-        // Debug log the route structure
-        console.log(`[MapboxRouteLayers] Route ${index}:`, route);
-
         // Ensure we have valid geometry
         if (!route.geometry || !route.geometry.coordinates) {
           console.warn(`[MapboxRouteLayers] Skipping route ${index} - no valid geometry`);
