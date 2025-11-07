@@ -339,15 +339,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       zoom: 4
     };
   });
-  const animationRef = useRef<number | null>(null);
-
-  // Simple animation state
-  const animationStateRef = useRef<{
-    phase: 'zoom-out' | 'pan' | 'zoom-in';
-    startViewState: any;
-    targetViewState: any;
-    progress: number; // 0 to 1
-  } | null>(null);
+  // Animation refs no longer needed with flyTo() - Mapbox handles animation internally
 
   // Disabled auto-update of viewport when locations change
   // Users can manually use "Fit to locations" button when they want to reset the view
@@ -383,126 +375,58 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   */
 
   // Smooth camera animation: zoom out → pan → zoom in
+  // Calculate duration based on distance (standardized formula)
+  const calculateAnimationDuration = useCallback((distance: number): number => {
+    // Base duration in milliseconds
+    const baseDuration = 800;
+    const scaledDuration = baseDuration + (distance * 300);
+
+    // Apply min/max constraints
+    const minDuration = 1200;
+    const maxDuration = 4000;
+
+    return Math.max(minDuration, Math.min(maxDuration, scaledDuration));
+  }, []);
+
+  // Smooth easing function for flyTo
+  const easeInOutQuint = useCallback((t: number) => {
+    return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+  }, []);
+
   const animateToLocation = useCallback((targetLat: number, targetLng: number, targetZoom: number = 12) => {
-    // Cancel any existing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
-    }
+    if (!mapRef.current) return;
 
-    const currentLat = viewState.latitude;
-    const currentLng = viewState.longitude;
-    const currentZoom = viewState.zoom;
+    const map = mapRef.current.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!map) return;
 
-    // Calculate zoom level that fits both points
-    const startPoint = turf.point([currentLng, currentLat]);
+    // Calculate distance for duration and curve adjustment
+    const currentCenter = map.getCenter();
+    const startPoint = turf.point([currentCenter.lng, currentCenter.lat]);
     const endPoint = turf.point([targetLng, targetLat]);
     const distance = turf.distance(startPoint, endPoint, { units: 'kilometers' });
 
-    // Determine zoom-out level based on distance
-    let zoomOutLevel = currentZoom - 2;
-    if (distance > 1000) zoomOutLevel = Math.min(zoomOutLevel, 3);
-    else if (distance > 500) zoomOutLevel = Math.min(zoomOutLevel, 4);
-    else if (distance > 200) zoomOutLevel = Math.min(zoomOutLevel, 5);
-    else if (distance > 100) zoomOutLevel = Math.min(zoomOutLevel, 6);
-    zoomOutLevel = Math.max(1, zoomOutLevel); // Never zoom out too far
+    // Calculate animation duration based on distance
+    const duration = calculateAnimationDuration(distance);
 
-    // Animation phases with durations
-    const ZOOM_OUT_DURATION = 0.3; // 30% of animation
-    const PAN_DURATION = 0.4;       // 40% of animation
-    const ZOOM_IN_DURATION = 0.3;   // 30% of animation
-
-    // Calculate animation speed based on distance
-    // Short distances (< 50km): 1.5s total
-    // Medium distances (100-500km): 2-3s total
-    // Long distances (> 1000km): 4s total
-    let animationSpeed;
-    if (distance < 50) {
-      animationSpeed = 0.011; // ~1.5s
-    } else if (distance < 100) {
-      animationSpeed = 0.008; // ~2s
-    } else if (distance < 500) {
-      animationSpeed = 0.006; // ~2.7s
-    } else if (distance < 1000) {
-      animationSpeed = 0.005; // ~3.3s
-    } else {
-      animationSpeed = 0.004; // ~4s
+    // Adjust curve parameter based on distance
+    // Higher curve = more pronounced arc for long distances
+    let curve = 1.42; // Default smooth curve
+    if (distance > 500) {
+      curve = 1.6; // More arc for long distances
+    } else if (distance < 50) {
+      curve = 1.2; // Gentler arc for nearby locations
     }
 
-    animationStateRef.current = {
-      phase: 'zoom-out',
-      startViewState: { ...viewState },
-      targetViewState: {
-        latitude: targetLat,
-        longitude: targetLng,
-        zoom: targetZoom
-      },
-      progress: 0
-    };
-
-    const easeInOutCubic = (t: number) => {
-      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    };
-
-    // Smoother easing for pan - slower acceleration/deceleration
-    const easeInOutQuint = (t: number) => {
-      return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
-    };
-
-    const animate = () => {
-      if (!animationStateRef.current) return;
-
-      const state = animationStateRef.current;
-      state.progress += animationSpeed; // Distance-based animation speed
-
-      const t = Math.min(1, state.progress);
-
-      let newViewState;
-
-      if (t < ZOOM_OUT_DURATION) {
-        // Phase 1: Zoom out
-        const phaseProgress = easeInOutCubic(t / ZOOM_OUT_DURATION);
-        newViewState = {
-          ...viewState,
-          latitude: currentLat,
-          longitude: currentLng,
-          zoom: currentZoom + (zoomOutLevel - currentZoom) * phaseProgress
-        };
-      } else if (t < ZOOM_OUT_DURATION + PAN_DURATION) {
-        // Phase 2: Pan to target (with smoother easing)
-        const rawProgress = (t - ZOOM_OUT_DURATION) / PAN_DURATION;
-        const phaseProgress = easeInOutQuint(rawProgress);
-        newViewState = {
-          ...viewState,
-          latitude: currentLat + (targetLat - currentLat) * phaseProgress,
-          longitude: currentLng + (targetLng - currentLng) * phaseProgress,
-          zoom: zoomOutLevel
-        };
-      } else {
-        // Phase 3: Zoom in
-        const rawProgress = (t - ZOOM_OUT_DURATION - PAN_DURATION) / ZOOM_IN_DURATION;
-        const phaseProgress = easeInOutCubic(rawProgress);
-        newViewState = {
-          ...viewState,
-          latitude: targetLat,
-          longitude: targetLng,
-          zoom: zoomOutLevel + (targetZoom - zoomOutLevel) * phaseProgress
-        };
-      }
-
-      setViewState(newViewState);
-
-      if (state.progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        // Final position
-        setViewState(state.targetViewState);
-        animationRef.current = null;
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
-  }, [viewState]);
+    // Use Mapbox's native flyTo for smooth, GPU-accelerated animation
+    map.flyTo({
+      center: [targetLng, targetLat],
+      zoom: targetZoom,
+      duration: duration,
+      easing: easeInOutQuint,
+      curve: curve,
+      essential: false, // Allows interruption if needed
+    });
+  }, [calculateAnimationDuration, easeInOutQuint]);
 
   // Track previous selected index to avoid unnecessary animations
   const prevSelectedIndexRef = useRef(selectedSearchIndex);
@@ -550,13 +474,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   }, [selectedSearchIndex, searchResults, animateToLocation]);
 
   // Cleanup animation on unmount
-  useEffect(() => {
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, []);
+  // Cleanup no longer needed - flyTo() handles its own lifecycle
 
   // Presentation mode: animate to locations in current block
   const prevBlockIndexRef = useRef<number>(-1);
