@@ -28,7 +28,6 @@ import ToolPickerBottomSheet from '@/components/ToolPickerBottomSheet';
 import { usePresentation } from '@/contexts/presentation-context';
 import { useLocationModal } from '@/hooks/useLocationModal';
 import { supabase } from '@/lib/supabase/client';
-import { parseDocumentIntoBlocks } from '@/utils/document-block-parser';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
 import { Ionicons } from '@expo/vector-icons';
@@ -124,29 +123,16 @@ export default function TripDocumentView() {
   // Ref for ProseMirror WebView (needed by location modal hook)
   const webViewRef = useRef<ProseMirrorWebViewRef>(null);
 
-  // Extract geo-marks from currentDoc for route visualization
+  // Extract geo-marks from locations (already parsed by DocumentEditorWithMap)
   const existingGeoMarks = useMemo(() => {
-    if (!currentDoc) return [];
-
-    try {
-      const doc = typeof currentDoc === 'string' ? JSON.parse(currentDoc) : currentDoc;
-      const blocks = parseDocumentIntoBlocks(doc);
-
-      // Collect all geo-marks from all blocks
-      const allGeoMarks = blocks.flatMap(block => block.geoMarks);
-
-      // Return simplified format for ToolPickerBottomSheet
-      return allGeoMarks.map(gm => ({
-        geoId: gm.geoId,
-        placeName: gm.placeName,
-        lat: gm.lat,
-        lng: gm.lng,
-      }));
-    } catch (error) {
-      console.error('[TripDocument] Error extracting geo-marks:', error);
-      return [];
-    }
-  }, [currentDoc]);
+    // Use locations directly - they're already parsed and updated by DocumentEditorWithMap
+    return locations.map(loc => ({
+      geoId: loc.geoId,
+      placeName: loc.placeName,
+      lat: loc.lat,
+      lng: loc.lng,
+    }));
+  }, [locations]);
 
   // Handle collaboration toggle
   const handleToggleCollaboration = useCallback(async () => {
