@@ -52,9 +52,30 @@ function extractTextContent(node: any): string {
 function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBlock[] {
   const geoMarks: GeoMarkInBlock[] = [];
   const seenGeoIds = new Set<string>();
-  let colorCounter = startingColorIndex;
+  const TOTAL_COLORS = 10; // We have 10 colors in our palette
 
   if (!node || !node.content) return geoMarks;
+
+  // Helper function to get the next color that avoids recent ones
+  function getNextColorIndex(existingMarks: GeoMarkInBlock[]): number {
+    if (existingMarks.length === 0) return 0;
+
+    // Get the last 3 color indices used
+    const recentColors = existingMarks
+      .slice(-3)
+      .map(mark => mark.colorIndex);
+
+    // Find a color that hasn't been used recently
+    for (let i = 0; i < TOTAL_COLORS; i++) {
+      const candidateColor = (existingMarks.length + i) % TOTAL_COLORS;
+      if (!recentColors.includes(candidateColor)) {
+        return candidateColor;
+      }
+    }
+
+    // Fallback: just use next sequential
+    return existingMarks.length % TOTAL_COLORS;
+  }
 
   function traverse(n: any) {
     // Check if this node is a text node with geo-mark marks
@@ -65,15 +86,12 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
           if (!seenGeoIds.has(mark.attrs.geoId)) {
             seenGeoIds.add(mark.attrs.geoId);
 
-            // Use stored colorIndex if available, otherwise auto-assign sequentially
-            const hasStoredColor = mark.attrs.colorIndex !== undefined;
-            const colorIndex = hasStoredColor ? mark.attrs.colorIndex : colorCounter++;
+            // Always reassign colors to avoid sequential duplicates
+            const colorIndex = getNextColorIndex(geoMarks);
 
             console.log('[Parser] Geo-mark:', mark.attrs.placeName,
-              'hasStored:', hasStoredColor,
               'stored:', mark.attrs.colorIndex,
-              'assigned:', colorIndex,
-              'counter:', colorCounter);
+              'reassigned:', colorIndex);
 
             geoMarks.push({
               geoId: mark.attrs.geoId,
