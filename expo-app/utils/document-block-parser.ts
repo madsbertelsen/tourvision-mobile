@@ -57,6 +57,7 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
   if (!node || !node.content) return geoMarks;
 
   // Helper function to get the next color that avoids recent ones
+  // NOTE: This is only used when a geo-mark doesn't have a colorIndex stored
   function getNextColorIndex(existingMarks: GeoMarkInBlock[]): number {
     // Use startingColorIndex + length to ensure colors continue across paragraphs
     const baseIndex = startingColorIndex + existingMarks.length;
@@ -87,12 +88,13 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
       if (!seenGeoIds.has(n.attrs.geoId)) {
         seenGeoIds.add(n.attrs.geoId);
 
-        // Always reassign colors to avoid sequential duplicates
-        const colorIndex = getNextColorIndex(geoMarks);
+        // Use stored colorIndex if it exists, otherwise assign a new one
+        const storedColorIndex = n.attrs.colorIndex;
+        const colorIndex = storedColorIndex !== undefined ? storedColorIndex : getNextColorIndex(geoMarks);
 
         console.log('[Parser] Geo-mark node:', n.attrs.placeName,
-          'stored:', n.attrs.colorIndex,
-          'reassigned:', colorIndex,
+          'stored:', storedColorIndex,
+          'using:', colorIndex,
           'existingMarksLength:', geoMarks.length,
           'startingColorIndex:', startingColorIndex);
 
@@ -123,12 +125,13 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
           if (!seenGeoIds.has(mark.attrs.geoId)) {
             seenGeoIds.add(mark.attrs.geoId);
 
-            // Always reassign colors to avoid sequential duplicates
-            const colorIndex = getNextColorIndex(geoMarks);
+            // Use stored colorIndex if it exists, otherwise assign a new one
+            const storedColorIndex = mark.attrs.colorIndex;
+            const colorIndex = storedColorIndex !== undefined ? storedColorIndex : getNextColorIndex(geoMarks);
 
             console.log('[Parser] Geo-mark mark:', mark.attrs.placeName,
-              'stored:', mark.attrs.colorIndex,
-              'reassigned:', colorIndex);
+              'stored:', storedColorIndex,
+              'using:', colorIndex);
 
             geoMarks.push({
               geoId: mark.attrs.geoId,
