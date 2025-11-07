@@ -197,25 +197,15 @@ export default function DynamicLandingDocumentProseMirror({
       return originalColor !== gm.colorIndex;
     });
 
-    if (needsColorUpdate) {
-      console.log('[Landing] Colors need updating, applying reassigned colors to document');
+    if (needsColorUpdate && onContentChange) {
+      console.log('[Landing] Colors need updating, saving reassigned colors to parent');
       const updatedDoc = updateGeoMarkColors(INITIAL_CONTENT, colorMap);
 
-      // Update the document in WebView with reassigned colors
+      // Save the corrected document to parent component
+      // This will persist the colors for the next page load
       setTimeout(() => {
-        if (webViewRef.current) {
-          console.log('[Landing] Sending updated document to WebView with reassigned colors');
-          webViewRef.current.postMessage({
-            type: 'setContent',
-            content: updatedDoc
-          });
-        }
-
-        // Also update parent component with the corrected document
-        if (onContentChange) {
-          onContentChange(updatedDoc);
-        }
-      }, 200); // Delay to ensure WebView is ready
+        onContentChange(updatedDoc);
+      }, 0);
     }
 
     // Notify parent component of initial locations
