@@ -40,6 +40,33 @@ import Svg, { Path } from 'react-native-svg';
 import DocumentEditorWithMap from '@/components/DocumentEditorWithMap';
 import { useTripContext } from './_layout';
 
+// Helper function to get the next color index that avoids recent colors
+function getNextColorIndex(locations: any[]): number {
+  const TOTAL_COLORS = 10; // We have 10 colors in our palette
+
+  // If no locations yet, start with 0
+  if (!locations || locations.length === 0) {
+    return 0;
+  }
+
+  // Get the last few color indices used (up to 3)
+  const recentColors = locations
+    .slice(-3)
+    .map(loc => loc.colorIndex ?? 0);
+
+  // Find a color that hasn't been used recently
+  for (let i = 0; i < TOTAL_COLORS; i++) {
+    const candidateColor = (locations.length + i) % TOTAL_COLORS;
+    if (!recentColors.includes(candidateColor)) {
+      return candidateColor;
+    }
+  }
+
+  // Fallback: if all colors were recently used (shouldn't happen with 10 colors and checking last 3)
+  // Just use the next sequential color
+  return locations.length % TOTAL_COLORS;
+}
+
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
@@ -303,7 +330,7 @@ export default function TripDocumentView() {
       placeName: data.placeName,
       lat: data.lat.toString(),
       lng: data.lng.toString(),
-      colorIndex: 0, // Will be auto-assigned by ProseMirror
+      colorIndex: getNextColorIndex(locations), // Assign color that avoids recent ones
       coordSource: 'nominatim',
       transportProfile: data.transportMode || 'walking',
       transportFrom: data.transportFrom || null,
@@ -317,10 +344,23 @@ export default function TripDocumentView() {
       geoMarkData,
     });
 
+    // Add the new location to the locations array
+    const newLocation = {
+      geoId: geoMarkData.geoId,
+      placeName: geoMarkData.placeName,
+      lat: parseFloat(geoMarkData.lat),
+      lng: parseFloat(geoMarkData.lng),
+      colorIndex: geoMarkData.colorIndex,
+      transportFrom: geoMarkData.transportFrom,
+      transportProfile: geoMarkData.transportProfile,
+      waypoints: geoMarkData.waypoints,
+    };
+    setLocations([...locations, newLocation]);
+
     // Close tool picker
     setToolPickerVisible(false);
     setToolPickerData(null);
-  }, [toolPickerData]);
+  }, [toolPickerData, locations, setLocations]);
 
   // Handle search results changes from tool picker
   const handleSearchResultsChange = useCallback((results: any[], selectedIndex: number) => {
