@@ -156,19 +156,20 @@ export default function DynamicLandingDocumentProseMirror({
   // Track if we've already updated colors for this document to prevent infinite loops
   const colorsUpdatedRef = useRef(false);
 
-  // Track the last parsed content to detect actual changes
-  const lastParsedContentRef = useRef<any>(null);
+  // Track the last parsed content to detect actual changes (using JSON comparison)
+  const lastParsedContentRef = useRef<string>('');
 
   // Parse initial document on mount and extract locations
   // Re-run when INITIAL_CONTENT changes, but only if it's actually different
   useEffect(() => {
-    // Skip if content hasn't actually changed (reference equality)
-    if (lastParsedContentRef.current === INITIAL_CONTENT) {
+    // Skip if content hasn't actually changed (deep equality via JSON)
+    const currentContentStr = JSON.stringify(INITIAL_CONTENT);
+    if (lastParsedContentRef.current === currentContentStr) {
       return;
     }
 
     // Store this content as the last parsed
-    lastParsedContentRef.current = INITIAL_CONTENT;
+    lastParsedContentRef.current = currentContentStr;
 
     console.log('[Landing] Initial content to parse:', INITIAL_CONTENT);
     const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
@@ -190,6 +191,8 @@ export default function DynamicLandingDocumentProseMirror({
     }));
 
     console.log('[Landing] Initial locations extracted:', locationsList);
+    console.log('[Landing] First location colorIndex:', locationsList[0]?.colorIndex);
+    console.log('[Landing] All location colorIndexes:', locationsList.map(l => l.colorIndex));
     setLocations(locationsList);
 
     // Check if any geo-marks need color reassignment

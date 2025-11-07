@@ -58,7 +58,10 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 
   // Helper function to get the next color that avoids recent ones
   function getNextColorIndex(existingMarks: GeoMarkInBlock[]): number {
-    if (existingMarks.length === 0) return 0;
+    // Use startingColorIndex + length to ensure colors continue across paragraphs
+    const baseIndex = startingColorIndex + existingMarks.length;
+
+    if (existingMarks.length === 0) return baseIndex % TOTAL_COLORS;
 
     // Get the last 3 color indices used
     const recentColors = existingMarks
@@ -67,14 +70,14 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 
     // Find a color that hasn't been used recently
     for (let i = 0; i < TOTAL_COLORS; i++) {
-      const candidateColor = (existingMarks.length + i) % TOTAL_COLORS;
+      const candidateColor = (baseIndex + i) % TOTAL_COLORS;
       if (!recentColors.includes(candidateColor)) {
         return candidateColor;
       }
     }
 
     // Fallback: just use next sequential
-    return existingMarks.length % TOTAL_COLORS;
+    return baseIndex % TOTAL_COLORS;
   }
 
   function traverse(n: any) {
@@ -89,7 +92,8 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 
         console.log('[Parser] Geo-mark node:', n.attrs.placeName,
           'stored:', n.attrs.colorIndex,
-          'reassigned:', colorIndex);
+          'reassigned:', colorIndex,
+          'existingMarksLength:', geoMarks.length);
 
         // Extract text from content
         const text = n.content && Array.isArray(n.content) && n.content[0]?.text || '';
