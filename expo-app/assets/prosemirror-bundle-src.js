@@ -72,8 +72,9 @@ const mySchema = new Schema({
       }],
       toDOM(mark) {
         // Apply background color based on colorIndex
+        // IMPORTANT: This must match the COLORS array in DocumentSplitMap.tsx
         const colors = [
-          '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+          '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
           '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
         ];
         const colorIndex = mark.attrs.colorIndex || 0;
