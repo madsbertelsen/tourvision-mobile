@@ -226,77 +226,44 @@ export default function LocationSearchMap({
   const animateMapTo = (targetLat: number, targetLng: number, targetZoom: number, duration?: number) => {
     if (!mapRef.current) return;
 
-    // Cancel any existing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-
-    // Get current state
+    // Get current state for duration calculation if needed
     const startCenter = mapRef.current.getCenter();
     const startLat = startCenter.lat;
     const startLng = startCenter.lng;
     const startZoom = mapRef.current.getZoom();
 
-    // Calculate peak zoom (arc height) that shows both endpoints
-    const peakZoom = calculatePeakZoom(startLat, startLng, targetLat, targetLng);
-
     // Calculate duration based on distance if not provided
     const animDuration = duration ?? calculateDuration(startLat, startLng, targetLat, targetLng, startZoom, targetZoom);
 
-    const startTime = Date.now();
+    // Calculate distance for curve adjustment
+    const startPoint = turf.point([startLng, startLat]);
+    const endPoint = turf.point([targetLng, targetLat]);
+    const distance = turf.distance(startPoint, endPoint, { units: 'kilometers' });
+
+    // Adjust curve parameter based on distance
+    let curve = 1.42; // Default smooth curve
+    if (distance > 500) {
+      curve = 1.6; // More arc for long distances
+    } else if (distance < 50) {
+      curve = 1.2; // Gentler arc for nearby locations
+    }
+
     setIsAnimating(true);
 
-    const animate = () => {
-      if (!mapRef.current) return;
+    // Use Mapbox's native flyTo for smooth, GPU-accelerated animation
+    mapRef.current.flyTo({
+      center: [targetLng, targetLat],
+      zoom: targetZoom,
+      duration: animDuration,
+      easing: easeInOutCubic,
+      curve: curve,
+      essential: false, // Allows interruption if needed
+    });
 
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / animDuration, 1);
-
-      // Three-phase sequential animation (NO overlap):
-      // Phase 1 (0-30%): Zoom out at start position
-      // Phase 2 (30-70%): Pan at peak zoom (high altitude)
-      // Phase 3 (70-100%): Zoom in at target position
-      let lat, lng, zoom;
-
-      if (progress < 0.3) {
-        // Phase 1: Zoom out at start position
-        const phaseProgress = progress / 0.3;
-        const phaseEased = easeInOutCubic(phaseProgress);
-
-        lat = startLat;
-        lng = startLng;
-        zoom = lerpZoom(startZoom, peakZoom, phaseEased);
-      } else if (progress < 0.7) {
-        // Phase 2: Pan at peak zoom (high altitude)
-        const phaseProgress = (progress - 0.3) / 0.4;
-        const phaseEased = easeInOutCubic(phaseProgress);
-
-        [lat, lng] = lerpLatLng(startLat, startLng, targetLat, targetLng, phaseEased);
-        zoom = peakZoom; // Keep zoom constant at peak
-      } else {
-        // Phase 3: Zoom in at target position
-        const phaseProgress = (progress - 0.7) / 0.3;
-        const phaseEased = easeInOutCubic(phaseProgress);
-
-        lat = targetLat;
-        lng = targetLng;
-        zoom = lerpZoom(peakZoom, targetZoom, phaseEased);
-      }
-
-      // Update map
-      mapRef.current.setCenter([lng, lat]);
-      mapRef.current.setZoom(zoom);
-
-      // Continue animation or finish
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        animationRef.current = null;
-        setIsAnimating(false);
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
+    // Mark animation as complete after duration
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, animDuration);
   };
 
   // Auto-scroll to center the selected card
