@@ -96,13 +96,65 @@ export default function ToolPickerBottomSheet({
   useEffect(() => {
     if (visible) {
       setFocusedTool(markType || 'location');
-      setCurrentStep('picker');
+
+      // If editing an existing location with coordinates, skip picker and go to transport-config
+      if (isEditing && markType === 'location' && existingMarkAttrs?.lat && existingMarkAttrs?.lng) {
+        console.log('[ToolPickerBottomSheet] Editing existing location, skipping to transport-config');
+
+        // Create location result from existing data
+        const locationResult: LocationResult = {
+          lat: existingMarkAttrs.lat.toString(),
+          lon: existingMarkAttrs.lng.toString(),
+          display_name: existingMarkAttrs.placeName || selectedText,
+          address: {}
+        };
+
+        setSelectedLocation(locationResult);
+        setSelectedResultIndex(0);
+
+        // Pre-fill transport mode if it exists
+        if (existingMarkAttrs.transportProfile) {
+          setTransportMode(existingMarkAttrs.transportProfile as TransportMode);
+        }
+
+        // Go directly to transport-config (or skip if no other locations)
+        if (existingGeoMarks.length > 1) {
+          setCurrentStep('transport-config');
+        } else {
+          // Only one location - close immediately and update
+          setCurrentStep('picker'); // Set to picker but will close
+          if (onCreateGeoMark) {
+            onCreateGeoMark({
+              placeName: locationResult.display_name,
+              lat: parseFloat(locationResult.lat),
+              lng: parseFloat(locationResult.lon),
+              transportMode: existingMarkAttrs.transportProfile as TransportMode | undefined,
+              transportFrom: existingMarkAttrs.transportFrom,
+              waypoints: existingMarkAttrs.waypoints,
+            });
+          }
+          // Close the modal since there's nothing to configure
+          setTimeout(() => onClose(), 0);
+          return;
+        }
+      } else {
+        // Normal flow: start at picker step
+        setCurrentStep('picker');
+      }
+
       // Pre-fill search with selected text
       setSearchQuery(selectedText);
       setSearchResults([]);
       setSelectedResultIndex(0);
-      setSelectedLocation(null);
-      setTransportMode('walking');
+
+      if (!isEditing || !existingMarkAttrs?.lat) {
+        setSelectedLocation(null);
+      }
+
+      if (!isEditing || !existingMarkAttrs?.transportProfile) {
+        setTransportMode('walking');
+      }
+
       setCurrentRoute(null);
 
       // Move focus out of iframe to enable keyboard navigation
@@ -116,7 +168,7 @@ export default function ToolPickerBottomSheet({
         window.focus();
       }, 0);
     }
-  }, [visible, selectedText, markType]);
+  }, [visible, selectedText, markType, isEditing, existingMarkAttrs, existingGeoMarks, onCreateGeoMark, onClose]);
 
   // Notify parent of search results changes
   useEffect(() => {

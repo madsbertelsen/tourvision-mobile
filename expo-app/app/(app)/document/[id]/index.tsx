@@ -262,17 +262,49 @@ export default function TripDocumentView() {
   const handleToolPickerMessage = useCallback((data: any) => {
     if (data.type === 'showToolPicker') {
       console.log('[TripDocument] Showing tool picker with data:', data.data);
-      setToolPickerData({
+
+      const pickerData = {
         selectedText: data.data.selectedText,
         from: data.data.from,
         to: data.data.to,
         markType: data.data.markType,
         isEditing: data.data.isEditing || false,
         existingMarkAttrs: data.data.existingMarkAttrs,
-      });
-      setToolPickerVisible(true);
+      };
+
+      // If editing a location with existing coordinates, skip the tool picker
+      // and go straight to transport configuration or update
+      if (pickerData.isEditing &&
+          pickerData.markType === 'location' &&
+          pickerData.existingMarkAttrs?.lat &&
+          pickerData.existingMarkAttrs?.lng) {
+
+        console.log('[TripDocument] Editing existing location, skipping tool picker');
+
+        // Check if there are other locations to route from
+        const hasOtherLocations = existingGeoMarks.length > 1;
+
+        if (hasOtherLocations) {
+          // Show transport configuration directly
+          setToolPickerData(pickerData);
+          setToolPickerVisible(true);
+          // The ToolPickerBottomSheet will handle going directly to transport-config
+        } else {
+          // No other locations - just update the location without showing any modal
+          console.log('[TripDocument] No other locations, updating directly');
+          // Note: For now, we can't update without showing UI
+          // This would require a direct update mechanism
+          // For now, show the tool picker but it will auto-proceed
+          setToolPickerData(pickerData);
+          setToolPickerVisible(true);
+        }
+      } else {
+        // Normal flow: show tool picker for creating new or editing without coordinates
+        setToolPickerData(pickerData);
+        setToolPickerVisible(true);
+      }
     }
-  }, []);
+  }, [existingGeoMarks]);
 
   const handleSelectLocation = useCallback(() => {
     console.log('[TripDocument] Tool picker - Location selected');
