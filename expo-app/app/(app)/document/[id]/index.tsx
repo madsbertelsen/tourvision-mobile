@@ -71,7 +71,7 @@ export default function TripDocumentView() {
   const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
   const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
-  const [showChat, setShowChat] = useState(true);
+  const [showChat, setShowChat] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(110); // Default fallback, will be measured
   const [documentWidth, setDocumentWidth] = useState(700); // Track actual document container width
