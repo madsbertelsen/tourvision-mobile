@@ -928,7 +928,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
             >
               <View style={[
                 styles.marker,
-                { backgroundColor: COLORS[(location.colorIndex || 0) % 5] }
+                { backgroundColor: COLORS[(location.colorIndex || 0) % COLORS.length] }
               ]}>
                 <View style={styles.markerInner} />
               </View>

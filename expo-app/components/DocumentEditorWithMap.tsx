@@ -35,6 +35,37 @@ interface DynamicLandingDocumentProseMirrorProps {
 // Use the full landing page content
 const DEFAULT_INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
+/**
+ * Update geo-mark colorIndex in document recursively
+ */
+function updateGeoMarkColors(doc: any, colorMap: Map<string, number>): any {
+  if (!doc || typeof doc !== 'object') return doc;
+
+  // If this is a geoMark node, update its colorIndex
+  if (doc.type === 'geoMark' && doc.attrs && doc.attrs.geoId) {
+    const newColorIndex = colorMap.get(doc.attrs.geoId);
+    if (newColorIndex !== undefined && newColorIndex !== doc.attrs.colorIndex) {
+      return {
+        ...doc,
+        attrs: {
+          ...doc.attrs,
+          colorIndex: newColorIndex
+        }
+      };
+    }
+  }
+
+  // Recursively process content array
+  if (doc.content && Array.isArray(doc.content)) {
+    return {
+      ...doc,
+      content: doc.content.map((child: any) => updateGeoMarkColors(child, colorMap))
+    };
+  }
+
+  return doc;
+}
+
 // Define the color palette (matching other components)
 const COLORS = [
   '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
@@ -431,15 +462,9 @@ export default function DynamicLandingDocumentProseMirror({
       console.log('[Landing] User edited document');
     }
 
-    // Update current document and parse blocks for map mode
-    setCurrentDocument(doc);
+    // Parse blocks to get geo-marks with reassigned colors
     const blocks = parseDocumentIntoBlocks(doc);
     setDocumentBlocks(blocks);
-
-    // Call the onContentChange prop if provided
-    if (onContentChange) {
-      onContentChange(doc);
-    }
 
     // Update locations list from all geo-marks
     const allGeoMarks = blocks.flatMap(block => block.geoMarks);
@@ -453,6 +478,18 @@ export default function DynamicLandingDocumentProseMirror({
       transportProfile: gm.transportProfile || null,
       waypoints: gm.waypoints || null
     }));
+
+    // Update document with reassigned colors
+    const colorMap = new Map(allGeoMarks.map(gm => [gm.geoId, gm.colorIndex]));
+    const updatedDoc = updateGeoMarkColors(doc, colorMap);
+
+    // Update current document with reassigned colors
+    setCurrentDocument(updatedDoc);
+
+    // Call the onContentChange prop with the updated document
+    if (onContentChange) {
+      onContentChange(updatedDoc);
+    }
 
     setLocations(prevLocations => {
       // Only update if locations actually changed
