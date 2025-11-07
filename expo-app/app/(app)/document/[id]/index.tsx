@@ -378,6 +378,11 @@ export default function TripDocumentView() {
     // Close tool picker
     setToolPickerVisible(false);
     setToolPickerData(null);
+
+    // Focus editor after modal closes (with delay for animation)
+    setTimeout(() => {
+      webViewRef.current?.focusEditor();
+    }, 300);
   }, [toolPickerData, locations, setLocations]);
 
   // Handle search results changes from tool picker
