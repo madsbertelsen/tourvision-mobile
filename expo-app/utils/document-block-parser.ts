@@ -93,12 +93,13 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
         console.log('[Parser] Geo-mark node:', n.attrs.placeName,
           'stored:', n.attrs.colorIndex,
           'reassigned:', colorIndex,
-          'existingMarksLength:', geoMarks.length);
+          'existingMarksLength:', geoMarks.length,
+          'startingColorIndex:', startingColorIndex);
 
         // Extract text from content
         const text = n.content && Array.isArray(n.content) && n.content[0]?.text || '';
 
-        geoMarks.push({
+        const geoMark = {
           geoId: n.attrs.geoId,
           placeName: n.attrs.placeName,
           lat: n.attrs.lat,
@@ -108,7 +109,9 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
           transportFrom: n.attrs.transportFrom || null,
           transportProfile: n.attrs.transportProfile || null,
           waypoints: n.attrs.waypoints || null
-        });
+        };
+        console.log('[Parser] Pushing geo-mark:', geoMark);
+        geoMarks.push(geoMark);
       }
     }
 
@@ -151,6 +154,11 @@ function extractGeoMarks(node: any, startingColorIndex: number = 0): GeoMarkInBl
 
   node.content.forEach((child: any) => traverse(child));
 
+  console.log('[Parser] extractGeoMarks returning:', geoMarks.map(gm => ({
+    placeName: gm.placeName,
+    colorIndex: gm.colorIndex
+  })));
+
   return geoMarks;
 }
 
@@ -178,11 +186,17 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
     });
     if (node.type === 'paragraph' || node.type === 'heading') {
       const text = extractTextContent(node);
+      console.log('[ParseDocumentIntoBlocks] Calling extractGeoMarks with globalColorIndex:', globalColorIndex);
       const geoMarks = extractGeoMarks(node, globalColorIndex);
-      console.log('[ParseDocumentIntoBlocks] Extracted geoMarks:', geoMarks);
+      console.log('[ParseDocumentIntoBlocks] Extracted geoMarks:', geoMarks.map(gm => ({
+        placeName: gm.placeName,
+        colorIndex: gm.colorIndex
+      })));
 
       // Increment globalColorIndex by number of geo-marks found
+      console.log('[ParseDocumentIntoBlocks] Incrementing globalColorIndex from', globalColorIndex, 'by', geoMarks.length);
       globalColorIndex += geoMarks.length;
+      console.log('[ParseDocumentIntoBlocks] New globalColorIndex:', globalColorIndex);
 
       blocks.push({
         type: node.type,
