@@ -35,6 +35,12 @@ interface DynamicLandingDocumentProseMirrorProps {
 // Use the full landing page content
 const DEFAULT_INITIAL_CONTENT = LANDING_DOCUMENT_CONTENT;
 
+// Define the color palette (matching other components)
+const COLORS = [
+  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+];
+
 // Helper function to get the next color index that avoids recent colors
 function getNextColorIndex(locations: Location[]): number {
   const TOTAL_COLORS = 10; // We have 10 colors in our palette
@@ -1116,7 +1122,7 @@ export default function DynamicLandingDocumentProseMirror({
                       <View
                         style={[
                           styles.locationMarkerDot,
-                          { backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][geoMark.colorIndex % 5] }
+                          { backgroundColor: COLORS[geoMark.colorIndex % COLORS.length] }
                         ]}
                       />
                       <Text style={styles.locationItemText} numberOfLines={1}>
