@@ -248,47 +248,27 @@ export default function TransportConfigView({
       )}
 
       {/* Transport modes */}
-      <ScrollView style={styles.modesScroll} contentContainerStyle={styles.modesContainer}>
+      <View style={styles.modesSection}>
         <Text style={styles.sectionLabel}>How will you get there?</Text>
-
-        {TRANSPORT_MODES.map((transport) => (
-          <TouchableOpacity
-            key={transport.mode}
-            style={[
-              styles.modeCard,
-              selectedMode === transport.mode && styles.modeCardSelected,
-            ]}
-            onPress={() => onSelectMode(transport.mode)}
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedMode}
+            onValueChange={(value) => onSelectMode(value as TransportMode)}
+            style={styles.picker}
           >
-            <View style={[
-              styles.modeIconContainer,
-              selectedMode === transport.mode && styles.modeIconContainerSelected,
-            ]}>
-              <Ionicons
-                name={transport.icon}
-                size={24}
-                color={selectedMode === transport.mode ? '#3B82F6' : '#6B7280'}
+            {TRANSPORT_MODES.map((transport) => (
+              <Picker.Item
+                key={transport.mode}
+                label={`${transport.label} - ${transport.description}`}
+                value={transport.mode}
               />
-            </View>
+            ))}
+          </Picker>
+        </View>
+      </View>
 
-            <View style={styles.modeTextContainer}>
-              <Text style={[
-                styles.modeLabel,
-                selectedMode === transport.mode && styles.modeLabelSelected,
-              ]}>
-                {transport.label}
-              </Text>
-              <Text style={styles.modeDescription}>{transport.description}</Text>
-            </View>
-
-            {selectedMode === transport.mode && (
-              <View style={styles.checkmarkContainer}>
-                <Ionicons name="checkmark-circle" size={24} color="#3B82F6" />
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Spacer to push button to bottom */}
+      <View style={styles.spacer} />
 
       {/* Add to document button */}
       <View style={styles.footer}>
@@ -430,62 +410,18 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
   },
-  modesScroll: {
-    flex: 1,
-  },
-  modesContainer: {
+  modesSection: {
     padding: 16,
-    gap: 12,
+    gap: 8,
   },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  modeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    gap: 12,
-  },
-  modeCardSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
-  },
-  modeIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeIconContainerSelected: {
-    backgroundColor: '#DBEAFE',
-  },
-  modeTextContainer: {
+  spacer: {
     flex: 1,
-  },
-  modeLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  modeLabelSelected: {
-    color: '#1E40AF',
-  },
-  modeDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  checkmarkContainer: {
-    padding: 4,
   },
   footer: {
     padding: 16,
