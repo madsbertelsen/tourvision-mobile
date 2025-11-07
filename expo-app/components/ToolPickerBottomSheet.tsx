@@ -186,7 +186,24 @@ export default function ToolPickerBottomSheet({
     console.log('[ToolPickerBottomSheet] Location selected:', result.display_name);
     setSelectedLocation(result);
     setSelectedResultIndex(index);
-    setCurrentStep('transport-config');
+
+    // If no existing geo-marks, skip transport config and create directly
+    if (existingGeoMarks.length === 0) {
+      console.log('[ToolPickerBottomSheet] No existing geo-marks, creating directly');
+      if (onCreateGeoMark) {
+        onCreateGeoMark({
+          placeName: result.display_name,
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          transportMode: undefined,
+          transportFrom: undefined,
+          waypoints: undefined,
+        });
+      }
+    } else {
+      // Show transport config if there are existing locations to route from
+      setCurrentStep('transport-config');
+    }
   };
 
   // Handle back from location search
