@@ -181,6 +181,54 @@ export default function ToolPickerBottomSheet({
     setCurrentStep('location-search');
   };
 
+  // Handle edit button clicked for existing location
+  const handleEditLocation = () => {
+    console.log('[ToolPickerBottomSheet] Edit location clicked', existingMarkAttrs);
+
+    // If coordinates already exist, skip search and go directly to transport config (or create)
+    if (existingMarkAttrs?.lat && existingMarkAttrs?.lng) {
+      // Create location result from existing data
+      const locationResult: LocationResult = {
+        lat: existingMarkAttrs.lat.toString(),
+        lon: existingMarkAttrs.lng.toString(),
+        display_name: existingMarkAttrs.placeName || selectedText,
+        address: {}
+      };
+
+      setSelectedLocation(locationResult);
+      setSelectedResultIndex(0);
+
+      // If no existing geo-marks (this is the only one), or if no other locations to route from
+      if (existingGeoMarks.length === 0 || existingGeoMarks.length === 1) {
+        console.log('[ToolPickerBottomSheet] No origin locations, creating directly');
+        // Create/update directly without transport config
+        if (onCreateGeoMark) {
+          onCreateGeoMark({
+            placeName: locationResult.display_name,
+            lat: parseFloat(locationResult.lat),
+            lng: parseFloat(locationResult.lon),
+            transportMode: existingMarkAttrs.transportProfile as TransportMode | undefined,
+            transportFrom: existingMarkAttrs.transportFrom,
+            waypoints: existingMarkAttrs.waypoints,
+          });
+        }
+      } else {
+        // Go to transport config with existing data
+        console.log('[ToolPickerBottomSheet] Going to transport config with existing data');
+        setCurrentStep('transport-config');
+
+        // Pre-fill transport mode if it exists
+        if (existingMarkAttrs.transportProfile) {
+          setTransportMode(existingMarkAttrs.transportProfile as TransportMode);
+        }
+      }
+    } else {
+      // No coordinates - go to search like normal
+      console.log('[ToolPickerBottomSheet] No coordinates, going to search');
+      handleLocationButtonClick();
+    }
+  };
+
   // Handle location result selected
   const handleLocationResultSelected = (result: LocationResult, index: number) => {
     console.log('[ToolPickerBottomSheet] Location selected:', result.display_name);
@@ -446,7 +494,7 @@ export default function ToolPickerBottomSheet({
               <>
                 <TouchableOpacity
                   style={[styles.toolButton, styles.toolButtonFocused]}
-                  onPress={onEdit || (markType === 'location' ? handleLocationButtonClick : onSelectComment)}
+                  onPress={onEdit || (markType === 'location' ? handleEditLocation : onSelectComment)}
                 >
                   <View style={styles.toolIconContainer}>
                     <Ionicons
