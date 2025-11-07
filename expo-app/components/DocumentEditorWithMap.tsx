@@ -139,8 +139,11 @@ export default function DynamicLandingDocumentProseMirror({
     setLocations(locationsList);
 
     // Notify parent component of initial locations
+    // Use setTimeout to avoid updating parent state during render
     if (onLocationsChange && locationsList.length > 0) {
-      onLocationsChange(locationsList);
+      setTimeout(() => {
+        onLocationsChange(locationsList);
+      }, 0);
     }
   }, [INITIAL_CONTENT, onLocationsChange]);
 
