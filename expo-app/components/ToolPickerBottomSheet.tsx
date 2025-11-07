@@ -370,6 +370,48 @@ export default function ToolPickerBottomSheet({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visible, currentStep, searchResults, selectedResultIndex, onClose, handleLocationResultSelected]);
 
+  // Keyboard navigation handler for transport-config step
+  useEffect(() => {
+    if (!visible || currentStep !== 'transport-config' || Platform.OS !== 'web') return;
+
+    const transportModes: TransportMode[] = ['walking', 'driving', 'transit', 'cycling', 'flight'];
+    const currentIndex = transportModes.indexOf(transportMode);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      console.log('[ToolPickerBottomSheet] Transport config key:', e.key, 'mode:', transportMode);
+
+      switch (e.key) {
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          // Move to previous transport mode
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : transportModes.length - 1;
+          setTransportMode(transportModes[prevIndex]);
+          break;
+
+        case 'ArrowDown':
+        case 'Tab':
+          e.preventDefault();
+          // Move to next transport mode
+          const nextIndex = currentIndex < transportModes.length - 1 ? currentIndex + 1 : 0;
+          setTransportMode(transportModes[nextIndex]);
+          break;
+
+        case 'Enter':
+          e.preventDefault();
+          handleAddToDocument();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [visible, currentStep, transportMode, onClose, handleAddToDocument]);
+
   if (!visible) return null;
 
   // Render different steps
