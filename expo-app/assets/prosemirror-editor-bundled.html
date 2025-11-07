@@ -1290,6 +1290,7 @@
 
       // Add click handler for geo-marks and comments
       document.querySelector('.ProseMirror').addEventListener('click', function(e) {
+        console.log('[WebView] Click detected on:', e.target, 'classes:', e.target.classList);
         if (e.target.classList.contains('geo-mark')) {
           const attrs = {
             geoId: e.target.getAttribute('data-geo-id'),

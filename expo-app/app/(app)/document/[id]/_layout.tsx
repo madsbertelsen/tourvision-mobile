@@ -296,7 +296,58 @@ export default function TripLayout() {
         clearLocationFlow,
       }}
     >
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen
+          name="test-modal"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="geo-edit"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="geo-search"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="geo-transport"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="test-nested/[testId]"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="geo-search/[geoId]"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="geo-transport/[geoId]"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
+      </Stack>
     </TripContext.Provider>
   );
 }

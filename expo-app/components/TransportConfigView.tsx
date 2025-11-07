@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { fetchRouteWithCache, type RouteDetails } from '../utils/transportation-api';
+import LocationPickerMap from './LocationPickerMap';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
@@ -30,6 +31,7 @@ interface TransportConfigViewProps {
     destination: { lat: number; lng: number };
     geometry?: RouteDetails['geometry'];
   } | null) => void;
+  onLocationChange?: (lat: number, lng: number) => void;
 }
 
 const TRANSPORT_MODES: Array<{
@@ -81,12 +83,22 @@ export default function TransportConfigView({
   onAddToDocument,
   onBack,
   onRouteChange,
+  onLocationChange,
 }: TransportConfigViewProps) {
   const [routeData, setRouteData] = useState<RouteDetails | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<typeof originLocation>(originLocation);
   const [showOriginSelector, setShowOriginSelector] = useState(false);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [currentLat, setCurrentLat] = useState(locationLat);
+  const [currentLng, setCurrentLng] = useState(locationLng);
+
+  const handleLocationChange = (lat: number, lng: number) => {
+    setCurrentLat(lat);
+    setCurrentLng(lng);
+    onLocationChange?.(lat, lng);
+  };
 
   // Fetch route when transport mode or locations change
   useEffect(() => {
@@ -164,6 +176,32 @@ export default function TransportConfigView({
         <Text style={styles.headerTitle}>Transportation</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      {/* Map preview - only on web */}
+      {Platform.OS === 'web' && (
+        <View style={styles.mapContainer}>
+          <LocationPickerMap
+            lat={currentLat}
+            lng={currentLng}
+            placeName={locationName}
+            editable={isEditingLocation}
+            onLocationChange={handleLocationChange}
+          />
+          <TouchableOpacity
+            style={styles.editLocationButton}
+            onPress={() => setIsEditingLocation(!isEditingLocation)}
+          >
+            <Ionicons
+              name={isEditingLocation ? 'checkmark-circle' : 'pencil'}
+              size={20}
+              color="#FFFFFF"
+            />
+            <Text style={styles.editLocationButtonText}>
+              {isEditingLocation ? 'Done' : 'Adjust Location'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Scrollable content */}
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
@@ -305,6 +343,33 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32, // Match back button width for centering
+  },
+  mapContainer: {
+    position: 'relative',
+    height: 200,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  editLocationButton: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  editLocationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   scrollContent: {
     flex: 1,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useTripContext } from '../../_layout';
+import { useTripContext } from './_layout';
 
 export default function ToolPickerRoute() {
   const router = useRouter();
@@ -16,7 +16,7 @@ export default function ToolPickerRoute() {
   };
 
   const handleLocationClick = () => {
-    router.push(`/document/${tripId}/geo/${geoId}/search`);
+    router.push(`/document/${tripId}/geo-search?geoId=${geoId}`);
   };
 
   const handleCommentClick = () => {

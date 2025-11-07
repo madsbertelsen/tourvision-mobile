@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useTripContext } from '../../_layout';
+import { useTripContext } from './_layout';
 import TransportConfigView from '@/components/TransportConfigView';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';

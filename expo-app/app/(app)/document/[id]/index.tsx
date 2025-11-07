@@ -194,7 +194,7 @@ export default function TripDocumentView() {
 
   // Location modal handlers
   const {
-    handleShowGeoMarkEditor,
+    handleShowGeoMarkEditor: _handleShowGeoMarkEditor,
     handleSelectResult,
     handleContinue,
     handleTransportModeChange,
@@ -202,6 +202,12 @@ export default function TripDocumentView() {
     handleAddLocation,
     handleClose,
   } = useLocationModal({ webViewRef });
+
+  // TEST: Override to navigate to test modal instead
+  const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
+    console.log('[TripDocument] Geo-mark clicked, navigating to test modal');
+    router.push(`/document/${tripId}/test-modal`);
+  }, [tripId]);
 
   // Handle selection changes to update line position immediately
   const handleSelectionChange = useCallback((empty: boolean, selectedText?: string, selectionData?: any) => {
@@ -261,23 +267,36 @@ export default function TripDocumentView() {
       // Store the data for potential fallback to old flow
       setToolPickerData(pickerData);
 
-      // NEW ROUTE-BASED FLOW: Start location flow and navigate to picker route
-      if (!pickerData.isEditing) {
-        console.log('[TripDocument] Starting new route-based location flow');
+      console.log('[TripDocument] Showing tool picker with data:', pickerData);
+
+      if (pickerData.isEditing && pickerData.existingMarkAttrs) {
+        // Editing existing geo-mark - navigate to geo-edit
+        const attrs = pickerData.existingMarkAttrs;
+        router.push({
+          pathname: `/document/${tripId}/geo-edit` as any,
+          params: {
+            isEditing: 'true',
+            geoId: attrs.geoId || '',
+            placeName: attrs.placeName || '',
+            selectedText: pickerData.selectedText || '',
+            lat: attrs.lat || '',
+            lng: attrs.lng || '',
+            colorIndex: attrs.colorIndex?.toString() || '0',
+          }
+        });
+      } else {
+        // Creating new geo-mark from selection - generate geoId and start location flow
         const geoId = startLocationFlow(
           pickerData.selectedText,
-          pickerData.from || 0,
-          pickerData.to || 0
+          pickerData.from,
+          pickerData.to
         );
-        router.push(`/document/${tripId}/geo/${geoId}/picker`);
-      } else {
-        // For editing existing locations, keep the old flow for now
-        // TODO: Implement route-based editing flow
-        console.log('[TripDocument] Editing location - using old ToolPickerBottomSheet');
-        setToolPickerVisible(true);
+
+        // Navigate to geo-search with dynamic geoId
+        router.push(`/document/${tripId}/geo-search/${geoId}` as any);
       }
     }
-  }, [existingGeoMarks, startLocationFlow, tripId]);
+  }, [existingGeoMarks, startLocationFlow, tripId, router]);
 
   const handleSelectLocation = useCallback(() => {
     console.log('[TripDocument] Tool picker - Location selected');
@@ -556,6 +575,21 @@ export default function TripDocumentView() {
               name={isEditMode ? "book" : "create-outline"}
               size={22}
               color={isEditMode ? "#fff" : "#6B7280"}
+            />
+          </TouchableOpacity>
+
+          {/* Test Nested Dynamic Route Button */}
+          <TouchableOpacity
+            onPress={() => {
+              const randomId = `test-${Date.now()}`;
+              router.push(`/document/${tripId}/test-nested/${randomId}` as any);
+            }}
+            style={[styles.iconButton, { backgroundColor: '#10B981' }]}
+          >
+            <Ionicons
+              name="flask"
+              size={22}
+              color="#fff"
             />
           </TouchableOpacity>
         </View>

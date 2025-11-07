@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useTripContext } from '../../_layout';
+import { useTripContext } from '../_layout';
 
 interface SearchResult {
   place_id: string;
@@ -30,7 +30,7 @@ export default function LocationSearchRoute() {
 
   const handleClose = () => {
     clearLocationFlow();
-    router.push(`/document/${tripId}`);
+    router.back();
   };
 
   const handleSearch = async (query: string) => {
@@ -97,7 +97,7 @@ export default function LocationSearchRoute() {
     });
 
     // Navigate to transport config
-    router.push(`/document/${tripId}/geo/${geoId}/transport`);
+    router.push(`/document/${tripId}/geo-transport/${geoId}` as any);
   };
 
   const handleContinue = () => {

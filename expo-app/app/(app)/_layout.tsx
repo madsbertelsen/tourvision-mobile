@@ -131,6 +131,16 @@ function MockLayoutContent() {
           headerShown: false, // Screen has its own header
         }}
       />
+      <Drawer.Screen
+        name="test-modal-top"
+        options={{
+          title: 'Test Modal',
+          drawerLabel: () => null, // Hide from drawer menu
+          headerShown: false,
+          presentation: 'transparentModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
     </Drawer>
   );
 }
