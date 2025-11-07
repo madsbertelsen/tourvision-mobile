@@ -31,13 +31,16 @@ import { supabase } from '@/lib/supabase/client';
 import { EMPTY_DOCUMENT_CONTENT } from '@/utils/landing-document-content';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import DocumentEditorWithMap from '@/components/DocumentEditorWithMap';
 import { useTripContext } from './_layout';
+import LocationPickerModal from '@/components/modals/LocationPickerModal';
+import LocationSearchModal from '@/components/modals/LocationSearchModal';
+import TransportConfigModal from '@/components/modals/TransportConfigModal';
 
 // Helper function to get the next color index that avoids recent colors
 function getNextColorIndex(locations: any[]): number {
@@ -68,8 +71,12 @@ function getNextColorIndex(locations: any[]): number {
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal } = useTripContext();
+  const params = useLocalSearchParams();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow } = useTripContext();
   const { startPresentation, isPresenting } = usePresentation();
+
+  // Read modal query param
+  const activeModal = params.modal as string | undefined;
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
@@ -258,39 +265,26 @@ export default function TripDocumentView() {
         existingMarkAttrs: data.data.existingMarkAttrs,
       };
 
-      // If editing a location with existing coordinates, skip the tool picker
-      // and go straight to transport configuration or update
-      if (pickerData.isEditing &&
-          pickerData.markType === 'location' &&
-          pickerData.existingMarkAttrs?.lat &&
-          pickerData.existingMarkAttrs?.lng) {
+      // Store the data for potential fallback to old flow
+      setToolPickerData(pickerData);
 
-        console.log('[TripDocument] Editing existing location, skipping tool picker');
-
-        // Check if there are other locations to route from
-        const hasOtherLocations = existingGeoMarks.length > 1;
-
-        if (hasOtherLocations) {
-          // Show transport configuration directly
-          setToolPickerData(pickerData);
-          setToolPickerVisible(true);
-          // The ToolPickerBottomSheet will handle going directly to transport-config
-        } else {
-          // No other locations - just update the location without showing any modal
-          console.log('[TripDocument] No other locations, updating directly');
-          // Note: For now, we can't update without showing UI
-          // This would require a direct update mechanism
-          // For now, show the tool picker but it will auto-proceed
-          setToolPickerData(pickerData);
-          setToolPickerVisible(true);
-        }
+      // NEW ROUTE-BASED FLOW: Start location flow and navigate to picker modal
+      if (!pickerData.isEditing) {
+        console.log('[TripDocument] Starting new route-based location flow');
+        startLocationFlow(
+          pickerData.selectedText,
+          pickerData.from || 0,
+          pickerData.to || 0
+        );
+        router.push(`/document/${tripId}?modal=picker`);
       } else {
-        // Normal flow: show tool picker for creating new or editing without coordinates
-        setToolPickerData(pickerData);
+        // For editing existing locations, keep the old flow for now
+        // TODO: Implement route-based editing flow
+        console.log('[TripDocument] Editing location - using old ToolPickerBottomSheet');
         setToolPickerVisible(true);
       }
     }
-  }, [existingGeoMarks]);
+  }, [existingGeoMarks, startLocationFlow, tripId]);
 
   const handleSelectLocation = useCallback(() => {
     console.log('[TripDocument] Tool picker - Location selected');
@@ -437,6 +431,55 @@ export default function TripDocumentView() {
       alert('Failed to start presentation: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }, [currentDoc, startPresentation]);
+
+  // Watch for locationFlowResult and create geo-mark when available
+  useEffect(() => {
+    if (locationFlowState.result && webViewRef.current) {
+      console.log('[TripDocument] Creating geo-mark from locationFlowResult:', locationFlowState.result);
+
+      const { placeName, lat, lng, transportMode, transportFrom, waypoints } = locationFlowState.result;
+
+      // Generate geoId
+      const geoId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Get next color index
+      const colorIndex = getNextColorIndex(locations);
+
+      // Prepare geo-mark data
+      const geoMarkData = {
+        geoId,
+        placeName,
+        lat,
+        lng,
+        colorIndex,
+        coordSource: 'manual' as const,
+        description: null,
+        visitDocument: null,
+        transportFrom: transportFrom || null,
+        transportProfile: transportMode || 'walking',
+        waypoints: waypoints || null,
+        photoName: null,
+      };
+
+      // Send createGeoMark command to WebView using sendCommand
+      webViewRef.current.sendCommand('createGeoMark', {
+        geoMarkData,
+        selectionFrom: locationFlowState.selectionFrom,
+        selectionTo: locationFlowState.selectionTo,
+      });
+
+      // Add to locations list
+      setLocations([...locations, {
+        geoId,
+        placeName,
+        lat,
+        lng,
+        colorIndex,
+      }]);
+
+      console.log('[TripDocument] Geo-mark created successfully');
+    }
+  }, [locationFlowState.result, locations, setLocations]);
 
   return (
     <View style={styles.container}>
@@ -681,6 +724,11 @@ export default function TripDocumentView() {
 
       {/* Presentation Overlay - shows controls when presentation is active */}
       <PresentationOverlay />
+
+      {/* Route-based Location Flow Modals */}
+      {activeModal === 'picker' && <LocationPickerModal />}
+      {activeModal === 'search' && <LocationSearchModal />}
+      {activeModal === 'transport' && <TransportConfigModal />}
     </View>
   );
 }

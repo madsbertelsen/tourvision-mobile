@@ -1,6 +1,33 @@
 import { useGlobalSearchParams, Stack } from 'expo-router';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
+// Transport mode type
+type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
+
+// Geo-mark data type
+interface GeoMarkData {
+  placeName: string;
+  lat: number;
+  lng: number;
+  transportMode?: TransportMode;
+  transportFrom?: string;
+  waypoints?: Array<{ lat: number; lng: number }>;
+}
+
+// Location flow state for route-based navigation
+interface LocationFlowState {
+  active: boolean;
+  selectedText: string;
+  selectionFrom: number;
+  selectionTo: number;
+  searchQuery: string;
+  searchResults: any[];
+  selectedLocation: { placeName: string; lat: number; lng: number } | null;
+  transportMode: TransportMode | null;
+  transportOriginGeoId: string | null;
+  result: GeoMarkData | null;
+}
+
 // Context for sharing document state across nested routes
 interface TripContextType {
   tripId: string;
@@ -16,7 +43,7 @@ interface TripContextType {
   }>;
   setLocations: (locations: any[]) => void;
 
-  // Location modal state
+  // Location modal state (legacy - keeping for backward compat)
   locationModal: {
     visible: boolean;
     step: 'location' | 'transport';
@@ -28,7 +55,7 @@ interface TripContextType {
     selectionTop?: number;
     transportConfig: {
       from: { lat: number; lng: number; name: string } | null;
-      mode: 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
+      mode: TransportMode;
       routeGeometry: any | null;
       routeDistance: number | null;
       routeDuration: number | null;
@@ -37,6 +64,13 @@ interface TripContextType {
     isLoadingRoute: boolean;
   };
   setLocationModal: (state: Partial<TripContextType['locationModal']>) => void;
+
+  // Location flow state (new route-based approach)
+  locationFlowState: LocationFlowState;
+  startLocationFlow: (selectedText: string, from: number, to: number) => void;
+  updateLocationFlow: (updates: Partial<LocationFlowState>) => void;
+  setLocationFlowResult: (data: GeoMarkData) => void;
+  clearLocationFlow: () => void;
 }
 
 const TripContext = createContext<TripContextType | null>(null);
@@ -85,6 +119,62 @@ export default function TripLayout() {
   // Helper to update location modal state
   const setLocationModal = useCallback((updates: Partial<TripContextType['locationModal']>) => {
     setLocationModalState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Location flow state (new route-based approach)
+  const [locationFlowState, setLocationFlowState] = useState<LocationFlowState>({
+    active: false,
+    selectedText: '',
+    selectionFrom: 0,
+    selectionTo: 0,
+    searchQuery: '',
+    searchResults: [],
+    selectedLocation: null,
+    transportMode: null,
+    transportOriginGeoId: null,
+    result: null,
+  });
+
+  // Start location flow
+  const startLocationFlow = useCallback((selectedText: string, from: number, to: number) => {
+    setLocationFlowState({
+      active: true,
+      selectedText,
+      selectionFrom: from,
+      selectionTo: to,
+      searchQuery: selectedText,
+      searchResults: [],
+      selectedLocation: null,
+      transportMode: 'walking',
+      transportOriginGeoId: null,
+      result: null,
+    });
+  }, []);
+
+  // Update location flow state
+  const updateLocationFlow = useCallback((updates: Partial<LocationFlowState>) => {
+    setLocationFlowState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  // Set final result
+  const setLocationFlowResult = useCallback((data: GeoMarkData) => {
+    setLocationFlowState(prev => ({ ...prev, result: data }));
+  }, []);
+
+  // Clear location flow
+  const clearLocationFlow = useCallback(() => {
+    setLocationFlowState({
+      active: false,
+      selectedText: '',
+      selectionFrom: 0,
+      selectionTo: 0,
+      searchQuery: '',
+      searchResults: [],
+      selectedLocation: null,
+      transportMode: null,
+      transportOriginGeoId: null,
+      result: null,
+    });
   }, []);
 
   // Load document from localStorage on mount
@@ -190,6 +280,11 @@ export default function TripLayout() {
         setLocations,
         locationModal,
         setLocationModal,
+        locationFlowState,
+        startLocationFlow,
+        updateLocationFlow,
+        setLocationFlowResult,
+        clearLocationFlow,
       }}
     >
       <Stack screenOptions={{ headerShown: false }} />
