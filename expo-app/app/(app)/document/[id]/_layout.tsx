@@ -96,12 +96,12 @@ export default function TripLayout() {
         // Find document by ID
         const doc = documents.find((d: any) => d.id === tripId);
         if (doc && doc.content) {
-          console.log('[TripLayout] Loading document from localStorage:', tripId);
+          console.log('Loading document from localStorage:', tripId);
           setCurrentDocState(doc.content);
         }
       }
     } catch (error) {
-      console.error('[TripLayout] Error loading from localStorage:', error);
+      console.error('Error loading from localStorage:', error);
     }
   }, [tripId]);
 
@@ -133,9 +133,9 @@ export default function TripLayout() {
       }
 
       localStorage.setItem('@tourvision_documents', JSON.stringify(documents));
-      console.log('[TripLayout] Saved document to localStorage:', tripId);
+      console.log('Saved document to localStorage:', tripId);
     } catch (error) {
-      console.error('[TripLayout] Error saving to localStorage:', error);
+      console.error('Error saving to localStorage:', error);
     }
   }, [tripId]);
 
