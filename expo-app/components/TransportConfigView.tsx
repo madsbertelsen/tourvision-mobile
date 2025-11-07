@@ -165,112 +165,112 @@ export default function TransportConfigView({
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Selected location summary */}
-      <View style={styles.locationSummary}>
-        <View style={styles.locationIcon}>
-          <Ionicons name="location" size={20} color="#3B82F6" />
+      {/* Scrollable content */}
+      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+        {/* Selected location summary */}
+        <View style={styles.locationSummary}>
+          <View style={styles.locationIcon}>
+            <Ionicons name="location" size={20} color="#3B82F6" />
+          </View>
+          <View style={styles.locationInfo}>
+            <Text style={styles.locationLabel}>Destination</Text>
+            <Text style={styles.locationName} numberOfLines={2}>
+              {locationName}
+            </Text>
+          </View>
         </View>
-        <View style={styles.locationInfo}>
-          <Text style={styles.locationLabel}>Destination</Text>
-          <Text style={styles.locationName} numberOfLines={2}>
-            {locationName}
-          </Text>
-        </View>
-      </View>
 
-      {/* Origin selector */}
-      {allOrigins.length > 0 && (
-        <View style={styles.originSection}>
-          <Text style={styles.sectionLabel}>Route from (optional):</Text>
+        {/* Origin selector */}
+        {allOrigins.length > 0 && (
+          <View style={styles.originSection}>
+            <Text style={styles.sectionLabel}>Route from (optional):</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedOrigin ? `${selectedOrigin.lat},${selectedOrigin.lng}` : null}
+                onValueChange={(value) => {
+                  if (value === null) {
+                    setSelectedOrigin(null);
+                  } else {
+                    const [lat, lng] = value.split(',').map(Number);
+                    const origin = allOrigins.find(o => o.lat === lat && o.lng === lng);
+                    if (origin) {
+                      setSelectedOrigin({
+                        lat: origin.lat,
+                        lng: origin.lng,
+                        name: origin.placeName,
+                      });
+                    }
+                  }
+                }}
+                style={styles.picker}
+              >
+                <Picker.Item label="No starting point" value={null} />
+                {allOrigins.map((origin) => (
+                  <Picker.Item
+                    key={origin.geoId}
+                    label={origin.placeName}
+                    value={`${origin.lat},${origin.lng}`}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        )}
+
+        {/* Route info display */}
+        {selectedOrigin && routeData && !isLoadingRoute && (
+          <View style={styles.routeInfoContainer}>
+            <View style={styles.routeInfoHeader}>
+              <Ionicons name="information-circle" size={20} color="#3B82F6" />
+              <Text style={styles.routeInfoTitle}>Route Details</Text>
+            </View>
+            <View style={styles.routeInfoContent}>
+              <View style={styles.routeInfoItem}>
+                <Ionicons name="navigate" size={16} color="#6B7280" />
+                <Text style={styles.routeInfoText}>
+                  {(routeData.distance / 1000).toFixed(1)} km
+                </Text>
+              </View>
+              <View style={styles.routeInfoDivider} />
+              <View style={styles.routeInfoItem}>
+                <Ionicons name="time" size={16} color="#6B7280" />
+                <Text style={styles.routeInfoText}>
+                  {Math.round(routeData.duration / 60)} min
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Loading route indicator */}
+        {selectedOrigin && isLoadingRoute && (
+          <View style={styles.routeLoadingContainer}>
+            <Text style={styles.routeLoadingText}>Calculating route...</Text>
+          </View>
+        )}
+
+        {/* Transport modes */}
+        <View style={styles.modesSection}>
+          <Text style={styles.sectionLabel}>How will you get there?</Text>
           <View style={styles.pickerContainer}>
             <Picker
-              selectedValue={selectedOrigin ? `${selectedOrigin.lat},${selectedOrigin.lng}` : null}
-              onValueChange={(value) => {
-                if (value === null) {
-                  setSelectedOrigin(null);
-                } else {
-                  const [lat, lng] = value.split(',').map(Number);
-                  const origin = allOrigins.find(o => o.lat === lat && o.lng === lng);
-                  if (origin) {
-                    setSelectedOrigin({
-                      lat: origin.lat,
-                      lng: origin.lng,
-                      name: origin.placeName,
-                    });
-                  }
-                }
-              }}
+              selectedValue={selectedMode}
+              onValueChange={(value) => onSelectMode(value as TransportMode)}
               style={styles.picker}
             >
-              <Picker.Item label="No starting point" value={null} />
-              {allOrigins.map((origin) => (
+              {TRANSPORT_MODES.map((transport) => (
                 <Picker.Item
-                  key={origin.geoId}
-                  label={origin.placeName}
-                  value={`${origin.lat},${origin.lng}`}
+                  key={transport.mode}
+                  label={`${transport.label} - ${transport.description}`}
+                  value={transport.mode}
                 />
               ))}
             </Picker>
           </View>
         </View>
-      )}
+      </ScrollView>
 
-      {/* Route info display */}
-      {selectedOrigin && routeData && !isLoadingRoute && (
-        <View style={styles.routeInfoContainer}>
-          <View style={styles.routeInfoHeader}>
-            <Ionicons name="information-circle" size={20} color="#3B82F6" />
-            <Text style={styles.routeInfoTitle}>Route Details</Text>
-          </View>
-          <View style={styles.routeInfoContent}>
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="navigate" size={16} color="#6B7280" />
-              <Text style={styles.routeInfoText}>
-                {(routeData.distance / 1000).toFixed(1)} km
-              </Text>
-            </View>
-            <View style={styles.routeInfoDivider} />
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="time" size={16} color="#6B7280" />
-              <Text style={styles.routeInfoText}>
-                {Math.round(routeData.duration / 60)} min
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Loading route indicator */}
-      {selectedOrigin && isLoadingRoute && (
-        <View style={styles.routeLoadingContainer}>
-          <Text style={styles.routeLoadingText}>Calculating route...</Text>
-        </View>
-      )}
-
-      {/* Transport modes */}
-      <View style={styles.modesSection}>
-        <Text style={styles.sectionLabel}>How will you get there?</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={selectedMode}
-            onValueChange={(value) => onSelectMode(value as TransportMode)}
-            style={styles.picker}
-          >
-            {TRANSPORT_MODES.map((transport) => (
-              <Picker.Item
-                key={transport.mode}
-                label={`${transport.label} - ${transport.description}`}
-                value={transport.mode}
-              />
-            ))}
-          </Picker>
-        </View>
-      </View>
-
-      {/* Spacer to push button to bottom */}
-      <View style={styles.spacer} />
-
-      {/* Add to document button */}
+      {/* Fixed footer with Add to Document button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.addButton} onPress={onAddToDocument}>
           <Ionicons name="add-circle" size={20} color="#FFFFFF" />
@@ -305,6 +305,12 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 32, // Match back button width for centering
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
   },
   locationSummary: {
     flexDirection: 'row',
@@ -419,9 +425,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 4,
-  },
-  spacer: {
-    flex: 1,
   },
   footer: {
     padding: 16,
