@@ -156,8 +156,20 @@ export default function DynamicLandingDocumentProseMirror({
   // Track if we've already updated colors for this document to prevent infinite loops
   const colorsUpdatedRef = useRef(false);
 
+  // Track the last parsed content to detect actual changes
+  const lastParsedContentRef = useRef<any>(null);
+
   // Parse initial document on mount and extract locations
+  // Re-run when INITIAL_CONTENT changes, but only if it's actually different
   useEffect(() => {
+    // Skip if content hasn't actually changed (reference equality)
+    if (lastParsedContentRef.current === INITIAL_CONTENT) {
+      return;
+    }
+
+    // Store this content as the last parsed
+    lastParsedContentRef.current = INITIAL_CONTENT;
+
     console.log('[Landing] Initial content to parse:', INITIAL_CONTENT);
     const blocks = parseDocumentIntoBlocks(INITIAL_CONTENT);
     setDocumentBlocks(blocks);
@@ -218,8 +230,7 @@ export default function DynamicLandingDocumentProseMirror({
         onLocationsChange(locationsList);
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount to avoid infinite loop
+  }, [INITIAL_CONTENT]); // Re-run when content changes, but ref check prevents infinite loop
 
   // Initialize animator
   useEffect(() => {
