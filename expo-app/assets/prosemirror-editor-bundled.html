@@ -1306,7 +1306,21 @@
             mapConfig.zoom = 11;
           } else if (geoMarks.length > 1) {
             // Multiple locations - use bounds for automatic fitting
-            const coordinates = geoMarks.map(gm => [gm.lng, gm.lat]);
+            // Include both markers and waypoints
+            const coordinates = [];
+
+            // Add all marker coordinates
+            geoMarks.forEach(gm => {
+              coordinates.push([gm.lng, gm.lat]);
+
+              // Also add waypoints if they exist
+              if (gm.waypoints && Array.isArray(gm.waypoints)) {
+                gm.waypoints.forEach(wp => {
+                  coordinates.push([wp.lng, wp.lat]);
+                });
+              }
+            });
+
             const bbox = coordinates.reduce((bounds, coord) => {
               return bounds.extend(coord);
             }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
