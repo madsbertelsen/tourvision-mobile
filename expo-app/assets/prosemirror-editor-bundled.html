@@ -1339,14 +1339,19 @@
           this.map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
           // Wait for map to load
-          this.map.on('load', () => {
+          this.map.on('load', async () => {
             console.log('[MapView] Map loaded, adding markers and routes');
 
             // Add markers
             this.addMarkers(geoMarks);
 
-            // Fetch and add routes
-            this.addRoutes(geoMarks);
+            // Fetch and add routes, then fit bounds to include them
+            await this.addRoutes(geoMarks);
+
+            // After routes are added, fit bounds to include everything
+            if (geoMarks.length > 1) {
+              this.fitBoundsToContent();
+            }
           });
         }
 
@@ -1431,6 +1436,7 @@
           if (geoMarks.length < 2) return;
 
           const mapboxToken = window.mapboxToken || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
+          this.routeGeometries = []; // Store route geometries for bounds calculation
 
           // Fetch routes between consecutive locations
           for (let i = 1; i < geoMarks.length; i++) {
@@ -1457,13 +1463,17 @@
               if (data.routes && data.routes[0]) {
                 const routeId = `route-${from.geoId}-${to.geoId}`;
                 const color = this.COLORS[to.colorIndex % this.COLORS.length];
+                const geometry = data.routes[0].geometry;
+
+                // Store geometry for bounds calculation
+                this.routeGeometries.push(geometry);
 
                 // Add route as source and layer
                 this.map.addSource(routeId, {
                   type: 'geojson',
                   data: {
                     type: 'Feature',
-                    geometry: data.routes[0].geometry
+                    geometry: geometry
                   }
                 });
 
@@ -1483,6 +1493,30 @@
             } catch (error) {
               console.error('[MapView] Error fetching route:', error);
             }
+          }
+        }
+
+        fitBoundsToContent() {
+          // Calculate bounds that include all route geometries
+          const bounds = new mapboxgl.LngLatBounds();
+
+          // Add all route coordinates
+          if (this.routeGeometries) {
+            this.routeGeometries.forEach(geometry => {
+              if (geometry.type === 'LineString' && geometry.coordinates) {
+                geometry.coordinates.forEach(coord => {
+                  bounds.extend(coord);
+                });
+              }
+            });
+          }
+
+          // Fit map to calculated bounds
+          if (!bounds.isEmpty()) {
+            this.map.fitBounds(bounds, {
+              padding: 50,
+              duration: 0 // No animation to prevent flickering
+            });
           }
         }
 
