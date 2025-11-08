@@ -1307,6 +1307,9 @@
           this.map.on('load', () => {
             console.log('[MapView] Map loaded, adding markers and routes');
 
+            // Trigger resize to ensure proper dimensions
+            this.map.resize();
+
             // Add markers
             this.addMarkers(geoMarks);
 
