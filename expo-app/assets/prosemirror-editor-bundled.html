@@ -1210,9 +1210,312 @@
         };
       }
 
+      // MapView NodeView for rendering interactive maps
+      class MapView {
+        constructor(node, view, getPos) {
+          this.node = node;
+          this.view = view;
+          this.getPos = getPos;
+          this.map = null;
+          this.markers = [];
+          this.routeLayers = [];
+
+          // Color palette matching geo-marks
+          this.COLORS = [
+            '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+            '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+          ];
+
+          // Create container
+          this.dom = document.createElement('div');
+          this.dom.className = 'prosemirror-map';
+          this.dom.style.cssText = `
+            height: ${node.attrs.height}px;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin: 16px 0;
+            position: relative;
+          `;
+
+          // Initialize map
+          this.initMap();
+        }
+
+        collectGeoMarks() {
+          const geoMarks = [];
+          const seenGeoIds = new Set();
+          const mapPos = this.getPos();
+
+          // Traverse from start of document to map position
+          this.view.state.doc.nodesBetween(0, mapPos, (node, pos) => {
+            if (node.marks) {
+              node.marks.forEach(mark => {
+                if (mark.type.name === 'geoMark' && !seenGeoIds.has(mark.attrs.geoId)) {
+                  seenGeoIds.add(mark.attrs.geoId);
+                  geoMarks.push({
+                    geoId: mark.attrs.geoId,
+                    placeName: mark.attrs.placeName,
+                    lat: parseFloat(mark.attrs.lat),
+                    lng: parseFloat(mark.attrs.lng),
+                    colorIndex: mark.attrs.colorIndex || 0,
+                    transportFrom: mark.attrs.transportFrom,
+                    transportProfile: mark.attrs.transportProfile,
+                    waypoints: mark.attrs.waypoints
+                  });
+                }
+              });
+            }
+          });
+
+          console.log('[MapView] Collected geo-marks:', geoMarks);
+          return geoMarks;
+        }
+
+        initMap() {
+          const geoMarks = this.collectGeoMarks();
+
+          if (geoMarks.length === 0) {
+            // Show empty state
+            this.dom.innerHTML = `
+              <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
+                🗺️ No locations to display yet
+              </div>
+            `;
+            return;
+          }
+
+          // Calculate bounds
+          const bounds = this.calculateBounds(geoMarks);
+
+          // Get Mapbox token
+          const mapboxToken = window.mapboxToken || process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+          if (!mapboxToken) {
+            console.error('[MapView] No Mapbox token found');
+            this.dom.innerHTML = `
+              <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #ef4444;">
+                ⚠️ Mapbox token not configured
+              </div>
+            `;
+            return;
+          }
+
+          // Initialize Mapbox GL map
+          mapboxgl.accessToken = mapboxToken;
+          this.map = new mapboxgl.Map({
+            container: this.dom,
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: bounds.center,
+            zoom: bounds.zoom
+          });
+
+          // Add navigation controls
+          this.map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+          // Wait for map to load
+          this.map.on('load', () => {
+            console.log('[MapView] Map loaded, adding markers and routes');
+
+            // Add markers
+            this.addMarkers(geoMarks);
+
+            // Fetch and add routes
+            this.addRoutes(geoMarks);
+
+            // Fit bounds with padding
+            if (geoMarks.length > 1) {
+              const coordinates = geoMarks.map(gm => [gm.lng, gm.lat]);
+              const bbox = coordinates.reduce((bounds, coord) => {
+                return bounds.extend(coord);
+              }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+              this.map.fitBounds(bbox, { padding: 50 });
+            }
+          });
+        }
+
+        calculateBounds(geoMarks) {
+          if (geoMarks.length === 0) {
+            return { center: [0, 0], zoom: 2 };
+          }
+
+          if (geoMarks.length === 1) {
+            return {
+              center: [geoMarks[0].lng, geoMarks[0].lat],
+              zoom: 12
+            };
+          }
+
+          // Calculate center
+          const lats = geoMarks.map(gm => gm.lat);
+          const lngs = geoMarks.map(gm => gm.lng);
+          const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+          const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+          // Calculate zoom based on bounds
+          const latDiff = Math.max(...lats) - Math.min(...lats);
+          const lngDiff = Math.max(...lngs) - Math.min(...lngs);
+          const maxDiff = Math.max(latDiff, lngDiff);
+
+          let zoom = 10;
+          if (maxDiff > 10) zoom = 3;
+          else if (maxDiff > 5) zoom = 5;
+          else if (maxDiff > 2) zoom = 7;
+          else if (maxDiff > 1) zoom = 9;
+
+          return {
+            center: [centerLng, centerLat],
+            zoom
+          };
+        }
+
+        addMarkers(geoMarks) {
+          geoMarks.forEach((gm, index) => {
+            const color = this.COLORS[gm.colorIndex % this.COLORS.length];
+
+            // Create marker element (matching DocumentSplitMap style)
+            const markerEl = document.createElement('div');
+            markerEl.style.cssText = `
+              width: 32px;
+              height: 32px;
+              border-radius: 16px;
+              background-color: ${color};
+              border: 3px solid white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            `;
+
+            const innerEl = document.createElement('div');
+            innerEl.style.cssText = `
+              width: 12px;
+              height: 12px;
+              border-radius: 6px;
+              background-color: white;
+            `;
+            markerEl.appendChild(innerEl);
+
+            // Create marker
+            const marker = new mapboxgl.Marker({ element: markerEl })
+              .setLngLat([gm.lng, gm.lat])
+              .setPopup(new mapboxgl.Popup().setHTML(`<strong>${gm.placeName}</strong>`))
+              .addTo(this.map);
+
+            this.markers.push(marker);
+          });
+        }
+
+        async addRoutes(geoMarks) {
+          if (geoMarks.length < 2) return;
+
+          const mapboxToken = window.mapboxToken || process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+
+          // Fetch routes between consecutive locations
+          for (let i = 1; i < geoMarks.length; i++) {
+            const from = geoMarks[i - 1];
+            const to = geoMarks[i];
+
+            // Build coordinates with waypoints
+            let coordinates;
+            if (to.waypoints && to.waypoints.length > 0) {
+              const waypointCoords = to.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+              coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+            } else {
+              coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+            }
+
+            // Determine transport profile
+            const profile = to.transportProfile || 'walking';
+            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+            try {
+              const response = await fetch(url);
+              const data = await response.json();
+
+              if (data.routes && data.routes[0]) {
+                const routeId = `route-${from.geoId}-${to.geoId}`;
+                const color = this.COLORS[to.colorIndex % this.COLORS.length];
+
+                // Add route as source and layer
+                this.map.addSource(routeId, {
+                  type: 'geojson',
+                  data: {
+                    type: 'Feature',
+                    geometry: data.routes[0].geometry
+                  }
+                });
+
+                this.map.addLayer({
+                  id: routeId,
+                  type: 'line',
+                  source: routeId,
+                  paint: {
+                    'line-color': color,
+                    'line-width': 3,
+                    'line-opacity': 0.75
+                  }
+                });
+
+                this.routeLayers.push(routeId);
+              }
+            } catch (error) {
+              console.error('[MapView] Error fetching route:', error);
+            }
+          }
+        }
+
+        update(node) {
+          // Check if node changed (e.g., height attribute)
+          if (node.attrs.height !== this.node.attrs.height) {
+            this.node = node;
+            this.dom.style.height = `${node.attrs.height}px`;
+            if (this.map) {
+              this.map.resize();
+            }
+            return true;
+          }
+          return true;
+        }
+
+        destroy() {
+          console.log('[MapView] Destroying map');
+
+          // Remove markers
+          this.markers.forEach(marker => marker.remove());
+          this.markers = [];
+
+          // Remove route layers
+          if (this.map) {
+            this.routeLayers.forEach(layerId => {
+              if (this.map.getLayer(layerId)) {
+                this.map.removeLayer(layerId);
+              }
+              if (this.map.getSource(layerId)) {
+                this.map.removeSource(layerId);
+              }
+            });
+            this.routeLayers = [];
+
+            // Remove map
+            this.map.remove();
+            this.map = null;
+          }
+        }
+
+        stopEvent() {
+          return true; // Prevent ProseMirror from handling events inside the map
+        }
+      }
+
       // Create editor view
       editorView = new EditorView(document.querySelector('#editor-container'), {
         state: editorState,
+        nodeViews: {
+          map(node, view, getPos) {
+            return new MapView(node, view, getPos);
+          }
+        },
         attributes: {
           spellcheck: 'false',
           autocorrect: 'off',
