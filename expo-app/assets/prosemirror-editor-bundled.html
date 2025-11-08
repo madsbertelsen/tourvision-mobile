@@ -1226,20 +1226,22 @@
             '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
           ];
 
-          // Create container
+          // Create container with explicit dimensions
           this.dom = document.createElement('div');
           this.dom.className = 'prosemirror-map';
           this.dom.style.cssText = `
+            width: 100%;
             height: ${node.attrs.height}px;
             background: #f3f4f6;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             margin: 16px 0;
             position: relative;
+            overflow: hidden;
           `;
 
-          // Initialize map
-          this.initMap();
+          // Initialize map after a short delay to ensure container is in DOM
+          setTimeout(() => this.initMap(), 0);
         }
 
         collectGeoMarks() {
