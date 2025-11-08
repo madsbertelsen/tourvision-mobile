@@ -102,6 +102,24 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
           </TouchableOpacity>
         </View>
 
+        <View style={styles.divider} />
+
+        {/* Map */}
+        <View style={styles.group}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isButtonHighlighted('map') && styles.buttonHighlighted
+            ]}
+            onPress={() => onCommand('insertMap')}
+          >
+            <Text style={[
+              styles.buttonText,
+              isButtonHighlighted('map') && styles.buttonTextHighlighted
+            ]}>🗺️</Text>
+          </TouchableOpacity>
+        </View>
+
       </View>
     </View>
   );
