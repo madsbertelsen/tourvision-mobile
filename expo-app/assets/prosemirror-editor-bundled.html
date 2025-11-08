@@ -1285,20 +1285,39 @@
             return;
           }
 
-          // Calculate bounds
-          const bounds = this.calculateBounds(geoMarks);
-
           // Get Mapbox token (hardcoded fallback)
           const mapboxToken = window.mapboxToken || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
 
           // Initialize Mapbox GL map
           mapboxgl.accessToken = mapboxToken;
-          this.map = new mapboxgl.Map({
+
+          // Use bounds for multiple locations, center/zoom for single location
+          const mapConfig = {
             container: this.dom,
             style: 'mapbox://styles/mapbox/light-v11',
-            center: bounds.center,
-            zoom: bounds.zoom
-          });
+            trackResize: true
+          };
+
+          if (geoMarks.length === 1) {
+            // Single location - use center and zoom
+            mapConfig.center = [geoMarks[0].lng, geoMarks[0].lat];
+            mapConfig.zoom = 11;
+          } else if (geoMarks.length > 1) {
+            // Multiple locations - use bounds for automatic fitting
+            const coordinates = geoMarks.map(gm => [gm.lng, gm.lat]);
+            const bbox = coordinates.reduce((bounds, coord) => {
+              return bounds.extend(coord);
+            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+            mapConfig.bounds = bbox;
+            mapConfig.fitBoundsOptions = { padding: 50 };
+          } else {
+            // No locations
+            mapConfig.center = [0, 0];
+            mapConfig.zoom = 2;
+          }
+
+          this.map = new mapboxgl.Map(mapConfig);
 
           // Add navigation controls
           this.map.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -1306,9 +1325,6 @@
           // Wait for map to load
           this.map.on('load', () => {
             console.log('[MapView] Map loaded, adding markers and routes');
-
-            // Trigger resize to ensure proper dimensions
-            this.map.resize();
 
             // Add markers
             this.addMarkers(geoMarks);
