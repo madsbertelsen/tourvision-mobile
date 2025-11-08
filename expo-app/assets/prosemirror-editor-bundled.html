@@ -1288,8 +1288,8 @@
           // Calculate bounds
           const bounds = this.calculateBounds(geoMarks);
 
-          // Get Mapbox token
-          const mapboxToken = window.mapboxToken || process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+          // Get Mapbox token from window (passed by native)
+          const mapboxToken = window.mapboxToken;
           if (!mapboxToken) {
             console.error('[MapView] No Mapbox token found');
             this.dom.innerHTML = `
@@ -1409,7 +1409,7 @@
         async addRoutes(geoMarks) {
           if (geoMarks.length < 2) return;
 
-          const mapboxToken = window.mapboxToken || process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+          const mapboxToken = window.mapboxToken;
 
           // Fetch routes between consecutive locations
           for (let i = 1; i < geoMarks.length; i++) {

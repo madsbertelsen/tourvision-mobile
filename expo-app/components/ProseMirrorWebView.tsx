@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v65 - Added MapView NodeView for interactive maps with geo-marks
+// v66 - Fixed process.env reference in MapView (browser compatibility)
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
