@@ -14,6 +14,19 @@ interface GeoMarkData {
   waypoints?: Array<{ lat: number; lng: number }>;
 }
 
+// Geo-mark update type
+interface GeoMarkUpdate {
+  geoId: string;
+  updatedAttrs: Partial<{
+    placeName: string;
+    lat: number;
+    lng: number;
+    transportFrom: string | null;
+    transportProfile: TransportMode | null;
+    waypoints: Array<{ lat: number; lng: number }> | null;
+  }>;
+}
+
 // Location flow state for route-based navigation
 interface LocationFlowState {
   active: boolean;
@@ -72,6 +85,10 @@ interface TripContextType {
   updateLocationFlow: (updates: Partial<LocationFlowState>) => void;
   setLocationFlowResult: (data: GeoMarkData) => void;
   clearLocationFlow: () => void;
+
+  // Geo-mark update state
+  geoMarkUpdate: GeoMarkUpdate | null;
+  setGeoMarkUpdate: (update: GeoMarkUpdate | null) => void;
 }
 
 const TripContext = createContext<TripContextType | null>(null);
@@ -136,6 +153,9 @@ export default function TripLayout() {
     transportOriginGeoId: null,
     result: null,
   });
+
+  // Geo-mark update state
+  const [geoMarkUpdate, setGeoMarkUpdate] = useState<GeoMarkUpdate | null>(null);
 
   // Start location flow
   const startLocationFlow = useCallback((selectedText: string, from: number, to: number) => {
@@ -294,6 +314,8 @@ export default function TripLayout() {
         updateLocationFlow,
         setLocationFlowResult,
         clearLocationFlow,
+        geoMarkUpdate,
+        setGeoMarkUpdate,
       }}
     >
       <Stack screenOptions={{ headerShown: false }}>

@@ -68,7 +68,7 @@ function getNextColorIndex(locations: any[]): number {
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow, clearLocationFlow } = useTripContext();
+  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow, clearLocationFlow, geoMarkUpdate, setGeoMarkUpdate } = useTripContext();
   const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(false);
@@ -498,6 +498,24 @@ export default function TripDocumentView() {
       clearLocationFlow();
     }
   }, [locationFlowState.result, locationFlowState.geoId, locationFlowState.selectionFrom, locationFlowState.selectionTo, locations, setLocations, clearLocationFlow]);
+
+  // Watch for geoMarkUpdate and send update command to WebView
+  useEffect(() => {
+    if (geoMarkUpdate && webViewRef.current) {
+      console.log('[TripDocument] Updating geo-mark:', geoMarkUpdate);
+
+      // Send updateGeoMark command to WebView
+      webViewRef.current.sendCommand('updateGeoMark', {
+        geoId: geoMarkUpdate.geoId,
+        updatedAttrs: geoMarkUpdate.updatedAttrs,
+      });
+
+      console.log('[TripDocument] Geo-mark update command sent');
+
+      // Clear the update to prevent re-triggering this effect
+      setGeoMarkUpdate(null);
+    }
+  }, [geoMarkUpdate, setGeoMarkUpdate]);
 
   return (
     <View style={styles.container}>
