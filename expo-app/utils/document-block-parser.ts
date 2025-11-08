@@ -15,11 +15,12 @@ export interface GeoMarkInBlock {
 }
 
 export interface DocumentBlock {
-  type: 'paragraph' | 'heading';
+  type: 'paragraph' | 'heading' | 'map';
   level?: number; // for headings
   text: string;
   geoMarks: GeoMarkInBlock[];
   hasGeoMarks: boolean;
+  height?: number; // for map blocks
 }
 
 /**
@@ -161,6 +162,7 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
 
   const blocks: DocumentBlock[] = [];
   let globalColorIndex = 0;
+  let previousBlockGeoMarks: GeoMarkInBlock[] = [];
 
   for (const node of doc.content) {
     if (node.type === 'paragraph' || node.type === 'heading') {
@@ -177,6 +179,20 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
         geoMarks: geoMarks,
         hasGeoMarks: geoMarks.length > 0
       });
+
+      // Store geo-marks for potential map block that follows
+      previousBlockGeoMarks = geoMarks;
+    } else if (node.type === 'map') {
+      // Map block displays geo-marks from the previous paragraph/heading
+      const height = node.attrs?.height || 400;
+
+      blocks.push({
+        type: 'map',
+        text: '',
+        geoMarks: previousBlockGeoMarks,
+        hasGeoMarks: previousBlockGeoMarks.length > 0,
+        height: height
+      });
     } else if (node.type === 'bulletList' || node.type === 'orderedList' ||
                node.type === 'bullet_list' || node.type === 'ordered_list') {
       // Process list items to extract geo-marks (handle both camelCase and snake_case)
@@ -192,6 +208,9 @@ export function parseDocumentIntoBlocks(doc: any): DocumentBlock[] {
         geoMarks: geoMarks,
         hasGeoMarks: geoMarks.length > 0
       });
+
+      // Store geo-marks for potential map block that follows
+      previousBlockGeoMarks = geoMarks;
     }
   }
 
