@@ -1288,17 +1288,8 @@
           // Calculate bounds
           const bounds = this.calculateBounds(geoMarks);
 
-          // Get Mapbox token from window (passed by native)
-          const mapboxToken = window.mapboxToken;
-          if (!mapboxToken) {
-            console.error('[MapView] No Mapbox token found');
-            this.dom.innerHTML = `
-              <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #ef4444;">
-                ⚠️ Mapbox token not configured
-              </div>
-            `;
-            return;
-          }
+          // Get Mapbox token (hardcoded fallback)
+          const mapboxToken = window.mapboxToken || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
 
           // Initialize Mapbox GL map
           mapboxgl.accessToken = mapboxToken;
@@ -1409,7 +1400,7 @@
         async addRoutes(geoMarks) {
           if (geoMarks.length < 2) return;
 
-          const mapboxToken = window.mapboxToken;
+          const mapboxToken = window.mapboxToken || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
 
           // Fetch routes between consecutive locations
           for (let i = 1; i < geoMarks.length; i++) {
