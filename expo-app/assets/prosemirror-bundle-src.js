@@ -34,9 +34,33 @@ const CollabConnection = null;
 const createCollabPlugin = null;
 const initializeCollaboration = null;
 
-// Create a custom schema with list support and geo-mark
+// Create a custom schema with list support, geo-mark, and map
 const mySchema = new Schema({
-  nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block'),
+  nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block')
+    .addToEnd('map', {
+      attrs: {
+        height: { default: 400 }
+      },
+      group: 'block',
+      atom: true,
+      parseDOM: [{
+        tag: 'div.prosemirror-map',
+        getAttrs(dom) {
+          return {
+            height: parseInt(dom.getAttribute('data-height') || '400')
+          };
+        }
+      }],
+      toDOM(node) {
+        return ['div', {
+          class: 'prosemirror-map',
+          'data-height': node.attrs.height,
+          style: `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative;`
+        }, ['div', {
+          style: 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;'
+        }, '🗺️ Map will be rendered here']];
+      }
+    }),
   marks: schema.spec.marks
     .addToEnd('geoMark', {
       attrs: {

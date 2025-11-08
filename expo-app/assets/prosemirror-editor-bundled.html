@@ -1923,6 +1923,35 @@
                   });
                   break;
 
+                case 'insertMap':
+                  console.log('[WebView] Inserting map');
+                  if (schema.nodes.map) {
+                    // Get the current cursor position
+                    const mapPos = state.selection.$from.pos;
+                    // Find the position after the current block
+                    const $pos = state.doc.resolve(mapPos);
+                    const insertPos = $pos.after($pos.depth);
+
+                    // Create map node
+                    const mapNode = schema.nodes.map.create({ height: 400 });
+
+                    // Insert map node
+                    const mapTr = state.tr.insert(insertPos, mapNode);
+                    dispatch(mapTr);
+
+                    console.log('[WebView] Map inserted at position:', insertPos);
+                    editorView.focus();
+
+                    // Notify native side that document changed
+                    sendMessageToNative({
+                      type: 'documentChanged',
+                      content: editorView.state.doc.toJSON()
+                    });
+                  } else {
+                    console.error('[WebView] Map node type not found in schema');
+                  }
+                  break;
+
                 case 'createComment':
                   // Create a comment mark with the provided data
                   if (data.params && schema.marks.comment) {
