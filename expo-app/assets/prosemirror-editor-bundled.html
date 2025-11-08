@@ -1315,16 +1315,6 @@
 
             // Fetch and add routes
             this.addRoutes(geoMarks);
-
-            // Fit bounds with padding
-            if (geoMarks.length > 1) {
-              const coordinates = geoMarks.map(gm => [gm.lng, gm.lat]);
-              const bbox = coordinates.reduce((bounds, coord) => {
-                return bounds.extend(coord);
-              }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
-
-              this.map.fitBounds(bbox, { padding: 50 });
-            }
           });
         }
 
@@ -1336,7 +1326,7 @@
           if (geoMarks.length === 1) {
             return {
               center: [geoMarks[0].lng, geoMarks[0].lat],
-              zoom: 12
+              zoom: 11
             };
           }
 
@@ -1346,16 +1336,21 @@
           const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
           const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-          // Calculate zoom based on bounds
+          // Calculate zoom based on bounds (with padding consideration)
           const latDiff = Math.max(...lats) - Math.min(...lats);
           const lngDiff = Math.max(...lngs) - Math.min(...lngs);
           const maxDiff = Math.max(latDiff, lngDiff);
 
+          // More granular zoom levels with padding consideration
           let zoom = 10;
-          if (maxDiff > 10) zoom = 3;
+          if (maxDiff > 20) zoom = 2;
+          else if (maxDiff > 10) zoom = 4;
           else if (maxDiff > 5) zoom = 5;
-          else if (maxDiff > 2) zoom = 7;
-          else if (maxDiff > 1) zoom = 9;
+          else if (maxDiff > 2) zoom = 6;
+          else if (maxDiff > 1) zoom = 7;
+          else if (maxDiff > 0.5) zoom = 8;
+          else if (maxDiff > 0.2) zoom = 9;
+          else if (maxDiff > 0.1) zoom = 10;
 
           return {
             center: [centerLng, centerLat],
