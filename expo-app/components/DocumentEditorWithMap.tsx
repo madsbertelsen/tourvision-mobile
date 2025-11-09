@@ -1284,8 +1284,13 @@ const styles = StyleSheet.create({
     maxWidth: 700, // Match editor maxWidth
     maxHeight: 200, // Allow space for wrapped content
     paddingHorizontal: 0,
+    backgroundColor: '#FFFFFF', // Ensure background is solid
     ...(Platform.OS === 'web'
       ? {
+          // Use sticky positioning on web to stay above keyboard
+          position: 'sticky' as any,
+          top: 0,
+          left: '50%',
           transform: 'translateX(-50%)' as any,
         }
       : {
