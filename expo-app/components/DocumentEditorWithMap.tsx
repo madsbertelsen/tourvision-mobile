@@ -1276,9 +1276,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   toolbarContainer: {
-    position: 'absolute',
-    top: 0,
-    left: '50%',
     zIndex: 1000,
     width: '100%',
     maxWidth: 700, // Match editor maxWidth
@@ -1294,7 +1291,10 @@ const styles = StyleSheet.create({
           transform: 'translateX(-50%)' as any,
         }
       : {
-          // For native platforms, center using marginLeft
+          // For native platforms, use absolute positioning
+          position: 'absolute',
+          top: 0,
+          left: '50%',
           marginLeft: -350,
         }),
   },
