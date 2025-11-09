@@ -1276,25 +1276,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   toolbarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: '50%',
     zIndex: 1000,
     width: '100%',
     maxWidth: 700, // Match editor maxWidth
     maxHeight: 200, // Allow space for wrapped content
     paddingHorizontal: 0,
-    backgroundColor: '#FFFFFF', // Ensure background is solid
     ...(Platform.OS === 'web'
       ? {
-          // Use sticky positioning on web to stay above keyboard
-          position: 'sticky' as any,
-          top: 0,
-          left: '50%',
           transform: 'translateX(-50%)' as any,
         }
       : {
-          // For native platforms, use absolute positioning
-          position: 'absolute',
-          top: 0,
-          left: '50%',
+          // For native platforms, center using marginLeft
           marginLeft: -350,
         }),
   },
