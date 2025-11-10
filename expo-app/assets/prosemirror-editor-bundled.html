@@ -719,11 +719,15 @@
     function createEditorPlugins() {
       const { SlashMenuPlugin, SlashMenuKey } = window.PM.slashMenu;
 
+      console.log('[SlashMenu] Creating slash menu plugin with items:', slashMenuItems);
+      const slashPlugin = SlashMenuPlugin(slashMenuItems);
+      console.log('[SlashMenu] Plugin created:', slashPlugin);
+
       return [
         window.PM.history.history(),
         window.PM.keymap({ 'Mod-z': window.PM.history.undo, 'Mod-y': window.PM.history.redo }),
         // Slash menu plugin
-        SlashMenuPlugin(slashMenuItems),
+        slashPlugin,
         // Custom Enter key handler for tool picker (must be before baseKeymap to override)
         window.PM.keymap({
           'Enter': (state, dispatch, view) => {
@@ -1266,6 +1270,96 @@
       // NOTE: Geo-marks are now rendered via schema toDOM() method
       // No custom NodeView needed - marks use toDOM for rendering
 
+      // Slash Menu Setup (must be before editor view creation)
+      const slashMenuElement = document.getElementById('slashMenu');
+
+      function renderSlashMenu(state) {
+        const { SlashMenuKey } = window.PM.slashMenu;
+        const slashMenuState = SlashMenuKey.getState(state);
+
+        console.log('[SlashMenu] renderSlashMenu called, state:', slashMenuState);
+
+        if (!slashMenuState || !slashMenuState.open) {
+          slashMenuElement.classList.remove('visible');
+          return;
+        }
+
+        console.log('[SlashMenu] Menu is open, rendering...');
+        const { filteredElements, selected } = slashMenuState;
+        console.log('[SlashMenu] Filtered elements:', filteredElements);
+
+        // Position the menu at the cursor
+        try {
+          const { from } = state.selection;
+          const coords = editorView.coordsAtPos(from);
+          const editorContainer = document.querySelector('#editor-container');
+          const editorRect = editorContainer.getBoundingClientRect();
+
+          // Calculate available space below cursor
+          const viewportHeight = window.visualViewport?.height || window.innerHeight;
+          const spaceBelow = viewportHeight - coords.bottom;
+          const menuHeight = 300; // max-height from CSS
+
+          // Position above cursor if not enough space below
+          if (spaceBelow < menuHeight && coords.top > menuHeight) {
+            // Position above cursor
+            slashMenuElement.style.left = (coords.left - editorRect.left) + 'px';
+            slashMenuElement.style.bottom = (editorRect.bottom - coords.top + 5) + 'px';
+            slashMenuElement.style.top = 'auto';
+            console.log('[SlashMenu] Positioning above cursor (not enough space below)');
+          } else {
+            // Position below cursor (default)
+            slashMenuElement.style.left = (coords.left - editorRect.left) + 'px';
+            slashMenuElement.style.top = (coords.bottom - editorRect.top + 5) + 'px';
+            slashMenuElement.style.bottom = 'auto';
+          }
+        } catch (e) {
+          console.warn('[SlashMenu] Could not position menu:', e);
+        }
+
+        // Render menu items
+        slashMenuElement.innerHTML = filteredElements.map((item, index) => {
+          const isSelected = item.id === selected;
+          return `<div class="slash-menu-item ${isSelected ? 'selected' : ''}" data-item-id="${item.id}">
+            <span class="slash-menu-item-icon">${getMenuItemIcon(item.id)}</span>
+            <span>${item.label}</span>
+          </div>`;
+        }).join('');
+
+        // Add click handlers
+        slashMenuElement.querySelectorAll('.slash-menu-item').forEach((el, index) => {
+          el.addEventListener('click', () => {
+            const itemId = el.getAttribute('data-item-id');
+            const item = filteredElements.find(i => i.id === itemId);
+            if (item && item.type === 'command') {
+              item.command(editorView);
+              closeSlashMenu();
+            }
+          });
+        });
+
+        slashMenuElement.classList.add('visible');
+      }
+
+      function getMenuItemIcon(itemId) {
+        const icons = {
+          'heading1': 'H1',
+          'heading2': 'H2',
+          'heading3': 'H3',
+          'bulletlist': '•',
+          'orderedlist': '1.',
+          'location': '📍'
+        };
+        return icons[itemId] || '•';
+      }
+
+      function closeSlashMenu() {
+        const { SlashMenuKey, SlashMetaTypes } = window.PM.slashMenu;
+        const tr = editorView.state.tr;
+        tr.setMeta(SlashMenuKey, { type: SlashMetaTypes.close });
+        editorView.dispatch(tr);
+      }
+
       // Typing cursor management
       const typingCursor = document.getElementById('typing-cursor');
       let isTypingActive = false;
@@ -1803,89 +1897,41 @@
               state: toolbarState
             });
           }
+
+          // Render slash menu on state update
+          renderSlashMenu(newState);
         }
       });
 
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
 
-      // Slash Menu Rendering
-      const slashMenuElement = document.getElementById('slashMenu');
-      let selectedMenuItemIndex = 0;
+      // Voice dictation: Listen for composition end (when user presses Done after voice input)
+      let compositionText = '';
 
-      function renderSlashMenu(state) {
-        const { SlashMenuKey } = window.PM.slashMenu;
-        const slashMenuState = SlashMenuKey.getState(state);
+      document.querySelector('.ProseMirror').addEventListener('compositionstart', function(e) {
+        console.log('[VoiceDictation] Composition started');
+        compositionText = '';
+      });
 
-        if (!slashMenuState || !slashMenuState.open) {
-          slashMenuElement.classList.remove('visible');
-          return;
-        }
+      document.querySelector('.ProseMirror').addEventListener('compositionupdate', function(e) {
+        compositionText = e.data || '';
+        console.log('[VoiceDictation] Composition updating:', compositionText);
+      });
 
-        const { filteredElements, selected } = slashMenuState;
+      document.querySelector('.ProseMirror').addEventListener('compositionend', function(e) {
+        const finalText = e.data || compositionText;
+        console.log('[VoiceDictation] Composition ended, text:', finalText);
 
-        // Position the menu at the cursor
-        try {
-          const { from } = state.selection;
-          const coords = editorView.coordsAtPos(from);
-          const editorContainer = document.querySelector('#editor-container');
-          const editorRect = editorContainer.getBoundingClientRect();
-
-          slashMenuElement.style.left = (coords.left - editorRect.left) + 'px';
-          slashMenuElement.style.top = (coords.bottom - editorRect.top + 5) + 'px';
-        } catch (e) {
-          console.warn('[SlashMenu] Could not position menu:', e);
-        }
-
-        // Render menu items
-        slashMenuElement.innerHTML = filteredElements.map((item, index) => {
-          const isSelected = item.id === selected;
-          return `<div class="slash-menu-item ${isSelected ? 'selected' : ''}" data-item-id="${item.id}">
-            <span class="slash-menu-item-icon">${getMenuItemIcon(item.id)}</span>
-            <span>${item.label}</span>
-          </div>`;
-        }).join('');
-
-        // Add click handlers
-        slashMenuElement.querySelectorAll('.slash-menu-item').forEach((el, index) => {
-          el.addEventListener('click', () => {
-            const itemId = el.getAttribute('data-item-id');
-            const item = filteredElements.find(i => i.id === itemId);
-            if (item && item.type === 'command') {
-              item.command(editorView);
-              closeSlashMenu();
-            }
+        // Send to native to process with LLM
+        if (finalText && finalText.length > 10) {
+          sendMessageToNative({
+            type: 'voiceDictationComplete',
+            text: finalText,
+            cursorPos: editorView.state.selection.from
           });
-        });
-
-        slashMenuElement.classList.add('visible');
-      }
-
-      function getMenuItemIcon(itemId) {
-        const icons = {
-          'heading1': 'H1',
-          'heading2': 'H2',
-          'heading3': 'H3',
-          'bulletlist': '•',
-          'orderedlist': '1.',
-          'location': '📍'
-        };
-        return icons[itemId] || '•';
-      }
-
-      function closeSlashMenu() {
-        const { SlashMenuKey, dispatchWithMeta, SlashMetaTypes } = window.PM.slashMenu;
-        const tr = editorView.state.tr;
-        tr.setMeta(SlashMenuKey, { type: SlashMetaTypes.close });
-        editorView.dispatch(tr);
-      }
-
-      // Subscribe to state updates to render the menu
-      const originalDispatchTransaction = editorView.dispatchTransaction;
-      editorView.dispatchTransaction = function(transaction) {
-        originalDispatchTransaction.call(this, transaction);
-        renderSlashMenu(editorView.state);
-      };
+        }
+      });
 
       // Add click handler for geo-marks and comments
       document.querySelector('.ProseMirror').addEventListener('click', function(e) {
