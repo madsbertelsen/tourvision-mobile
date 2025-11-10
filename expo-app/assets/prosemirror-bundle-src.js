@@ -186,6 +186,49 @@ const mySchema = new Schema({
         return ['span', attrs, 0];
       }
     })
+    .addToEnd('pendingVoice', {
+      attrs: {
+        voiceSessionId: { default: null },
+        startTime: { default: null },
+        transcribedText: { default: '' },
+        editedText: { default: null },
+        correctionRound: { default: 0 }
+      },
+      inclusive: false,  // Don't extend mark when user types after voice input
+      parseDOM: [{
+        tag: 'span.pending-voice',
+        getAttrs(dom) {
+          return {
+            voiceSessionId: dom.getAttribute('data-voice-session-id'),
+            startTime: dom.getAttribute('data-start-time'),
+            transcribedText: dom.getAttribute('data-transcribed-text') || '',
+            editedText: dom.getAttribute('data-edited-text'),
+            correctionRound: parseInt(dom.getAttribute('data-correction-round') || '0')
+          };
+        }
+      }],
+      toDOM(mark) {
+        const attrs = {
+          class: 'pending-voice',
+          'data-voice-session-id': mark.attrs.voiceSessionId,
+          'data-start-time': mark.attrs.startTime,
+          'data-transcribed-text': mark.attrs.transcribedText,
+          'data-correction-round': mark.attrs.correctionRound,
+          style: `
+            background-color: rgba(251, 191, 36, 0.25);
+            border-left: 3px solid #FBBF24;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: default;
+            transition: all 0.2s ease;
+          `
+        };
+        if (mark.attrs.editedText) {
+          attrs['data-edited-text'] = mark.attrs.editedText;
+        }
+        return ['span', attrs, 0];
+      }
+    })
 });
 
 // Custom Enter key handler for tool picker
