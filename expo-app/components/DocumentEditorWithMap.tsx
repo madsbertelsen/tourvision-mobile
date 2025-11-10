@@ -1287,8 +1287,7 @@ const styles = StyleSheet.create({
           // Use sticky positioning on web to stay visible during scroll
           position: 'sticky' as any,
           top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)' as any,
+          alignSelf: 'center' as any,
         }
       : {
           // For native platforms, use absolute positioning
