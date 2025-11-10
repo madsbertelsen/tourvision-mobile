@@ -27,6 +27,9 @@ import { WebsocketProvider } from 'y-websocket';
 // Import y-partyserver provider (NEW - production-ready)
 import YProvider from 'y-partyserver/provider';
 
+// Import slash menu plugin
+import { SlashMenuPlugin, SlashMenuKey, dispatchWithMeta, SlashMetaTypes } from 'prosemirror-slash-menu';
+
 // Import old collaboration plugin (will be deprecated)
 // import { CollabConnection, createCollabPlugin, initializeCollaboration } from './prosemirror-collab-plugin';
 // Stub for missing collab plugin
@@ -245,7 +248,9 @@ window.PM = {
   // y-partyserver provider (NEW - production-ready)
   YProvider: YProvider,
   // Custom Enter key handler for tool picker
-  handleEnterWithSelection: handleEnterWithSelection
+  handleEnterWithSelection: handleEnterWithSelection,
+  // Slash menu plugin
+  slashMenu: { SlashMenuPlugin, SlashMenuKey, dispatchWithMeta, SlashMetaTypes }
 };
 
 console.log('[ProseMirror Bundle] Loaded successfully with Y.js, Hocuspocus, and PartyKit support');

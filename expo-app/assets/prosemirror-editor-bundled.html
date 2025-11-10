@@ -451,6 +451,59 @@
       padding: 40px;
       color: #6B7280;
     }
+
+    /* Slash Menu Styles */
+    .slash-menu {
+      position: absolute;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      padding: 4px;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+    }
+
+    .slash-menu.visible {
+      display: block;
+    }
+
+    .slash-menu-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #1f2937;
+    }
+
+    .slash-menu-item:hover {
+      background-color: #f3f4f6;
+    }
+
+    .slash-menu-item.selected {
+      background-color: #3b82f6;
+      color: white;
+    }
+
+    .slash-menu-item-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .slash-menu-filter {
+      color: #6b7280;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -458,6 +511,9 @@
   <div id="collab-status">Disconnected</div>
   <div id="collab-users"></div>
   <div id="editor-container"></div>
+
+  <!-- Slash Menu -->
+  <div id="slashMenu" class="slash-menu"></div>
 
   <!-- Location Modal -->
   <div id="locationModalOverlay" class="location-modal-overlay">
@@ -556,11 +612,118 @@
       };
     }
 
+    // Define slash menu items
+    const slashMenuItems = [
+      {
+        id: 'heading1',
+        label: 'Heading 1',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          const { state, dispatch } = view;
+          const { $from } = state.selection;
+          const nodeType = state.schema.nodes.heading;
+
+          if (nodeType) {
+            const tr = state.tr.setBlockType($from.pos, $from.pos, nodeType, { level: 1 });
+            dispatch(tr);
+          }
+        }
+      },
+      {
+        id: 'heading2',
+        label: 'Heading 2',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          const { state, dispatch } = view;
+          const { $from } = state.selection;
+          const nodeType = state.schema.nodes.heading;
+
+          if (nodeType) {
+            const tr = state.tr.setBlockType($from.pos, $from.pos, nodeType, { level: 2 });
+            dispatch(tr);
+          }
+        }
+      },
+      {
+        id: 'heading3',
+        label: 'Heading 3',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          const { state, dispatch } = view;
+          const { $from } = state.selection;
+          const nodeType = state.schema.nodes.heading;
+
+          if (nodeType) {
+            const tr = state.tr.setBlockType($from.pos, $from.pos, nodeType, { level: 3 });
+            dispatch(tr);
+          }
+        }
+      },
+      {
+        id: 'bulletlist',
+        label: 'Bullet List',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          const { state, dispatch } = view;
+          const { $from } = state.selection;
+          const listType = state.schema.nodes.bullet_list;
+          const itemType = state.schema.nodes.list_item;
+
+          if (listType && itemType) {
+            const tr = state.tr.replaceSelectionWith(
+              listType.create(null, itemType.create(null, state.schema.nodes.paragraph.create()))
+            );
+            dispatch(tr);
+          }
+        }
+      },
+      {
+        id: 'orderedlist',
+        label: 'Numbered List',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          const { state, dispatch } = view;
+          const { $from } = state.selection;
+          const listType = state.schema.nodes.ordered_list;
+          const itemType = state.schema.nodes.list_item;
+
+          if (listType && itemType) {
+            const tr = state.tr.replaceSelectionWith(
+              listType.create(null, itemType.create(null, state.schema.nodes.paragraph.create()))
+            );
+            dispatch(tr);
+          }
+        }
+      },
+      {
+        id: 'location',
+        label: 'Add Location',
+        type: 'command',
+        available: () => true,
+        command: (view) => {
+          console.log('[SlashMenu] Add Location selected');
+          // Trigger location creation flow
+          if (window.createLocationFromSelection) {
+            window.createLocationFromSelection();
+          }
+        }
+      }
+    ];
+
     // Helper to create standard plugins with Enter key handler
     function createEditorPlugins() {
+      const { SlashMenuPlugin, SlashMenuKey } = window.PM.slashMenu;
+
       return [
         window.PM.history.history(),
         window.PM.keymap({ 'Mod-z': window.PM.history.undo, 'Mod-y': window.PM.history.redo }),
+        // Slash menu plugin
+        SlashMenuPlugin(slashMenuItems),
         // Custom Enter key handler for tool picker (must be before baseKeymap to override)
         window.PM.keymap({
           'Enter': (state, dispatch, view) => {
@@ -1645,6 +1808,84 @@
 
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
+
+      // Slash Menu Rendering
+      const slashMenuElement = document.getElementById('slashMenu');
+      let selectedMenuItemIndex = 0;
+
+      function renderSlashMenu(state) {
+        const { SlashMenuKey } = window.PM.slashMenu;
+        const slashMenuState = SlashMenuKey.getState(state);
+
+        if (!slashMenuState || !slashMenuState.open) {
+          slashMenuElement.classList.remove('visible');
+          return;
+        }
+
+        const { filteredElements, selected } = slashMenuState;
+
+        // Position the menu at the cursor
+        try {
+          const { from } = state.selection;
+          const coords = editorView.coordsAtPos(from);
+          const editorContainer = document.querySelector('#editor-container');
+          const editorRect = editorContainer.getBoundingClientRect();
+
+          slashMenuElement.style.left = (coords.left - editorRect.left) + 'px';
+          slashMenuElement.style.top = (coords.bottom - editorRect.top + 5) + 'px';
+        } catch (e) {
+          console.warn('[SlashMenu] Could not position menu:', e);
+        }
+
+        // Render menu items
+        slashMenuElement.innerHTML = filteredElements.map((item, index) => {
+          const isSelected = item.id === selected;
+          return `<div class="slash-menu-item ${isSelected ? 'selected' : ''}" data-item-id="${item.id}">
+            <span class="slash-menu-item-icon">${getMenuItemIcon(item.id)}</span>
+            <span>${item.label}</span>
+          </div>`;
+        }).join('');
+
+        // Add click handlers
+        slashMenuElement.querySelectorAll('.slash-menu-item').forEach((el, index) => {
+          el.addEventListener('click', () => {
+            const itemId = el.getAttribute('data-item-id');
+            const item = filteredElements.find(i => i.id === itemId);
+            if (item && item.type === 'command') {
+              item.command(editorView);
+              closeSlashMenu();
+            }
+          });
+        });
+
+        slashMenuElement.classList.add('visible');
+      }
+
+      function getMenuItemIcon(itemId) {
+        const icons = {
+          'heading1': 'H1',
+          'heading2': 'H2',
+          'heading3': 'H3',
+          'bulletlist': '•',
+          'orderedlist': '1.',
+          'location': '📍'
+        };
+        return icons[itemId] || '•';
+      }
+
+      function closeSlashMenu() {
+        const { SlashMenuKey, dispatchWithMeta, SlashMetaTypes } = window.PM.slashMenu;
+        const tr = editorView.state.tr;
+        tr.setMeta(SlashMenuKey, { type: SlashMetaTypes.close });
+        editorView.dispatch(tr);
+      }
+
+      // Subscribe to state updates to render the menu
+      const originalDispatchTransaction = editorView.dispatchTransaction;
+      editorView.dispatchTransaction = function(transaction) {
+        originalDispatchTransaction.call(this, transaction);
+        renderSlashMenu(editorView.state);
+      };
 
       // Add click handler for geo-marks and comments
       document.querySelector('.ProseMirror').addEventListener('click', function(e) {
