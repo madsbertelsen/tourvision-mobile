@@ -1601,6 +1601,33 @@
             overflow: hidden;
           `;
 
+          // Create clickable overlay on top of map
+          this.clickOverlay = document.createElement('div');
+          this.clickOverlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            cursor: pointer;
+            background: transparent;
+          `;
+
+          // Add click handler to overlay
+          this.clickOverlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[MapView] Map overlay clicked, opening fullscreen map');
+            const geoMarks = this.collectGeoMarks();
+            sendMessageToNative({
+              type: 'openFullscreenMap',
+              locations: geoMarks
+            });
+          });
+
+          this.dom.appendChild(this.clickOverlay);
+
           // Initialize map after a short delay to ensure container is in DOM
           setTimeout(() => this.initMap(), 0);
         }
@@ -1619,6 +1646,7 @@
                   geoMarks.push({
                     geoId: mark.attrs.geoId,
                     placeName: mark.attrs.placeName,
+                    displayText: node.text || mark.attrs.placeName, // Use actual text content
                     lat: parseFloat(mark.attrs.lat),
                     lng: parseFloat(mark.attrs.lng),
                     colorIndex: mark.attrs.colorIndex || 0,

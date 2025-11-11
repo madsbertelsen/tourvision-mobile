@@ -253,6 +253,15 @@ export default function TripDocumentView() {
 
   // Tool picker handlers
   const handleToolPickerMessage = useCallback((data: any) => {
+    if (data.type === 'openFullscreenMap') {
+      console.log('[TripDocument] Opening fullscreen map with locations:', data.locations);
+      // Set locations in context before navigating
+      setLocations(data.locations);
+      // Navigate to fullscreen map modal
+      router.push(`/document/${documentId}/map-fullscreen` as any);
+      return;
+    }
+
     if (data.type === 'showToolPicker') {
       console.log('[TripDocument] Showing tool picker with data:', data.data);
 
@@ -297,7 +306,7 @@ export default function TripDocumentView() {
         router.push(`/document/${documentId}/geo-search/${geoId}` as any);
       }
     }
-  }, [existingGeoMarks, startLocationFlow, documentId, router]);
+  }, [existingGeoMarks, startLocationFlow, documentId, router, setLocations]);
 
   const handleSelectLocation = useCallback(() => {
     console.log('[TripDocument] Tool picker - Location selected');
