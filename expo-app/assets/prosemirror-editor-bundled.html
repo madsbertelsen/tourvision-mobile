@@ -609,8 +609,8 @@
     <div class="voice-help-text">Edit the text above and click Accept or Reject</div>
   </div>
 
-  <!-- Draft Control Buttons -->
-  <div id="draftControlButtons" class="voice-control-buttons">
+  <!-- Draft Control Buttons (DISABLED - user prefers undo feature) -->
+  <div id="draftControlButtons" class="voice-control-buttons" style="display: none;">
     <div class="voice-button-row">
       <button id="acceptDraftBtn" class="voice-btn voice-btn-accept">✓ Accept Draft</button>
     </div>
@@ -1941,7 +1941,9 @@
           const oldState = editorView.state;
           let newState = oldState.apply(transaction);
 
-          // Auto-apply draft mark to new text insertions
+          // DISABLED: Auto-apply draft mark to new text insertions
+          // User prefers to use undo feature instead of draft confirmation
+          /*
           if (transaction.docChanged && !transaction.getMeta('draftApplied')) {
             const draftMark = schema.marks.draft.create({
               sessionId: draftSessionId,
@@ -1981,11 +1983,12 @@
               newState = newState.apply(tr);
             }
           }
+          */
 
           editorView.updateState(newState);
 
-          // Update draft button visibility
-          updateDraftButtonVisibility();
+          // DISABLED: Update draft button visibility
+          // updateDraftButtonVisibility();
 
           // Update typing cursor position on any change
           if (isTypingActive) {
@@ -3412,9 +3415,12 @@
                     message: 'EditorView exists, processing HTML: ' + data.html.substring(0, 100)
                   });
 
-                  // Find all text with draft marks
+                  // Find text to replace (draft marks if available, otherwise find "assist" keyword)
                   let draftStart = null;
                   let draftEnd = null;
+                  let foundAssistParagraph = false;
+
+                  // First try to find draft marks (legacy support)
                   state.doc.descendants((node, pos) => {
                     if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
                       if (draftStart === null) {
@@ -3424,11 +3430,26 @@
                     }
                   });
 
+                  // If no draft marks found, find the paragraph containing "assist"
                   if (draftStart === null || draftEnd === null) {
-                    console.warn('[WebView] No draft text found to replace');
+                    state.doc.descendants((node, pos) => {
+                      if (node.type.name === 'paragraph' && !foundAssistParagraph) {
+                        const text = node.textContent.toLowerCase();
+                        if (text.includes('assist')) {
+                          // Replace the entire paragraph
+                          draftStart = pos + 1; // +1 to skip paragraph node itself
+                          draftEnd = pos + node.nodeSize - 1; // -1 to not include closing
+                          foundAssistParagraph = true;
+                        }
+                      }
+                    });
+                  }
+
+                  if (draftStart === null || draftEnd === null) {
+                    console.warn('[WebView] No draft text or assist paragraph found to replace');
                     sendMessageToNative({
                       type: 'debug',
-                      message: 'No draft text found to replace'
+                      message: 'No draft text or assist paragraph found to replace'
                     });
                     break;
                   }

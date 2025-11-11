@@ -3,7 +3,7 @@ import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import { extractLocationsFromText } from '@/utils/extract-locations-from-text';
-// v83 - Native Alert.alert for assist trigger instead of web alert
+// v85 - Find and replace "assist" paragraph instead of draft marks
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -423,9 +423,11 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               console.log('[ProseMirrorWebView] Draft text:', data.draftText);
               console.log('[ProseMirrorWebView] Has draft:', data.hasDraft);
 
-              // Process draft text with LLM for location extraction
-              if (data.hasDraft && data.draftText) {
-                handleAssistTrigger(data.draftText);
+              // Process text with LLM for location extraction
+              // Use draft text if available (legacy), otherwise use full text (draft feature disabled)
+              const textToProcess = data.hasDraft && data.draftText ? data.draftText : data.text;
+              if (textToProcess) {
+                handleAssistTrigger(textToProcess);
               }
               break;
 
