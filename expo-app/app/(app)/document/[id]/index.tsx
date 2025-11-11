@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
   documentContainer: {
     flex: 1,
     maxWidth: 700,  // Set max width for document
-    overflow: 'hidden',  // Prevent arrow from extending outside
+    overflow: 'visible',  // Changed from 'hidden' to prevent text cutoff
     position: 'relative',  // Positioning context for tool picker
   },
   documentContainerSplit: {
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     maxWidth: 700,  // Enforce max width
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
-    overflow: 'hidden',  // Prevent arrow from extending outside
+    overflow: 'visible',  // Changed from 'hidden' to prevent text cutoff
     position: 'relative',  // Positioning context for tool picker
   },
   mapContainer: {

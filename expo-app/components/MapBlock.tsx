@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
+import { Marker, Source, Layer } from 'react-map-gl/mapbox';
 
 interface GeoMarkLocation {
   geoId: string;
@@ -163,9 +163,6 @@ const MapBlock = memo(function MapBlock({
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
       >
-        {/* Navigation controls */}
-        <NavigationControl position="top-right" />
-
         {/* Route rendering using Mapbox layers */}
         {routes.map((route) => {
           const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
@@ -231,7 +228,8 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 8,
     overflow: 'hidden',
-    marginVertical: 16,
+    marginTop: 32,
+    marginBottom: 16,
     backgroundColor: '#f3f4f6',
   },
   marker: {

@@ -1596,7 +1596,7 @@
             background: #f3f4f6;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            margin: 16px 0;
+            margin: 32px 0 16px 0;
             position: relative;
             overflow: hidden;
           `;
@@ -1658,7 +1658,14 @@
           const mapConfig = {
             container: this.dom,
             style: 'mapbox://styles/mapbox/light-v11',
-            trackResize: true
+            trackResize: true,
+            dragPan: false,
+            scrollZoom: false,
+            boxZoom: false,
+            dragRotate: false,
+            keyboard: false,
+            doubleClickZoom: false,
+            touchZoomRotate: false
           };
 
           if (geoMarks.length === 1) {
@@ -1695,9 +1702,6 @@
           }
 
           this.map = new mapboxgl.Map(mapConfig);
-
-          // Add navigation controls
-          this.map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
           // Wait for map to load
           this.map.on('load', async () => {
@@ -2009,37 +2013,54 @@
               doc: docJSON
             });
 
-            // Check for trigger word "assist" - only trigger once
-            const docText = newState.doc.textContent.toLowerCase();
+            // Pause-based trigger: detect when user stops typing
+            const docText = newState.doc.textContent;
 
-            if (!assistTriggered && docText.includes('assist')) {
-              assistTriggered = true;
-              console.log('[Trigger] ✅ Assist detected! Extracting draft text...');
+            // Clear existing timeout
+            if (typingPauseTimeout) {
+              clearTimeout(typingPauseTimeout);
+            }
 
-              // Extract text with draft marks
-              let draftText = '';
-              newState.doc.descendants((node, pos) => {
-                if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
-                  draftText += node.text;
-                }
-              });
+            // Only trigger if:
+            // 1. Document has meaningful content (at least 10 characters)
+            // 2. Not already triggered recently
+            // 3. Document has actually changed since last processing
+            const hasChanged = docText !== lastProcessedText;
+            if (docText.trim().length >= 10 && !assistTriggered && hasChanged) {
+              // Set timeout to trigger after 2 seconds of no typing
+              typingPauseTimeout = setTimeout(function() {
+                assistTriggered = true;
+                console.log('[Trigger] ✅ Typing pause detected! Extracting text for location detection...');
 
-              console.log('[Trigger] Draft text extracted:', draftText);
+                // Store the current text to prevent reprocessing
+                lastProcessedText = docText;
 
-              // Send message to React Native with both full text and draft text
-              sendMessageToNative({
-                type: 'assistTrigger',
-                text: docText,
-                draftText: draftText,
-                hasDraft: draftText.length > 0,
-                timestamp: new Date().toISOString()
-              });
+                // Extract text with draft marks (if any)
+                let draftText = '';
+                newState.doc.descendants((node, pos) => {
+                  if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
+                    draftText += node.text;
+                  }
+                });
 
-              // Reset after 5 seconds to allow triggering again
-              setTimeout(function() {
-                assistTriggered = false;
-                console.log('[Trigger] Assist trigger reset');
-              }, 5000);
+                console.log('[Trigger] Draft text extracted:', draftText);
+                console.log('[Trigger] Full text:', docText);
+
+                // Send message to React Native with both full text and draft text
+                sendMessageToNative({
+                  type: 'assistTrigger',
+                  text: docText,
+                  draftText: draftText,
+                  hasDraft: draftText.length > 0,
+                  timestamp: new Date().toISOString()
+                });
+
+                // Reset after 5 seconds to allow triggering again
+                setTimeout(function() {
+                  assistTriggered = false;
+                  console.log('[Trigger] Ready for next pause detection');
+                }, 5000);
+              }, 2000); // 2 second pause
             }
           }
 
@@ -2091,8 +2112,10 @@
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
 
-      // Track if assist trigger has been detected
+      // Track if assist trigger has been detected and typing pause timeout
       let assistTriggered = false;
+      let typingPauseTimeout = null;
+      let lastProcessedText = ''; // Track last processed document text
 
       // Voice dictation: Listen for composition end (when user presses Done after voice input)
       let compositionText = '';
@@ -2523,6 +2546,25 @@
           if (event.data.action === 'addNote') {
             console.log('[WebView] Add note from native menu:', event.data.data.selectedText);
             // Handle add note action
+            return;
+          }
+
+          if (event.data.action === 'insertMap') {
+            console.log('[WebView] Insert map from native menu');
+            // Directly insert map into editor
+            if (editorView && schema.nodes.map) {
+              const { state, dispatch } = editorView;
+              const mapPos = state.selection.$from.pos;
+              const $pos = state.doc.resolve(mapPos);
+              const insertPos = $pos.after($pos.depth);
+              const mapNode = schema.nodes.map.create({ height: 400 });
+              const mapTr = state.tr.insert(insertPos, mapNode);
+              dispatch(mapTr);
+              console.log('[WebView] Map inserted at position:', insertPos);
+              editorView.focus();
+            } else {
+              console.error('[WebView] Map node type not found in schema or editorView not ready');
+            }
             return;
           }
         }
@@ -3379,36 +3421,24 @@
 
             case 'applyReplacements':
               console.log('[WebView] Applying targeted replacements');
+              sendMessageToNative({
+                type: 'debug',
+                message: '[WebView] applyReplacements handler called with ' + (data.replacements ? data.replacements.length : 0) + ' replacements'
+              });
 
               if (editorView && data.replacements && Array.isArray(data.replacements)) {
                 try {
                   const { state, dispatch } = editorView;
                   let tr = state.tr;
+                  let replacementsApplied = 0;
 
-                  // Find the paragraph containing "assist"
-                  let assistParagraphPos = null;
-                  let assistParagraphNode = null;
-
-                  state.doc.descendants((node, pos) => {
-                    if (node.type.name === 'paragraph' && assistParagraphPos === null) {
-                      const text = node.textContent.toLowerCase();
-                      if (text.includes('assist')) {
-                        assistParagraphPos = pos;
-                        assistParagraphNode = node;
-                        return false; // Stop searching
-                      }
-                    }
+                  console.log('[WebView] Processing', data.replacements.length, 'replacements');
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '[WebView] Processing ' + data.replacements.length + ' replacements'
                   });
 
-                  if (!assistParagraphPos || !assistParagraphNode) {
-                    console.warn('[WebView] No paragraph with "assist" found');
-                    break;
-                  }
-
-                  console.log('[WebView] Found assist paragraph at pos', assistParagraphPos);
-                  console.log('[WebView] Processing', data.replacements.length, 'replacements');
-
-                  // For each replacement, find the text and replace it with geo-mark
+                  // For each replacement, find ALL occurrences in the document
                   data.replacements.forEach((replacement) => {
                     const { find, replaceWith } = replacement;
                     console.log('[WebView] Looking for:', find);
@@ -3441,42 +3471,45 @@
                       attrs.transportProfile = geoMarkSpan.getAttribute('data-transport-profile');
                     }
 
-                    // Find the text to replace (case-insensitive)
-                    const paragraphText = assistParagraphNode.textContent;
+                    // Search through all text nodes in the document
                     const findLower = find.toLowerCase();
-                    const textLower = paragraphText.toLowerCase();
-                    const findIndex = textLower.indexOf(findLower);
+                    let foundMatch = false;
 
-                    if (findIndex === -1) {
+                    state.doc.descendants((node, pos) => {
+                      if (node.isText && node.text) {
+                        const textLower = node.text.toLowerCase();
+                        const findIndex = textLower.indexOf(findLower);
+
+                        if (findIndex !== -1) {
+                          // Calculate absolute position in document
+                          const from = pos + findIndex;
+                          const to = from + find.length;
+
+                          console.log('[WebView] Found "' + find + '" at', from, '-', to);
+
+                          // Create geoMark mark
+                          const geoMarkMark = schema.marks.geoMark.create(attrs);
+
+                          // Apply the mark to the text
+                          tr = tr.addMark(from, to, geoMarkMark);
+                          foundMatch = true;
+                          replacementsApplied++;
+                        }
+                      }
+                    });
+
+                    if (!foundMatch) {
                       console.warn('[WebView] Could not find text:', find);
-                      return;
                     }
-
-                    // Calculate absolute position in document
-                    const from = assistParagraphPos + 1 + findIndex; // +1 to skip paragraph node
-                    const to = from + find.length;
-
-                    console.log('[WebView] Replacing text at', from, '-', to);
-
-                    // Create geoMark mark
-                    const geoMarkMark = schema.marks.geoMark.create(attrs);
-
-                    // Apply the mark to the text
-                    tr = tr.addMark(from, to, geoMarkMark);
                   });
-
-                  // Remove "assist" keyword from the paragraph
-                  const paragraphText = assistParagraphNode.textContent;
-                  const assistIndex = paragraphText.toLowerCase().indexOf(' assist');
-                  if (assistIndex !== -1) {
-                    const assistFrom = assistParagraphPos + 1 + assistIndex;
-                    const assistTo = assistFrom + ' assist'.length;
-                    tr = tr.delete(assistFrom, assistTo);
-                  }
 
                   // Apply transaction
                   dispatch(tr);
-                  console.log('[WebView] Replacements applied successfully');
+                  console.log('[WebView] Replacements applied successfully, count:', replacementsApplied);
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '[WebView] ✅ Applied ' + replacementsApplied + ' geo-marks successfully!'
+                  });
 
                   sendMessageToNative({
                     type: 'replacementsApplied',

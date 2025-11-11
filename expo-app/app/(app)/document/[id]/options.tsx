@@ -95,6 +95,15 @@ export default function DocumentOptionsModal() {
 
         <View style={styles.separator} />
 
+        <TouchableOpacity style={styles.actionItem} onPress={() => handleAction('insertMap')}>
+          <View style={styles.actionIcon}>
+            <Ionicons name="map" size={22} color="#007AFF" />
+          </View>
+          <Text style={styles.actionText}>Indsæt kort</Text>
+        </TouchableOpacity>
+
+        <View style={styles.separator} />
+
         <TouchableOpacity style={styles.actionItem} onPress={() => handleAction('duplicate')}>
           <View style={styles.actionIcon}>
             <Ionicons name="copy-outline" size={22} color="#007AFF" />

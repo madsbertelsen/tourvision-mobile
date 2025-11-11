@@ -78,10 +78,18 @@ extension WKWebView {
                 self?.handleAddNoteAction()
             }
 
+            let insertMapAction = UIAction(
+                title: "Insert Map",
+                image: UIImage(systemName: "map.fill")
+            ) { [weak self] _ in
+                print("[DomWebViewExtension] 🎯 Insert Map action triggered!")
+                self?.handleInsertMapAction()
+            }
+
             let customMenu = UIMenu(
                 title: "",
                 options: .displayInline,
-                children: [createLocationAction, addNoteAction]
+                children: [createLocationAction, addNoteAction, insertMapAction]
             )
 
             // Insert our custom menu BEFORE the standard edit menu to appear first
@@ -134,6 +142,13 @@ extension WKWebView {
                 ])
             }
         }
+    }
+
+    // Handle the "Insert Map" action
+    private func handleInsertMapAction() {
+        print("[DomWebViewExtension] 📍 Handling Insert Map action")
+        // Send message to JavaScript to insert a map at the current cursor position
+        self.sendMessageToJavaScript(action: "insertMap", data: [:])
     }
 
     // Helper method to send messages to JavaScript

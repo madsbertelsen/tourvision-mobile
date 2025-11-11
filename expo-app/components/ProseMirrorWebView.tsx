@@ -3,7 +3,7 @@ import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import { extractLocationsFromText } from '@/utils/extract-locations-from-text';
-// v86 - Targeted replacements, only replace location names with geo-marks
+// v100 - Fixed text cutoff above map by increasing top margin to 32px
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
