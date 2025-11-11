@@ -3,7 +3,7 @@ import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import { extractLocationsFromText } from '@/utils/extract-locations-from-text';
-// v85 - Find and replace "assist" paragraph instead of draft marks
+// v86 - Targeted replacements, only replace location names with geo-marks
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -287,16 +287,16 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
                 break;
 
               case 'assist_complete':
-                // Worker has finished generating HTML snippet with geo-marks
-                console.log('[ProseMirrorWebView] Assist complete, HTML:', data.html);
+                // Worker has finished generating replacements array with geo-marks
+                console.log('[ProseMirrorWebView] Assist complete, replacements:', data.replacements);
 
-                if (data.html) {
-                  // Send the HTML snippet to WebView to replace draft content
-                  console.log('[ProseMirrorWebView] Sending replaceDraftWithHTML message to WebView');
-                  console.log('[ProseMirrorWebView] HTML length:', data.html.length);
+                if (data.replacements && Array.isArray(data.replacements)) {
+                  // Send the replacements array to WebView to do targeted replacements
+                  console.log('[ProseMirrorWebView] Sending applyReplacements message to WebView');
+                  console.log('[ProseMirrorWebView] Number of replacements:', data.replacements.length);
                   sendMessageInternal({
-                    type: 'replaceDraftWithHTML',
-                    html: data.html
+                    type: 'applyReplacements',
+                    replacements: data.replacements
                   });
                   console.log('[ProseMirrorWebView] Message sent to WebView');
                 }

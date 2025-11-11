@@ -3377,6 +3377,124 @@
               }
               break;
 
+            case 'applyReplacements':
+              console.log('[WebView] Applying targeted replacements');
+
+              if (editorView && data.replacements && Array.isArray(data.replacements)) {
+                try {
+                  const { state, dispatch } = editorView;
+                  let tr = state.tr;
+
+                  // Find the paragraph containing "assist"
+                  let assistParagraphPos = null;
+                  let assistParagraphNode = null;
+
+                  state.doc.descendants((node, pos) => {
+                    if (node.type.name === 'paragraph' && assistParagraphPos === null) {
+                      const text = node.textContent.toLowerCase();
+                      if (text.includes('assist')) {
+                        assistParagraphPos = pos;
+                        assistParagraphNode = node;
+                        return false; // Stop searching
+                      }
+                    }
+                  });
+
+                  if (!assistParagraphPos || !assistParagraphNode) {
+                    console.warn('[WebView] No paragraph with "assist" found');
+                    break;
+                  }
+
+                  console.log('[WebView] Found assist paragraph at pos', assistParagraphPos);
+                  console.log('[WebView] Processing', data.replacements.length, 'replacements');
+
+                  // For each replacement, find the text and replace it with geo-mark
+                  data.replacements.forEach((replacement) => {
+                    const { find, replaceWith } = replacement;
+                    console.log('[WebView] Looking for:', find);
+
+                    // Parse the replaceWith HTML to extract geo-mark attributes
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(replaceWith, 'text/html');
+                    const geoMarkSpan = doc.querySelector('.geo-mark');
+
+                    if (!geoMarkSpan) {
+                      console.warn('[WebView] No geo-mark found in replacement HTML');
+                      return;
+                    }
+
+                    // Extract attributes
+                    const attrs = {
+                      geoId: geoMarkSpan.getAttribute('data-geo-id'),
+                      placeName: geoMarkSpan.getAttribute('data-place-name'),
+                      lat: parseFloat(geoMarkSpan.getAttribute('data-lat')),
+                      lng: parseFloat(geoMarkSpan.getAttribute('data-lng')),
+                      colorIndex: parseInt(geoMarkSpan.getAttribute('data-color-index')),
+                      coordSource: geoMarkSpan.getAttribute('data-coord-source') || 'nominatim'
+                    };
+
+                    // Add transport if present
+                    if (geoMarkSpan.getAttribute('data-transport-from')) {
+                      attrs.transportFrom = geoMarkSpan.getAttribute('data-transport-from');
+                    }
+                    if (geoMarkSpan.getAttribute('data-transport-profile')) {
+                      attrs.transportProfile = geoMarkSpan.getAttribute('data-transport-profile');
+                    }
+
+                    // Find the text to replace (case-insensitive)
+                    const paragraphText = assistParagraphNode.textContent;
+                    const findLower = find.toLowerCase();
+                    const textLower = paragraphText.toLowerCase();
+                    const findIndex = textLower.indexOf(findLower);
+
+                    if (findIndex === -1) {
+                      console.warn('[WebView] Could not find text:', find);
+                      return;
+                    }
+
+                    // Calculate absolute position in document
+                    const from = assistParagraphPos + 1 + findIndex; // +1 to skip paragraph node
+                    const to = from + find.length;
+
+                    console.log('[WebView] Replacing text at', from, '-', to);
+
+                    // Create geoMark mark
+                    const geoMarkMark = schema.marks.geoMark.create(attrs);
+
+                    // Apply the mark to the text
+                    tr = tr.addMark(from, to, geoMarkMark);
+                  });
+
+                  // Remove "assist" keyword from the paragraph
+                  const paragraphText = assistParagraphNode.textContent;
+                  const assistIndex = paragraphText.toLowerCase().indexOf(' assist');
+                  if (assistIndex !== -1) {
+                    const assistFrom = assistParagraphPos + 1 + assistIndex;
+                    const assistTo = assistFrom + ' assist'.length;
+                    tr = tr.delete(assistFrom, assistTo);
+                  }
+
+                  // Apply transaction
+                  dispatch(tr);
+                  console.log('[WebView] Replacements applied successfully');
+
+                  sendMessageToNative({
+                    type: 'replacementsApplied',
+                    success: true,
+                    count: data.replacements.length
+                  });
+
+                } catch (error) {
+                  console.error('[WebView] Error applying replacements:', error);
+                  sendMessageToNative({
+                    type: 'replacementsApplied',
+                    success: false,
+                    error: error.message
+                  });
+                }
+              }
+              break;
+
             case 'replaceDraftWithHTML':
               console.log('[WebView] Replacing draft content with HTML snippet');
               sendMessageToNative({

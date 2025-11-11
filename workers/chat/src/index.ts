@@ -272,8 +272,9 @@ Return ONLY the JSON, no markdown, no explanation.`
         }
       }
 
-      // Build HTML snippet with geo-marks
-      let html = locationsData.template;
+      // Build array of replacements (target text → geo-mark HTML)
+      const replacements: Array<{ find: string; replaceWith: string }> = [];
+
       geocodedLocations.forEach((location, index) => {
         const colorIndex = index % 10; // We have 10 colors
         const geoMarkAttrs: any = {
@@ -298,13 +299,18 @@ Return ONLY the JSON, no markdown, no explanation.`
           .join(' ');
 
         const geoMarkHtml = `<span class="geo-mark" ${attrsString}>${location.displayText}</span>`;
-        html = html.replace(`{${index}}`, geoMarkHtml);
+
+        // Add replacement instruction
+        replacements.push({
+          find: location.displayText, // The text to find (e.g., "Copenhagen")
+          replaceWith: geoMarkHtml    // The geo-mark span to replace it with
+        });
       });
 
-      // Send HTML snippet back to client
+      // Send replacements back to client
       ws.send(JSON.stringify({
         type: 'assist_complete',
-        html: html,
+        replacements: replacements,  // Array of {find, replaceWith}
         locations: geocodedLocations
       }));
 
