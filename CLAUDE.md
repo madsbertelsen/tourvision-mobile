@@ -1206,56 +1206,59 @@ This command:
 
 ### Geo-Mark Implementation
 
-#### Structure: Inline Nodes (Not Marks!)
+#### Structure: Text Marks (Not Inline Nodes!)
 
-Geo-marks are **inline nodes** (like inline code or links), not text marks (like bold/italic). This is critical for proper rendering with background colors.
+Geo-marks are **text marks** (like bold/italic), not inline nodes. They are applied to text content and carry location attributes.
 
-**Correct Structure** (inline node):
+**Correct Structure** (mark):
+```json
+{
+  "type": "text",
+  "marks": [
+    {
+      "type": "geoMark",
+      "attrs": {
+        "geoId": "loc-123",
+        "placeName": "Copenhagen, Denmark",
+        "lat": 55.6867,
+        "lng": 12.5700,
+        "colorIndex": 0,
+        "coordSource": "manual",
+        "description": "Optional short text",
+        "visitDocument": {
+          "type": "doc",
+          "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Rich text notes"}]}
+          ]
+        },
+        "transportFrom": null,
+        "transportProfile": "walking",
+        "waypoints": null,
+        "photoName": null
+      }
+    }
+  ],
+  "text": "Copenhagen"
+}
+```
+
+**Wrong Structure** (inline node):
 ```json
 {
   "type": "geoMark",
-  "attrs": {
-    "geoId": "loc-123",
-    "placeName": "Copenhagen, Denmark",
-    "lat": 55.6867,
-    "lng": 12.5700,
-    "colorIndex": 0,
-    "coordSource": "manual",
-    "description": "Optional short text",
-    "visitDocument": {
-      "type": "doc",
-      "content": [
-        {"type": "paragraph", "content": [{"type": "text", "text": "Rich text notes"}]}
-      ]
-    },
-    "transportFrom": null,
-    "transportProfile": "walking",
-    "waypoints": null,
-    "photoName": null
-  },
+  "attrs": {...},
   "content": [
     {"type": "text", "text": "Copenhagen"}
   ]
 }
 ```
 
-**Old Structure** (mark - WRONG!):
-```json
-{
-  "type": "text",
-  "marks": [
-    {"type": "geoMark", "attrs": {...}}
-  ],
-  "text": "Copenhagen"
-}
-```
+#### Why Text Marks?
 
-#### Why Inline Nodes?
-
-1. **Background Colors**: NodeViews can apply background colors properly
-2. **Click Handling**: Nodes can be clicked independently
-3. **Attributes**: Nodes can store complex data like `visitDocument`
-4. **Rendering**: Read mode can render with proper styling
+1. **Text Integration**: Marks are applied to existing text, preserving document flow
+2. **Multiple Marks**: Text can have multiple marks (bold + geoMark)
+3. **Selection**: Works naturally with text selection
+4. **Background Colors**: Rendered via span elements with background styles
 
 #### Visit Document Structure
 

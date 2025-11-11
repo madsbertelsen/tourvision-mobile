@@ -545,8 +545,17 @@ export default function DynamicLandingDocumentProseMirror({
           JSON.stringify(prevLocations[idx].waypoints) !== JSON.stringify(loc.waypoints)
         );
 
+      console.log('[DocumentEditorWithMap] Change detection:', {
+        locationsChanged,
+        prevCount: prevLocations.length,
+        newCount: locationsList.length,
+        prevTransports: prevLocations.map(l => l.transportProfile),
+        newTransports: locationsList.map(l => l.transportProfile)
+      });
+
       // Schedule onLocationsChange to run after render completes
       if (locationsChanged && onLocationsChange) {
+        console.log('[DocumentEditorWithMap] Calling onLocationsChange with updated locations');
         setTimeout(() => onLocationsChange(locationsList), 0);
       }
 
@@ -1123,6 +1132,13 @@ export default function DynamicLandingDocumentProseMirror({
           onMessage={(data) => {
             if (data.type === 'toggleViewMode') {
               setViewMode(viewMode === 'document' ? 'map' : 'document');
+            } else if (data.type === 'documentChanged') {
+              // Handle document changes (e.g., from geo-mark updates)
+              console.log('[DocumentEditorWithMap] Document changed, refreshing content');
+              // Trigger content update to re-extract locations
+              if (data.content) {
+                handleContentChange(data.content);
+              }
             }
             // Forward all messages to external handler if provided
             if (externalOnMessage) {

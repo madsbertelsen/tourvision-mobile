@@ -265,6 +265,20 @@ export default function TripListScreen() {
             <Text style={styles.emptyDescription}>
               Paste a travel guide URL above to extract locations and create your first document
             </Text>
+            <TouchableOpacity
+              style={styles.emptyCreateButton}
+              onPress={handleCreateTrip}
+              disabled={isCreating}
+            >
+              {isCreating ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <>
+                  <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
+                  <Text style={styles.emptyCreateButtonText}>Create Blank Document</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         ) : (
           documents.map((document) => (
@@ -445,6 +459,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   emptyCreateButtonText: {
     color: '#3B82F6',

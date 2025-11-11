@@ -188,6 +188,8 @@ export class ChatRoomV2 {
 
 Your task: Extract ONLY NEW locations that are NOT already inside geo-mark spans.
 
+CRITICAL: If text is inside <span class="geo-mark">...</span>, it is ALREADY MARKED. DO NOT extract it again!
+
 Return ONLY valid JSON in this format:
 {
   "locations": [
@@ -199,34 +201,35 @@ Return ONLY valid JSON in this format:
   "template": "I want to go to {0}"
 }
 
-CRITICAL RULES:
-- DO NOT extract locations that are already inside <span class="geo-mark">...</span> tags
-- ONLY extract plain text locations that are NOT marked yet
-- If ALL locations are already marked, return {"locations": [], "template": ""}
-- Extract ONLY locations explicitly mentioned - do not invent or add locations
-- Do NOT add transport modes unless explicitly stated
-- If transport is mentioned, include transportFrom (previous location) and transportMode
-- Transport modes: "walking", "driving", "cycling", "transit", "flight"
-- Template uses {0}, {1}, {2}, etc. as placeholders for NEW locations only
-- Keep the exact wording from the user's text
+RULES:
+1. SKIP any text inside <span class="geo-mark">...</span> tags - these are already marked locations
+2. ONLY extract plain text locations NOT in spans
+3. If ALL locations are in spans, return {"locations": [], "template": ""}
+4. Extract ONLY locations explicitly mentioned - do not invent locations
+5. Template uses {0}, {1}, {2} as placeholders for NEW locations only
+6. Keep exact wording from user's text
 
 Examples:
 
 Example 1 - Plain text (no marks):
-Input HTML: "I want to go to Copenhagen"
-Response: {"locations": [{"name": "Copenhagen", "displayText": "Copenhagen"}], "template": "I want to go to {0}"}
+Input: "I want to go to Copenhagen"
+Output: {"locations": [{"name": "Copenhagen", "displayText": "Copenhagen"}], "template": "I want to go to {0}"}
 
-Example 2 - Already marked location (skip it):
-Input HTML: "I want to go to <span class="geo-mark" data-geo-id="loc-123">Copenhagen</span>"
-Response: {"locations": [], "template": ""}
+Example 2 - Already marked (SKIP IT!):
+Input: "I want to go to <span class="geo-mark" data-geo-id="loc-123">Copenhagen</span>"
+Output: {"locations": [], "template": ""}
 
 Example 3 - Mix of marked and unmarked:
-Input HTML: "I want to go to <span class="geo-mark">Copenhagen</span> and then to Aarhus"
-Response: {"locations": [{"name": "Aarhus", "displayText": "Aarhus"}], "template": "I want to go to Copenhagen and then to {0}"}
+Input: "I want to go to <span class="geo-mark">Copenhagen</span> and then to Aarhus"
+Output: {"locations": [{"name": "Aarhus", "displayText": "Aarhus"}], "template": "I want to go to Copenhagen and then to {0}"}
 
-Example 4 - Transport between locations:
-Input HTML: "I will cycle from Lejre to Copenhagen"
-Response: {"locations": [{"name": "Lejre", "displayText": "Lejre"}, {"name": "Copenhagen", "displayText": "Copenhagen", "transportFrom": "Lejre", "transportMode": "cycling"}], "template": "I will cycle from {0} to {1}"}
+Example 4 - Two already marked locations (SKIP BOTH!):
+Input: "<span class="geo-mark">Lejre</span> <span class="geo-mark">Copenhagen</span>fr"
+Output: {"locations": [], "template": ""}
+
+Example 5 - One marked, one unmarked:
+Input: "<span class="geo-mark">Lejre</span> and then Roskilde"
+Output: {"locations": [{"name": "Roskilde", "displayText": "Roskilde"}], "template": "Lejre and then {0}"}
 
 Return ONLY the JSON, no markdown, no explanation.`;
 
@@ -253,14 +256,17 @@ Return ONLY the JSON, no markdown, no explanation.`;
       let locationsData = null;
       try {
         let content = aiResponse.response || aiResponse.content || '';
+        console.log('[ChatRoom] Raw LLM content before cleaning:', content);
         content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        console.log('[ChatRoom] Cleaned content:', content);
         locationsData = JSON.parse(content);
 
-        if (!locationsData || !locationsData.locations || !locationsData.template) {
+        if (!locationsData || !Array.isArray(locationsData.locations) || typeof locationsData.template !== 'string') {
           throw new Error('Invalid locations data structure');
         }
       } catch (parseError) {
         console.error('[ChatRoom] Failed to parse AI response:', parseError);
+        console.error('[ChatRoom] Attempted to parse:', aiResponse.response || aiResponse.content);
         ws.send(JSON.stringify({
           type: 'error',
           error: 'Failed to parse LLM response'

@@ -201,7 +201,11 @@ export default function MapFullscreenModal() {
       return;
     }
 
-    console.log('[MapFullscreen] Saving transport mode change:', pendingTransportMode);
+    console.log('[MapFullscreen] Saving transport mode change:', {
+      geoId: selectedRoute.toLocation.geoId,
+      oldTransportProfile: selectedRoute.toLocation?.transportProfile,
+      newTransportProfile: pendingTransportMode,
+    });
 
     // Use setGeoMarkUpdate to update the document
     setGeoMarkUpdate({
@@ -211,7 +215,9 @@ export default function MapFullscreenModal() {
       },
     });
 
+    console.log('[MapFullscreen] geoMarkUpdate set, clearing pendingTransportMode');
     setPendingTransportMode(null);
+    console.log('[MapFullscreen] Navigating back to location view');
     handleBackToLocation();
   }, [selectedRoute, pendingTransportMode, setGeoMarkUpdate, handleBackToLocation]);
 

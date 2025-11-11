@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, memo, ReactNode } from 'react';
+import React, { useRef, useState, useEffect, useCallback, ReactNode } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
@@ -51,7 +51,7 @@ const COLORS = [
   '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
 ];
 
-const DocumentSplitMap = memo(function DocumentSplitMap({
+function DocumentSplitMap({
   locations,
   sidebarContent,
   arrowContent,
@@ -61,6 +61,12 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
   previewRoute,
   onWaypointsChange,
 }: DocumentSplitMapProps) {
+  console.log('[DocumentSplitMap] Component rendering with locations:', locations.map(l => ({
+    geoId: l.geoId,
+    placeName: l.placeName,
+    transportProfile: l.transportProfile
+  })));
+
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
   // Edit mode is always enabled - users can always add waypoints
@@ -273,6 +279,11 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       setRoutes(validRoutes);
     };
 
+    console.log('[DocumentSplitMap] useEffect triggered, locations:', locations.map(l => ({
+      geoId: l.geoId,
+      placeName: l.placeName,
+      transportProfile: l.transportProfile
+    })));
     fetchRoutes();
   }, [locations]);
 
@@ -965,47 +976,7 @@ const DocumentSplitMap = memo(function DocumentSplitMap({
       {arrowContent}
     </View>
   );
-}, (prevProps, nextProps) => {
-  // Custom comparison function to prevent unnecessary re-renders
-  // Re-render if locations changed or modal content changed
-  if (prevProps.locations.length !== nextProps.locations.length) {
-    return false; // Re-render
-  }
-
-  // Check if sidebar content changed
-  if (prevProps.sidebarContent !== nextProps.sidebarContent) {
-    return false; // Re-render
-  }
-
-  // Check if arrow content changed
-  if (prevProps.arrowContent !== nextProps.arrowContent) {
-    return false; // Re-render
-  }
-
-  // Check if search results changed
-  if (prevProps.searchResults?.length !== nextProps.searchResults?.length ||
-      prevProps.selectedSearchIndex !== nextProps.selectedSearchIndex) {
-    return false; // Re-render
-  }
-
-  // Check if any location changed
-  for (let i = 0; i < prevProps.locations.length; i++) {
-    const prev = prevProps.locations[i];
-    const next = nextProps.locations[i];
-
-    if (prev.geoId !== next.geoId ||
-        prev.lat !== next.lat ||
-        prev.lng !== next.lng ||
-        prev.colorIndex !== next.colorIndex) {
-      return false; // Re-render
-    }
-  }
-
-  // Note: focusedGeoLocation comes from context hook, not props,
-  // so it will trigger re-renders automatically when it changes
-
-  return true; // Skip re-render
-});
+}
 
 export default DocumentSplitMap;
 

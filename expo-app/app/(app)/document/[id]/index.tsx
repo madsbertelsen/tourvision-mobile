@@ -511,8 +511,18 @@ export default function TripDocumentView() {
 
   // Watch for geoMarkUpdate and send update command to WebView
   useEffect(() => {
+    console.log('[TripDocument] geoMarkUpdate effect triggered:', {
+      hasUpdate: !!geoMarkUpdate,
+      update: geoMarkUpdate,
+      hasWebViewRef: !!webViewRef.current
+    });
+
     if (geoMarkUpdate && webViewRef.current) {
-      console.log('[TripDocument] Updating geo-mark:', geoMarkUpdate);
+      console.log('[TripDocument] Updating geo-mark with details:', {
+        geoId: geoMarkUpdate.geoId,
+        updatedAttrs: geoMarkUpdate.updatedAttrs,
+        transportProfile: geoMarkUpdate.updatedAttrs?.transportProfile
+      });
 
       // Send updateGeoMark command to WebView
       webViewRef.current.sendCommand('updateGeoMark', {
@@ -520,10 +530,12 @@ export default function TripDocumentView() {
         updatedAttrs: geoMarkUpdate.updatedAttrs,
       });
 
-      console.log('[TripDocument] Geo-mark update command sent');
+      console.log('[TripDocument] Geo-mark update command sent to WebView');
 
       // Clear the update to prevent re-triggering this effect
       setGeoMarkUpdate(null);
+    } else if (geoMarkUpdate && !webViewRef.current) {
+      console.error('[TripDocument] Cannot send update - webViewRef.current is null');
     }
   }, [geoMarkUpdate, setGeoMarkUpdate]);
 

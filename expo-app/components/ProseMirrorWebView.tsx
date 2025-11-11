@@ -181,12 +181,10 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       if (Platform.OS === 'web') {
         // On web, use postMessage (handled by IframeWebView)
         webViewRef.current.postMessage(jsonMessage);
-      } else if (Platform.OS === 'ios') {
-        webViewRef.current.injectJavaScript(`
-          window.postMessage(${jsonMessage}, '*');
-          true;
-        `);
       } else {
+        // On native platforms (iOS and Android), use postMessage directly
+        // The WebView will receive this in the injectedJavaScript listener
+        console.log('[ProseMirrorWebView] Sending to native WebView via postMessage');
         webViewRef.current.postMessage(jsonMessage);
       }
     }, []);
@@ -413,6 +411,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               console.log('[ProseMirrorWebView]', data.message);
               break;
 
+            case 'console':
+              // Forward WebView console messages
+              const prefix = '[ProseMirrorWebView] [WebView]';
+              if (data.level === 'log') {
+                console.log(prefix, data.message);
+              } else if (data.level === 'warn') {
+                console.warn(prefix, data.message);
+              } else if (data.level === 'error') {
+                console.error(prefix, data.message);
+              }
+              break;
+
             case 'info':
               console.log('[ProseMirrorWebView]', data.message);
               break;
@@ -589,7 +599,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
     useEffect(() => {
       return () => {
         // Cleanup on unmount
-        console.log('[ProseMirrorWebView] Component unmounting - resetting refs');
+        console.log('[ProseMirrorWebView] Component unmounting - resetting refs (remove and re-add map v7)');
 
         setIsReady(false);
         isInternalChangeRef.current = false;
@@ -631,7 +641,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       ref,
       () => ({
         sendCommand: (command: string, params?: any) => {
-          console.log('[ProseMirrorWebView] Sending command:', command, params);
+          console.log('[ProseMirrorWebView] Sending command via postMessage:', command, params);
           sendMessage({ type: 'command', command, params });
         },
         scrollToNode: (nodeId: string) => {

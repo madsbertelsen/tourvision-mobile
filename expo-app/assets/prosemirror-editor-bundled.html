@@ -672,12 +672,58 @@
           // Web iframe
           window.parent.postMessage(json, '*');
         } else {
-          console.warn('[WebView] No message handler available');
+          // Use original console since we're overriding it below
+          if (window.originalConsoleWarn) {
+            window.originalConsoleWarn('[WebView] No message handler available');
+          }
         }
       } catch (e) {
-        console.error('[WebView] Error sending message:', e);
+        if (window.originalConsoleError) {
+          window.originalConsoleError('[WebView] Error sending message:', e);
+        }
       }
     }
+
+    // Override console methods to forward to React Native
+    window.originalConsoleLog = console.log;
+    window.originalConsoleWarn = console.warn;
+    window.originalConsoleError = console.error;
+
+    console.log = function(...args) {
+      window.originalConsoleLog.apply(console, args);
+      sendMessageToNative({
+        type: 'console',
+        level: 'log',
+        message: args.map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg);
+            } catch {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ')
+      });
+    };
+
+    console.warn = function(...args) {
+      window.originalConsoleWarn.apply(console, args);
+      sendMessageToNative({
+        type: 'console',
+        level: 'warn',
+        message: args.map(arg => String(arg)).join(' ')
+      });
+    };
+
+    console.error = function(...args) {
+      window.originalConsoleError.apply(console, args);
+      sendMessageToNative({
+        type: 'console',
+        level: 'error',
+        message: args.map(arg => String(arg)).join(' ')
+      });
+    };
 
     // Wrapper for Enter key handler that sends tool picker message to React Native
     function createEnterKeyHandler(view) {
@@ -1637,11 +1683,15 @@
           const seenGeoIds = new Set();
           const mapPos = this.getPos();
 
+          console.log('[MapView] Collecting geo-marks from position 0 to', mapPos);
+
           // Traverse from start of document to map position
           this.view.state.doc.nodesBetween(0, mapPos, (node, pos) => {
+            // Check marks (geo-marks are text marks, not nodes)
             if (node.marks) {
               node.marks.forEach(mark => {
                 if (mark.type.name === 'geoMark' && !seenGeoIds.has(mark.attrs.geoId)) {
+                  console.log('[MapView] Found geoMark mark at pos', pos, 'with attrs:', mark.attrs);
                   seenGeoIds.add(mark.attrs.geoId);
                   geoMarks.push({
                     geoId: mark.attrs.geoId,
@@ -1914,6 +1964,8 @@
         }
 
         update(node) {
+          console.log('[MapView] update() called');
+
           // Check if node changed (e.g., height attribute)
           if (node.attrs.height !== this.node.attrs.height) {
             this.node = node;
@@ -1921,8 +1973,55 @@
             if (this.map) {
               this.map.resize();
             }
-            return true;
           }
+
+          // Check if geo-marks were updated (via timestamp)
+          if (node.attrs._lastGeoMarkUpdate !== this.node.attrs._lastGeoMarkUpdate) {
+            console.log('[MapView] Geo-marks update detected via timestamp, forcing re-render');
+            this.node = node;
+            // Return false to force complete re-render
+            return false;
+          }
+
+          // Collect current geo-marks to check if they've changed
+          const currentGeoMarks = this.collectGeoMarks();
+          const prevGeoMarks = this.lastGeoMarks || [];
+
+          // Check if geo-marks have changed (including transport profiles)
+          const geoMarksChanged = currentGeoMarks.length !== prevGeoMarks.length ||
+            currentGeoMarks.some((mark, i) => {
+              const prevMark = prevGeoMarks.find(m => m.geoId === mark.geoId);
+              if (!prevMark) return true; // New mark
+
+              // Check if any relevant property changed
+              return prevMark.transportProfile !== mark.transportProfile ||
+                     prevMark.transportFrom !== mark.transportFrom ||
+                     JSON.stringify(prevMark.waypoints) !== JSON.stringify(mark.waypoints) ||
+                     prevMark.lat !== mark.lat ||
+                     prevMark.lng !== mark.lng;
+            });
+
+          if (geoMarksChanged) {
+            console.log('[MapView] Geo-marks changed, re-rendering map');
+            console.log('[MapView] Previous geo-marks:', prevGeoMarks);
+            console.log('[MapView] Current geo-marks:', currentGeoMarks);
+
+            // Store current geo-marks for next comparison
+            this.lastGeoMarks = currentGeoMarks;
+
+            // Force complete re-render by returning false
+            // This will destroy the current MapView and create a new one
+            return false;
+          }
+
+          // Store geo-marks if this is the first update
+          if (!this.lastGeoMarks) {
+            this.lastGeoMarks = currentGeoMarks;
+          }
+
+          // Update node reference for next comparison
+          this.node = node;
+
           return true;
         }
 
@@ -2077,31 +2176,29 @@
                 // Convert document to HTML to preserve geo-mark spans
                 function nodeToHTML(node) {
                   if (node.type.name === 'text') {
-                    return node.text || '';
-                  }
+                    let text = node.text || '';
 
-                  if (node.type.name === 'geoMark') {
-                    // Convert geo-mark node to HTML span
-                    const attrs = node.attrs || {};
-                    const attrPairs = [
-                      'data-geo-id="' + (attrs.geoId || '') + '"',
-                      'data-place-name="' + (attrs.placeName || '') + '"',
-                      'data-lat="' + (attrs.lat || '') + '"',
-                      'data-lng="' + (attrs.lng || '') + '"',
-                      'data-color-index="' + (attrs.colorIndex || 0) + '"',
-                      'data-coord-source="' + (attrs.coordSource || '') + '"'
-                    ];
-                    if (attrs.transportFrom) attrPairs.push('data-transport-from="' + attrs.transportFrom + '"');
-                    if (attrs.transportProfile) attrPairs.push('data-transport-profile="' + attrs.transportProfile + '"');
+                    // Check if this text node has geo-mark MARKS
+                    if (node.marks && node.marks.length > 0) {
+                      node.marks.forEach(function(mark) {
+                        if (mark.type.name === 'geoMark') {
+                          const attrs = mark.attrs || {};
+                          const attrPairs = [
+                            'data-geo-id="' + (attrs.geoId || '') + '"',
+                            'data-place-name="' + (attrs.placeName || '') + '"',
+                            'data-lat="' + (attrs.lat || '') + '"',
+                            'data-lng="' + (attrs.lng || '') + '"',
+                            'data-color-index="' + (attrs.colorIndex || 0) + '"',
+                            'data-coord-source="' + (attrs.coordSource || '') + '"'
+                          ];
+                          if (attrs.transportFrom) attrPairs.push('data-transport-from="' + attrs.transportFrom + '"');
+                          if (attrs.transportProfile) attrPairs.push('data-transport-profile="' + attrs.transportProfile + '"');
 
-                    let html = '<span class="geo-mark" ' + attrPairs.join(' ') + '>';
-                    if (node.content) {
-                      node.content.forEach(function(child) {
-                        html += nodeToHTML(child);
+                          text = '<span class="geo-mark" ' + attrPairs.join(' ') + '>' + text + '</span>';
+                        }
                       });
                     }
-                    html += '</span>';
-                    return html;
+                    return text;
                   }
 
                   // For other nodes, just process children
@@ -2115,7 +2212,12 @@
                 }
 
                 const docHTML = nodeToHTML(newState.doc);
-                console.log('[Trigger] 🔥 NEW BUNDLE - Document HTML:', docHTML);
+
+                // Send log to React Native so we can see it
+                sendMessageToNative({
+                  type: 'info',
+                  message: '[Trigger] 🔥 NEW BUNDLE - Document HTML: ' + docHTML.substring(0, 200) + (docHTML.length > 200 ? '...' : '')
+                });
 
                 // Send message to React Native with HTML (not plain text)
                 sendMessageToNative({
@@ -3061,19 +3163,63 @@
                   }
                   break;
 
+                case 'refreshMaps':
+                  // Force refresh all map nodes by replacing them
+                  console.log('[WebView] Refreshing all maps');
+                  const refreshTr = state.tr;
+                  let mapsFound = false;
+
+                  state.doc.descendants((node, pos) => {
+                    if (node.type.name === 'map') {
+                      console.log('[WebView] Found map at position:', pos, 'recreating it');
+
+                      // Create a completely new map node
+                      const newMap = schema.nodes.map.create({
+                        height: node.attrs.height || 400,
+                        _refresh: Date.now() // Force new instance
+                      });
+
+                      refreshTr.replaceWith(pos, pos + node.nodeSize, newMap);
+                      mapsFound = true;
+                      return false; // Stop after first map
+                    }
+                  });
+
+                  if (mapsFound) {
+                    dispatch(refreshTr);
+                    console.log('[WebView] Maps refreshed successfully');
+                  }
+                  break;
+
                 case 'updateGeoMark':
                   // Update all attributes of a geo-mark
-                  console.log('[WebView] Updating geo-mark:', data.params?.geoId);
+                  console.log('[WebView] updateGeoMark command received:', {
+                    geoId: data.params?.geoId,
+                    updatedAttrs: data.params?.updatedAttrs,
+                    transportProfile: data.params?.updatedAttrs?.transportProfile
+                  });
+
+                  // Send confirmation back to React Native
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: `[WebView] updateGeoMark received for ${data.params?.geoId} with transportProfile: ${data.params?.updatedAttrs?.transportProfile}`
+                  });
+
                   if (data.params?.geoId && data.params?.updatedAttrs && schema.marks.geoMark) {
                     let geoMarkFound = false;
                     const updateFullTr = state.tr;
+                    console.log('[WebView] Starting search for geo-mark in document');
 
                     // Find all geo-marks and update the one with matching geoId
                     state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
                       if (node.marks && node.marks.length > 0) {
                         const geoMark = node.marks.find(m => m.type === schema.marks.geoMark && m.attrs.geoId === data.params.geoId);
                         if (geoMark) {
-                          console.log('[WebView] Found geo-mark to update at pos:', pos);
+                          console.log('[WebView] Found geo-mark to update:', {
+                            position: pos,
+                            currentTransportProfile: geoMark.attrs.transportProfile,
+                            newTransportProfile: data.params.updatedAttrs.transportProfile
+                          });
                           // Create updated mark with all new attributes
                           const updatedMark = schema.marks.geoMark.create({
                             ...geoMark.attrs,
@@ -3089,14 +3235,77 @@
 
                     if (geoMarkFound) {
                       dispatch(updateFullTr);
-                      console.log('[WebView] Geo-mark updated successfully');
+                      console.log('[WebView] Geo-mark updated successfully, sending documentChanged');
+
+                      // Force all maps to refresh after geo-mark update
+                      setTimeout(() => {
+                        console.log('[WebView] Triggering map refresh after geo-mark update');
+
+                        // Step 1: Remove all map nodes
+                        let mapPosition = -1;
+                        let mapHeight = 400;
+
+                        const removeTr = editorView.state.tr;
+                        editorView.state.doc.descendants((node, pos) => {
+                          if (node.type.name === 'map') {
+                            console.log('[WebView] Removing map at position:', pos);
+                            mapPosition = pos;
+                            mapHeight = node.attrs.height || 400;
+                            // Delete the map node entirely
+                            removeTr.delete(pos, pos + node.nodeSize);
+                            return false; // Stop after first map
+                          }
+                        });
+
+                        if (mapPosition >= 0) {
+                          dispatch(removeTr);
+                          console.log('[WebView] Map removed, waiting before re-adding...');
+
+                          // Step 2: Re-add the map after a brief delay
+                          setTimeout(() => {
+                            console.log('[WebView] Re-adding map node');
+                            const insertTr = editorView.state.tr;
+
+                            // Create a fresh map node
+                            const newMap = editorView.state.schema.nodes.map.create({
+                              height: mapHeight
+                            });
+
+                            // Insert at the same position (or closest valid position)
+                            const insertPos = Math.min(mapPosition, insertTr.doc.content.size);
+                            insertTr.insert(insertPos, newMap);
+
+                            dispatch(insertTr);
+                            console.log('[WebView] Map re-added successfully');
+                          }, 50);
+                        }
+                      }, 100); // Small delay to ensure geo-mark update is processed first
+
+                      // Send success confirmation
+                      sendMessageToNative({
+                        type: 'debug',
+                        message: `[WebView] ✅ Geo-mark ${data.params.geoId} updated successfully`
+                      });
+
                       sendMessageToNative({
                         type: 'documentChanged',
                         content: editorView.state.doc.toJSON()
                       });
                     } else {
                       console.warn('[WebView] Geo-mark with ID not found for update:', data.params.geoId);
+
+                      // Send failure notification
+                      sendMessageToNative({
+                        type: 'debug',
+                        message: `[WebView] ❌ Geo-mark ${data.params.geoId} not found in document`
+                      });
                     }
+                  } else {
+                    console.error('[WebView] Missing required params for updateGeoMark:', {
+                      hasGeoId: !!data.params?.geoId,
+                      hasUpdatedAttrs: !!data.params?.updatedAttrs,
+                      hasGeoMarkSchema: !!schema.marks.geoMark
+                    });
                   }
                   break;
 
