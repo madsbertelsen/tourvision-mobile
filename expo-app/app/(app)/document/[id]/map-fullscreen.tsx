@@ -32,6 +32,9 @@ export default function MapFullscreenModal() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
 
+  // Camera ref for programmatic control
+  const cameraRef = useRef<Mapbox.Camera>(null);
+
   // Handle marker press
   const handleMarkerPress = useCallback((location: any, index: number) => {
     console.log('[MapFullscreen] Marker pressed:', location.displayText || location.placeName);
@@ -60,23 +63,62 @@ export default function MapFullscreenModal() {
     const fromLocation = locations[routeIndex];
     const toLocation = locations[routeIndex + 1];
 
-    setSelectedRoute({
+    const enrichedRoute = {
       ...route,
       fromLocation,
       toLocation,
       routeIndex
-    });
+    };
+
+    setSelectedRoute(enrichedRoute);
     setSelectedLocation(toLocation); // Keep location for context
     setSheetView('route');
     bottomSheetRef.current?.expand();
-  }, [locations]);
+
+    // Focus camera on the route
+    setTimeout(() => focusOnRoute(enrichedRoute), 100);
+  }, [locations, focusOnRoute]);
+
+  // Focus camera on a specific route
+  const focusOnRoute = useCallback((route: any) => {
+    if (!cameraRef.current || !route.geometry?.coordinates) return;
+
+    const coordinates = route.geometry.coordinates;
+    if (coordinates.length === 0) return;
+
+    // Calculate bounds for the route
+    let minLng = coordinates[0][0];
+    let maxLng = coordinates[0][0];
+    let minLat = coordinates[0][1];
+    let maxLat = coordinates[0][1];
+
+    coordinates.forEach(([lng, lat]: [number, number]) => {
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    });
+
+    // Add padding to bounds (10%)
+    const lngPadding = (maxLng - minLng) * 0.1;
+    const latPadding = (maxLat - minLat) * 0.1;
+
+    cameraRef.current.fitBounds(
+      [minLng - lngPadding, minLat - latPadding],
+      [maxLng + lngPadding, maxLat + latPadding],
+      [50, 50, 50, 300], // padding: top, right, bottom, left
+      1000 // animation duration
+    );
+  }, []);
 
   // Navigate to route view from location view
   const handleViewRoute = useCallback(() => {
     if (selectedRoute) {
       setSheetView('route');
+      // Focus camera on the route
+      setTimeout(() => focusOnRoute(selectedRoute), 100);
     }
-  }, [selectedRoute]);
+  }, [selectedRoute, focusOnRoute]);
 
   // Navigate back to location view
   const handleBackToLocation = useCallback(() => {
@@ -154,6 +196,7 @@ export default function MapFullscreenModal() {
         styleURL="mapbox://styles/mapbox/light-v11"
       >
         <Mapbox.Camera
+          ref={cameraRef}
           zoomLevel={locations.length === 1 ? 11 : 8}
           centerCoordinate={
             locations.length > 0
