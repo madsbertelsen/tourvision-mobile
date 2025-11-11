@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { useTripContext } from './_layout';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -20,6 +22,23 @@ export default function MapFullscreenModal() {
   const insets = useSafeAreaInsets();
   const { locations } = useTripContext();
   const [routes, setRoutes] = useState<any[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
+
+  // Bottom sheet ref and snap points
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
+
+  // Handle marker press
+  const handleMarkerPress = useCallback((location: any) => {
+    console.log('[MapFullscreen] Marker pressed:', location.displayText || location.placeName);
+    setSelectedLocation(location);
+    bottomSheetRef.current?.expand();
+  }, []);
+
+  // Handle bottom sheet close
+  const handleSheetClose = useCallback(() => {
+    setSelectedLocation(null);
+  }, []);
 
   // Fetch routes between locations
   useEffect(() => {
@@ -78,7 +97,7 @@ export default function MapFullscreenModal() {
   }, [locations]);
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
       {/* Mapbox map */}
       <Mapbox.MapView
         style={styles.map}
@@ -125,19 +144,24 @@ export default function MapFullscreenModal() {
               id={location.geoId || `marker-${index}`}
               coordinate={[location.lng, location.lat]}
             >
-              <View style={styles.markerContainer}>
-                <View
-                  style={[
-                    styles.marker,
-                    { backgroundColor: bgColor }
-                  ]}
-                >
-                  <View style={styles.markerInner} />
+              <TouchableOpacity
+                onPress={() => handleMarkerPress(location)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.markerContainer}>
+                  <View
+                    style={[
+                      styles.marker,
+                      { backgroundColor: bgColor }
+                    ]}
+                  >
+                    <View style={styles.markerInner} />
+                  </View>
+                  <View style={[styles.label, { backgroundColor: bgColor }]}>
+                    <Text style={styles.labelText}>{location.displayText || location.placeName}</Text>
+                  </View>
                 </View>
-                <View style={[styles.label, { backgroundColor: bgColor }]}>
-                  <Text style={styles.labelText}>{location.displayText || location.placeName}</Text>
-                </View>
-              </View>
+              </TouchableOpacity>
             </Mapbox.MarkerView>
           );
         })}
@@ -150,7 +174,108 @@ export default function MapFullscreenModal() {
       >
         <Ionicons name="close" size={28} color="#000" />
       </TouchableOpacity>
-    </View>
+
+      {/* Bottom Sheet for location details */}
+      {selectedLocation && (
+        <BottomSheet
+          ref={bottomSheetRef}
+          index={-1}
+          snapPoints={snapPoints}
+          enablePanDownToClose={true}
+          onClose={handleSheetClose}
+          backgroundStyle={styles.bottomSheetBackground}
+          handleIndicatorStyle={styles.bottomSheetIndicator}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            {/* Header with location name */}
+            <View style={styles.sheetHeader}>
+              <View style={[
+                styles.sheetColorDot,
+                { backgroundColor: COLORS[(selectedLocation.colorIndex || 0) % COLORS.length] }
+              ]} />
+              <Text style={styles.sheetTitle}>
+                {selectedLocation.displayText || selectedLocation.placeName}
+              </Text>
+            </View>
+
+            {/* Location details */}
+            <View style={styles.sheetSection}>
+              <View style={styles.sheetRow}>
+                <Ionicons name="location-outline" size={20} color="#666" />
+                <Text style={styles.sheetLabel}>Full Address</Text>
+              </View>
+              <Text style={styles.sheetValue}>{selectedLocation.placeName}</Text>
+            </View>
+
+            {selectedLocation.description && (
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetRow}>
+                  <Ionicons name="document-text-outline" size={20} color="#666" />
+                  <Text style={styles.sheetLabel}>Description</Text>
+                </View>
+                <Text style={styles.sheetValue}>{selectedLocation.description}</Text>
+              </View>
+            )}
+
+            <View style={styles.sheetSection}>
+              <View style={styles.sheetRow}>
+                <Ionicons name="navigate-outline" size={20} color="#666" />
+                <Text style={styles.sheetLabel}>Coordinates</Text>
+              </View>
+              <Text style={styles.sheetValue}>
+                {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+              </Text>
+            </View>
+
+            {selectedLocation.transportProfile && (
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetRow}>
+                  <Ionicons
+                    name={
+                      selectedLocation.transportProfile === 'driving' ? 'car-outline' :
+                      selectedLocation.transportProfile === 'walking' ? 'walk-outline' :
+                      selectedLocation.transportProfile === 'cycling' ? 'bicycle-outline' :
+                      'airplane-outline'
+                    }
+                    size={20}
+                    color="#666"
+                  />
+                  <Text style={styles.sheetLabel}>Transport</Text>
+                </View>
+                <Text style={styles.sheetValue}>
+                  {selectedLocation.transportProfile.charAt(0).toUpperCase() + selectedLocation.transportProfile.slice(1)}
+                </Text>
+              </View>
+            )}
+
+            {/* Action buttons */}
+            <View style={styles.sheetActions}>
+              <TouchableOpacity
+                style={styles.sheetButton}
+                onPress={() => {
+                  // TODO: Navigate to location edit screen
+                  console.log('Edit location:', selectedLocation.geoId);
+                }}
+              >
+                <Ionicons name="pencil" size={20} color="#007AFF" />
+                <Text style={styles.sheetButtonText}>Edit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetButton}
+                onPress={() => {
+                  // TODO: Show directions
+                  console.log('Show directions to:', selectedLocation.geoId);
+                }}
+              >
+                <Ionicons name="navigate" size={20} color="#007AFF" />
+                <Text style={styles.sheetButtonText}>Directions</Text>
+              </TouchableOpacity>
+            </View>
+          </BottomSheetView>
+        </BottomSheet>
+      )}
+    </GestureHandlerRootView>
   );
 }
 
@@ -216,5 +341,88 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+  },
+  bottomSheetBackground: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  bottomSheetIndicator: {
+    backgroundColor: '#ccc',
+    width: 40,
+    height: 4,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  sheetColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    flex: 1,
+  },
+  sheetSection: {
+    marginBottom: 16,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sheetLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginLeft: 8,
+  },
+  sheetValue: {
+    fontSize: 15,
+    color: '#333',
+    marginLeft: 28,
+    lineHeight: 20,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  sheetButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  sheetButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginLeft: 6,
   },
 });
