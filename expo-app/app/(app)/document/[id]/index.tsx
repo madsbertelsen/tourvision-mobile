@@ -18,6 +18,7 @@
  * See legacy implementation at: app/(app)/document-legacy/[id]/index.tsx
  */
 
+import { ChromeTabBar } from '@/components/ChromeTabBar';
 import DocumentChat from '@/components/DocumentChat';
 import DocumentSplitMap from '@/components/DocumentSplitMap';
 import type { GeoMark } from '@/utils/parse-geo-marks';
@@ -33,7 +34,7 @@ import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import DocumentEditorWithMap from '@/components/DocumentEditorWithMap';
@@ -68,7 +69,7 @@ function getNextColorIndex(locations: any[]): number {
 
 export default function TripDocumentView() {
   const insets = useSafeAreaInsets();
-  const { tripId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow, clearLocationFlow, geoMarkUpdate, setGeoMarkUpdate } = useTripContext();
+  const { tripId: documentId, isEditMode, setIsEditMode, locations, setLocations, currentDoc, setCurrentDoc, locationModal, setLocationModal, locationFlowState, startLocationFlow, clearLocationFlow, geoMarkUpdate, setGeoMarkUpdate } = useTripContext();
   const { startPresentation, isPresenting } = usePresentation();
   const [showMap, setShowMap] = useState(true);
   const [showChat, setShowChat] = useState(false);
@@ -171,12 +172,12 @@ export default function TripDocumentView() {
 
       // Use a simple token (room name) for authentication
       // In production, you'd generate a JWT here
-      const token = tripId;
+      const token = documentId;
 
       // Start collaboration via WebView ref
       webViewRef.current?.startCollaboration(
         collabUrl,
-        tripId,
+        documentId,
         user.id,
         user.email || 'Anonymous',
         token
@@ -190,7 +191,7 @@ export default function TripDocumentView() {
     } finally {
       setIsEnablingCollab(false);
     }
-  }, [isCollabEnabled, tripId]);
+  }, [isCollabEnabled, documentId]);
 
   // Location modal handlers
   const {
@@ -206,8 +207,8 @@ export default function TripDocumentView() {
   // TEST: Override to navigate to test modal instead
   const handleShowGeoMarkEditor = useCallback((data: any, locations: any[]) => {
     console.log('[TripDocument] Geo-mark clicked, navigating to test modal');
-    router.push(`/document/${tripId}/test-modal`);
-  }, [tripId]);
+    router.push(`/document/${documentId}/test-modal`);
+  }, [documentId]);
 
   // Handle selection changes to update line position immediately
   const handleSelectionChange = useCallback((empty: boolean, selectedText?: string, selectionData?: any) => {
@@ -273,7 +274,7 @@ export default function TripDocumentView() {
         // Editing existing geo-mark - navigate to geo-edit
         const attrs = pickerData.existingMarkAttrs;
         router.push({
-          pathname: `/document/${tripId}/geo-edit` as any,
+          pathname: `/document/${documentId}/geo-edit` as any,
           params: {
             isEditing: 'true',
             geoId: attrs.geoId || '',
@@ -293,10 +294,10 @@ export default function TripDocumentView() {
         );
 
         // Navigate to geo-search with dynamic geoId
-        router.push(`/document/${tripId}/geo-search/${geoId}` as any);
+        router.push(`/document/${documentId}/geo-search/${geoId}` as any);
       }
     }
-  }, [existingGeoMarks, startLocationFlow, tripId, router]);
+  }, [existingGeoMarks, startLocationFlow, documentId, router]);
 
   const handleSelectLocation = useCallback(() => {
     console.log('[TripDocument] Tool picker - Location selected');
@@ -537,80 +538,6 @@ export default function TripDocumentView() {
             </View>
           )}
         </View>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={handlePlayDocument}
-            style={[styles.iconButton, isPresenting && styles.iconButtonActive]}
-            disabled={!currentDoc}
-          >
-            <Ionicons
-              name={isPresenting ? "pause" : "play"}
-              size={22}
-              color={isPresenting ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleToggleCollaboration}
-            style={[styles.iconButton, isCollabEnabled && styles.iconButtonActive]}
-            disabled={isEnablingCollab}
-          >
-            <Ionicons
-              name={isCollabEnabled ? "people" : "people-outline"}
-              size={22}
-              color={isCollabEnabled ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setShowChat(!showChat)}
-            style={[styles.iconButton, showChat && styles.iconButtonActive]}
-          >
-            <Ionicons
-              name={showChat ? "chatbubbles" : "chatbubbles-outline"}
-              size={22}
-              color={showChat ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setShowMap(!showMap)}
-            style={[styles.iconButton, showMap && styles.iconButtonActive]}
-          >
-            <Ionicons
-              name={showMap ? "map" : "map-outline"}
-              size={22}
-              color={showMap ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setIsEditMode(!isEditMode)}
-            style={[styles.iconButton, isEditMode && styles.iconButtonActive]}
-          >
-            <Ionicons
-              name={isEditMode ? "book" : "create-outline"}
-              size={22}
-              color={isEditMode ? "#fff" : "#6B7280"}
-            />
-          </TouchableOpacity>
-
-          {/* Test Nested Dynamic Route Button */}
-          <TouchableOpacity
-            onPress={() => {
-              const randomId = `test-${Date.now()}`;
-              router.push(`/document/${tripId}/test-nested/${randomId}` as any);
-            }}
-            style={[styles.iconButton, { backgroundColor: '#10B981' }]}
-          >
-            <Ionicons
-              name="flask"
-              size={22}
-              color="#fff"
-            />
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* Main Content - Split View */}
@@ -622,15 +549,16 @@ export default function TripDocumentView() {
         {showChat && (
           <View style={styles.chatContainer}>
             <DocumentChat
-              documentId={tripId}
+              documentId={documentId}
               onGeoMarksChange={setChatGeoMarks}
             />
           </View>
         )}
 
-        {/* Map - Always mounted but hidden when not shown to preserve state */}
-        <View style={[styles.mapContainer, { display: showMap ? 'flex' : 'none' }]}>
-          <DocumentSplitMap
+        {/* Map - Always mounted but hidden when not shown to preserve state (web only) */}
+        {Platform.OS === 'web' && (
+          <View style={[styles.mapContainer, { display: showMap ? 'flex' : 'none' }]}>
+            <DocumentSplitMap
               locations={[...locations, ...chatLocations]}
               searchResults={
                 toolPickerVisible && toolPickerSearchResults.length > 0
@@ -671,7 +599,8 @@ export default function TripDocumentView() {
                 />
               }
             />
-        </View>
+          </View>
+        )}
 
         {/* Document */}
         <View
@@ -682,6 +611,7 @@ export default function TripDocumentView() {
           onLayout={(e) => setDocumentWidth(e.nativeEvent.layout.width)}
         >
           <DocumentEditorWithMap
+            documentId={documentId}
             initialContent={currentDoc || EMPTY_DOCUMENT_CONTENT}
             onLocationsChange={setLocations}
             onContentChange={setCurrentDoc}
@@ -775,6 +705,9 @@ export default function TripDocumentView() {
 
       {/* Presentation Overlay - shows controls when presentation is active */}
       <PresentationOverlay />
+
+      {/* Chrome-style Tab Bar */}
+      {!isPresenting && <ChromeTabBar />}
     </View>
   );
 }

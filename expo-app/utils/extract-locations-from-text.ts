@@ -1,69 +1,66 @@
 /**
- * Extract location names from text using LLM
- * This is used for voice dictation to automatically identify locations
+ * Extract locations from text using LLM and generate ProseMirror document with geo-marks
+ * This is used for voice dictation to automatically identify locations and create structured content
  */
 
-export interface ExtractedLocation {
-  name: string;
-  startIndex: number;
-  endIndex: number;
-  confidence: number; // 0-1
+export interface GeoMarkNode {
+  type: 'geoMark';
+  attrs: {
+    geoId: string;
+    placeName: string;
+    lat?: number;
+    lng?: number;
+    colorIndex: number;
+    coordSource?: string;
+    transportFrom?: string | null;
+    transportProfile?: string | null;
+  };
+  content: Array<{ type: 'text'; text: string }>;
+}
+
+export interface ProseMirrorDocument {
+  type: 'doc';
+  content: Array<{
+    type: string;
+    content?: Array<any>;
+    attrs?: any;
+  }>;
 }
 
 /**
- * Extract location names from dictated text using LLM
+ * Generate ProseMirror document with geo-marks from dictated text using LLM (Cloudflare Workers AI)
  *
  * @param text The transcribed text from voice dictation
- * @returns Array of detected locations with their positions
+ * @returns ProseMirror document with geo-marks (without coordinates - need to geocode)
  */
-export async function extractLocationsFromText(text: string): Promise<ExtractedLocation[]> {
-  // TODO: Call LLM API (Mistral via Vercel AI SDK or similar)
-  // For now, return a mock implementation
+export async function extractLocationsFromText(text: string): Promise<ProseMirrorDocument | null> {
+  console.log('[LocationExtraction] Processing text with LLM:', text);
 
-  console.log('[LocationExtraction] Processing text:', text);
+  try {
+    // Call Cloudflare Workers AI via direct API
+    const CHAT_WS_URL = process.env.EXPO_PUBLIC_CHAT_WS_URL || 'https://tourvision-chat.mads-9b9.workers.dev';
+    const HTTP_URL = CHAT_WS_URL.replace('wss://', 'https://').replace('ws://', 'http://');
 
-  // Mock implementation - finds common Danish location names
-  const locations: ExtractedLocation[] = [];
-  const knownLocations = [
-    'København', 'Kobenhavn', 'Copenhagen',
-    'Lejre',
-    'Århus', 'Aarhus',
-    'Odense',
-    'Aalborg',
-    'Roskilde',
-    'Helsingør', 'Elsinore',
-    'Paris', 'London', 'Berlin', 'Stockholm'
-  ];
+    const response = await fetch(`${HTTP_URL}/api/extract-locations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ text })
+    });
 
-  const lowerText = text.toLowerCase();
-
-  for (const location of knownLocations) {
-    const lowerLocation = location.toLowerCase();
-    let startIndex = 0;
-
-    while ((startIndex = lowerText.indexOf(lowerLocation, startIndex)) !== -1) {
-      locations.push({
-        name: location,
-        startIndex,
-        endIndex: startIndex + location.length,
-        confidence: 0.9
-      });
-      startIndex += location.length;
+    if (!response.ok) {
+      console.error('[LocationExtraction] API request failed:', response.status, response.statusText);
+      throw new Error(`API request failed: ${response.status}`);
     }
+
+    const data = await response.json();
+    console.log('[LocationExtraction] LLM response:', data);
+
+    return data.document || null;
+  } catch (error) {
+    console.error('[LocationExtraction] Error calling LLM:', error);
+    // Fall back to null on error
+    return null;
   }
-
-  console.log('[LocationExtraction] Found locations:', locations);
-  return locations;
-}
-
-/**
- * Create LLM prompt for location extraction
- */
-function createLocationExtractionPrompt(text: string): string {
-  return `Extract all location names (cities, countries, landmarks, addresses) from the following text.
-Return a JSON array of objects with format: {"name": "location name", "startIndex": number, "endIndex": number, "confidence": number}
-
-Text: "${text}"
-
-Return only the JSON array, no explanation.`;
 }

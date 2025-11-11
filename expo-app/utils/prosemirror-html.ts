@@ -108,21 +108,12 @@ export function htmlToProsemirror(html: string): JSONContent {
     }
   }
 
-  // Get or create DOM environment (supports both browser and Node.js with jsdom)
-  let dom: Document;
-  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-    // Browser/React Native Web environment
-    dom = window.document;
-  } else {
-    // Node.js environment - dynamically require jsdom (not bundled for web)
-    try {
-      const { JSDOM } = require('jsdom');
-      const jsdom = new JSDOM();
-      dom = jsdom.window.document;
-    } catch (error) {
-      throw new Error('DOM environment not available. This function requires a browser environment or jsdom in Node.js.');
-    }
+  // Get or create DOM environment (only works in browser/web)
+  if (typeof window === 'undefined' || typeof window.document === 'undefined') {
+    throw new Error('htmlToProsemirror only works in browser/web environment. Use on server or native platforms is not supported.');
   }
+
+  const dom = window.document;
 
   // Create a temporary DOM element to parse the HTML
   const tempDiv = dom.createElement('div');

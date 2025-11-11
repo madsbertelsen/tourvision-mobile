@@ -1,14 +1,16 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Platform, ScrollView } from 'react-native';
 
 interface ProseMirrorToolbarProps {
   editable: boolean;
   selectionEmpty?: boolean;
   highlightedButton?: string | null;
+  canUndo?: boolean;
+  canRedo?: boolean;
   onCommand: (command: string, params?: any) => void;
 }
 
-export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, onCommand }: ProseMirrorToolbarProps) {
+export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlightedButton, canUndo = false, canRedo = false, onCommand }: ProseMirrorToolbarProps) {
   if (!editable) {
     return null;
   }
@@ -17,33 +19,46 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
 
   return (
     <View style={styles.container}>
-      <View style={styles.toolbarContent}>
-        {/* Block type selector - Always use buttons, no dropdown */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.toolbarContent}>
+        {/* Undo/Redo */}
         <View style={styles.group}>
           <TouchableOpacity
             style={[
               styles.button,
-              isButtonHighlighted('paragraph') && styles.buttonHighlighted
+              !canUndo && styles.buttonDisabled
             ]}
-            onPress={() => onCommand('setParagraph')}
+            onPress={() => canUndo && onCommand('undo')}
+            disabled={!canUndo}
           >
             <Text style={[
               styles.buttonText,
-              isButtonHighlighted('paragraph') && styles.buttonTextHighlighted
-            ]}>P</Text>
+              !canUndo && styles.buttonTextDisabled
+            ]}>↶</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.button,
-              isButtonHighlighted('h1') && styles.buttonHighlighted
+              !canRedo && styles.buttonDisabled
             ]}
-            onPress={() => onCommand('setHeading', { level: 1 })}
+            onPress={() => canRedo && onCommand('redo')}
+            disabled={!canRedo}
           >
             <Text style={[
               styles.buttonText,
-              isButtonHighlighted('h1') && styles.buttonTextHighlighted
-            ]}>H1</Text>
+              !canRedo && styles.buttonTextDisabled
+            ]}>↷</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Heading */}
+        <View style={styles.group}>
           <TouchableOpacity
             style={[
               styles.button,
@@ -55,18 +70,6 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
               styles.buttonText,
               isButtonHighlighted('h2') && styles.buttonTextHighlighted
             ]}>H2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('h3') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('setHeading', { level: 3 })}
-          >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('h3') && styles.buttonTextHighlighted
-            ]}>H3</Text>
           </TouchableOpacity>
         </View>
 
@@ -82,45 +85,8 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
           </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
-
-        {/* Geo-mark */}
-        <View style={styles.group}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              selectionEmpty && styles.buttonDisabled,
-              isButtonHighlighted('location') && styles.buttonHighlighted
-            ]}
-            onPress={() => !selectionEmpty && onCommand('createGeoMark')}
-            disabled={selectionEmpty}
-          >
-            <View style={[styles.locationIcon, selectionEmpty && styles.locationIconDisabled]}>
-              <View style={styles.locationPin} />
-              <View style={styles.locationDot} />
-            </View>
-          </TouchableOpacity>
         </View>
-
-        <View style={styles.divider} />
-
-        {/* Map */}
-        <View style={styles.group}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isButtonHighlighted('map') && styles.buttonHighlighted
-            ]}
-            onPress={() => onCommand('insertMap')}
-          >
-            <Text style={[
-              styles.buttonText,
-              isButtonHighlighted('map') && styles.buttonTextHighlighted
-            ]}>🗺️</Text>
-          </TouchableOpacity>
-        </View>
-
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -129,8 +95,6 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
     borderRadius: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
     width: '100%',
     minHeight: 52,
     borderTopWidth: 1,
@@ -144,12 +108,15 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  scrollContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexGrow: 1,
+  },
   toolbarContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
-    rowGap: 8, // Add space between wrapped rows
     ...Platform.select({
       web: {
         minWidth: 'auto' as any,

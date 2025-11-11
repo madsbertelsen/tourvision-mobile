@@ -1,8 +1,9 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
-// v78 - Added voice dictation pendingVoice mark with accept/reject controls
+import { extractLocationsFromText } from '@/utils/extract-locations-from-text';
+// v83 - Native Alert.alert for assist trigger instead of web alert
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
@@ -42,6 +43,17 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
       if (event.source === iframeRef.current?.contentWindow) {
         // Ensure data is in the right format
         const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+
+        // Log debug messages from WebView
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'debug') {
+            console.log('[WebView Debug]', parsed.message);
+          }
+        } catch (e) {
+          // Not JSON, ignore
+        }
+
         // Verbose logging removed - messages are frequent
         onMessage?.({ nativeEvent: { data } });
       }
@@ -55,7 +67,7 @@ const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLo
     const iframe = iframeRef.current;
     if (iframe) {
       const handleLoad = () => {
-        console.log('[IframeWebView] Iframe loaded');
+        console.log('[IframeWebView] Iframe loaded successfully');
         onLoadEnd?.();
       };
       const handleLoadStart = () => {
@@ -107,6 +119,7 @@ export interface ProseMirrorWebViewRef {
 
 interface ProseMirrorWebViewProps {
   content?: any; // ProseMirror JSON document
+  documentId?: string; // Document ID for assist WebSocket
   onNodeFocus?: (nodeId: string | null) => void;
   focusedNodeId?: string | null;
   editable?: boolean;
@@ -129,6 +142,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
   (
     {
       content,
+      documentId,
       onNodeFocus,
       focusedNodeId,
       editable = false,
@@ -185,6 +199,148 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       }
       sendMessageInternal(message);
     }, [isReady, sendMessageInternal]);
+
+    // Handle assist trigger - use WebSocket with tool delegation
+    const handleAssistTrigger = useCallback(async (draftText: string) => {
+      console.log('[ProseMirrorWebView] Processing assist trigger for draft text:', draftText);
+
+      try {
+        const CHAT_WS_URL = process.env.EXPO_PUBLIC_CHAT_WS_URL || 'wss://tourvision-chat.mads-9b9.workers.dev';
+        const wsUrl = `${CHAT_WS_URL}/assist/${documentId}`;
+
+        console.log('[ProseMirrorWebView] Connecting to WebSocket:', wsUrl);
+
+        const ws = new WebSocket(wsUrl);
+        let finalDocument: any = null;
+
+        ws.onopen = () => {
+          console.log('[ProseMirrorWebView] WebSocket connected, sending assist request');
+          ws.send(JSON.stringify({
+            type: 'assist_request',
+            text: draftText,
+            user_id: 'current-user' // TODO: Get from auth context
+          }));
+        };
+
+        ws.onmessage = async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[ProseMirrorWebView] WebSocket message:', data.type);
+
+            switch (data.type) {
+              case 'tool_request':
+                // Worker is requesting tool execution (geocode)
+                console.log('[ProseMirrorWebView] Tool request:', data.tool_name, data.args);
+
+                if (data.tool_name === 'geocode') {
+                  try {
+                    const response = await fetch(
+                      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(data.args.location)}&limit=1`,
+                      {
+                        headers: {
+                          'User-Agent': 'TourVision-App/1.0'
+                        }
+                      }
+                    );
+
+                    if (response.ok) {
+                      const results = await response.json();
+                      if (results.length > 0) {
+                        const result = results[0];
+                        console.log('[ProseMirrorWebView] Geocoded', data.args.location, '→', result.display_name);
+
+                        // Send successful result back to worker
+                        ws.send(JSON.stringify({
+                          type: 'tool_result',
+                          tool_id: data.tool_id,
+                          result: {
+                            place_name: result.display_name,
+                            lat: parseFloat(result.lat),
+                            lng: parseFloat(result.lon),
+                            source: 'nominatim'
+                          }
+                        }));
+                      } else {
+                        // Send error if no results
+                        ws.send(JSON.stringify({
+                          type: 'tool_result',
+                          tool_id: data.tool_id,
+                          error: 'Location not found'
+                        }));
+                      }
+                    } else {
+                      ws.send(JSON.stringify({
+                        type: 'tool_result',
+                        tool_id: data.tool_id,
+                        error: 'Nominatim request failed'
+                      }));
+                    }
+                  } catch (error) {
+                    console.error('[ProseMirrorWebView] Error executing geocode tool:', error);
+                    ws.send(JSON.stringify({
+                      type: 'tool_result',
+                      tool_id: data.tool_id,
+                      error: error instanceof Error ? error.message : 'Unknown error'
+                    }));
+                  }
+                }
+                break;
+
+              case 'assist_complete':
+                // Worker has finished generating HTML snippet with geo-marks
+                console.log('[ProseMirrorWebView] Assist complete, HTML:', data.html);
+
+                if (data.html) {
+                  // Send the HTML snippet to WebView to replace draft content
+                  console.log('[ProseMirrorWebView] Sending replaceDraftWithHTML message to WebView');
+                  console.log('[ProseMirrorWebView] HTML length:', data.html.length);
+                  sendMessageInternal({
+                    type: 'replaceDraftWithHTML',
+                    html: data.html
+                  });
+                  console.log('[ProseMirrorWebView] Message sent to WebView');
+                }
+
+                ws.close();
+                break;
+
+              case 'error':
+                console.error('[ProseMirrorWebView] Worker error:', data.error);
+                Alert.alert(
+                  '❌ Error',
+                  data.error || 'Failed to process locations. Please try again.',
+                  [{ text: 'OK' }]
+                );
+                ws.close();
+                break;
+            }
+          } catch (error) {
+            console.error('[ProseMirrorWebView] Error handling WebSocket message:', error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('[ProseMirrorWebView] WebSocket error:', error);
+          Alert.alert(
+            '❌ Connection Error',
+            'Failed to connect to assist service.',
+            [{ text: 'OK' }]
+          );
+        };
+
+        ws.onclose = () => {
+          console.log('[ProseMirrorWebView] WebSocket closed');
+        };
+
+      } catch (error) {
+        console.error('[ProseMirrorWebView] Error setting up assist WebSocket:', error);
+        Alert.alert(
+          '❌ Error',
+          'Failed to initialize assist service.',
+          [{ text: 'OK' }]
+        );
+      }
+    }, [sendMessageInternal, documentId]);
 
     // Handle messages from WebView
     const handleMessage = useCallback(
@@ -259,6 +415,18 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
 
             case 'info':
               console.log('[ProseMirrorWebView]', data.message);
+              break;
+
+            case 'assistTrigger':
+              console.log('[ProseMirrorWebView] Assist trigger detected!');
+              console.log('[ProseMirrorWebView] Full text:', data.text);
+              console.log('[ProseMirrorWebView] Draft text:', data.draftText);
+              console.log('[ProseMirrorWebView] Has draft:', data.hasDraft);
+
+              // Process draft text with LLM for location extraction
+              if (data.hasDraft && data.draftText) {
+                handleAssistTrigger(data.draftText);
+              }
               break;
 
             case 'documentChange':

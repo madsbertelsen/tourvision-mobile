@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { fetchRouteWithCache, type RouteDetails } from '../utils/transportation-api';
 import LocationPickerMap from './LocationPickerMap';
+import LocationPickerMapNative from './LocationPickerMapNative';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
@@ -33,6 +33,9 @@ interface LocationConfigViewProps {
     geometry?: RouteDetails['geometry'];
   } | null) => void;
   onLocationChange?: (lat: number, lng: number) => void;
+  hideHeader?: boolean;
+  saveButtonText?: string;
+  saveButtonIcon?: keyof typeof Ionicons.glyphMap;
 }
 
 const TRANSPORT_MODES: Array<{
@@ -86,6 +89,9 @@ export default function LocationConfigView({
   onBack,
   onRouteChange,
   onLocationChange,
+  hideHeader = false,
+  saveButtonText = 'Add to Document',
+  saveButtonIcon = 'add-circle',
 }: LocationConfigViewProps) {
   const [routeData, setRouteData] = useState<RouteDetails | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
@@ -171,17 +177,19 @@ export default function LocationConfigView({
   return (
     <View style={styles.container}>
       {/* Header with back button */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#374151" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{selectedText}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      {!hideHeader && (
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>{selectedText}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      )}
 
-      {/* Map preview - only on web */}
-      {Platform.OS === 'web' && (
-        <View style={styles.mapContainer}>
+      {/* Map preview */}
+      <View style={styles.mapContainer}>
+        {Platform.OS === 'web' ? (
           <LocationPickerMap
             lat={currentLat}
             lng={currentLng}
@@ -189,24 +197,38 @@ export default function LocationConfigView({
             editable={isEditingLocation}
             onLocationChange={handleLocationChange}
           />
-          <TouchableOpacity
-            style={styles.editLocationButton}
-            onPress={() => setIsEditingLocation(!isEditingLocation)}
-          >
-            <Ionicons
-              name={isEditingLocation ? 'checkmark-circle' : 'pencil'}
-              size={20}
-              color="#FFFFFF"
-            />
-            <Text style={styles.editLocationButtonText}>
-              {isEditingLocation ? 'Done' : 'Adjust Location'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        ) : (
+          <LocationPickerMapNative
+            lat={currentLat}
+            lng={currentLng}
+            placeName={locationName}
+            editable={isEditingLocation}
+            onLocationChange={handleLocationChange}
+          />
+        )}
+        <TouchableOpacity
+          style={styles.editLocationButton}
+          onPress={() => setIsEditingLocation(!isEditingLocation)}
+        >
+          <Ionicons
+            name={isEditingLocation ? 'checkmark-circle' : 'pencil'}
+            size={20}
+            color="#FFFFFF"
+          />
+          <Text style={styles.editLocationButtonText}>
+            {isEditingLocation ? 'Done' : 'Adjust Location'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Scrollable content */}
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+      {/* Scrollable content wrapper with explicit height */}
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          style={styles.scrollContent}
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+        >
         {/* Selected location summary */}
         <View style={styles.locationSummary}>
           <View style={styles.locationIcon}>
@@ -224,36 +246,67 @@ export default function LocationConfigView({
         {allOrigins.length > 0 && (
           <View style={styles.originSection}>
             <Text style={styles.sectionLabel}>Route from (optional):</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedOrigin ? `${selectedOrigin.lat},${selectedOrigin.lng}` : null}
-                onValueChange={(value) => {
-                  if (value === null) {
-                    setSelectedOrigin(null);
-                  } else {
-                    const [lat, lng] = value.split(',').map(Number);
-                    const origin = allOrigins.find(o => o.lat === lat && o.lng === lng);
-                    if (origin) {
-                      setSelectedOrigin({
-                        lat: origin.lat,
-                        lng: origin.lng,
-                        name: origin.placeName,
-                      });
-                    }
-                  }
-                }}
-                style={styles.picker}
-              >
-                <Picker.Item label="No starting point" value={null} />
-                {allOrigins.map((origin) => (
-                  <Picker.Item
-                    key={origin.geoId}
-                    label={origin.placeName}
-                    value={`${origin.lat},${origin.lng}`}
-                  />
-                ))}
-              </Picker>
-            </View>
+
+            {/* "No starting point" option */}
+            <TouchableOpacity
+              style={[
+                styles.originButton,
+                !selectedOrigin && styles.originButtonSelected,
+              ]}
+              onPress={() => setSelectedOrigin(null)}
+            >
+              <View style={styles.originButtonContent}>
+                <Ionicons
+                  name={!selectedOrigin ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={20}
+                  color={!selectedOrigin ? '#3B82F6' : '#9CA3AF'}
+                />
+                <Text style={[
+                  styles.originButtonText,
+                  !selectedOrigin && styles.originButtonTextSelected,
+                ]}>
+                  No starting point
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* List of origin locations */}
+            {allOrigins.map((origin, index) => {
+              const isSelected = selectedOrigin &&
+                selectedOrigin.lat === origin.lat &&
+                selectedOrigin.lng === origin.lng;
+
+              return (
+                <TouchableOpacity
+                  key={`${origin.geoId}-${index}`}
+                  style={[
+                    styles.originButton,
+                    isSelected && styles.originButtonSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedOrigin({
+                      lat: origin.lat,
+                      lng: origin.lng,
+                      name: origin.placeName,
+                    });
+                  }}
+                >
+                  <View style={styles.originButtonContent}>
+                    <Ionicons
+                      name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={isSelected ? '#3B82F6' : '#9CA3AF'}
+                    />
+                    <Text style={[
+                      styles.originButtonText,
+                      isSelected && styles.originButtonTextSelected,
+                    ]}>
+                      {origin.placeName}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -292,29 +345,51 @@ export default function LocationConfigView({
         {/* Transport modes */}
         <View style={styles.modesSection}>
           <Text style={styles.sectionLabel}>How will you get there?</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={selectedMode}
-              onValueChange={(value) => onSelectMode(value as TransportMode)}
-              style={styles.picker}
-            >
-              {TRANSPORT_MODES.map((transport) => (
-                <Picker.Item
+          <View style={styles.modesGrid}>
+            {TRANSPORT_MODES.map((transport) => {
+              const isSelected = selectedMode === transport.mode;
+
+              return (
+                <TouchableOpacity
                   key={transport.mode}
-                  label={`${transport.label} - ${transport.description}`}
-                  value={transport.mode}
-                />
-              ))}
-            </Picker>
+                  style={[
+                    styles.modeButton,
+                    isSelected && styles.modeButtonSelected,
+                  ]}
+                  onPress={() => onSelectMode(transport.mode)}
+                >
+                  <View style={[
+                    styles.modeIconContainer,
+                    isSelected && styles.modeIconContainerSelected,
+                  ]}>
+                    <Ionicons
+                      name={transport.icon}
+                      size={24}
+                      color={isSelected ? '#FFFFFF' : '#6B7280'}
+                    />
+                  </View>
+                  <Text style={[
+                    styles.modeLabel,
+                    isSelected && styles.modeLabelSelected,
+                  ]}>
+                    {transport.label}
+                  </Text>
+                  <Text style={styles.modeDescription}>
+                    {transport.description}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
+      </View>
 
-      {/* Fixed footer with Add to Document button */}
+      {/* Fixed footer with save button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.addButton} onPress={onAddToDocument}>
-          <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>Add to Document</Text>
+          <Ionicons name={saveButtonIcon} size={20} color="#FFFFFF" />
+          <Text style={styles.addButtonText}>{saveButtonText}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -377,7 +452,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContentContainer: {
-    paddingBottom: 16,
+    paddingBottom: 120,
   },
   locationSummary: {
     flexDirection: 'row',
@@ -419,16 +494,30 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
     gap: 8,
   },
-  pickerContainer: {
+  originButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    overflow: 'hidden',
+    padding: 12,
   },
-  picker: {
-    height: 50,
-    color: '#111827',
+  originButtonSelected: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+  },
+  originButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  originButtonText: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  originButtonTextSelected: {
+    color: '#1E40AF',
+    fontWeight: '600',
   },
   routeInfoContainer: {
     margin: 16,
@@ -487,6 +576,49 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  modesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  modeButton: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    padding: 12,
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeButtonSelected: {
+    borderColor: '#3B82F6',
+    borderWidth: 2,
+    backgroundColor: '#EFF6FF',
+  },
+  modeIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeIconContainerSelected: {
+    backgroundColor: '#3B82F6',
+  },
+  modeLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  modeLabelSelected: {
+    color: '#1E40AF',
+  },
+  modeDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -494,6 +626,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',

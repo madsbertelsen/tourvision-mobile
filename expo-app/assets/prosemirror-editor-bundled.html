@@ -609,6 +609,14 @@
     <div class="voice-help-text">Edit the text above and click Accept or Reject</div>
   </div>
 
+  <!-- Draft Control Buttons -->
+  <div id="draftControlButtons" class="voice-control-buttons">
+    <div class="voice-button-row">
+      <button id="acceptDraftBtn" class="voice-btn voice-btn-accept">✓ Accept Draft</button>
+    </div>
+    <div class="voice-help-text">New text is marked as draft until accepted</div>
+  </div>
+
   <!-- Location Modal -->
   <div id="locationModalOverlay" class="location-modal-overlay">
     <div class="location-modal">
@@ -1557,7 +1565,9 @@
           h2: isNodeTypeActive(state, schema.nodes.heading, { level: 2 }),
           h3: isNodeTypeActive(state, schema.nodes.heading, { level: 3 }),
           bold: schema.marks.strong ? isMarkActive(state, schema.marks.strong) : false,
-          italic: schema.marks.em ? isMarkActive(state, schema.marks.em) : false
+          italic: schema.marks.em ? isMarkActive(state, schema.marks.em) : false,
+          canUndo: window.PM.history.undo(state),
+          canRedo: window.PM.history.redo(state)
         };
       }
 
@@ -1929,8 +1939,53 @@
         },
         dispatchTransaction(transaction) {
           const oldState = editorView.state;
-          const newState = oldState.apply(transaction);
+          let newState = oldState.apply(transaction);
+
+          // Auto-apply draft mark to new text insertions
+          if (transaction.docChanged && !transaction.getMeta('draftApplied')) {
+            const draftMark = schema.marks.draft.create({
+              sessionId: draftSessionId,
+              timestamp: Date.now()
+            });
+
+            // Find newly inserted text and apply draft mark
+            let tr = newState.tr;
+            let modified = false;
+
+            transaction.steps.forEach((step, i) => {
+              if (step.jsonID === 'replace' || step.jsonID === 'replaceAround') {
+                const map = transaction.mapping.maps[i];
+                map.forEach((oldStart, oldEnd, newStart, newEnd) => {
+                  // Only mark if text was inserted (newEnd > newStart)
+                  if (newEnd > newStart) {
+                    const slice = newState.doc.slice(newStart, newEnd);
+                    // Check if inserted content is plain text (not already marked or special nodes)
+                    let hasPlainText = false;
+                    slice.content.forEach(node => {
+                      if (node.isText && !node.marks.some(m => m.type.name === 'draft')) {
+                        hasPlainText = true;
+                      }
+                    });
+
+                    if (hasPlainText) {
+                      tr.addMark(newStart, newEnd, draftMark);
+                      modified = true;
+                    }
+                  }
+                });
+              }
+            });
+
+            if (modified) {
+              tr.setMeta('draftApplied', true);
+              newState = newState.apply(tr);
+            }
+          }
+
           editorView.updateState(newState);
+
+          // Update draft button visibility
+          updateDraftButtonVisibility();
 
           // Update typing cursor position on any change
           if (isTypingActive) {
@@ -1950,6 +2005,39 @@
               type: 'documentChange',
               doc: docJSON
             });
+
+            // Check for trigger word "assist" - only trigger once
+            const docText = newState.doc.textContent.toLowerCase();
+
+            if (!assistTriggered && docText.includes('assist')) {
+              assistTriggered = true;
+              console.log('[Trigger] ✅ Assist detected! Extracting draft text...');
+
+              // Extract text with draft marks
+              let draftText = '';
+              newState.doc.descendants((node, pos) => {
+                if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
+                  draftText += node.text;
+                }
+              });
+
+              console.log('[Trigger] Draft text extracted:', draftText);
+
+              // Send message to React Native with both full text and draft text
+              sendMessageToNative({
+                type: 'assistTrigger',
+                text: docText,
+                draftText: draftText,
+                hasDraft: draftText.length > 0,
+                timestamp: new Date().toISOString()
+              });
+
+              // Reset after 5 seconds to allow triggering again
+              setTimeout(function() {
+                assistTriggered = false;
+                console.log('[Trigger] Assist trigger reset');
+              }, 5000);
+            }
           }
 
           // Send selection changes to native
@@ -2000,11 +2088,17 @@
       console.log('[WebView] Editor created successfully');
       setStatus('Editor ready');
 
+      // Track if assist trigger has been detected
+      let assistTriggered = false;
+
       // Voice dictation: Listen for composition end (when user presses Done after voice input)
       let compositionText = '';
       let voiceSessionActive = false;
       let voiceSessionStartPos = null;
       let voiceSessionId = null;
+
+      // Draft mode: Track session for auto-marking new text
+      const draftSessionId = `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       document.querySelector('.ProseMirror').addEventListener('compositionstart', function(e) {
         console.log('[VoiceDictation] Composition started');
@@ -2172,6 +2266,62 @@
           reason: 'User clicked reject'
         });
       });
+
+      // Draft mode: Accept draft button handler
+      document.getElementById('acceptDraftBtn').addEventListener('click', function() {
+        console.log('[Draft] Accept button clicked');
+        const { state, dispatch } = editorView;
+
+        // Find all draft marks in document
+        let tr = state.tr;
+        let removed = 0;
+
+        state.doc.descendants((node, pos) => {
+          if (node.isText) {
+            const draftMark = node.marks.find(m => m.type.name === 'draft');
+            if (draftMark) {
+              tr = tr.removeMark(pos, pos + node.nodeSize, schema.marks.draft);
+              removed++;
+            }
+          }
+        });
+
+        if (removed > 0) {
+          dispatch(tr);
+          console.log('[Draft] Removed', removed, 'draft marks');
+
+          // Hide draft control buttons
+          updateDraftButtonVisibility();
+
+          // Notify native
+          sendMessageToNative({
+            type: 'draftAccepted',
+            marksRemoved: removed
+          });
+        } else {
+          console.log('[Draft] No draft marks found');
+        }
+      });
+
+      // Draft mode: Check if draft marks exist and show/hide button
+      function updateDraftButtonVisibility() {
+        const { state } = editorView;
+        let hasDraft = false;
+
+        state.doc.descendants((node) => {
+          if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
+            hasDraft = true;
+            return false; // Stop traversal
+          }
+        });
+
+        const draftButtons = document.getElementById('draftControlButtons');
+        if (hasDraft) {
+          draftButtons.classList.add('visible');
+        } else {
+          draftButtons.classList.remove('visible');
+        }
+      }
 
       // Add click handler for geo-marks and comments
       document.querySelector('.ProseMirror').addEventListener('click', function(e) {
@@ -2631,6 +2781,18 @@
                     }
                     editorView.focus();
                   }
+                  break;
+
+                case 'undo':
+                  console.log('[WebView] Undo');
+                  window.PM.history.undo(state, dispatch);
+                  editorView.focus();
+                  break;
+
+                case 'redo':
+                  console.log('[WebView] Redo');
+                  window.PM.history.redo(state, dispatch);
+                  editorView.focus();
                   break;
 
                 case 'createGeoMark':
@@ -3145,6 +3307,240 @@
 
                 default:
                   console.warn('[WebView] Unknown command:', data.command);
+              }
+              break;
+
+            case 'replaceDraftWithDocument':
+              console.log('[WebView] Replacing draft content with structured document');
+              if (editorView && data.document) {
+                try {
+                  const { state, dispatch } = editorView;
+
+                  // Find all text with draft marks
+                  let draftStart = null;
+                  let draftEnd = null;
+                  state.doc.descendants((node, pos) => {
+                    if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
+                      if (draftStart === null) {
+                        draftStart = pos;
+                      }
+                      draftEnd = pos + node.nodeSize;
+                    }
+                  });
+
+                  if (draftStart === null || draftEnd === null) {
+                    console.warn('[WebView] No draft text found to replace');
+                    break;
+                  }
+
+                  console.log('[WebView] Found draft text from', draftStart, 'to', draftEnd);
+
+                  // Parse the new document content
+                  const newContent = schema.nodeFromJSON(data.document);
+                  console.log('[WebView] Parsed new document:', newContent.toString());
+
+                  // Create transaction to replace draft text with new content
+                  let tr = state.tr;
+
+                  // Delete draft text
+                  tr = tr.delete(draftStart, draftEnd);
+
+                  // Insert new content at the same position
+                  // Extract the content from the document node (skip the doc wrapper)
+                  const contentToInsert = newContent.content;
+                  tr = tr.insert(draftStart, contentToInsert);
+
+                  // Dispatch the transaction
+                  dispatch(tr);
+
+                  console.log('[WebView] Draft content replaced with structured document');
+
+                  // Hide draft control buttons
+                  updateDraftButtonVisibility();
+
+                  // Notify React Native
+                  sendMessageToNative({
+                    type: 'draftReplaced',
+                    success: true
+                  });
+                } catch (error) {
+                  console.error('[WebView] Error replacing draft content:', error);
+                  sendMessageToNative({
+                    type: 'draftReplaced',
+                    success: false,
+                    error: error.message
+                  });
+                }
+              }
+              break;
+
+            case 'replaceDraftWithHTML':
+              console.log('[WebView] Replacing draft content with HTML snippet');
+              sendMessageToNative({
+                type: 'debug',
+                message: 'replaceDraftWithHTML handler called'
+              });
+
+              if (editorView && data.html) {
+                try {
+                  const { state, dispatch } = editorView;
+
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '🔵 NEW CODE v13:36 - About to get schema from state'
+                  });
+
+                  const schema = state.schema;  // Get schema from editor state
+
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '🟢 NEW CODE v13:36 - Schema obtained: ' + (schema ? 'SUCCESS' : 'FAILED')
+                  });
+
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '🔍 Schema nodes available: ' + Object.keys(schema.nodes).join(', ')
+                  });
+
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: '📍 schema.nodes.geoMark exists? ' + (schema.nodes.geoMark ? 'YES' : 'NO')
+                  });
+
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: 'EditorView exists, processing HTML: ' + data.html.substring(0, 100)
+                  });
+
+                  // Find all text with draft marks
+                  let draftStart = null;
+                  let draftEnd = null;
+                  state.doc.descendants((node, pos) => {
+                    if (node.isText && node.marks.some(m => m.type.name === 'draft')) {
+                      if (draftStart === null) {
+                        draftStart = pos;
+                      }
+                      draftEnd = pos + node.nodeSize;
+                    }
+                  });
+
+                  if (draftStart === null || draftEnd === null) {
+                    console.warn('[WebView] No draft text found to replace');
+                    sendMessageToNative({
+                      type: 'debug',
+                      message: 'No draft text found to replace'
+                    });
+                    break;
+                  }
+
+                  console.log('[WebView] Found draft text from', draftStart, 'to', draftEnd);
+                  console.log('[WebView] HTML to insert:', data.html);
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: `Found draft text from ${draftStart} to ${draftEnd}`
+                  });
+
+                  // Parse HTML using DOMParser
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(data.html, 'text/html');
+
+                  // Convert geo-mark spans to ProseMirror text with marks
+                  const fragment = [];
+                  const walk = (node) => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                      if (node.textContent) {
+                        fragment.push(schema.text(node.textContent));
+                      }
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                      if (node.classList.contains('geo-mark')) {
+                        // Parse geo-mark attributes
+                        const attrs = {
+                          geoId: node.getAttribute('data-geo-id'),
+                          placeName: node.getAttribute('data-place-name'),
+                          lat: parseFloat(node.getAttribute('data-lat')),
+                          lng: parseFloat(node.getAttribute('data-lng')),
+                          colorIndex: parseInt(node.getAttribute('data-color-index')),
+                          coordSource: node.getAttribute('data-coord-source') || 'nominatim'
+                        };
+
+                        // Add transport info if present
+                        if (node.getAttribute('data-transport-from')) {
+                          attrs.transportFrom = node.getAttribute('data-transport-from');
+                        }
+                        if (node.getAttribute('data-transport-profile')) {
+                          attrs.transportProfile = node.getAttribute('data-transport-profile');
+                        }
+
+                        // Create text node with geoMark mark applied
+                        const textContent = node.textContent || attrs.placeName;
+                        const geoMarkMark = schema.marks.geoMark.create(attrs);
+                        const textNode = schema.text(textContent, [geoMarkMark]);
+                        fragment.push(textNode);
+                      } else {
+                        // Regular element, walk its children
+                        for (const child of node.childNodes) {
+                          walk(child);
+                        }
+                      }
+                    }
+                  };
+
+                  // Walk the parsed HTML body
+                  for (const child of doc.body.childNodes) {
+                    walk(child);
+                  }
+
+                  console.log('[WebView] Converted HTML to', fragment.length, 'nodes');
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: `Converted HTML to ${fragment.length} nodes`
+                  });
+
+                  // Create transaction to replace draft text
+                  let tr = state.tr;
+                  tr = tr.delete(draftStart, draftEnd);
+
+                  // Insert each fragment node
+                  let insertPos = draftStart;
+                  for (const node of fragment) {
+                    tr = tr.insert(insertPos, node);
+                    insertPos += node.nodeSize;
+                  }
+
+                  // Dispatch the transaction
+                  dispatch(tr);
+
+                  console.log('[WebView] Draft content replaced with HTML snippet');
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: 'Draft content replaced with HTML snippet successfully'
+                  });
+
+                  // Hide draft control buttons
+                  updateDraftButtonVisibility();
+
+                  // Notify React Native
+                  sendMessageToNative({
+                    type: 'draftReplaced',
+                    success: true
+                  });
+                } catch (error) {
+                  console.error('[WebView] Error replacing draft with HTML:', error);
+                  sendMessageToNative({
+                    type: 'debug',
+                    message: 'Error replacing draft: ' + error.message
+                  });
+                  sendMessageToNative({
+                    type: 'draftReplaced',
+                    success: false,
+                    error: error.message
+                  });
+                }
+              } else {
+                sendMessageToNative({
+                  type: 'debug',
+                  message: 'replaceDraftWithHTML: editorView=' + !!editorView + ', html=' + !!data.html
+                });
               }
               break;
 

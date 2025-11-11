@@ -229,6 +229,32 @@ const mySchema = new Schema({
         return ['span', attrs, 0];
       }
     })
+    .addToEnd('draft', {
+      attrs: {
+        sessionId: { default: null },
+        timestamp: { default: null }
+      },
+      inclusive: true,  // Extend mark when user continues typing
+      parseDOM: [{
+        tag: 'span.draft',
+        getAttrs(dom) {
+          return {
+            sessionId: dom.getAttribute('data-session-id'),
+            timestamp: dom.getAttribute('data-timestamp')
+          };
+        }
+      }],
+      toDOM(mark) {
+        return ['span', {
+          class: 'draft',
+          'data-session-id': mark.attrs.sessionId,
+          'data-timestamp': mark.attrs.timestamp,
+          style: `
+            color: #9CA3AF;
+          `
+        }, 0];
+      }
+    })
 });
 
 // Custom Enter key handler for tool picker

@@ -12,7 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase/client';
-import { htmlToProsemirror } from '@/utils/prosemirror-html';
+// Conditional import - only works on web
+const htmlToProsemirror = Platform.OS === 'web'
+  ? require('@/utils/prosemirror-html').htmlToProsemirror
+  : () => { throw new Error('htmlToProsemirror not available on native'); };
 import { useChatWebSocket } from '@/hooks/useChatWebSocket';
 import { usePresentation } from '@/contexts/presentation-context';
 import { parsePresentationBlocks } from '@/utils/parse-presentation-blocks';

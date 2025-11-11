@@ -74,7 +74,8 @@
         {
           "locationWhenInUsePermission": "Show current location on map."
         }
-      ]
+      ],
+      "./plugins/withDomWebViewExtension.js"
     ],
     "experiments": {
       "typedRoutes": true

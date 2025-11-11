@@ -69,6 +69,10 @@ export class ChatRoomV2 {
           await this.handleChatMessage(data, ws, documentId);
           break;
 
+        case "assist_request":
+          await this.handleAssistRequest(data, ws);
+          break;
+
         case "tool_result":
           await this.handleToolResult(data);
           break;
@@ -158,6 +162,158 @@ export class ChatRoomV2 {
     return toolPromise;
   }
 
+  /**
+   * Handle assist request - generate structured document with tool delegation
+   */
+  private async handleAssistRequest(data: any, ws: WebSocket) {
+    console.log('[ChatRoom] handleAssistRequest called');
+    const { text, user_id } = data;
+
+    if (!text) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Text is required for assist request'
+      }));
+      return;
+    }
+
+    try {
+      console.log('[ChatRoom] Generating HTML snippet for:', text);
+
+      // Use LLM to identify locations and their relationships
+      const aiResponse = await this.env.AI.run(
+        "@hf/nousresearch/hermes-2-pro-mistral-7b",
+        {
+          messages: [
+            {
+              role: "system",
+              content: `You are a travel itinerary assistant. Identify locations in the user's text and return structured data.
+
+Return ONLY valid JSON in this format:
+{
+  "locations": [
+    {
+      "name": "Lejre",
+      "displayText": "Lejre"
+    },
+    {
+      "name": "Copenhagen",
+      "displayText": "Copenhagen",
+      "transportFrom": "Lejre",
+      "transportMode": "cycling"
+    }
+  ],
+  "template": "I will cycle from {0} to {1}"
+}
+
+Rules:
+- Extract all location names from the text
+- For destinations after the first, include transportFrom (previous location name) and transportMode
+- Transport modes: "walking", "driving", "cycling", "transit", "flight"
+- Template uses {0}, {1}, {2}, etc. as placeholders for locations in order
+- Keep the original text's natural language in the template
+
+Return ONLY the JSON, no markdown, no explanation.`
+            },
+            {
+              role: "user",
+              content: `Identify locations in:\n\n"${text}"`
+            }
+          ]
+        }
+      );
+
+      console.log('[ChatRoom] AI response:', aiResponse);
+
+      // Parse the AI response
+      let locationsData = null;
+      try {
+        let content = aiResponse.response || aiResponse.content || '';
+        content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        locationsData = JSON.parse(content);
+
+        if (!locationsData || !locationsData.locations || !locationsData.template) {
+          throw new Error('Invalid locations data structure');
+        }
+      } catch (parseError) {
+        console.error('[ChatRoom] Failed to parse AI response:', parseError);
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: 'Failed to parse LLM response'
+        }));
+        return;
+      }
+
+      console.log('[ChatRoom] Found', locationsData.locations.length, 'locations to geocode');
+
+      // Geocode each location using client tool delegation
+      const geocodedLocations: any[] = [];
+      for (const location of locationsData.locations) {
+        try {
+          const result = await this.requestClientTool('geocode', {
+            location: location.name
+          });
+
+          geocodedLocations.push({
+            ...location,
+            lat: result.lat,
+            lng: result.lng,
+            placeName: result.place_name,
+            geoId: `loc-${crypto.randomUUID()}`
+          });
+
+          console.log('[ChatRoom] Geocoded', location.name, '→', result.place_name);
+        } catch (error) {
+          console.error('[ChatRoom] Failed to geocode', location.name, ':', error);
+          // Continue with other locations even if one fails
+        }
+      }
+
+      // Build HTML snippet with geo-marks
+      let html = locationsData.template;
+      geocodedLocations.forEach((location, index) => {
+        const colorIndex = index % 10; // We have 10 colors
+        const geoMarkAttrs: any = {
+          'data-geo-id': location.geoId,
+          'data-place-name': location.placeName,
+          'data-lat': location.lat,
+          'data-lng': location.lng,
+          'data-color-index': colorIndex,
+          'data-coord-source': 'nominatim'
+        };
+
+        // Add transport info for non-first locations
+        if (location.transportFrom) {
+          geoMarkAttrs['data-transport-from'] = location.transportFrom;
+        }
+        if (location.transportMode) {
+          geoMarkAttrs['data-transport-profile'] = location.transportMode;
+        }
+
+        const attrsString = Object.entries(geoMarkAttrs)
+          .map(([key, value]) => `${key}="${value}"`)
+          .join(' ');
+
+        const geoMarkHtml = `<span class="geo-mark" ${attrsString}>${location.displayText}</span>`;
+        html = html.replace(`{${index}}`, geoMarkHtml);
+      });
+
+      // Send HTML snippet back to client
+      ws.send(JSON.stringify({
+        type: 'assist_complete',
+        html: html,
+        locations: geocodedLocations
+      }));
+
+    } catch (error) {
+      console.error('[ChatRoom] Error in handleAssistRequest:', error);
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }));
+    }
+  }
+
   private async handleChatMessage(data: any, sender: WebSocket, documentId: string) {
     console.log('[ChatRoom] handleChatMessage called');
     const { content, user_id, metadata } = data;
@@ -220,6 +376,8 @@ export class ChatRoomV2 {
         {
           role: "system",
           content: `You are a helpful travel planning assistant. When users mention specific locations, use the geocode tool to get accurate coordinates.
+
+IMPORTANT: Always respond in the SAME LANGUAGE as the user's message. If the user writes in Danish, respond in Danish. If they write in English, respond in English.
 
 Format your responses as HTML paragraphs. After getting coordinates from the geocode tool, wrap location names in geo-mark spans with unique geo-ids:
 
@@ -632,10 +790,159 @@ export default {
       );
     }
 
+    // Extract locations endpoint - uses LLM to detect locations in text
+    if (url.pathname === "/api/extract-locations" && request.method === "POST") {
+      try {
+        const { text } = await request.json();
+
+        if (!text || typeof text !== 'string') {
+          return new Response(
+            JSON.stringify({ error: 'Invalid request: text field required' }),
+            { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+          );
+        }
+
+        console.log('[ExtractLocations] Processing text:', text);
+
+        // Call AI to extract locations
+        const response = await env.AI.run(
+          "@hf/nousresearch/hermes-2-pro-mistral-7b",
+          {
+            messages: [
+              {
+                role: "system",
+                content: `You are a travel itinerary assistant. Convert the user's text into a structured ProseMirror document with geo-marks for locations and transportation information.
+
+Return ONLY valid JSON in this exact ProseMirror format:
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {"type": "text", "text": "I will cycle from "},
+        {
+          "type": "geoMark",
+          "attrs": {
+            "geoId": "loc-1",
+            "placeName": "Lejre",
+            "colorIndex": 0
+          },
+          "content": [{"type": "text", "text": "Lejre"}]
+        },
+        {"type": "text", "text": " to "},
+        {
+          "type": "geoMark",
+          "attrs": {
+            "geoId": "loc-2",
+            "placeName": "Copenhagen",
+            "colorIndex": 1,
+            "transportFrom": "Lejre",
+            "transportProfile": "cycling"
+          },
+          "content": [{"type": "text", "text": "Copenhagen"}]
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Create unique geoId for each location (loc-1, loc-2, etc.)
+- Set colorIndex starting from 0 and incrementing
+- For destinations, add transportFrom (previous location name) and transportProfile
+- Transport profiles: "walking", "driving", "cycling", "transit", "flight"
+- Keep the original text's natural language
+- Do not include lat/lng - frontend will geocode using placeName
+- Do NOT add any extra marks to text nodes, only plain text and geoMark nodes
+
+Return ONLY the JSON, no markdown, no explanation.`
+              },
+              {
+                role: "user",
+                content: `Convert to ProseMirror format:\n\n"${text}"`
+              }
+            ]
+          }
+        );
+
+        console.log('[ExtractLocations] AI response:', response);
+
+        // Parse the AI response
+        let document = null;
+        try {
+          // The response might be wrapped in markdown code blocks
+          let content = response.response || response.content || '';
+
+          // Remove markdown code blocks if present
+          content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+          document = JSON.parse(content);
+
+          // Validate it's a ProseMirror document
+          if (!document || document.type !== 'doc') {
+            console.error('[ExtractLocations] Invalid document structure');
+            document = null;
+          }
+        } catch (parseError) {
+          console.error('[ExtractLocations] Failed to parse AI response:', parseError);
+          document = null;
+        }
+
+        console.log('[ExtractLocations] Generated document:', JSON.stringify(document));
+
+        return new Response(
+          JSON.stringify({ document }),
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          }
+        );
+      } catch (error) {
+        console.error('[ExtractLocations] Error:', error);
+        return new Response(
+          JSON.stringify({ error: 'Internal server error', locations: [] }),
+          {
+            status: 500,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          }
+        );
+      }
+    }
+
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
+      });
+    }
+
     // WebSocket upgrade for chat rooms
     const chatMatch = url.pathname.match(/^\/chat\/(.+)$/);
     if (chatMatch && request.headers.get("Upgrade") === "websocket") {
       const documentId = chatMatch[1];
+
+      // Get or create Durable Object for this document
+      const id = env.CHAT_ROOM.idFromName(documentId);
+      const stub = env.CHAT_ROOM.get(id);
+
+      // Forward the WebSocket request to the Durable Object
+      return stub.fetch(request);
+    }
+
+    // WebSocket upgrade for assist (same as chat, uses same Durable Object)
+    const assistMatch = url.pathname.match(/^\/assist\/(.+)$/);
+    if (assistMatch && request.headers.get("Upgrade") === "websocket") {
+      const documentId = assistMatch[1];
 
       // Get or create Durable Object for this document
       const id = env.CHAT_ROOM.idFromName(documentId);

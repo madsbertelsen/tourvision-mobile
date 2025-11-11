@@ -1,5 +1,7 @@
 import { useGlobalSearchParams, Stack } from 'expo-router';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
+import { storage } from '@/utils/storage';
 
 // Transport mode type
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
@@ -206,28 +208,51 @@ export default function TripLayout() {
     });
   }, []);
 
-  // Load document from localStorage on mount
+  // Load document from storage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('@tourvision_documents');
-      if (stored) {
-        const documents = JSON.parse(stored);
-        // Find document by ID
-        const doc = documents.find((d: any) => d.id === tripId);
-        if (doc && doc.content) {
-          console.log('Loading document from localStorage:', tripId);
-          setCurrentDocState(doc.content);
-        }
+    const loadDocument = async () => {
+      // Clear any pending save timeout when changing documents
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
       }
-    } catch (error) {
-      console.error('Error loading from localStorage:', error);
-    }
+
+      try {
+        const stored = await storage.getItem('@tourvision_documents');
+        if (stored) {
+          const documents = JSON.parse(stored);
+          // Find document by ID
+          const doc = documents.find((d: any) => d.id === tripId);
+          if (doc) {
+            console.log('Loading document from storage:', tripId, 'content:', JSON.stringify(doc.content).substring(0, 100));
+            setCurrentDocState(doc.content);
+            latestDocRef.current = doc.content;
+          } else {
+            // Document not found - clear to empty state
+            console.log('Document not found:', tripId, 'setting empty state');
+            setCurrentDocState(null);
+            latestDocRef.current = null;
+          }
+        } else {
+          // No documents in storage - clear to empty state
+          console.log('No documents in storage, setting empty state');
+          setCurrentDocState(null);
+          latestDocRef.current = null;
+        }
+      } catch (error) {
+        console.error('Error loading from storage:', error);
+        setCurrentDocState(null);
+        latestDocRef.current = null;
+      }
+    };
+
+    loadDocument();
   }, [tripId]);
 
-  // Function to save document to localStorage
-  const saveToLocalStorage = useCallback((doc: any) => {
+  // Function to save document to storage
+  const saveToStorage = useCallback(async (doc: any) => {
     try {
-      const stored = localStorage.getItem('@tourvision_documents');
+      const stored = await storage.getItem('@tourvision_documents');
       let documents = stored ? JSON.parse(stored) : [];
 
       // Find and update existing document or create new one
@@ -251,14 +276,14 @@ export default function TripLayout() {
         });
       }
 
-      localStorage.setItem('@tourvision_documents', JSON.stringify(documents));
-      console.log('Saved document to localStorage:', tripId);
+      await storage.setItem('@tourvision_documents', JSON.stringify(documents));
+      console.log('Saved document to storage:', tripId);
     } catch (error) {
-      console.error('Error saving to localStorage:', error);
+      console.error('Error saving to storage:', error);
     }
   }, [tripId]);
 
-  // Custom setCurrentDoc that also saves to localStorage (debounced)
+  // Custom setCurrentDoc that also saves to storage (debounced)
   const setCurrentDoc = useCallback((doc: any) => {
     // Check if document actually changed (avoid unnecessary updates)
     if (latestDocRef.current === doc) {
@@ -279,10 +304,10 @@ export default function TripLayout() {
     // Schedule save after 1 second of inactivity
     saveTimeoutRef.current = setTimeout(() => {
       if (latestDocRef.current) {
-        saveToLocalStorage(latestDocRef.current);
+        saveToStorage(latestDocRef.current);
       }
     }, 1000);
-  }, [saveToLocalStorage]);
+  }, [saveToStorage]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -291,11 +316,11 @@ export default function TripLayout() {
         clearTimeout(saveTimeoutRef.current);
         // Save immediately on unmount if there's pending changes
         if (latestDocRef.current) {
-          saveToLocalStorage(latestDocRef.current);
+          saveToStorage(latestDocRef.current);
         }
       }
     };
-  }, [saveToLocalStorage]);
+  }, [saveToStorage]);
 
   return (
     <TripContext.Provider
@@ -322,10 +347,11 @@ export default function TripLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen
           name="geo-edit"
-          options={{
-            presentation: 'transparentModal',
-            animation: 'slide_from_bottom',
-          }}
+          options={({ route }) => ({
+            presentation: 'modal',
+            headerShown: true,
+            headerTitle: (route.params as any)?.selectedText || '',
+          })}
         />
         <Stack.Screen
           name="geo-search/[geoId]"
@@ -339,6 +365,13 @@ export default function TripLayout() {
           options={{
             presentation: 'transparentModal',
             animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="options"
+          options={{
+            presentation: 'formSheet',
+            headerShown: false,
           }}
         />
       </Stack>

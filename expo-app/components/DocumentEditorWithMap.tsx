@@ -22,6 +22,7 @@ interface Location {
 }
 
 interface DynamicLandingDocumentProseMirrorProps {
+  documentId?: string;
   initialContent?: any;
   onLocationsChange?: (locations: Location[]) => void;
   onContentChange?: (doc: any) => void;
@@ -100,6 +101,7 @@ function getNextColorIndex(locations: Location[]): number {
 }
 
 export default function DynamicLandingDocumentProseMirror({
+  documentId,
   initialContent,
   onLocationsChange,
   onContentChange,
@@ -540,8 +542,9 @@ export default function DynamicLandingDocumentProseMirror({
           prevLocations[idx].lng !== loc.lng
         );
 
+      // Schedule onLocationsChange to run after render completes
       if (locationsChanged && onLocationsChange) {
-        onLocationsChange(locationsList);
+        setTimeout(() => onLocationsChange(locationsList), 0);
       }
 
       return locationsList;
@@ -815,6 +818,8 @@ export default function DynamicLandingDocumentProseMirror({
           editable={true}
           selectionEmpty={!hasTextSelection}
           highlightedButton={highlightedButton}
+          canUndo={true}
+          canRedo={true}
           onCommand={(command, params) => {
             console.log('[Landing] onCommand received:', command, params, Date.now());
             webViewRef.current?.sendCommand(command, params);
@@ -1105,7 +1110,9 @@ export default function DynamicLandingDocumentProseMirror({
         style={styles.editorContainer}
       >
         <ProseMirrorWebView
+          key={documentId || 'default'}
           ref={webViewRef}
+          documentId={documentId}
           content={INITIAL_CONTENT}
           onChange={handleContentChange}
           onSelectionChange={handleSelectionChange}
@@ -1282,19 +1289,16 @@ const styles = StyleSheet.create({
     maxHeight: 200, // Allow space for wrapped content
     paddingHorizontal: 0,
     backgroundColor: '#FFFFFF',
+    alignSelf: 'center',
     ...(Platform.OS === 'web'
       ? {
           // Use sticky positioning on web to stay visible during scroll
           position: 'sticky' as any,
           top: 0,
-          alignSelf: 'center' as any,
         }
       : {
-          // For native platforms, use absolute positioning
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          marginLeft: -350,
+          // For native platforms, use default positioning (no absolute)
+          position: 'relative',
         }),
   },
   highlightOverlay: {

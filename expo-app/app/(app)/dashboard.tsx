@@ -117,8 +117,8 @@ export default function TripListScreen() {
   };
 
   const getDocumentTitle = (document: SavedDocument): string => {
-    // Try to find first heading in document
-    if (document.document && document.document.content) {
+    // Try to find first heading in document content
+    if (document.content) {
       const findHeading = (node: any): string | null => {
         if (!node) return null;
 
@@ -141,7 +141,7 @@ export default function TripListScreen() {
         return null;
       };
 
-      const heading = findHeading(document.document);
+      const heading = findHeading(document.content);
       if (heading) return heading;
     }
 
@@ -168,9 +168,9 @@ export default function TripListScreen() {
       return '';
     };
 
-    // Try to extract text from document first (skip first heading since we use it as title)
-    if (document.document && document.document.content) {
-      const text = extractText(document.document, true).trim();
+    // Try to extract text from document content (skip headings since we use them as title)
+    if (document.content) {
+      const text = extractText(document.content, true).trim();
       if (text) {
         // Remove extra whitespace
         const cleanText = text.replace(/\s+/g, ' ');
@@ -179,7 +179,7 @@ export default function TripListScreen() {
     }
 
     // Fallback to messages
-    if (document.messages.length > 0) {
+    if (document.messages && document.messages.length > 0) {
       const lastMessage = document.messages[document.messages.length - 1];
       if (typeof lastMessage.content === 'string') {
         // Strip HTML tags for preview
