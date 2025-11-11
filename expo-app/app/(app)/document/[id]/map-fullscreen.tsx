@@ -148,18 +148,13 @@ export default function MapFullscreenModal() {
                 onPress={() => handleMarkerPress(location)}
                 activeOpacity={0.7}
               >
-                <View style={styles.markerContainer}>
-                  <View
-                    style={[
-                      styles.marker,
-                      { backgroundColor: bgColor }
-                    ]}
-                  >
-                    <View style={styles.markerInner} />
-                  </View>
-                  <View style={[styles.label, { backgroundColor: bgColor }]}>
-                    <Text style={styles.labelText}>{location.displayText || location.placeName}</Text>
-                  </View>
+                <View
+                  style={[
+                    styles.marker,
+                    { backgroundColor: bgColor }
+                  ]}
+                >
+                  <View style={styles.markerInner} />
                 </View>
               </TouchableOpacity>
             </Mapbox.MarkerView>
@@ -287,9 +282,6 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  markerContainer: {
-    alignItems: 'center',
-  },
   marker: {
     width: 32,
     height: 32,
@@ -308,23 +300,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: 'white',
-  },
-  label: {
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  labelText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
   },
   closeButton: {
     position: 'absolute',
