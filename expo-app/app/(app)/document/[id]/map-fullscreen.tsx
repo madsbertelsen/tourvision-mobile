@@ -22,22 +22,72 @@ export default function MapFullscreenModal() {
   const insets = useSafeAreaInsets();
   const { locations } = useTripContext();
   const [routes, setRoutes] = useState<any[]>([]);
+
+  // Bottom sheet state - can show either location or route
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
+  const [sheetView, setSheetView] = useState<'location' | 'route'>('location');
 
   // Bottom sheet ref and snap points
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
 
   // Handle marker press
-  const handleMarkerPress = useCallback((location: any) => {
+  const handleMarkerPress = useCallback((location: any, index: number) => {
     console.log('[MapFullscreen] Marker pressed:', location.displayText || location.placeName);
     setSelectedLocation(location);
+    setSheetView('location');
+
+    // Find the route that ends at this location
+    const routeIndex = index - 1; // Route TO this location
+    if (routeIndex >= 0 && routes[routeIndex]) {
+      setSelectedRoute({
+        ...routes[routeIndex],
+        fromLocation: locations[routeIndex],
+        toLocation: location,
+        routeIndex: routeIndex
+      });
+    } else {
+      setSelectedRoute(null);
+    }
+
     bottomSheetRef.current?.expand();
+  }, [routes, locations]);
+
+  // Handle route line press
+  const handleRoutePress = useCallback((route: any, routeIndex: number) => {
+    console.log('[MapFullscreen] Route pressed:', route.id);
+    const fromLocation = locations[routeIndex];
+    const toLocation = locations[routeIndex + 1];
+
+    setSelectedRoute({
+      ...route,
+      fromLocation,
+      toLocation,
+      routeIndex
+    });
+    setSelectedLocation(toLocation); // Keep location for context
+    setSheetView('route');
+    bottomSheetRef.current?.expand();
+  }, [locations]);
+
+  // Navigate to route view from location view
+  const handleViewRoute = useCallback(() => {
+    if (selectedRoute) {
+      setSheetView('route');
+    }
+  }, [selectedRoute]);
+
+  // Navigate back to location view
+  const handleBackToLocation = useCallback(() => {
+    setSheetView('location');
   }, []);
 
   // Handle bottom sheet close
   const handleSheetClose = useCallback(() => {
     setSelectedLocation(null);
+    setSelectedRoute(null);
+    setSheetView('location');
   }, []);
 
   // Fetch routes between locations
@@ -113,19 +163,20 @@ export default function MapFullscreenModal() {
         />
 
         {/* Route lines */}
-        {routes.map((route) => {
+        {routes.map((route, routeIndex) => {
           const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
           return (
             <Mapbox.ShapeSource
               key={route.id}
               id={route.id}
               shape={route.geometry}
+              onPress={() => handleRoutePress(route, routeIndex)}
             >
               <Mapbox.LineLayer
                 id={`${route.id}-line`}
                 style={{
                   lineColor: routeColor,
-                  lineWidth: 3,
+                  lineWidth: 5,
                   lineOpacity: 0.75,
                 }}
               />
@@ -145,7 +196,7 @@ export default function MapFullscreenModal() {
               coordinate={[location.lng, location.lat]}
             >
               <TouchableOpacity
-                onPress={() => handleMarkerPress(location)}
+                onPress={() => handleMarkerPress(location, index)}
                 activeOpacity={0.7}
               >
                 <View
@@ -182,91 +233,146 @@ export default function MapFullscreenModal() {
           handleIndicatorStyle={styles.bottomSheetIndicator}
         >
           <BottomSheetView style={styles.bottomSheetContent}>
-            {/* Header with location name */}
-            <View style={styles.sheetHeader}>
-              <View style={[
-                styles.sheetColorDot,
-                { backgroundColor: COLORS[(selectedLocation.colorIndex || 0) % COLORS.length] }
-              ]} />
-              <Text style={styles.sheetTitle}>
-                {selectedLocation.displayText || selectedLocation.placeName}
-              </Text>
-            </View>
-
-            {/* Location details */}
-            <View style={styles.sheetSection}>
-              <View style={styles.sheetRow}>
-                <Ionicons name="location-outline" size={20} color="#666" />
-                <Text style={styles.sheetLabel}>Full Address</Text>
-              </View>
-              <Text style={styles.sheetValue}>{selectedLocation.placeName}</Text>
-            </View>
-
-            {selectedLocation.description && (
-              <View style={styles.sheetSection}>
-                <View style={styles.sheetRow}>
-                  <Ionicons name="document-text-outline" size={20} color="#666" />
-                  <Text style={styles.sheetLabel}>Description</Text>
+            {sheetView === 'location' ? (
+              // LOCATION VIEW
+              <>
+                {/* Header with location name */}
+                <View style={styles.sheetHeader}>
+                  <View style={[
+                    styles.sheetColorDot,
+                    { backgroundColor: COLORS[(selectedLocation.colorIndex || 0) % COLORS.length] }
+                  ]} />
+                  <Text style={styles.sheetTitle}>
+                    {selectedLocation.displayText || selectedLocation.placeName}
+                  </Text>
                 </View>
-                <Text style={styles.sheetValue}>{selectedLocation.description}</Text>
-              </View>
-            )}
 
-            <View style={styles.sheetSection}>
-              <View style={styles.sheetRow}>
-                <Ionicons name="navigate-outline" size={20} color="#666" />
-                <Text style={styles.sheetLabel}>Coordinates</Text>
-              </View>
-              <Text style={styles.sheetValue}>
-                {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
-              </Text>
-            </View>
-
-            {selectedLocation.transportProfile && (
-              <View style={styles.sheetSection}>
-                <View style={styles.sheetRow}>
-                  <Ionicons
-                    name={
-                      selectedLocation.transportProfile === 'driving' ? 'car-outline' :
-                      selectedLocation.transportProfile === 'walking' ? 'walk-outline' :
-                      selectedLocation.transportProfile === 'cycling' ? 'bicycle-outline' :
-                      'airplane-outline'
-                    }
-                    size={20}
-                    color="#666"
-                  />
-                  <Text style={styles.sheetLabel}>Transport</Text>
+                {/* Location details */}
+                <View style={styles.sheetSection}>
+                  <View style={styles.sheetRow}>
+                    <Ionicons name="location-outline" size={20} color="#666" />
+                    <Text style={styles.sheetLabel}>Full Address</Text>
+                  </View>
+                  <Text style={styles.sheetValue}>{selectedLocation.placeName}</Text>
                 </View>
-                <Text style={styles.sheetValue}>
-                  {selectedLocation.transportProfile.charAt(0).toUpperCase() + selectedLocation.transportProfile.slice(1)}
-                </Text>
-              </View>
+
+                {selectedLocation.description && (
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="document-text-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>Description</Text>
+                    </View>
+                    <Text style={styles.sheetValue}>{selectedLocation.description}</Text>
+                  </View>
+                )}
+
+                <View style={styles.sheetSection}>
+                  <View style={styles.sheetRow}>
+                    <Ionicons name="navigate-outline" size={20} color="#666" />
+                    <Text style={styles.sheetLabel}>Coordinates</Text>
+                  </View>
+                  <Text style={styles.sheetValue}>
+                    {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                  </Text>
+                </View>
+
+                {/* Action buttons */}
+                <View style={styles.sheetActions}>
+                  <TouchableOpacity
+                    style={styles.sheetButton}
+                    onPress={() => {
+                      console.log('Edit location:', selectedLocation.geoId);
+                    }}
+                  >
+                    <Ionicons name="pencil" size={20} color="#007AFF" />
+                    <Text style={styles.sheetButtonText}>Edit</Text>
+                  </TouchableOpacity>
+
+                  {selectedRoute && (
+                    <TouchableOpacity
+                      style={styles.sheetButton}
+                      onPress={handleViewRoute}
+                    >
+                      <Ionicons name="arrow-forward" size={20} color="#007AFF" />
+                      <Text style={styles.sheetButtonText}>View Route</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            ) : (
+              // ROUTE VIEW
+              <>
+                {/* Header with back button */}
+                <View style={styles.sheetHeader}>
+                  <TouchableOpacity onPress={handleBackToLocation} style={styles.backButton}>
+                    <Ionicons name="chevron-back" size={24} color="#007AFF" />
+                  </TouchableOpacity>
+                  <View style={[
+                    styles.sheetColorDot,
+                    { backgroundColor: COLORS[(selectedRoute.colorIndex || 0) % COLORS.length] }
+                  ]} />
+                  <Text style={styles.sheetTitle}>Route Details</Text>
+                </View>
+
+                {/* Route info */}
+                <View style={styles.sheetSection}>
+                  <View style={styles.sheetRow}>
+                    <Ionicons name="navigate-outline" size={20} color="#666" />
+                    <Text style={styles.sheetLabel}>From → To</Text>
+                  </View>
+                  <Text style={styles.sheetValue}>
+                    {selectedRoute.fromLocation?.displayText || selectedRoute.fromLocation?.placeName} → {selectedRoute.toLocation?.displayText || selectedRoute.toLocation?.placeName}
+                  </Text>
+                </View>
+
+                {/* Transportation Method Selector */}
+                <View style={styles.sheetSection}>
+                  <View style={styles.sheetRow}>
+                    <Ionicons name="car-outline" size={20} color="#666" />
+                    <Text style={styles.sheetLabel}>Transportation Method</Text>
+                  </View>
+                  <View style={styles.transportOptions}>
+                    {['walking', 'driving', 'cycling'].map((mode) => (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.transportOption,
+                          selectedRoute.toLocation?.transportProfile === mode && styles.transportOptionActive
+                        ]}
+                        onPress={() => {
+                          console.log('Change transport to:', mode);
+                          // TODO: Update transport mode in document
+                        }}
+                      >
+                        <Ionicons
+                          name={mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bicycle'}
+                          size={24}
+                          color={selectedRoute.toLocation?.transportProfile === mode ? '#007AFF' : '#666'}
+                        />
+                        <Text style={[
+                          styles.transportOptionText,
+                          selectedRoute.toLocation?.transportProfile === mode && styles.transportOptionTextActive
+                        ]}>
+                          {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Save button */}
+                <TouchableOpacity
+                  style={[styles.sheetButton, styles.saveButton]}
+                  onPress={() => {
+                    console.log('Save route changes');
+                    handleBackToLocation();
+                  }}
+                >
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Text style={[styles.sheetButtonText, styles.saveButtonText]}>Save Changes</Text>
+                </TouchableOpacity>
+              </>
             )}
-
-            {/* Action buttons */}
-            <View style={styles.sheetActions}>
-              <TouchableOpacity
-                style={styles.sheetButton}
-                onPress={() => {
-                  // TODO: Navigate to location edit screen
-                  console.log('Edit location:', selectedLocation.geoId);
-                }}
-              >
-                <Ionicons name="pencil" size={20} color="#007AFF" />
-                <Text style={styles.sheetButtonText}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sheetButton}
-                onPress={() => {
-                  // TODO: Show directions
-                  console.log('Show directions to:', selectedLocation.geoId);
-                }}
-              >
-                <Ionicons name="navigate" size={20} color="#007AFF" />
-                <Text style={styles.sheetButtonText}>Directions</Text>
-              </TouchableOpacity>
-            </View>
           </BottomSheetView>
         </BottomSheet>
       )}
@@ -399,5 +505,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#007AFF',
     marginLeft: 6,
+  },
+  backButton: {
+    marginRight: 8,
+    padding: 4,
+  },
+  transportOptions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginLeft: 28,
+  },
+  transportOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  transportOptionActive: {
+    backgroundColor: '#f0f8ff',
+    borderColor: '#007AFF',
+  },
+  transportOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 4,
+  },
+  transportOptionTextActive: {
+    color: '#007AFF',
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    marginTop: 16,
+  },
+  saveButtonText: {
+    color: '#fff',
   },
 });
