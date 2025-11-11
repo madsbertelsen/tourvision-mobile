@@ -187,31 +187,34 @@ export class ChatRoomV2 {
           messages: [
             {
               role: "system",
-              content: `You are a travel itinerary assistant. Identify locations in the user's text and return structured data.
+              content: `You are a travel itinerary assistant. Extract ONLY the locations explicitly mentioned in the user's text. Do not add locations, transport modes, or other details that are not in the original text.
 
 Return ONLY valid JSON in this format:
 {
   "locations": [
     {
-      "name": "Lejre",
-      "displayText": "Lejre"
-    },
-    {
       "name": "Copenhagen",
-      "displayText": "Copenhagen",
-      "transportFrom": "Lejre",
-      "transportMode": "cycling"
+      "displayText": "Copenhagen"
     }
   ],
-  "template": "I will cycle from {0} to {1}"
+  "template": "I want to go to {0}"
 }
 
 Rules:
-- Extract all location names from the text
-- For destinations after the first, include transportFrom (previous location name) and transportMode
+- Extract ONLY locations that are explicitly mentioned in the user's text
+- Do NOT invent or add locations that are not in the text
+- Do NOT add transport modes unless explicitly stated
+- If transport is mentioned, include transportFrom (previous location) and transportMode
 - Transport modes: "walking", "driving", "cycling", "transit", "flight"
 - Template uses {0}, {1}, {2}, etc. as placeholders for locations in order
-- Keep the original text's natural language in the template
+- Keep the exact wording and meaning from the user's text in the template
+
+Examples:
+User: "I want to go to Copenhagen"
+Response: {"locations": [{"name": "Copenhagen", "displayText": "Copenhagen"}], "template": "I want to go to {0}"}
+
+User: "I will cycle from Lejre to Copenhagen"
+Response: {"locations": [{"name": "Lejre", "displayText": "Lejre"}, {"name": "Copenhagen", "displayText": "Copenhagen", "transportFrom": "Lejre", "transportMode": "cycling"}], "template": "I will cycle from {0} to {1}"}
 
 Return ONLY the JSON, no markdown, no explanation.`
             },
