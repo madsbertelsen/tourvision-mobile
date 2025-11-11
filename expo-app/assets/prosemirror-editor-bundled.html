@@ -2074,10 +2074,54 @@
                 console.log('[Trigger] Draft text extracted:', draftText);
                 console.log('[Trigger] Full text:', docText);
 
-                // Send message to React Native with both full text and draft text
+                // Convert document to HTML to preserve geo-mark spans
+                function nodeToHTML(node) {
+                  if (node.type.name === 'text') {
+                    return node.text || '';
+                  }
+
+                  if (node.type.name === 'geoMark') {
+                    // Convert geo-mark node to HTML span
+                    const attrs = node.attrs || {};
+                    const attrPairs = [
+                      'data-geo-id="' + (attrs.geoId || '') + '"',
+                      'data-place-name="' + (attrs.placeName || '') + '"',
+                      'data-lat="' + (attrs.lat || '') + '"',
+                      'data-lng="' + (attrs.lng || '') + '"',
+                      'data-color-index="' + (attrs.colorIndex || 0) + '"',
+                      'data-coord-source="' + (attrs.coordSource || '') + '"'
+                    ];
+                    if (attrs.transportFrom) attrPairs.push('data-transport-from="' + attrs.transportFrom + '"');
+                    if (attrs.transportProfile) attrPairs.push('data-transport-profile="' + attrs.transportProfile + '"');
+
+                    let html = '<span class="geo-mark" ' + attrPairs.join(' ') + '>';
+                    if (node.content) {
+                      node.content.forEach(function(child) {
+                        html += nodeToHTML(child);
+                      });
+                    }
+                    html += '</span>';
+                    return html;
+                  }
+
+                  // For other nodes, just process children
+                  let html = '';
+                  if (node.content) {
+                    node.content.forEach(function(child) {
+                      html += nodeToHTML(child);
+                    });
+                  }
+                  return html;
+                }
+
+                const docHTML = nodeToHTML(newState.doc);
+                console.log('[Trigger] 🔥 NEW BUNDLE - Document HTML:', docHTML);
+
+                // Send message to React Native with HTML (not plain text)
                 sendMessageToNative({
                   type: 'assistTrigger',
-                  text: docText,
+                  html: docHTML,
+                  text: docText, // Keep plain text for backward compatibility
                   draftText: draftText,
                   hasDraft: draftText.length > 0,
                   timestamp: new Date().toISOString()
@@ -2137,7 +2181,7 @@
         }
       });
 
-      console.log('[WebView] Editor created successfully');
+      console.log('[WebView] 🚀 BUNDLE VERSION 2.0 - Editor created successfully with HTML extraction');
       setStatus('Editor ready');
 
       // Track if assist trigger has been detected and typing pause timeout

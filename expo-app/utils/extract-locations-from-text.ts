@@ -31,10 +31,15 @@ export interface ProseMirrorDocument {
  * Generate ProseMirror document with geo-marks from dictated text using LLM (Cloudflare Workers AI)
  *
  * @param text The transcribed text from voice dictation
+ * @param existingLocations Array of location names that are already marked (to avoid re-marking)
  * @returns ProseMirror document with geo-marks (without coordinates - need to geocode)
  */
-export async function extractLocationsFromText(text: string): Promise<ProseMirrorDocument | null> {
+export async function extractLocationsFromText(
+  text: string,
+  existingLocations?: string[]
+): Promise<ProseMirrorDocument | null> {
   console.log('[LocationExtraction] Processing text with LLM:', text);
+  console.log('[LocationExtraction] Existing locations to skip:', existingLocations);
 
   try {
     // Call Cloudflare Workers AI via direct API
@@ -46,7 +51,10 @@ export async function extractLocationsFromText(text: string): Promise<ProseMirro
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({
+        text,
+        existingLocations: existingLocations || []
+      })
     });
 
     if (!response.ok) {

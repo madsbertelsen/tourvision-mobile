@@ -539,7 +539,10 @@ export default function DynamicLandingDocumentProseMirror({
           !prevLocations[idx] ||
           prevLocations[idx].geoId !== loc.geoId ||
           prevLocations[idx].lat !== loc.lat ||
-          prevLocations[idx].lng !== loc.lng
+          prevLocations[idx].lng !== loc.lng ||
+          prevLocations[idx].transportProfile !== loc.transportProfile ||
+          prevLocations[idx].transportFrom !== loc.transportFrom ||
+          JSON.stringify(prevLocations[idx].waypoints) !== JSON.stringify(loc.waypoints)
         );
 
       // Schedule onLocationsChange to run after render completes

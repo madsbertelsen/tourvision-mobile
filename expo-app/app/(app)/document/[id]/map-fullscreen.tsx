@@ -7,6 +7,7 @@ import Mapbox from '@rnmapbox/maps';
 import { useTripContext } from './_layout';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import bbox from '@turf/bbox';
 
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -20,13 +21,16 @@ const COLORS = [
 export default function MapFullscreenModal() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { locations } = useTripContext();
+  const { locations, setGeoMarkUpdate } = useTripContext();
   const [routes, setRoutes] = useState<any[]>([]);
 
   // Bottom sheet state - can show either location or route
   const [selectedLocation, setSelectedLocation] = useState<any | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
   const [sheetView, setSheetView] = useState<'location' | 'route'>('location');
+
+  // Pending transport mode change (before saving)
+  const [pendingTransportMode, setPendingTransportMode] = useState<string | null>(null);
 
   // Bottom sheet ref and snap points
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -57,6 +61,39 @@ export default function MapFullscreenModal() {
     bottomSheetRef.current?.expand();
   }, [routes, locations]);
 
+  // Focus camera on a specific route
+  const focusOnRoute = useCallback((route: any) => {
+    if (!cameraRef.current || !route.geometry) return;
+
+    // Use Turf.js to calculate bounds from the lineString geometry
+    const [minLng, minLat, maxLng, maxLat] = bbox(route.geometry);
+
+    // Calculate center point
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    // Calculate appropriate zoom level based on bounds
+    const lngDiff = maxLng - minLng;
+    const latDiff = maxLat - minLat;
+    const maxDiff = Math.max(lngDiff, latDiff);
+
+    // Zoom levels: smaller diff = higher zoom (more zoomed in)
+    // Adjust these values to control zoom sensitivity
+    let zoomLevel = 10;
+    if (maxDiff < 0.01) zoomLevel = 14;       // ~1km
+    else if (maxDiff < 0.05) zoomLevel = 12;  // ~5km
+    else if (maxDiff < 0.1) zoomLevel = 11;   // ~10km
+    else if (maxDiff < 0.5) zoomLevel = 9;    // ~50km
+    else if (maxDiff < 1) zoomLevel = 8;      // ~100km
+    else zoomLevel = 7;                       // >100km
+
+    cameraRef.current.setCamera({
+      centerCoordinate: [centerLng, centerLat],
+      zoomLevel: zoomLevel,
+      animationDuration: 1000,
+    });
+  }, []);
+
   // Handle route line press
   const handleRoutePress = useCallback((route: any, routeIndex: number) => {
     console.log('[MapFullscreen] Route pressed:', route.id);
@@ -79,38 +116,6 @@ export default function MapFullscreenModal() {
     setTimeout(() => focusOnRoute(enrichedRoute), 100);
   }, [locations, focusOnRoute]);
 
-  // Focus camera on a specific route
-  const focusOnRoute = useCallback((route: any) => {
-    if (!cameraRef.current || !route.geometry?.coordinates) return;
-
-    const coordinates = route.geometry.coordinates;
-    if (coordinates.length === 0) return;
-
-    // Calculate bounds for the route
-    let minLng = coordinates[0][0];
-    let maxLng = coordinates[0][0];
-    let minLat = coordinates[0][1];
-    let maxLat = coordinates[0][1];
-
-    coordinates.forEach(([lng, lat]: [number, number]) => {
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-    });
-
-    // Add padding to bounds (10%)
-    const lngPadding = (maxLng - minLng) * 0.1;
-    const latPadding = (maxLat - minLat) * 0.1;
-
-    cameraRef.current.fitBounds(
-      [minLng - lngPadding, minLat - latPadding],
-      [maxLng + lngPadding, maxLat + latPadding],
-      [50, 50, 50, 300], // padding: top, right, bottom, left
-      1000 // animation duration
-    );
-  }, []);
-
   // Navigate to route view from location view
   const handleViewRoute = useCallback(() => {
     if (selectedRoute) {
@@ -130,7 +135,85 @@ export default function MapFullscreenModal() {
     setSelectedLocation(null);
     setSelectedRoute(null);
     setSheetView('location');
+    setPendingTransportMode(null);
   }, []);
+
+  // Handle transport mode change
+  const handleTransportModeChange = useCallback(async (mode: string) => {
+    if (!selectedRoute) return;
+
+    console.log('[MapFullscreen] Changing transport mode to:', mode);
+    setPendingTransportMode(mode);
+
+    // Refetch the route with the new transport mode
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+    if (!mapboxToken) return;
+
+    const from = selectedRoute.fromLocation;
+    const to = selectedRoute.toLocation;
+
+    let coordinates;
+    if (to.waypoints && to.waypoints.length > 0) {
+      const waypointCoords = to.waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
+      coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+    } else {
+      coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+    }
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/${mode}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.routes && data.routes[0]) {
+        // Update the route in the routes array
+        const newRoute = {
+          id: selectedRoute.id,
+          geometry: data.routes[0].geometry,
+          colorIndex: to.colorIndex || 0,
+        };
+
+        setRoutes(prevRoutes => {
+          const updatedRoutes = [...prevRoutes];
+          updatedRoutes[selectedRoute.routeIndex] = newRoute;
+          return updatedRoutes;
+        });
+
+        // Update selectedRoute with new geometry
+        setSelectedRoute({
+          ...selectedRoute,
+          geometry: data.routes[0].geometry,
+        });
+
+        console.log('[MapFullscreen] Route updated with new transport mode');
+      }
+    } catch (error) {
+      console.error('[MapFullscreen] Error fetching route:', error);
+    }
+  }, [selectedRoute]);
+
+  // Handle save route changes
+  const handleSaveRouteChanges = useCallback(() => {
+    if (!selectedRoute || !pendingTransportMode) {
+      console.log('[MapFullscreen] No changes to save');
+      handleBackToLocation();
+      return;
+    }
+
+    console.log('[MapFullscreen] Saving transport mode change:', pendingTransportMode);
+
+    // Use setGeoMarkUpdate to update the document
+    setGeoMarkUpdate({
+      geoId: selectedRoute.toLocation.geoId,
+      updatedAttrs: {
+        transportProfile: pendingTransportMode as any,
+      },
+    });
+
+    setPendingTransportMode(null);
+    handleBackToLocation();
+  }, [selectedRoute, pendingTransportMode, setGeoMarkUpdate, handleBackToLocation]);
 
   // Fetch routes between locations
   useEffect(() => {
@@ -208,6 +291,9 @@ export default function MapFullscreenModal() {
         {/* Route lines */}
         {routes.map((route, routeIndex) => {
           const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
+          const isFocused = sheetView === 'route' && selectedRoute?.routeIndex === routeIndex;
+          const isOtherRoute = sheetView === 'route' && selectedRoute?.routeIndex !== routeIndex;
+
           return (
             <Mapbox.ShapeSource
               key={route.id}
@@ -219,8 +305,8 @@ export default function MapFullscreenModal() {
                 id={`${route.id}-line`}
                 style={{
                   lineColor: routeColor,
-                  lineWidth: 5,
-                  lineOpacity: 0.75,
+                  lineWidth: isFocused ? 6 : 5,
+                  lineOpacity: isOtherRoute ? 0.2 : 0.75,
                 }}
               />
             </Mapbox.ShapeSource>
@@ -231,6 +317,13 @@ export default function MapFullscreenModal() {
         {locations.map((location, index) => {
           const colorIndex = (location.colorIndex || 0) % COLORS.length;
           const bgColor = COLORS[colorIndex];
+
+          // Determine if this marker should be muted
+          const isPartOfFocusedRoute = sheetView === 'route' && selectedRoute && (
+            index === selectedRoute.routeIndex || // From location
+            index === selectedRoute.routeIndex + 1 // To location
+          );
+          const shouldMute = sheetView === 'route' && !isPartOfFocusedRoute;
 
           return (
             <Mapbox.MarkerView
@@ -245,7 +338,10 @@ export default function MapFullscreenModal() {
                 <View
                   style={[
                     styles.marker,
-                    { backgroundColor: bgColor }
+                    {
+                      backgroundColor: bgColor,
+                      opacity: shouldMute ? 0.3 : 1.0
+                    }
                   ]}
                 >
                   <View style={styles.markerInner} />
@@ -375,41 +471,40 @@ export default function MapFullscreenModal() {
                     <Text style={styles.sheetLabel}>Transportation Method</Text>
                   </View>
                   <View style={styles.transportOptions}>
-                    {['walking', 'driving', 'cycling'].map((mode) => (
-                      <TouchableOpacity
-                        key={mode}
-                        style={[
-                          styles.transportOption,
-                          selectedRoute.toLocation?.transportProfile === mode && styles.transportOptionActive
-                        ]}
-                        onPress={() => {
-                          console.log('Change transport to:', mode);
-                          // TODO: Update transport mode in document
-                        }}
-                      >
-                        <Ionicons
-                          name={mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bicycle'}
-                          size={24}
-                          color={selectedRoute.toLocation?.transportProfile === mode ? '#007AFF' : '#666'}
-                        />
-                        <Text style={[
-                          styles.transportOptionText,
-                          selectedRoute.toLocation?.transportProfile === mode && styles.transportOptionTextActive
-                        ]}>
-                          {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                    {['walking', 'driving', 'cycling'].map((mode) => {
+                      const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile;
+                      const isActive = currentMode === mode;
+
+                      return (
+                        <TouchableOpacity
+                          key={mode}
+                          style={[
+                            styles.transportOption,
+                            isActive && styles.transportOptionActive
+                          ]}
+                          onPress={() => handleTransportModeChange(mode)}
+                        >
+                          <Ionicons
+                            name={mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bicycle'}
+                            size={24}
+                            color={isActive ? '#007AFF' : '#666'}
+                          />
+                          <Text style={[
+                            styles.transportOptionText,
+                            isActive && styles.transportOptionTextActive
+                          ]}>
+                            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
 
                 {/* Save button */}
                 <TouchableOpacity
                   style={[styles.sheetButton, styles.saveButton]}
-                  onPress={() => {
-                    console.log('Save route changes');
-                    handleBackToLocation();
-                  }}
+                  onPress={handleSaveRouteChanges}
                 >
                   <Ionicons name="checkmark" size={20} color="#fff" />
                   <Text style={[styles.sheetButtonText, styles.saveButtonText]}>Save Changes</Text>

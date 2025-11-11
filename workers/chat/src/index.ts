@@ -167,27 +167,26 @@ export class ChatRoomV2 {
    */
   private async handleAssistRequest(data: any, ws: WebSocket) {
     console.log('[ChatRoom] handleAssistRequest called');
-    const { text, user_id } = data;
+    const { html, user_id } = data;
 
-    if (!text) {
+    if (!html) {
       ws.send(JSON.stringify({
         type: 'error',
-        error: 'Text is required for assist request'
+        error: 'HTML is required for assist request'
       }));
       return;
     }
 
-    try {
-      console.log('[ChatRoom] Generating HTML snippet for:', text);
+    console.log('[ChatRoom] Processing HTML for location extraction:', html);
 
-      // Use LLM to identify locations and their relationships
-      const aiResponse = await this.env.AI.run(
-        "@hf/nousresearch/hermes-2-pro-mistral-7b",
-        {
-          messages: [
-            {
-              role: "system",
-              content: `You are a travel itinerary assistant. Extract ONLY the locations explicitly mentioned in the user's text. Do not add locations, transport modes, or other details that are not in the original text.
+    try {
+      // Extract plain text from HTML for LLM to analyze
+      const plainText = html.replace(/<[^>]*>/g, '');
+
+      // Build system prompt that understands HTML with geo-marks
+      const systemPrompt = `You are a travel itinerary assistant. The user will provide HTML that may contain already-marked locations in <span class="geo-mark"> tags.
+
+Your task: Extract ONLY NEW locations that are NOT already inside geo-mark spans.
 
 Return ONLY valid JSON in this format:
 {
@@ -200,27 +199,49 @@ Return ONLY valid JSON in this format:
   "template": "I want to go to {0}"
 }
 
-Rules:
-- Extract ONLY locations that are explicitly mentioned in the user's text
-- Do NOT invent or add locations that are not in the text
+CRITICAL RULES:
+- DO NOT extract locations that are already inside <span class="geo-mark">...</span> tags
+- ONLY extract plain text locations that are NOT marked yet
+- If ALL locations are already marked, return {"locations": [], "template": ""}
+- Extract ONLY locations explicitly mentioned - do not invent or add locations
 - Do NOT add transport modes unless explicitly stated
 - If transport is mentioned, include transportFrom (previous location) and transportMode
 - Transport modes: "walking", "driving", "cycling", "transit", "flight"
-- Template uses {0}, {1}, {2}, etc. as placeholders for locations in order
-- Keep the exact wording and meaning from the user's text in the template
+- Template uses {0}, {1}, {2}, etc. as placeholders for NEW locations only
+- Keep the exact wording from the user's text
 
 Examples:
-User: "I want to go to Copenhagen"
+
+Example 1 - Plain text (no marks):
+Input HTML: "I want to go to Copenhagen"
 Response: {"locations": [{"name": "Copenhagen", "displayText": "Copenhagen"}], "template": "I want to go to {0}"}
 
-User: "I will cycle from Lejre to Copenhagen"
+Example 2 - Already marked location (skip it):
+Input HTML: "I want to go to <span class="geo-mark" data-geo-id="loc-123">Copenhagen</span>"
+Response: {"locations": [], "template": ""}
+
+Example 3 - Mix of marked and unmarked:
+Input HTML: "I want to go to <span class="geo-mark">Copenhagen</span> and then to Aarhus"
+Response: {"locations": [{"name": "Aarhus", "displayText": "Aarhus"}], "template": "I want to go to Copenhagen and then to {0}"}
+
+Example 4 - Transport between locations:
+Input HTML: "I will cycle from Lejre to Copenhagen"
 Response: {"locations": [{"name": "Lejre", "displayText": "Lejre"}, {"name": "Copenhagen", "displayText": "Copenhagen", "transportFrom": "Lejre", "transportMode": "cycling"}], "template": "I will cycle from {0} to {1}"}
 
-Return ONLY the JSON, no markdown, no explanation.`
+Return ONLY the JSON, no markdown, no explanation.`;
+
+      // Use LLM to identify locations and their relationships
+      const aiResponse = await this.env.AI.run(
+        "@hf/nousresearch/hermes-2-pro-mistral-7b",
+        {
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
             },
             {
               role: "user",
-              content: `Identify locations in:\n\n"${text}"`
+              content: `Extract NEW locations from this HTML (skip locations already in geo-mark spans):\n\n${html}`
             }
           ]
         }
@@ -247,7 +268,18 @@ Return ONLY the JSON, no markdown, no explanation.`
         return;
       }
 
-      console.log('[ChatRoom] Found', locationsData.locations.length, 'locations to geocode');
+      console.log('[ChatRoom] Found', locationsData.locations.length, 'NEW locations to geocode');
+
+      // If no new locations, return empty array (all locations already marked)
+      if (locationsData.locations.length === 0) {
+        console.log('[ChatRoom] No new locations found - all locations already marked');
+        ws.send(JSON.stringify({
+          type: 'assist_complete',
+          replacements: [],
+          locations: []
+        }));
+        return;
+      }
 
       // Geocode each location using client tool delegation
       const geocodedLocations: any[] = [];
@@ -802,7 +834,7 @@ export default {
     // Extract locations endpoint - uses LLM to detect locations in text
     if (url.pathname === "/api/extract-locations" && request.method === "POST") {
       try {
-        const { text } = await request.json();
+        const { text, existingLocations } = await request.json();
 
         if (!text || typeof text !== 'string') {
           return new Response(
@@ -812,15 +844,10 @@ export default {
         }
 
         console.log('[ExtractLocations] Processing text:', text);
+        console.log('[ExtractLocations] Existing locations:', existingLocations);
 
-        // Call AI to extract locations
-        const response = await env.AI.run(
-          "@hf/nousresearch/hermes-2-pro-mistral-7b",
-          {
-            messages: [
-              {
-                role: "system",
-                content: `You are a travel itinerary assistant. Convert the user's text into a structured ProseMirror document with geo-marks for locations and transportation information.
+        // Build system prompt with existing locations info
+        let systemPrompt = `You are a travel itinerary assistant. Convert the user's text into a structured ProseMirror document with geo-marks for locations and transportation information.
 
 Return ONLY valid JSON in this exact ProseMirror format:
 {
@@ -863,9 +890,26 @@ Rules:
 - Transport profiles: "walking", "driving", "cycling", "transit", "flight"
 - Keep the original text's natural language
 - Do not include lat/lng - frontend will geocode using placeName
-- Do NOT add any extra marks to text nodes, only plain text and geoMark nodes
+- Do NOT add any extra marks to text nodes, only plain text and geoMark nodes`;
 
-Return ONLY the JSON, no markdown, no explanation.`
+        // Add existing locations info if provided
+        if (existingLocations && Array.isArray(existingLocations) && existingLocations.length > 0) {
+          systemPrompt += `\n\nIMPORTANT: The following locations are ALREADY MARKED in the document with geo-marks. DO NOT create new geo-marks for these locations:
+${existingLocations.map((loc: string) => `- ${loc}`).join('\n')}
+
+When you see these location names in the text, leave them as plain text nodes (not geo-marks). Only create geo-marks for NEW locations that are not in this list.`;
+        }
+
+        systemPrompt += `\n\nReturn ONLY the JSON, no markdown, no explanation.`;
+
+        // Call AI to extract locations
+        const response = await env.AI.run(
+          "@hf/nousresearch/hermes-2-pro-mistral-7b",
+          {
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
               },
               {
                 role: "user",

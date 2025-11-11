@@ -200,9 +200,9 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
       sendMessageInternal(message);
     }, [isReady, sendMessageInternal]);
 
-    // Handle assist trigger - use WebSocket with tool delegation
-    const handleAssistTrigger = useCallback(async (draftText: string) => {
-      console.log('[ProseMirrorWebView] Processing assist trigger for draft text:', draftText);
+    // Handle assist trigger - use WebSocket with tool delegation (HTML-based v2)
+    const handleAssistTrigger = useCallback(async (html: string) => {
+      console.log('[ProseMirrorWebView] 🔥 NEW VERSION - Processing HTML with geo-marks:', html);
 
       try {
         const CHAT_WS_URL = process.env.EXPO_PUBLIC_CHAT_WS_URL || 'wss://tourvision-chat.mads-9b9.workers.dev';
@@ -217,7 +217,7 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
           console.log('[ProseMirrorWebView] WebSocket connected, sending assist request');
           ws.send(JSON.stringify({
             type: 'assist_request',
-            text: draftText,
+            html: html,
             user_id: 'current-user' // TODO: Get from auth context
           }));
         };
@@ -423,11 +423,10 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               console.log('[ProseMirrorWebView] Draft text:', data.draftText);
               console.log('[ProseMirrorWebView] Has draft:', data.hasDraft);
 
-              // Process text with LLM for location extraction
-              // Use draft text if available (legacy), otherwise use full text (draft feature disabled)
-              const textToProcess = data.hasDraft && data.draftText ? data.draftText : data.text;
-              if (textToProcess) {
-                handleAssistTrigger(textToProcess);
+              // Process HTML with LLM for location extraction
+              // HTML preserves existing geo-marks so LLM can skip them
+              if (data.html) {
+                handleAssistTrigger(data.html);
               }
               break;
 
