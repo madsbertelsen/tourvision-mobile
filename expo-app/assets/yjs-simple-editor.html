@@ -75,26 +75,64 @@
   <div id="status" class="disconnected">Disconnected</div>
   <div id="editor"></div>
 
-  <!-- Load dependencies from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/yjs@13/dist/yjs.mjs" type="module"></script>
-  <script type="module">
-    // Import dependencies
-    import * as Y from 'https://cdn.jsdelivr.net/npm/yjs@13/dist/yjs.mjs';
-    import { WebsocketProvider } from 'https://cdn.jsdelivr.net/npm/y-websocket@1/dist/y-websocket.mjs';
+  <!-- Load dependencies from CDN (IIFE/UMD builds for React Native WebView) -->
+  <script src="https://cdn.jsdelivr.net/npm/yjs@13.6.18/dist/yjs.iife.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/y-websocket@1.5.0/dist/y-websocket.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-model@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-state@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-view@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-schema-basic@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-keymap@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-commands@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-history@1/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/y-prosemirror@1/dist/y-prosemirror.js"></script>
 
-    // ProseMirror imports (using unpkg)
-    import { EditorState } from 'https://unpkg.com/prosemirror-state@1/dist/index.js';
-    import { EditorView } from 'https://unpkg.com/prosemirror-view@1/dist/index.js';
-    import { Schema, DOMParser } from 'https://unpkg.com/prosemirror-model@1/dist/index.js';
-    import { schema as basicSchema } from 'https://unpkg.com/prosemirror-schema-basic@1/dist/index.js';
-    import { keymap } from 'https://unpkg.com/prosemirror-keymap@1/dist/index.js';
-    import { baseKeymap } from 'https://unpkg.com/prosemirror-commands@1/dist/index.js';
-    import { history, undo, redo } from 'https://unpkg.com/prosemirror-history@1/dist/index.js';
+  <script>
+    // Override console.log to send messages to React Native
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
 
-    // Y-ProseMirror
-    import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo } from 'https://unpkg.com/y-prosemirror@1/dist/y-prosemirror.js';
+    console.log = function(...args) {
+      originalConsoleLog.apply(console, args);
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+        }));
+      }
+    };
+
+    console.error = function(...args) {
+      originalConsoleError.apply(console, args);
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'error',
+          message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+        }));
+      }
+    };
+
+    // Access libraries from global scope (IIFE builds)
 
     console.log('[Editor] Starting simple Y.js ProseMirror editor');
+
+    // Check if libraries loaded
+    if (typeof Y === 'undefined') {
+      console.error('[Editor] Y.js not loaded!');
+      document.getElementById('status').textContent = 'Error: Y.js not loaded';
+      throw new Error('Y.js not loaded');
+    }
+    if (typeof yWebsocket === 'undefined') {
+      console.error('[Editor] y-websocket not loaded!');
+      document.getElementById('status').textContent = 'Error: y-websocket not loaded';
+      throw new Error('y-websocket not loaded');
+    }
+
+    console.log('[Editor] Libraries loaded:', {
+      Y: typeof Y,
+      yWebsocket: typeof yWebsocket,
+      PM: typeof PM
+    });
 
     // HARDCODED CONFIGURATION
     const DOCUMENT_ID = '1b6d8dd9-e031-42b6-b554-5eb194c01526';
@@ -114,11 +152,10 @@
     });
 
     // Connect to WebSocket server
-    // Note: Using standard y-websocket for now since y-partyserver has same protocol
     const wsUrl = `${WS_URL}/parties/${ROOM_NAME}/${DOCUMENT_ID}`;
     console.log('[Editor] Connecting to:', wsUrl);
 
-    const provider = new WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
+    const provider = new yWebsocket.WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
       awareness: awareness,
       connect: true
     });
@@ -143,6 +180,17 @@
 
     // Create ProseMirror editor
     const editorContainer = document.getElementById('editor');
+
+    // Access ProseMirror from global namespace
+    const { EditorState } = PM.state;
+    const { EditorView } = PM.view;
+    const { schema: basicSchema } = PM.schemaBasic;
+    const { keymap } = PM.keymap;
+    const { baseKeymap } = PM.commands;
+    const { history } = PM.history;
+
+    // Access y-prosemirror from global namespace
+    const { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo: yUndo, redo: yRedo } = yProsemirror;
 
     const state = EditorState.create({
       schema: basicSchema,
