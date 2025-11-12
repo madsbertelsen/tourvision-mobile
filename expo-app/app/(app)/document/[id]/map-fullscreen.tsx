@@ -32,6 +32,11 @@ export default function MapFullscreenModal() {
   // Pending transport mode change (before saving)
   const [pendingTransportMode, setPendingTransportMode] = useState<string | null>(null);
 
+  // Waypoints for custom routing
+  const [pendingWaypoints, setPendingWaypoints] = useState<Array<{lat: number; lng: number; name?: string}>>([]);
+  const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
+  const [draggingWaypointIndex, setDraggingWaypointIndex] = useState<number | null>(null);
+
   // Bottom sheet ref and snap points
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
@@ -95,8 +100,46 @@ export default function MapFullscreenModal() {
   }, []);
 
   // Handle route line press
-  const handleRoutePress = useCallback((route: any, routeIndex: number) => {
-    console.log('[MapFullscreen] Route pressed:', route.id);
+  const handleRoutePress = useCallback((route: any, routeIndex: number, event?: any) => {
+    console.log('[MapFullscreen] Route pressed:', {
+      routeId: route.id,
+      routeIndex,
+      isAddingWaypoint,
+      hasEvent: !!event,
+      hasCoordinates: !!event?.coordinates,
+      coordinates: event?.coordinates,
+      eventDetails: JSON.stringify(event, null, 2)
+    });
+
+    // If in waypoint adding mode, add a waypoint at the press location
+    if (isAddingWaypoint && event?.coordinates) {
+      const { longitude: lng, latitude: lat } = event.coordinates;
+      console.log('[MapFullscreen] Adding waypoint at:', lat, lng);
+      setPendingWaypoints(prev => [...prev, { lat, lng }]);
+      setIsAddingWaypoint(false);
+
+      // Recalculate route with new waypoint
+      setTimeout(() => {
+        if (selectedRoute) {
+          const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile || 'walking';
+          handleTransportModeChange(currentMode);
+        }
+      }, 100);
+
+      return; // Don't show bottom sheet
+    }
+
+    if (isAddingWaypoint && !event?.coordinates) {
+      console.log('[MapFullscreen] In adding waypoint mode but no coordinates in event!');
+      return; // Don't show bottom sheet
+    }
+
+    // If we're currently viewing this route, don't reopen the sheet
+    if (sheetView === 'route' && selectedRoute?.routeIndex === routeIndex) {
+      console.log('[MapFullscreen] Route already selected, ignoring press');
+      return;
+    }
+
     const fromLocation = locations[routeIndex];
     const toLocation = locations[routeIndex + 1];
 
@@ -110,16 +153,24 @@ export default function MapFullscreenModal() {
     setSelectedRoute(enrichedRoute);
     setSelectedLocation(toLocation); // Keep location for context
     setSheetView('route');
+
+    // Initialize pendingWaypoints with existing waypoints
+    setPendingWaypoints(toLocation.waypoints || []);
+
     bottomSheetRef.current?.expand();
 
     // Focus camera on the route
     setTimeout(() => focusOnRoute(enrichedRoute), 100);
-  }, [locations, focusOnRoute]);
+  }, [locations, focusOnRoute, isAddingWaypoint, selectedRoute, pendingTransportMode, sheetView]);
 
   // Navigate to route view from location view
   const handleViewRoute = useCallback(() => {
     if (selectedRoute) {
       setSheetView('route');
+
+      // Initialize pendingWaypoints with existing waypoints
+      setPendingWaypoints(selectedRoute.toLocation?.waypoints || []);
+
       // Focus camera on the route
       setTimeout(() => focusOnRoute(selectedRoute), 100);
     }
@@ -136,7 +187,77 @@ export default function MapFullscreenModal() {
     setSelectedRoute(null);
     setSheetView('location');
     setPendingTransportMode(null);
+    setPendingWaypoints([]);
+    setIsAddingWaypoint(false);
   }, []);
+
+  // Handle add waypoint mode
+  const handleAddWaypointMode = useCallback(() => {
+    setIsAddingWaypoint(true);
+    bottomSheetRef.current?.snapToIndex(0); // Minimize sheet to see map better
+  }, []);
+
+  // Handle map press to move waypoint (during drag)
+  const handleMapPress = useCallback((event: any) => {
+    console.log('[MapFullscreen] Map pressed:', {
+      draggingWaypointIndex,
+      isAddingWaypoint,
+      hasGeometry: !!event?.geometry,
+      hasCoordinates: !!event?.geometry?.coordinates,
+      geometryCoordinates: event?.geometry?.coordinates,
+      event: JSON.stringify(event, null, 2)
+    });
+
+    // If we're dragging a waypoint, update its position
+    if (draggingWaypointIndex !== null) {
+      // Map press events have geometry.coordinates [lng, lat]
+      if (!event?.geometry?.coordinates) {
+        console.log('[MapFullscreen] No geometry.coordinates in event for dragging');
+        return;
+      }
+
+      const [lng, lat] = event.geometry.coordinates;
+      console.log('[MapFullscreen] Moving waypoint', draggingWaypointIndex, 'to:', lat, lng);
+
+      setPendingWaypoints(prev => {
+        const updated = [...prev];
+        updated[draggingWaypointIndex] = { lat, lng };
+        return updated;
+      });
+
+      // Recalculate route with moved waypoint
+      setTimeout(() => {
+        if (selectedRoute) {
+          const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile || 'walking';
+          handleTransportModeChange(currentMode);
+        }
+      }, 100);
+
+      setDraggingWaypointIndex(null);
+      return;
+    }
+  }, [draggingWaypointIndex, selectedRoute, pendingTransportMode, isAddingWaypoint]);
+
+  // Handle start dragging waypoint
+  const handleStartDragWaypoint = useCallback((index: number) => {
+    console.log('[MapFullscreen] Starting drag for waypoint:', index);
+    setDraggingWaypointIndex(index);
+    bottomSheetRef.current?.snapToIndex(0); // Minimize sheet to see map better
+  }, []);
+
+  // Handle remove waypoint
+  const handleRemoveWaypoint = useCallback((index: number) => {
+    console.log('[MapFullscreen] Removing waypoint at index:', index);
+    setPendingWaypoints(prev => prev.filter((_, i) => i !== index));
+
+    // Recalculate route without this waypoint
+    setTimeout(() => {
+      if (selectedRoute) {
+        const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile || 'walking';
+        handleTransportModeChange(currentMode);
+      }
+    }, 100);
+  }, [selectedRoute, pendingTransportMode]);
 
   // Handle transport mode change
   const handleTransportModeChange = useCallback(async (mode: string) => {
@@ -152,9 +273,12 @@ export default function MapFullscreenModal() {
     const from = selectedRoute.fromLocation;
     const to = selectedRoute.toLocation;
 
+    // Use pendingWaypoints if any, otherwise fall back to existing waypoints
     let coordinates;
-    if (to.waypoints && to.waypoints.length > 0) {
-      const waypointCoords = to.waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
+    const waypoints = pendingWaypoints.length > 0 ? pendingWaypoints : (to.waypoints || []);
+
+    if (waypoints.length > 0) {
+      const waypointCoords = waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
       coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
     } else {
       coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
@@ -186,40 +310,49 @@ export default function MapFullscreenModal() {
           geometry: data.routes[0].geometry,
         });
 
-        console.log('[MapFullscreen] Route updated with new transport mode');
+        console.log('[MapFullscreen] Route updated with new transport mode and waypoints:', waypoints.length);
       }
     } catch (error) {
       console.error('[MapFullscreen] Error fetching route:', error);
     }
-  }, [selectedRoute]);
+  }, [selectedRoute, pendingWaypoints]);
 
   // Handle save route changes
   const handleSaveRouteChanges = useCallback(() => {
-    if (!selectedRoute || !pendingTransportMode) {
+    if (!selectedRoute || (!pendingTransportMode && pendingWaypoints.length === 0)) {
       console.log('[MapFullscreen] No changes to save');
       handleBackToLocation();
       return;
     }
 
-    console.log('[MapFullscreen] Saving transport mode change:', {
+    console.log('[MapFullscreen] Saving route changes:', {
       geoId: selectedRoute.toLocation.geoId,
       oldTransportProfile: selectedRoute.toLocation?.transportProfile,
       newTransportProfile: pendingTransportMode,
+      waypoints: pendingWaypoints,
     });
+
+    // Build updated attributes
+    const updatedAttrs: any = {};
+    if (pendingTransportMode) {
+      updatedAttrs.transportProfile = pendingTransportMode;
+    }
+    if (pendingWaypoints.length > 0) {
+      updatedAttrs.waypoints = pendingWaypoints;
+    }
 
     // Use setGeoMarkUpdate to update the document
     setGeoMarkUpdate({
       geoId: selectedRoute.toLocation.geoId,
-      updatedAttrs: {
-        transportProfile: pendingTransportMode as any,
-      },
+      updatedAttrs,
     });
 
-    console.log('[MapFullscreen] geoMarkUpdate set, clearing pendingTransportMode');
+    console.log('[MapFullscreen] geoMarkUpdate set, clearing pending changes');
     setPendingTransportMode(null);
+    setPendingWaypoints([]);
     console.log('[MapFullscreen] Navigating back to location view');
     handleBackToLocation();
-  }, [selectedRoute, pendingTransportMode, setGeoMarkUpdate, handleBackToLocation]);
+  }, [selectedRoute, pendingTransportMode, pendingWaypoints, setGeoMarkUpdate, handleBackToLocation]);
 
   // Fetch routes between locations
   useEffect(() => {
@@ -283,6 +416,7 @@ export default function MapFullscreenModal() {
       <Mapbox.MapView
         style={styles.map}
         styleURL="mapbox://styles/mapbox/light-v11"
+        onPress={handleMapPress}
       >
         <Mapbox.Camera
           ref={cameraRef}
@@ -305,8 +439,18 @@ export default function MapFullscreenModal() {
               key={route.id}
               id={route.id}
               shape={route.geometry}
-              onPress={() => handleRoutePress(route, routeIndex)}
+              onPress={(event) => handleRoutePress(route, routeIndex, event)}
             >
+              {/* Invisible wider hit area for easier tapping */}
+              <Mapbox.LineLayer
+                id={`${route.id}-hit-area`}
+                style={{
+                  lineColor: 'transparent',
+                  lineWidth: isAddingWaypoint ? 30 : 15, // Much wider when adding waypoints
+                  lineOpacity: 1,
+                }}
+              />
+              {/* Visible route line */}
               <Mapbox.LineLayer
                 id={`${route.id}-line`}
                 style={{
@@ -318,6 +462,66 @@ export default function MapFullscreenModal() {
             </Mapbox.ShapeSource>
           );
         })}
+
+        {/* Waypoint markers */}
+        {pendingWaypoints.map((waypoint, index) => (
+          <React.Fragment key={`waypoint-${index}`}>
+            {/* Invisible PointAnnotation for drag handling */}
+            <Mapbox.PointAnnotation
+              draggable={true}
+              id={`waypoint-draggable-${index}`}
+              coordinate={[waypoint.lng, waypoint.lat]}
+              anchor={{ x: 0.5, y: 0.5 }}
+              onDragStart={() => {
+                console.log('[MapFullscreen] Drag started for waypoint:', index);
+                setDraggingWaypointIndex(index);
+              }}
+              onDrag={(event) => {
+                const [lng, lat] = event.geometry.coordinates;
+                setPendingWaypoints(prev => {
+                  const updated = [...prev];
+                  updated[index] = { lat, lng };
+                  return updated;
+                });
+              }}
+              onDragEnd={(event) => {
+                const [lng, lat] = event.geometry.coordinates;
+                console.log('[MapFullscreen] Drag ended for waypoint:', index, 'at:', lat, lng);
+                setPendingWaypoints(prev => {
+                  const updated = [...prev];
+                  updated[index] = { lat, lng };
+                  return updated;
+                });
+                setDraggingWaypointIndex(null);
+
+                // Recalculate route
+                setTimeout(() => {
+                  if (selectedRoute) {
+                    const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile || 'walking';
+                    handleTransportModeChange(currentMode);
+                  }
+                }, 100);
+              }}
+            >
+              {/* Invisible content */}
+              <View style={{ width: 28, height: 28, opacity: 0 }} />
+            </Mapbox.PointAnnotation>
+
+            {/* Visible MarkerView */}
+            <Mapbox.MarkerView
+              id={`waypoint-visual-${index}`}
+              coordinate={[waypoint.lng, waypoint.lat]}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={[
+                styles.waypointMarker,
+                draggingWaypointIndex === index && styles.waypointMarkerDragging
+              ]}>
+                <Text style={styles.waypointNumber}>{index + 1}</Text>
+              </View>
+            </Mapbox.MarkerView>
+          </React.Fragment>
+        ))}
 
         {/* Location markers */}
         {locations.map((location, index) => {
@@ -507,6 +711,85 @@ export default function MapFullscreenModal() {
                   </View>
                 </View>
 
+                {/* Waypoints Section */}
+                <View style={styles.sheetSection}>
+                  <View style={styles.sheetRow}>
+                    <Ionicons name="location-outline" size={20} color="#666" />
+                    <Text style={styles.sheetLabel}>Waypoints</Text>
+                  </View>
+
+                  {/* List of waypoints */}
+                  {pendingWaypoints.length > 0 ? (
+                    <View style={styles.waypointsList}>
+                      {pendingWaypoints.map((waypoint, index) => (
+                        <View key={index} style={styles.waypointItem}>
+                          <View style={styles.waypointInfo}>
+                            <View style={styles.waypointNumberBadge}>
+                              <Text style={styles.waypointNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.waypointCoords}>
+                              {waypoint.lat.toFixed(5)}, {waypoint.lng.toFixed(5)}
+                            </Text>
+                          </View>
+                          <View style={styles.waypointActions}>
+                            <TouchableOpacity
+                              onPress={() => handleStartDragWaypoint(index)}
+                              style={styles.waypointActionButton}
+                            >
+                              <Ionicons name="move" size={20} color="#007AFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => handleRemoveWaypoint(index)}
+                              style={styles.waypointActionButton}
+                            >
+                              <Ionicons name="close-circle" size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* Instructions */}
+                  {isAddingWaypoint ? (
+                    <View style={styles.instructionBox}>
+                      <Ionicons name="information-circle" size={20} color="#007AFF" />
+                      <Text style={styles.instructionText}>
+                        Tap on the route line to add a waypoint
+                      </Text>
+                    </View>
+                  ) : draggingWaypointIndex !== null ? (
+                    <View style={styles.instructionBox}>
+                      <Ionicons name="information-circle" size={20} color="#007AFF" />
+                      <Text style={styles.instructionText}>
+                        Dragging waypoint {draggingWaypointIndex + 1}...
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.instructionBox}>
+                      <Ionicons name="information-circle-outline" size={20} color="#666" />
+                      <Text style={[styles.instructionText, { color: '#666' }]}>
+                        Tap route to add • Drag waypoints to move
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Add waypoint button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetButton,
+                      styles.addWaypointButton,
+                      isAddingWaypoint && styles.addWaypointButtonActive
+                    ]}
+                    onPress={handleAddWaypointMode}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={isAddingWaypoint ? '#666' : '#007AFF'} />
+                    <Text style={[styles.sheetButtonText, isAddingWaypoint && { color: '#666' }]}>
+                      {isAddingWaypoint ? 'Adding waypoint...' : 'Add Waypoint'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
                 {/* Save button */}
                 <TouchableOpacity
                   style={[styles.sheetButton, styles.saveButton]}
@@ -689,5 +972,101 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: '#fff',
+  },
+  waypointMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F59E0B',
+    borderWidth: 2,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  waypointNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'white',
+  },
+  waypointsList: {
+    marginTop: 8,
+    marginLeft: 28,
+    gap: 8,
+  },
+  waypointItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  waypointInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  waypointNumberBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waypointNumberText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'white',
+  },
+  waypointCoords: {
+    fontSize: 13,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  waypointActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  waypointActionButton: {
+    padding: 4,
+  },
+  waypointRemoveButton: {
+    padding: 4,
+  },
+  addWaypointButton: {
+    marginTop: 8,
+    marginLeft: 28,
+    backgroundColor: '#f0f8ff',
+  },
+  addWaypointButtonActive: {
+    backgroundColor: '#e0e0e0',
+  },
+  waypointMarkerDragging: {
+    opacity: 0.6,
+    transform: [{ scale: 1.2 }],
+  },
+  instructionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginLeft: 28,
+    padding: 10,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1E7FF',
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#007AFF',
+    lineHeight: 18,
   },
 });
