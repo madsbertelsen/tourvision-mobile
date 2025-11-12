@@ -13,6 +13,7 @@
 
 import * as Y from 'yjs';
 import YProvider from 'y-partyserver/provider';
+import { Awareness } from 'y-protocols/awareness.js';
 import WebSocket from 'ws';
 
 // Polyfill WebSocket for Node.js
@@ -42,6 +43,61 @@ async function startAgent() {
 
     // Get the ProseMirror XML fragment (standard Y.js structure for ProseMirror)
     const type = ydoc.getXmlFragment('prosemirror');
+
+    // Create awareness for presence/cursor tracking
+    const awareness = new Awareness(ydoc);
+
+    // Set local awareness state (identify as local agent)
+    awareness.setLocalStateField('user', {
+      id: 'local-agent',
+      name: 'Local Agent',
+      color: '#FF6B6B' // Red color for agent
+    });
+
+    console.log('[Agent] Awareness initialized with clientID:', ydoc.clientID);
+
+    // Listen to awareness changes (cursor positions, selections, presence)
+    awareness.on('change', ({ added, updated, removed }) => {
+      console.log('\n[Agent] 👁️  Awareness changed!');
+
+      if (added.length > 0) {
+        console.log(`[Agent] Users joined: ${added.length}`);
+        added.forEach(clientId => {
+          const state = awareness.getStates().get(clientId);
+          console.log(`  - Client ${clientId}:`, state?.user);
+        });
+      }
+
+      if (updated.length > 0) {
+        console.log(`[Agent] Users updated: ${updated.length}`);
+        updated.forEach(clientId => {
+          const state = awareness.getStates().get(clientId);
+          if (state?.user) {
+            console.log(`  - Client ${clientId}: ${state.user.name}`);
+          }
+          // Check for cursor/selection data
+          if (state?.cursor) {
+            console.log(`    Cursor: anchor=${state.cursor.anchor}, head=${state.cursor.head}`);
+          }
+        });
+      }
+
+      if (removed.length > 0) {
+        console.log(`[Agent] Users left: ${removed.length}`);
+        removed.forEach(clientId => {
+          console.log(`  - Client ${clientId} disconnected`);
+        });
+      }
+
+      // Log current active users
+      const activeUsers = Array.from(awareness.getStates().entries())
+        .filter(([id]) => id !== ydoc.clientID)
+        .map(([id, state]) => ({ id, name: state?.user?.name }));
+
+      if (activeUsers.length > 0) {
+        console.log(`[Agent] Active users (${activeUsers.length}):`, activeUsers);
+      }
+    });
 
     // Set up observer for document changes
     let isInitialSync = true;
@@ -95,6 +151,7 @@ async function startAgent() {
       ydoc,
       {
         party: PARTY_NAME,
+        awareness: awareness,  // Pass awareness for presence/cursor tracking
         connect: true,
       }
     );
