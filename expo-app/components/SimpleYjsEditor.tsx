@@ -162,11 +162,13 @@ export default function SimpleYjsEditor() {
         connect: true
       });
 
-      // Wait for initial sync, then clear document if it has incompatible content
+      // Wait for initial sync, then clear document and enable sync plugin
+      let syncEnabled = false;
       provider.on('synced', ({ synced }) => {
-        if (synced) {
+        if (synced && !syncEnabled) {
           console.log('[Editor] Initial sync complete');
-          // Check if document has content
+
+          // Clear incompatible content
           if (type.length > 0) {
             console.log('[Editor] Document has existing content, clearing for fresh start...');
             ydoc.transact(() => {
@@ -174,6 +176,13 @@ export default function SimpleYjsEditor() {
             });
             console.log('[Editor] Document cleared');
           }
+
+          // Recreate editor with sync plugin enabled
+          console.log('[Editor] Enabling sync plugin...');
+          view.destroy();
+          view = createEditor(true);
+          syncEnabled = true;
+          console.log('[Editor] Sync enabled, ready for collaboration');
         }
       });
 
@@ -204,10 +213,11 @@ export default function SimpleYjsEditor() {
 
       const editorContainer = document.getElementById('editor');
 
-      const state = EditorState.create({
-        schema: schema,
-        plugins: [
-          ySyncPlugin(type),
+      // Create editor without ySync plugin initially to avoid processing incompatible content
+      let view;
+
+      const createEditor = (includeSync = false) => {
+        const plugins = [
           yCursorPlugin(awareness),
           yUndoPlugin(),
           keymap({
@@ -217,12 +227,23 @@ export default function SimpleYjsEditor() {
           }),
           keymap(baseKeymap),
           history()
-        ]
-      });
+        ];
 
-      const view = new EditorView(editorContainer, {
-        state
-      });
+        // Only add sync plugin if requested
+        if (includeSync) {
+          plugins.unshift(ySyncPlugin(type));
+        }
+
+        const state = EditorState.create({
+          schema: schema,
+          plugins
+        });
+
+        return new EditorView(editorContainer, { state });
+      };
+
+      // Start without sync
+      view = createEditor(false);
 
       console.log('[Editor] ProseMirror editor created');
       console.log('[Editor] Document ID:', DOCUMENT_ID);
