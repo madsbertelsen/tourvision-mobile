@@ -177,10 +177,40 @@ async function startAgent() {
     console.log('\n[Agent] 👂 Listening for document changes...');
     console.log('[Agent] Press Ctrl+C to stop\n');
 
+    // Test: Move cursor to random position every 10 seconds
+    let testInterval = setInterval(() => {
+      try {
+        // Get document length
+        const docLength = type.length;
+
+        if (docLength === 0) {
+          console.log('[Agent] 🎯 Document is empty, skipping cursor update');
+          return;
+        }
+
+        // Generate random position within document
+        const randomPos = Math.floor(Math.random() * docLength);
+
+        // Update awareness with cursor position
+        // ProseMirror cursor format: { anchor, head }
+        // anchor = start of selection, head = end of selection
+        // For a cursor (no selection), anchor === head
+        awareness.setLocalStateField('cursor', {
+          anchor: randomPos,
+          head: randomPos
+        });
+
+        console.log(`\n[Agent] 🎯 Moving cursor to position ${randomPos} (doc length: ${docLength})`);
+      } catch (error) {
+        console.error('[Agent] Error updating cursor:', error);
+      }
+    }, 10000); // Every 10 seconds
+
     // Keep the process running
     // Graceful shutdown
     process.on('SIGINT', () => {
       console.log('\n[Agent] Shutting down...');
+      clearInterval(testInterval);
       provider.destroy();
       process.exit(0);
     });
