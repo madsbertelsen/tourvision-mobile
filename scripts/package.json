@@ -1,0 +1,14 @@
+{
+  "name": "tourvision-local-agent",
+  "version": "1.0.0",
+  "description": "Local agent for Y.js document synchronization",
+  "type": "module",
+  "scripts": {
+    "agent": "node local-agent-yjs.js"
+  },
+  "dependencies": {
+    "yjs": "^13.6.10",
+    "y-partyserver": "^0.0.51",
+    "ws": "^8.16.0"
+  }
+}
