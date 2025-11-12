@@ -162,6 +162,21 @@ export default function SimpleYjsEditor() {
         connect: true
       });
 
+      // Wait for initial sync, then clear document if it has incompatible content
+      provider.on('synced', ({ synced }) => {
+        if (synced) {
+          console.log('[Editor] Initial sync complete');
+          // Check if document has content
+          if (type.length > 0) {
+            console.log('[Editor] Document has existing content, clearing for fresh start...');
+            ydoc.transact(() => {
+              type.delete(0, type.length);
+            });
+            console.log('[Editor] Document cleared');
+          }
+        }
+      });
+
       // Get awareness from provider
       const awareness = provider.awareness;
       awareness.setLocalStateField('user', {
