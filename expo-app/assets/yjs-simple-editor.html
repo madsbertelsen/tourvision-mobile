@@ -88,28 +88,36 @@
   <script src="https://cdn.jsdelivr.net/npm/y-prosemirror@1/dist/y-prosemirror.js"></script>
 
   <script>
-    // Override console.log to send messages to React Native
+    // Override console.log to send messages to React Native or parent window
     const originalConsoleLog = console.log;
     const originalConsoleError = console.error;
 
+    function postMessageToParent(data) {
+      const message = JSON.stringify(data);
+      // Try React Native WebView first
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(message);
+      }
+      // Try iframe parent window
+      else if (window.parent !== window) {
+        window.parent.postMessage(message, '*');
+      }
+    }
+
     console.log = function(...args) {
       originalConsoleLog.apply(console, args);
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log',
-          message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
-        }));
-      }
+      postMessageToParent({
+        type: 'log',
+        message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+      });
     };
 
     console.error = function(...args) {
       originalConsoleError.apply(console, args);
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'error',
-          message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
-        }));
-      }
+      postMessageToParent({
+        type: 'error',
+        message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+      });
     };
 
     // Access libraries from global scope (IIFE builds)

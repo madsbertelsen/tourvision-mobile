@@ -7,17 +7,60 @@
  * Purpose: Test basic Y.js collaboration without complex editor features
  */
 
-import React, { useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, View, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Asset } from 'expo-asset';
 
 export default function SimpleYjsEditor() {
   const webViewRef = useRef<WebView>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Load the simple editor HTML
   const htmlAsset = Asset.fromModule(require('@/assets/yjs-simple-editor.html'));
 
+  // On web, set up iframe message listener
+  useEffect(() => {
+    if (Platform.OS === 'web' && iframeRef.current) {
+      const handleMessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[SimpleYjsEditor] Message from iframe:', data);
+        } catch (e) {
+          console.log('[SimpleYjsEditor] iframe message:', event.data);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, []);
+
+  // On web, use iframe instead of WebView
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <iframe
+          ref={iframeRef as any}
+          src={htmlAsset.uri || '/assets/yjs-simple-editor.html'}
+          style={{
+            flex: 1,
+            width: '100%',
+            height: '100%',
+            border: 'none',
+          }}
+          onLoad={() => {
+            console.log('[SimpleYjsEditor] iframe loaded');
+          }}
+          onError={(error) => {
+            console.error('[SimpleYjsEditor] iframe error:', error);
+          }}
+        />
+      </View>
+    );
+  }
+
+  // On native, use WebView
   return (
     <View style={styles.container}>
       <WebView
