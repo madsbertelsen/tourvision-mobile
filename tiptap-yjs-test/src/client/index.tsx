@@ -42,7 +42,7 @@ function ProseMirrorEditor() {
 
     // Create YProvider
     const prov = new YProvider(
-      window.location.host,
+      "localhost:8787",  // Connect to Wrangler server, not Vite dev server
       "y-partyserver-text-editor-example",
       yDoc,
       {
@@ -81,6 +81,18 @@ function ProseMirrorEditor() {
     });
     prov.on("status", ({ status }: { status: string }) => {
       console.log("Provider status:", status);
+    });
+
+    // Log awareness changes
+    prov.awareness.on("change", () => {
+      const states = prov.awareness.getStates();
+      console.log(`[Client] Awareness change - ${states.size} users connected`);
+      states.forEach((state, clientId) => {
+        console.log(`  Client ${clientId}: ${state.user?.name || 'no-name'}`, {
+          color: state.user?.color,
+          hasCursor: !!state.cursor
+        });
+      });
     });
 
     // Custom cursor builder for remote users

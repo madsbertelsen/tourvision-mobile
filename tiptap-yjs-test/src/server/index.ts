@@ -16,6 +16,7 @@ export class Document extends YServer<Env> {
     debounceMaxWait: 10000,
     timeout: 10000
   };
+
   async onStart() {
     console.log("onStart", this.name);
     this.ctx.storage.sql.exec(
@@ -72,6 +73,28 @@ export class Document extends YServer<Env> {
         this.broadcastCustomMessage(
           JSON.stringify({ action: "notification", text: "Someone pinged!" }),
           connection
+        );
+      } else if (data.action === "agent_hello") {
+        console.log(`[Server] Agent connected: ${data.name}`);
+
+        // Reply to agent
+        this.sendCustomMessage(
+          connection,
+          JSON.stringify({ action: "hello_ack", message: "Welcome, AI Agent!" })
+        );
+
+        // Broadcast to all other clients
+        this.broadcastCustomMessage(
+          JSON.stringify({ action: "notification", text: `${data.name} has joined!` }),
+          connection
+        );
+      } else if (data.action === "agent_ping") {
+        console.log(`[Server] Agent ping at ${data.timestamp}`);
+
+        // Reply with pong
+        this.sendCustomMessage(
+          connection,
+          JSON.stringify({ action: "pong", timestamp: Date.now() })
         );
       }
     } catch (error) {
