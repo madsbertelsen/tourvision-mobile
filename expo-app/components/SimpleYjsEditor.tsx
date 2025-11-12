@@ -218,8 +218,6 @@ export default function SimpleYjsEditor() {
 
       const createEditor = (includeSync = false) => {
         const plugins = [
-          yCursorPlugin(awareness),
-          yUndoPlugin(),
           keymap({
             'Mod-z': undo,
             'Mod-y': redo,
@@ -229,9 +227,13 @@ export default function SimpleYjsEditor() {
           history()
         ];
 
-        // Only add sync plugin if requested
+        // Only add Y.js plugins if sync is enabled
         if (includeSync) {
-          plugins.unshift(ySyncPlugin(type));
+          plugins.unshift(
+            ySyncPlugin(type),
+            yCursorPlugin(awareness),
+            yUndoPlugin()
+          );
         }
 
         const state = EditorState.create({
