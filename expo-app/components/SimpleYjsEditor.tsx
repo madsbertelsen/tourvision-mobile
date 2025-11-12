@@ -154,19 +154,20 @@ export default function SimpleYjsEditor() {
       const ydoc = new Y.Doc();
       const type = ydoc.getXmlFragment('prosemirror');
 
-      const awareness = ydoc.getOrCreateAwareness();
+      const wsUrl = \`\${WS_URL}/parties/\${ROOM_NAME}/\${DOCUMENT_ID}\`;
+      console.log('[Editor] Connecting to:', wsUrl);
+
+      // Create provider first - it creates its own awareness
+      const provider = new WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
+        connect: true
+      });
+
+      // Get awareness from provider
+      const awareness = provider.awareness;
       awareness.setLocalStateField('user', {
         id: 'test-user',
         name: 'Test User',
         color: '#3B82F6'
-      });
-
-      const wsUrl = \`\${WS_URL}/parties/\${ROOM_NAME}/\${DOCUMENT_ID}\`;
-      console.log('[Editor] Connecting to:', wsUrl);
-
-      const provider = new WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
-        awareness: awareness,
-        connect: true
       });
 
       const statusEl = document.getElementById('status');
