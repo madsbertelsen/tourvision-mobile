@@ -539,6 +539,13 @@ export default function TripDocumentView() {
     }
   }, [geoMarkUpdate, setGeoMarkUpdate]);
 
+  // Auto-enable collaboration on mount
+  useEffect(() => {
+    if (!isCollabEnabled && !isEnablingCollab) {
+      handleToggleCollaboration();
+    }
+  }, []); // Empty deps array = run once on mount
+
   return (
     <View style={styles.container}>
       {/* Header */}
