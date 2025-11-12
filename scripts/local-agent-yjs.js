@@ -212,30 +212,92 @@ async function startAgent() {
     // Test: Move cursor to random position every 10 seconds
     let testInterval = setInterval(() => {
       try {
-        // Calculate actual ProseMirror document length
-        const pmLength = calculateProseMirrorLength(type);
-
-        console.log(`\n[Agent] 🔍 Document analysis: Y.js nodes=${type.length}, PM length=${pmLength}`);
-
-        if (pmLength <= 2) {
-          console.log('[Agent] 🎯 Document is too short (PM length <= 2), skipping cursor update');
+        // Check if document has content
+        if (type.length === 0) {
+          console.log('[Agent] 🎯 Document is empty, skipping cursor update');
           return;
         }
 
-        // Generate random position within valid ProseMirror range
-        // Position must be between 1 and pmLength - 1 (inside the document, not at boundaries)
-        const randomPos = Math.floor(Math.random() * (pmLength - 2)) + 1;
+        // Find all text nodes in the document
+        let allTextNodes = [];
+        let cumulativeLength = 0;
+
+        // Helper function to recursively find all text nodes
+        function collectTextNodes(xmlElement, path = []) {
+          if (!xmlElement) return;
+
+          // If this is an XmlText node, collect it
+          if (xmlElement.constructor.name === 'YXmlText') {
+            const textLength = xmlElement.length;
+            if (textLength > 0) {
+              allTextNodes.push({
+                node: xmlElement,
+                path: [...path],
+                startOffset: cumulativeLength,
+                length: textLength
+              });
+              cumulativeLength += textLength;
+            }
+          }
+
+          // If this is an XmlElement, recurse into its children
+          if (xmlElement.constructor.name === 'YXmlElement' || xmlElement.constructor.name === 'YXmlFragment') {
+            let i = 0;
+            let child = xmlElement._first;
+            while (child) {
+              const childContent = child.content;
+              if (childContent) {
+                collectTextNodes(childContent.type, [...path, i]);
+              }
+              child = child.right;
+              i++;
+            }
+          }
+        }
+
+        collectTextNodes(type);
+
+        console.log(`[Agent] 🔍 Found ${allTextNodes.length} text nodes, total length: ${cumulativeLength}`);
+        console.log('[Agent] 🔍 Document structure:', type.toString().substring(0, 200));
+
+        if (allTextNodes.length === 0 || cumulativeLength === 0) {
+          console.log('[Agent] 🎯 No text content found, skipping cursor update');
+          return;
+        }
+
+        // Pick a random position in the entire document
+        const randomTextOffset = Math.floor(Math.random() * cumulativeLength);
+
+        // Find which text node contains this offset
+        let targetTextNode = null;
+        let localOffset = 0;
+
+        for (const textNode of allTextNodes) {
+          if (randomTextOffset >= textNode.startOffset && randomTextOffset < textNode.startOffset + textNode.length) {
+            targetTextNode = textNode;
+            localOffset = randomTextOffset - textNode.startOffset;
+            break;
+          }
+        }
+
+        if (!targetTextNode) {
+          // Fallback to last position
+          targetTextNode = allTextNodes[allTextNodes.length - 1];
+          localOffset = targetTextNode.length;
+        }
+
+        // Create relative position using Y.js API
+        const relativePos = Y.createRelativePositionFromTypeIndex(targetTextNode.node, localOffset);
 
         // Update awareness with cursor position
-        // ProseMirror cursor format: { anchor, head }
-        // anchor = start of selection, head = end of selection
-        // For a cursor (no selection), anchor === head
         awareness.setLocalStateField('cursor', {
-          anchor: randomPos,
-          head: randomPos
+          anchor: relativePos,
+          head: relativePos
         });
 
-        console.log(`\n[Agent] 🎯 Moving cursor to position ${randomPos} (PM length: ${pmLength}, Y.js nodes: ${type.length})`);
+        console.log(`\n[Agent] 🎯 Moving cursor to offset ${randomTextOffset} / ${cumulativeLength}`);
+        console.log(`[Agent] Text node path: ${targetTextNode.path.join(' > ')}, local offset: ${localOffset}`);
+        console.log(`[Agent] Relative position:`, JSON.stringify(relativePos, null, 2));
       } catch (error) {
         console.error('[Agent] Error updating cursor:', error);
       }
