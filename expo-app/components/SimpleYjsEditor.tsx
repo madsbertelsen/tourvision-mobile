@@ -116,42 +116,35 @@ export default function SimpleYjsEditor() {
   <div id="status" class="disconnected">Disconnected</div>
   <div id="editor"></div>
 
-  <script src="https://unpkg.com/yjs@13.6.18/dist/yjs.iife.js"></script>
-  <script src="https://unpkg.com/y-websocket@1.5.0/dist/y-websocket.js"></script>
-  <script src="https://unpkg.com/prosemirror-model@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-state@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-view@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-schema-basic@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-keymap@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-commands@1/dist/index.js"></script>
-  <script src="https://unpkg.com/prosemirror-history@1/dist/index.js"></script>
-  <script src="https://unpkg.com/y-prosemirror@1/dist/y-prosemirror.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "yjs": "https://cdn.jsdelivr.net/npm/yjs@13/+esm",
+        "y-websocket": "https://cdn.jsdelivr.net/npm/y-websocket@2/+esm",
+        "y-prosemirror": "https://cdn.jsdelivr.net/npm/y-prosemirror@1/+esm",
+        "prosemirror-model": "https://cdn.jsdelivr.net/npm/prosemirror-model@1/+esm",
+        "prosemirror-state": "https://cdn.jsdelivr.net/npm/prosemirror-state@1/+esm",
+        "prosemirror-view": "https://cdn.jsdelivr.net/npm/prosemirror-view@1/+esm",
+        "prosemirror-schema-basic": "https://cdn.jsdelivr.net/npm/prosemirror-schema-basic@1/+esm",
+        "prosemirror-keymap": "https://cdn.jsdelivr.net/npm/prosemirror-keymap@1/+esm",
+        "prosemirror-commands": "https://cdn.jsdelivr.net/npm/prosemirror-commands@1/+esm",
+        "prosemirror-history": "https://cdn.jsdelivr.net/npm/prosemirror-history@1/+esm"
+      }
+    }
+  </script>
 
-  <script>
+  <script type="module">
+    import * as Y from 'yjs';
+    import { WebsocketProvider } from 'y-websocket';
+    import { EditorState } from 'prosemirror-state';
+    import { EditorView } from 'prosemirror-view';
+    import { schema } from 'prosemirror-schema-basic';
+    import { keymap } from 'prosemirror-keymap';
+    import { baseKeymap } from 'prosemirror-commands';
+    import { history, undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
+    import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo, redo } from 'y-prosemirror';
+
     console.log('[Editor] Starting simple Y.js ProseMirror editor');
-
-    // Check what libraries loaded
-    console.log('[Editor] Checking libraries...');
-    console.log('[Editor] Y:', typeof Y);
-    console.log('[Editor] yWebsocket:', typeof yWebsocket);
-    console.log('[Editor] PM:', typeof PM);
-    console.log('[Editor] yProsemirror:', typeof yProsemirror);
-
-    if (typeof Y === 'undefined') {
-      const error = 'Y.js library not loaded';
-      console.error('[Editor]', error);
-      document.getElementById('status').textContent = 'Error: ' + error;
-      document.getElementById('status').className = 'disconnected';
-      throw new Error(error);
-    }
-
-    if (typeof yWebsocket === 'undefined') {
-      const error = 'y-websocket library not loaded';
-      console.error('[Editor]', error);
-      document.getElementById('status').textContent = 'Error: ' + error;
-      document.getElementById('status').className = 'disconnected';
-      throw new Error(error);
-    }
 
     const DOCUMENT_ID = '1b6d8dd9-e031-42b6-b554-5eb194c01526';
     const WS_URL = 'wss://tourvision-collab.mads-9b9.workers.dev';
@@ -161,7 +154,7 @@ export default function SimpleYjsEditor() {
       const ydoc = new Y.Doc();
       const type = ydoc.getXmlFragment('prosemirror');
 
-      const awareness = new Y.Awareness(ydoc);
+      const awareness = ydoc.getOrCreateAwareness();
       awareness.setLocalStateField('user', {
         id: 'test-user',
         name: 'Test User',
@@ -171,7 +164,7 @@ export default function SimpleYjsEditor() {
       const wsUrl = \`\${WS_URL}/parties/\${ROOM_NAME}/\${DOCUMENT_ID}\`;
       console.log('[Editor] Connecting to:', wsUrl);
 
-      const provider = new yWebsocket.WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
+      const provider = new WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
         awareness: awareness,
         connect: true
       });
@@ -195,25 +188,16 @@ export default function SimpleYjsEditor() {
 
       const editorContainer = document.getElementById('editor');
 
-      const { EditorState } = PM.state;
-      const { EditorView } = PM.view;
-      const { schema: basicSchema } = PM.schemaBasic;
-      const { keymap } = PM.keymap;
-      const { baseKeymap } = PM.commands;
-      const { history } = PM.history;
-
-      const { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo: yUndo, redo: yRedo } = yProsemirror;
-
       const state = EditorState.create({
-        schema: basicSchema,
+        schema: schema,
         plugins: [
           ySyncPlugin(type),
           yCursorPlugin(awareness),
           yUndoPlugin(),
           keymap({
-            'Mod-z': yUndo,
-            'Mod-y': yRedo,
-            'Mod-Shift-z': yRedo
+            'Mod-z': undo,
+            'Mod-y': redo,
+            'Mod-Shift-z': redo
           }),
           keymap(baseKeymap),
           history()
