@@ -411,10 +411,10 @@ Return ONLY the JSON, no markdown, no explanation.`;
       message: ackMessage
     }));
 
-    console.log('[ChatRoom] Generating AI response');
-    // Generate AI response with streaming
-    await this.generateAIResponse(documentId, user_id, content);
-    console.log('[ChatRoom] AI response complete');
+    // DISABLED: AI response generation for local agent POC
+    // The local agent will handle document edits instead of the LLM
+    console.log('[ChatRoom] AI response generation DISABLED for local agent POC');
+    // await this.generateAIResponse(documentId, user_id, content);
   }
 
   private async generateAIResponse(documentId: string, userId: string, userMessage: string) {
