@@ -143,6 +143,13 @@ export default {
       }
     }
 
+    // Log all requests for debugging
+    console.log('[Worker] Incoming request:', {
+      method: request.method,
+      url: request.url,
+      headers: Object.fromEntries(request.headers.entries())
+    });
+
     // Use PartyKit's standard routing: /parties/:server/:room
     // This automatically routes to the correct Durable Object based on the URL pattern
     const response = await routePartykitRequest(request, env);

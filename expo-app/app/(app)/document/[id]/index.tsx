@@ -539,12 +539,18 @@ export default function TripDocumentView() {
     }
   }, [geoMarkUpdate, setGeoMarkUpdate]);
 
-  // Auto-enable collaboration on mount
-  useEffect(() => {
-    if (!isCollabEnabled && !isEnablingCollab) {
+  // Track if we've already enabled collaboration
+  const collabEnabledRef = useRef(false);
+
+  // Handle WebView ready event - enable collaboration when ready
+  const handleWebViewReady = useCallback(() => {
+    console.log('[TripDocument] WebView ready, checking collaboration state');
+    if (!collabEnabledRef.current && !isCollabEnabled && !isEnablingCollab) {
+      console.log('[TripDocument] WebView ready, enabling collaboration');
+      collabEnabledRef.current = true;
       handleToggleCollaboration();
     }
-  }, []); // Empty deps array = run once on mount
+  }, [isCollabEnabled, isEnablingCollab, handleToggleCollaboration]);
 
   return (
     <View style={styles.container}>
@@ -648,6 +654,7 @@ export default function TripDocumentView() {
             onShowGeoMarkEditor={handleShowGeoMarkEditor}
             onSelectionChange={handleSelectionChange}
             onMessage={handleToolPickerMessage}
+            onReady={handleWebViewReady}
           />
 
           {/* Tool Picker Bottom Sheet - overlays only document panel */}

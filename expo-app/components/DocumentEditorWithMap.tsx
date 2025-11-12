@@ -31,6 +31,7 @@ interface DynamicLandingDocumentProseMirrorProps {
   onShowGeoMarkEditor?: (data: any, locations: Location[]) => void;
   onSelectionChange?: (empty: boolean, selectedText?: string, selectionData?: { selectionTop?: number; selectionLeft?: number; selectionWidth?: number }) => void;
   onMessage?: (data: any) => void;
+  onReady?: () => void;
 }
 
 // Use the full landing page content
@@ -109,7 +110,8 @@ export default function DynamicLandingDocumentProseMirror({
   webViewRef: externalWebViewRef,
   onShowGeoMarkEditor: externalOnShowGeoMarkEditor,
   onSelectionChange: externalOnSelectionChange,
-  onMessage: externalOnMessage
+  onMessage: externalOnMessage,
+  onReady: externalOnReady
 }: DynamicLandingDocumentProseMirrorProps) {
   const INITIAL_CONTENT = initialContent || DEFAULT_INITIAL_CONTENT;
   const [animationState, setAnimationState] = useState<AnimationState | null>(null);
@@ -594,7 +596,12 @@ export default function DynamicLandingDocumentProseMirror({
 
     setEditorReady(true);
     console.log('[Landing] editorReady state should now be true');
-  }, []);
+
+    // Call external onReady if provided
+    if (externalOnReady) {
+      externalOnReady();
+    }
+  }, [externalOnReady]);
 
   const handleShowGeoMarkEditor = useCallback((data: any, locs: any[]) => {
     // Use external handler if provided (for split-screen mode)
