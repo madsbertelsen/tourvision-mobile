@@ -164,25 +164,32 @@ export default function SimpleYjsEditor() {
 
       // Wait for initial sync, then clear document and enable sync plugin
       let syncEnabled = false;
+      let initialSyncDone = false;
+
       provider.on('synced', ({ synced }) => {
-        if (synced && !syncEnabled) {
+        if (synced && !syncEnabled && !initialSyncDone) {
+          initialSyncDone = true; // Prevent multiple triggers
           console.log('[Editor] Initial sync complete');
 
-          // Clear incompatible content
+          // Clear incompatible content only if document has content
           if (type.length > 0) {
-            console.log('[Editor] Document has existing content, clearing for fresh start...');
+            console.log('[Editor] Document has existing content (length:', type.length, '), clearing for fresh start...');
             ydoc.transact(() => {
               type.delete(0, type.length);
             });
             console.log('[Editor] Document cleared');
+          } else {
+            console.log('[Editor] Document is empty, no need to clear');
           }
 
-          // Recreate editor with sync plugin enabled
-          console.log('[Editor] Enabling sync plugin...');
-          view.destroy();
-          view = createEditor(true);
-          syncEnabled = true;
-          console.log('[Editor] Sync enabled, ready for collaboration');
+          // Small delay to ensure clear operation completes
+          setTimeout(() => {
+            console.log('[Editor] Enabling sync plugin...');
+            view.destroy();
+            view = createEditor(true);
+            syncEnabled = true;
+            console.log('[Editor] Sync enabled, ready for collaboration');
+          }, 100);
         }
       });
 
