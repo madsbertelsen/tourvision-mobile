@@ -116,19 +116,42 @@ export default function SimpleYjsEditor() {
   <div id="status" class="disconnected">Disconnected</div>
   <div id="editor"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/yjs@13.6.18/dist/yjs.iife.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/y-websocket@1.5.0/dist/y-websocket.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-model@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-state@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-view@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-schema-basic@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-keymap@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-commands@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prosemirror-history@1/dist/index.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/y-prosemirror@1/dist/y-prosemirror.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/yjs@13.6.18/dist/yjs.iife.js"></script>
+  <script src="https://unpkg.com/y-websocket@1.5.0/dist/y-websocket.js"></script>
+  <script src="https://unpkg.com/prosemirror-model@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-state@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-view@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-schema-basic@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-keymap@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-commands@1/dist/index.js"></script>
+  <script src="https://unpkg.com/prosemirror-history@1/dist/index.js"></script>
+  <script src="https://unpkg.com/y-prosemirror@1/dist/y-prosemirror.js"></script>
 
   <script>
     console.log('[Editor] Starting simple Y.js ProseMirror editor');
+
+    // Check what libraries loaded
+    console.log('[Editor] Checking libraries...');
+    console.log('[Editor] Y:', typeof Y);
+    console.log('[Editor] yWebsocket:', typeof yWebsocket);
+    console.log('[Editor] PM:', typeof PM);
+    console.log('[Editor] yProsemirror:', typeof yProsemirror);
+
+    if (typeof Y === 'undefined') {
+      const error = 'Y.js library not loaded';
+      console.error('[Editor]', error);
+      document.getElementById('status').textContent = 'Error: ' + error;
+      document.getElementById('status').className = 'disconnected';
+      throw new Error(error);
+    }
+
+    if (typeof yWebsocket === 'undefined') {
+      const error = 'y-websocket library not loaded';
+      console.error('[Editor]', error);
+      document.getElementById('status').textContent = 'Error: ' + error;
+      document.getElementById('status').className = 'disconnected';
+      throw new Error(error);
+    }
 
     const DOCUMENT_ID = '1b6d8dd9-e031-42b6-b554-5eb194c01526';
     const WS_URL = 'wss://tourvision-collab.mads-9b9.workers.dev';
