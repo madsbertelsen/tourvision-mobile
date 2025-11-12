@@ -38,11 +38,203 @@ export default function SimpleYjsEditor() {
 
   // On web, use iframe instead of WebView
   if (Platform.OS === 'web') {
+    // Use blob URL to avoid CORS issues
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Y.js ProseMirror Editor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #editor {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 400px;
+      outline: none;
+    }
+
+    #status {
+      padding: 8px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #status.connected {
+      background: #10B981;
+      color: white;
+    }
+
+    #status.disconnected {
+      background: #EF4444;
+      color: white;
+    }
+
+    .ProseMirror {
+      outline: none;
+    }
+
+    .ProseMirror p {
+      margin: 1em 0;
+    }
+
+    .ProseMirror-yjs-cursor {
+      position: relative;
+      margin-left: -1px;
+      margin-right: -1px;
+      border-left: 2px solid;
+      border-right: 2px solid;
+      word-break: normal;
+      pointer-events: none;
+      height: 1.2em;
+      display: inline-block;
+    }
+
+    .ProseMirror-yjs-cursor > div {
+      position: absolute;
+      top: -1.4em;
+      left: -1px;
+      font-size: 11px;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      font-weight: 500;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="status" class="disconnected">Disconnected</div>
+  <div id="editor"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/yjs@13.6.18/dist/yjs.iife.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/y-websocket@1.5.0/dist/y-websocket.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-model@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-state@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-view@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-schema-basic@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-keymap@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-commands@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prosemirror-history@1/dist/index.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/y-prosemirror@1/dist/y-prosemirror.js" crossorigin="anonymous"></script>
+
+  <script>
+    console.log('[Editor] Starting simple Y.js ProseMirror editor');
+
+    const DOCUMENT_ID = '1b6d8dd9-e031-42b6-b554-5eb194c01526';
+    const WS_URL = 'wss://tourvision-collab.mads-9b9.workers.dev';
+    const ROOM_NAME = 'yjs-room';
+
+    try {
+      const ydoc = new Y.Doc();
+      const type = ydoc.getXmlFragment('prosemirror');
+
+      const awareness = new Y.Awareness(ydoc);
+      awareness.setLocalStateField('user', {
+        id: 'test-user',
+        name: 'Test User',
+        color: '#3B82F6'
+      });
+
+      const wsUrl = \`\${WS_URL}/parties/\${ROOM_NAME}/\${DOCUMENT_ID}\`;
+      console.log('[Editor] Connecting to:', wsUrl);
+
+      const provider = new yWebsocket.WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
+        awareness: awareness,
+        connect: true
+      });
+
+      const statusEl = document.getElementById('status');
+
+      provider.on('status', ({ status }) => {
+        console.log('[Editor] Status:', status);
+        if (status === 'connected') {
+          statusEl.textContent = 'Connected to Y.js server';
+          statusEl.className = 'connected';
+        } else {
+          statusEl.textContent = 'Disconnected';
+          statusEl.className = 'disconnected';
+        }
+      });
+
+      provider.on('sync', (synced) => {
+        console.log('[Editor] Synced:', synced);
+      });
+
+      const editorContainer = document.getElementById('editor');
+
+      const { EditorState } = PM.state;
+      const { EditorView } = PM.view;
+      const { schema: basicSchema } = PM.schemaBasic;
+      const { keymap } = PM.keymap;
+      const { baseKeymap } = PM.commands;
+      const { history } = PM.history;
+
+      const { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo: yUndo, redo: yRedo } = yProsemirror;
+
+      const state = EditorState.create({
+        schema: basicSchema,
+        plugins: [
+          ySyncPlugin(type),
+          yCursorPlugin(awareness),
+          yUndoPlugin(),
+          keymap({
+            'Mod-z': yUndo,
+            'Mod-y': yRedo,
+            'Mod-Shift-z': yRedo
+          }),
+          keymap(baseKeymap),
+          history()
+        ]
+      });
+
+      const view = new EditorView(editorContainer, {
+        state
+      });
+
+      console.log('[Editor] ProseMirror editor created');
+      console.log('[Editor] Document ID:', DOCUMENT_ID);
+      console.log('[Editor] Ready for collaboration');
+
+      awareness.on('change', ({ added, updated, removed }) => {
+        console.log('[Editor] Awareness changed:', {
+          added,
+          updated,
+          removed,
+          states: Array.from(awareness.getStates().entries())
+        });
+      });
+
+      window.addEventListener('beforeunload', () => {
+        provider.destroy();
+        view.destroy();
+      });
+    } catch (error) {
+      console.error('[Editor] Error:', error);
+      document.getElementById('status').textContent = 'Error: ' + error.message;
+    }
+  </script>
+</body>
+</html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+
     return (
       <View style={styles.container}>
         <iframe
           ref={iframeRef as any}
-          src={htmlAsset.uri || '/assets/yjs-simple-editor.html'}
+          src={blobUrl}
           style={{
             flex: 1,
             width: '100%',
@@ -52,9 +244,7 @@ export default function SimpleYjsEditor() {
           onLoad={() => {
             console.log('[SimpleYjsEditor] iframe loaded');
           }}
-          onError={(error) => {
-            console.error('[SimpleYjsEditor] iframe error:', error);
-          }}
+          sandbox="allow-scripts allow-same-origin"
         />
       </View>
     );
