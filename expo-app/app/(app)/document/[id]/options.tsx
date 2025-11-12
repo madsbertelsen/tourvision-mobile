@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,14 +10,30 @@ export default function DocumentOptionsModal() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const documentTitle = params.title as string || 'Document';
-  const { isEditMode, setIsEditMode } = useTripContext();
+  const documentId = params.id as string;
+  const { isEditMode, setIsEditMode, tripId } = useTripContext();
 
-  const handleAction = (action: string) => {
+  const handleAction = async (action: string) => {
     console.log(`Action: ${action}`);
 
     // Handle specific actions that need to update state before closing
     if (action === 'toggleEdit') {
       setIsEditMode(!isEditMode);
+      router.back();
+      return;
+    }
+
+    if (action === 'share') {
+      try {
+        await Share.share({
+          message: `Document ID: ${tripId}\n\nYou can use this ID to connect the local Y.js agent.`,
+          title: 'Document ID',
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+      router.back();
+      return;
     }
 
     router.back();
