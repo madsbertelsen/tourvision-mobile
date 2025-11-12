@@ -428,16 +428,11 @@ const ProseMirrorWebView = forwardRef<ProseMirrorWebViewRef, ProseMirrorWebViewP
               break;
 
             case 'assistTrigger':
-              console.log('[ProseMirrorWebView] Assist trigger detected!');
-              console.log('[ProseMirrorWebView] Full text:', data.text);
-              console.log('[ProseMirrorWebView] Draft text:', data.draftText);
-              console.log('[ProseMirrorWebView] Has draft:', data.hasDraft);
-
-              // Process HTML with LLM for location extraction
-              // HTML preserves existing geo-marks so LLM can skip them
-              if (data.html) {
-                handleAssistTrigger(data.html);
-              }
+              // DISABLED: AI assist for local agent POC
+              // The local Y.js agent will handle document edits instead
+              console.log('[ProseMirrorWebView] Assist trigger detected (DISABLED for local agent POC)');
+              console.log('[ProseMirrorWebView] Text:', data.text?.substring(0, 100));
+              // handleAssistTrigger(data.html); // Commented out - no longer calling AI
               break;
 
             case 'documentChange':
