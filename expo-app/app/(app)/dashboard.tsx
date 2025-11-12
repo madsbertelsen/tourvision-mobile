@@ -207,6 +207,12 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Documents</Text>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => router.push('/(app)/yjs-test')}
+        >
+          <Ionicons name="flask-outline" size={24} color="#8B5CF6" />
+        </TouchableOpacity>
       </View>
 
       {/* URL Input Section */}
@@ -519,5 +525,10 @@ const styles = StyleSheet.create({
   tripDate: {
     fontSize: 13,
     color: '#9CA3AF',
+  },
+  testButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
   },
 });
