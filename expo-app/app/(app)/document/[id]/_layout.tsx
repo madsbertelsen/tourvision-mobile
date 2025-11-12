@@ -208,45 +208,19 @@ export default function TripLayout() {
     });
   }, []);
 
-  // Load document from storage on mount
+  // DISABLED: Load document from storage on mount
+  // Y.js is now the single source of truth - document loads from remote Y.js CRDT only
   useEffect(() => {
-    const loadDocument = async () => {
-      // Clear any pending save timeout when changing documents
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
+    // Clear any pending save timeout when changing documents
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
 
-      try {
-        const stored = await storage.getItem('@tourvision_documents');
-        if (stored) {
-          const documents = JSON.parse(stored);
-          // Find document by ID
-          const doc = documents.find((d: any) => d.id === tripId);
-          if (doc) {
-            console.log('Loading document from storage:', tripId, 'content:', JSON.stringify(doc.content).substring(0, 100));
-            setCurrentDocState(doc.content);
-            latestDocRef.current = doc.content;
-          } else {
-            // Document not found - clear to empty state
-            console.log('Document not found:', tripId, 'setting empty state');
-            setCurrentDocState(null);
-            latestDocRef.current = null;
-          }
-        } else {
-          // No documents in storage - clear to empty state
-          console.log('No documents in storage, setting empty state');
-          setCurrentDocState(null);
-          latestDocRef.current = null;
-        }
-      } catch (error) {
-        console.error('Error loading from storage:', error);
-        setCurrentDocState(null);
-        latestDocRef.current = null;
-      }
-    };
-
-    loadDocument();
+    // Start with null - document will be loaded from Y.js collaboration
+    console.log('[TripLayout] Document will be loaded from Y.js (local storage disabled)');
+    setCurrentDocState(null);
+    latestDocRef.current = null;
   }, [tripId]);
 
   // Function to save document to storage
@@ -283,7 +257,8 @@ export default function TripLayout() {
     }
   }, [tripId]);
 
-  // Custom setCurrentDoc that also saves to storage (debounced)
+  // Custom setCurrentDoc - DISABLED auto-save to local storage
+  // Y.js is the single source of truth - all persistence happens via Y.js CRDT
   const setCurrentDoc = useCallback((doc: any) => {
     // Check if document actually changed (avoid unnecessary updates)
     if (latestDocRef.current === doc) {
@@ -296,18 +271,10 @@ export default function TripLayout() {
     // Store latest document in ref
     latestDocRef.current = doc;
 
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    // Schedule save after 1 second of inactivity
-    saveTimeoutRef.current = setTimeout(() => {
-      if (latestDocRef.current) {
-        saveToStorage(latestDocRef.current);
-      }
-    }, 1000);
-  }, [saveToStorage]);
+    // DISABLED: Local storage saving
+    // Y.js handles all persistence automatically via CRDT sync
+    console.log('[TripLayout] Document updated (Y.js handles persistence)');
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {

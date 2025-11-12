@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Y.js ProseMirror Editor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #editor {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 400px;
+      outline: none;
+    }
+
+    #status {
+      padding: 8px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    #status.connected {
+      background: #10B981;
+      color: white;
+    }
+
+    #status.disconnected {
+      background: #EF4444;
+      color: white;
+    }
+
+    .ProseMirror {
+      outline: none;
+    }
+
+    .ProseMirror p {
+      margin: 1em 0;
+    }
+
+    /* Y.js cursor styles */
+    .ProseMirror-yjs-cursor {
+      position: relative;
+      margin-left: -1px;
+      margin-right: -1px;
+      border-left: 2px solid;
+      border-right: 2px solid;
+      word-break: normal;
+      pointer-events: none;
+      height: 1.2em;
+      display: inline-block;
+    }
+
+    .ProseMirror-yjs-cursor > div {
+      position: absolute;
+      top: -1.4em;
+      left: -1px;
+      font-size: 11px;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      font-weight: 500;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="status" class="disconnected">Disconnected</div>
+  <div id="editor"></div>
+
+  <!-- Load dependencies from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/yjs@13/dist/yjs.mjs" type="module"></script>
+  <script type="module">
+    // Import dependencies
+    import * as Y from 'https://cdn.jsdelivr.net/npm/yjs@13/dist/yjs.mjs';
+    import { WebsocketProvider } from 'https://cdn.jsdelivr.net/npm/y-websocket@1/dist/y-websocket.mjs';
+
+    // ProseMirror imports (using unpkg)
+    import { EditorState } from 'https://unpkg.com/prosemirror-state@1/dist/index.js';
+    import { EditorView } from 'https://unpkg.com/prosemirror-view@1/dist/index.js';
+    import { Schema, DOMParser } from 'https://unpkg.com/prosemirror-model@1/dist/index.js';
+    import { schema as basicSchema } from 'https://unpkg.com/prosemirror-schema-basic@1/dist/index.js';
+    import { keymap } from 'https://unpkg.com/prosemirror-keymap@1/dist/index.js';
+    import { baseKeymap } from 'https://unpkg.com/prosemirror-commands@1/dist/index.js';
+    import { history, undo, redo } from 'https://unpkg.com/prosemirror-history@1/dist/index.js';
+
+    // Y-ProseMirror
+    import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo } from 'https://unpkg.com/y-prosemirror@1/dist/y-prosemirror.js';
+
+    console.log('[Editor] Starting simple Y.js ProseMirror editor');
+
+    // HARDCODED CONFIGURATION
+    const DOCUMENT_ID = '1b6d8dd9-e031-42b6-b554-5eb194c01526';
+    const WS_URL = 'wss://tourvision-collab.mads-9b9.workers.dev';
+    const ROOM_NAME = 'yjs-room';
+
+    // Create Y.js document
+    const ydoc = new Y.Doc();
+    const type = ydoc.getXmlFragment('prosemirror');
+
+    // Create awareness for cursor/presence
+    const awareness = new Y.Awareness(ydoc);
+    awareness.setLocalStateField('user', {
+      id: 'test-user',
+      name: 'Test User',
+      color: '#3B82F6'
+    });
+
+    // Connect to WebSocket server
+    // Note: Using standard y-websocket for now since y-partyserver has same protocol
+    const wsUrl = `${WS_URL}/parties/${ROOM_NAME}/${DOCUMENT_ID}`;
+    console.log('[Editor] Connecting to:', wsUrl);
+
+    const provider = new WebsocketProvider(wsUrl, DOCUMENT_ID, ydoc, {
+      awareness: awareness,
+      connect: true
+    });
+
+    // Update status indicator
+    const statusEl = document.getElementById('status');
+
+    provider.on('status', ({ status }) => {
+      console.log('[Editor] Status:', status);
+      if (status === 'connected') {
+        statusEl.textContent = 'Connected to Y.js server';
+        statusEl.className = 'connected';
+      } else {
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = 'disconnected';
+      }
+    });
+
+    provider.on('sync', (synced) => {
+      console.log('[Editor] Synced:', synced);
+    });
+
+    // Create ProseMirror editor
+    const editorContainer = document.getElementById('editor');
+
+    const state = EditorState.create({
+      schema: basicSchema,
+      plugins: [
+        ySyncPlugin(type),
+        yCursorPlugin(awareness),
+        yUndoPlugin(),
+        keymap({
+          'Mod-z': yUndo,
+          'Mod-y': yRedo,
+          'Mod-Shift-z': yRedo
+        }),
+        keymap(baseKeymap),
+        history()
+      ]
+    });
+
+    const view = new EditorView(editorContainer, {
+      state
+    });
+
+    console.log('[Editor] ProseMirror editor created');
+    console.log('[Editor] Document ID:', DOCUMENT_ID);
+    console.log('[Editor] Ready for collaboration');
+
+    // Log awareness changes
+    awareness.on('change', ({ added, updated, removed }) => {
+      console.log('[Editor] Awareness changed:', {
+        added,
+        updated,
+        removed,
+        states: Array.from(awareness.getStates().entries())
+      });
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      provider.destroy();
+      view.destroy();
+    });
+  </script>
+</body>
+</html>

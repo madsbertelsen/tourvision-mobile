@@ -177,19 +177,54 @@ async function startAgent() {
     console.log('\n[Agent] 👂 Listening for document changes...');
     console.log('[Agent] Press Ctrl+C to stop\n');
 
+    // Helper function to calculate ProseMirror position from Y.js XML structure
+    function calculateProseMirrorLength(xmlFragment) {
+      // Convert Y.js XML to string and parse it to get actual content length
+      const xmlString = xmlFragment.toString();
+
+      // Count nodes and text content
+      // Each XML element adds 2 (open/close), text content adds its length
+      let length = 0;
+
+      // Simple parser: count < and > pairs as nodes (2 each), everything else as text
+      let inTag = false;
+      let tagCount = 0;
+      let textLength = 0;
+
+      for (const char of xmlString) {
+        if (char === '<') {
+          inTag = true;
+          tagCount++;
+        } else if (char === '>') {
+          inTag = false;
+        } else if (!inTag) {
+          textLength++;
+        }
+      }
+
+      // Each opening tag adds 1 for opening position, text adds its length, closing tag adds 1
+      // So total = tagCount + textLength
+      length = tagCount + textLength;
+
+      return length;
+    }
+
     // Test: Move cursor to random position every 10 seconds
     let testInterval = setInterval(() => {
       try {
-        // Get document length
-        const docLength = type.length;
+        // Calculate actual ProseMirror document length
+        const pmLength = calculateProseMirrorLength(type);
 
-        if (docLength === 0) {
-          console.log('[Agent] 🎯 Document is empty, skipping cursor update');
+        console.log(`\n[Agent] 🔍 Document analysis: Y.js nodes=${type.length}, PM length=${pmLength}`);
+
+        if (pmLength <= 2) {
+          console.log('[Agent] 🎯 Document is too short (PM length <= 2), skipping cursor update');
           return;
         }
 
-        // Generate random position within document
-        const randomPos = Math.floor(Math.random() * docLength);
+        // Generate random position within valid ProseMirror range
+        // Position must be between 1 and pmLength - 1 (inside the document, not at boundaries)
+        const randomPos = Math.floor(Math.random() * (pmLength - 2)) + 1;
 
         // Update awareness with cursor position
         // ProseMirror cursor format: { anchor, head }
@@ -200,7 +235,7 @@ async function startAgent() {
           head: randomPos
         });
 
-        console.log(`\n[Agent] 🎯 Moving cursor to position ${randomPos} (doc length: ${docLength})`);
+        console.log(`\n[Agent] 🎯 Moving cursor to position ${randomPos} (PM length: ${pmLength}, Y.js nodes: ${type.length})`);
       } catch (error) {
         console.error('[Agent] Error updating cursor:', error);
       }

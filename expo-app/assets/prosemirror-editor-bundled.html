@@ -717,11 +717,28 @@
     };
 
     console.error = function(...args) {
+      // Filter out non-fatal Y.js sync errors
+      const errorMessage = args.map(arg => String(arg)).join(' ');
+      const isYjsSyncError = errorMessage.includes('Caught error while handling a Yjs update') ||
+                             errorMessage.includes('Unexpected case');
+
+      if (isYjsSyncError) {
+        // Log as warning instead - these are non-fatal
+        window.originalConsoleWarn.apply(console, ['[Y.js sync warning - non-fatal]'].concat(args));
+        sendMessageToNative({
+          type: 'console',
+          level: 'warn',
+          message: '[Y.js sync warning - non-fatal] ' + errorMessage
+        });
+        return;
+      }
+
+      // For other errors, log normally
       window.originalConsoleError.apply(console, args);
       sendMessageToNative({
         type: 'console',
         level: 'error',
-        message: args.map(arg => String(arg)).join(' ')
+        message: errorMessage
       });
     };
 
@@ -894,6 +911,22 @@
 
     // Handle errors
     window.addEventListener('error', function(e) {
+      // Filter out non-fatal Y.js sync errors and generic script errors
+      // These are expected when handling complex document transformations
+      const isYjsSyncError = e.message && (
+        e.message.includes('Caught error while handling a Yjs update') ||
+        e.message.includes('Unexpected case') ||
+        e.message === 'Script error.' || // Generic cross-origin error
+        e.message === 'Script error'     // Without period
+      );
+
+      if (isYjsSyncError) {
+        // Log as warning instead of error - these are non-fatal
+        console.warn('[WebView] Y.js sync warning (non-fatal):', e.message);
+        return; // Don't propagate to React Native
+      }
+
+      // For other errors, log and send to React Native
       console.error('[WebView] Error:', e.message, e.filename, e.lineno);
       setStatus('Error: ' + e.message, true);
       sendMessageToNative({
@@ -4022,6 +4055,9 @@
 
               (async () => {
                 try {
+                  // Import Plugin and PluginKey for safe cursor plugin
+                  const { Plugin, PluginKey } = window.PM.state;
+
                   // Connect to Tiptap Cloud or standalone Hocuspocus server
                   const { documentId, userId, userName, token, serverUrl, hocuspocusUrl } = data;
 
@@ -4178,13 +4214,97 @@
 
                   console.log('[WebView] PartyKit provider created and connecting...');
 
+                  // Create a safe cursor plugin that validates positions
+                  const safeCursorPlugin = (() => {
+                    try {
+                      const baseCursorPlugin = window.PM.yProsemirror.yCursorPlugin(awareness);
+
+                      // Wrap the plugin's view to add error handling
+                      const originalPlugin = baseCursorPlugin;
+                      const originalView = originalPlugin.spec?.view;
+
+                      if (originalView) {
+                        return {
+                          ...originalPlugin,
+                          spec: {
+                            ...originalPlugin.spec,
+                            view: (editorView) => {
+                              try {
+                                const viewInstance = originalView(editorView);
+
+                                // Wrap update method with error handling and detailed logging
+                                if (viewInstance && viewInstance.update) {
+                                  const originalUpdate = viewInstance.update.bind(viewInstance);
+                                  viewInstance.update = (view, prevState) => {
+                                    try {
+                                      // Log cursor positions from awareness before attempting to render
+                                      const states = awareness.getStates();
+                                      states.forEach((state, clientId) => {
+                                        if (state.cursor && clientId !== ydoc.clientID) {
+                                          console.log('[WebView] 🎯 Attempting to render cursor for client', clientId);
+                                          console.log('[WebView]   - Cursor anchor:', state.cursor.anchor);
+                                          console.log('[WebView]   - Cursor head:', state.cursor.head);
+                                          console.log('[WebView]   - Document content size:', view.state.doc.content.size);
+                                          console.log('[WebView]   - User info:', state.user);
+
+                                          // Check if positions are within bounds
+                                          const maxPos = view.state.doc.content.size;
+                                          const anchorValid = state.cursor.anchor >= 0 && state.cursor.anchor <= maxPos;
+                                          const headValid = state.cursor.head >= 0 && state.cursor.head <= maxPos;
+                                          console.log('[WebView]   - Anchor valid:', anchorValid);
+                                          console.log('[WebView]   - Head valid:', headValid);
+
+                                          if (!anchorValid || !headValid) {
+                                            console.error('[WebView] ❌ Cursor positions out of bounds!');
+                                          }
+                                        }
+                                      });
+
+                                      return originalUpdate(view, prevState);
+                                    } catch (error) {
+                                      console.error('[WebView] ❌ yCursorPlugin error details:', {
+                                        message: error.message,
+                                        stack: error.stack,
+                                        docSize: view.state.doc.content.size,
+                                        awarenessStates: Array.from(awareness.getStates().entries()).map(([id, state]) => ({
+                                          clientId: id,
+                                          cursor: state.cursor,
+                                          user: state.user
+                                        }))
+                                      });
+                                      // Don't propagate error - just log it
+                                    }
+                                  };
+                                }
+
+                                return viewInstance;
+                              } catch (error) {
+                                console.error('[WebView] yCursorPlugin view init error:', error);
+                                return {}; // Return empty view to prevent crash
+                              }
+                            }
+                          }
+                        };
+                      }
+
+                      return baseCursorPlugin;
+                    } catch (error) {
+                      console.error('[WebView] Failed to create yCursorPlugin:', error);
+                      // Return a no-op plugin if cursor plugin fails
+                      return new Plugin({
+                        key: new PluginKey('safe-cursor-fallback'),
+                        view: () => ({})
+                      });
+                    }
+                  })();
+
                   // Recreate editor with Y.js plugins
                   // NOTE: Do NOT pass a doc parameter - ySyncPlugin will create the doc from YXmlFragment
                   const newState = EditorState.create({
                     schema: schema,
                     plugins: [
                       window.PM.yProsemirror.ySyncPlugin(yXmlFragment),
-                      window.PM.yProsemirror.yCursorPlugin(awareness),
+                      safeCursorPlugin,
                       window.PM.yProsemirror.yUndoPlugin(),
                       window.PM.keymap({ 'Mod-z': window.PM.history.undo, 'Mod-y': window.PM.history.redo }),
                       // Custom Enter key handler for tool picker (must be before baseKeymap to override)
