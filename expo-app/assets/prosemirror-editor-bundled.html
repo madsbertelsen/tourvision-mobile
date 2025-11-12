@@ -4083,56 +4083,23 @@
                     console.log('[WebView] No local Y.js state to load - will sync from server');
                   }
 
-                  // PRESERVE CURRENT DOCUMENT CONTENT
-                  // If the user has edited the document before enabling collaboration,
-                  // we need to transfer that content to the Y.js CRDT structure.
-                  // This prevents data loss when switching from local-only to collaborative mode.
+                  // ALWAYS USE REMOTE VERSION (Y.js)
+                  // The Y.js document on the server is the source of truth.
+                  // We discard any local editor content and use what's in Y.js.
                   if (editorView && editorView.state.doc) {
-                    const currentDoc = editorView.state.doc;
-                    const currentDocJSON = JSON.stringify(currentDoc.toJSON());
-
-                    // Get the Y.js document content (if any)
-                    let yjsDocJSON = '{}';
-                    if (yXmlFragment.length > 0) {
-                      try {
-                        // Convert Y.js fragment to ProseMirror and then to JSON for comparison
-                        const yjsDoc = window.PM.yProsemirror.yXmlFragmentToProsemirrorJSON(yXmlFragment, schema);
-                        yjsDocJSON = JSON.stringify(yjsDoc);
-                      } catch (e) {
-                        console.warn('[WebView] Could not convert Y.js to JSON for comparison:', e);
-                      }
-                    }
-
-                    // Only preserve if the current editor content differs from Y.js content
-                    const contentDiffers = currentDocJSON !== yjsDocJSON;
                     const yjsIsEmpty = yXmlFragment.length === 0;
-                    const editorHasContent = currentDoc.content.childCount > 0;
+                    const editorHasContent = editorView.state.doc.content.childCount > 0;
 
-                    console.log('[WebView] Content comparison:', {
+                    console.log('[WebView] Content sync strategy: ALWAYS USE REMOTE', {
                       yjsIsEmpty,
-                      editorHasContent,
-                      contentDiffers,
-                      currentDocLength: currentDocJSON.length,
-                      yjsDocLength: yjsDocJSON.length
+                      editorHasContent
                     });
 
-                    if (yjsIsEmpty && editorHasContent) {
-                      // Y.js is empty, editor has content → Preserve editor content
-                      console.log('[WebView] 📋 Y.js empty, preserving editor content into Y.js');
-                      if (window.PM.yProsemirror && window.PM.yProsemirror.prosemirrorToYXmlFragment) {
-                        window.PM.yProsemirror.prosemirrorToYXmlFragment(currentDoc, yXmlFragment);
-                        console.log('[WebView] ✅ Editor content preserved to Y.js');
-                      } else {
-                        console.error('[WebView] ❌ prosemirrorToYXmlFragment not available');
-                      }
-                    } else if (!yjsIsEmpty && editorHasContent && contentDiffers) {
-                      // Both have content but different → Y.js wins (loaded from storage or server)
-                      console.log('[WebView] ⚠️  Y.js and editor both have content but differ - Y.js takes precedence');
-                    } else if (!yjsIsEmpty) {
-                      // Y.js has content (same or different) → Use Y.js
-                      console.log('[WebView] ✅ Y.js has content - will use Y.js state');
+                    if (!yjsIsEmpty) {
+                      console.log('[WebView] ✅ Y.js has content - will use Y.js state (discarding local)');
+                    } else if (editorHasContent) {
+                      console.log('[WebView] ⚠️  Y.js empty but editor has content - clearing editor to match Y.js');
                     } else {
-                      // Both empty
                       console.log('[WebView] ℹ️  Both Y.js and editor are empty - starting fresh');
                     }
                   }
