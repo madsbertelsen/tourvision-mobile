@@ -1,26 +1,29 @@
 import WebSocket from 'ws';
 import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import YProvider from './src/y-partyserver/provider.js';
+
+// Polyfill WebSocket for Node.js
+global.WebSocket = WebSocket;
 
 // Default port 8787 matches Wrangler dev server default
 const WS_PORT = process.env.WS_PORT || '8787';
-const WS_URL = `ws://localhost:${WS_PORT}`;
 const PARTY_NAME = 'document';
 const DOCUMENT_NAME = 'y-partyserver-text-editor-example';
 
 console.log('[Agent] Starting AI Agent...');
-console.log('[Agent] Connecting to:', `${WS_URL}/parties/${PARTY_NAME}/${DOCUMENT_NAME}`);
+console.log('[Agent] Connecting to:', `localhost:${WS_PORT}/parties/${PARTY_NAME}/${DOCUMENT_NAME}`);
 
 // Create Y.Doc
 const ydoc = new Y.Doc();
 const yXmlFragment = ydoc.getXmlFragment('prosemirror');
 
-// Create WebSocket provider
-const provider = new WebsocketProvider(
-  `${WS_URL}/parties/${PARTY_NAME}`,
+// Create YProvider (custom provider with message support)
+const provider = new YProvider(
+  `localhost:${WS_PORT}`,
   DOCUMENT_NAME,
   ydoc,
   {
+    party: PARTY_NAME,
     WebSocketPolyfill: WebSocket,
     connect: true
   }
@@ -39,13 +42,37 @@ provider.on('sync', (isSynced) => {
   console.log('[Agent] Synced:', isSynced);
 
   if (isSynced) {
-    console.log('[Agent] 💡 Period-triggered cursor movement enabled');
-    console.log('[Agent] Type a "." to trigger cursor movement');
+    console.log('[Agent] 💡 Period-triggered LLM processing enabled');
+    console.log('[Agent] Type a "." to trigger LLM analysis with tool calling');
   }
 });
 
 provider.on('status', ({ status }) => {
   console.log('[Agent] Status:', status);
+});
+
+// Track pending geocode tasks waiting for client response
+const pendingGeocodeTasks = new Map(); // taskId -> { resolve, reject }
+
+// Listen for custom messages from clients (geocode results)
+provider.on('custom-message', (message) => {
+  try {
+    const data = JSON.parse(message);
+    console.log('[Agent] Received custom message:', data.type);
+
+    if (data.type === 'geocode_result') {
+      const pending = pendingGeocodeTasks.get(data.taskId);
+      if (pending) {
+        console.log(`[Agent] ✅ Received geocode result for task ${data.taskId}`);
+        pending.resolve(data.result);
+        pendingGeocodeTasks.delete(data.taskId);
+      } else {
+        console.log(`[Agent] ⚠️  Received result for unknown task: ${data.taskId}`);
+      }
+    }
+  } catch (error) {
+    console.error('[Agent] Error handling custom message:', error);
+  }
 });
 
 // Set up observer for document changes
@@ -74,68 +101,281 @@ yXmlFragment.observeDeep((events) => {
     }
   });
 
-  // Trigger cursor movement if a period was detected
+  // Trigger LLM processing if a period was detected
   if (periodDetected) {
-    console.log('[Agent] 🔴 Period detected! Moving cursor...');
+    console.log('[Agent] 🔴 Period detected! Triggering LLM processing...');
 
-    // Debounce: wait 1 second after the last period before moving cursor
+    // Debounce: wait 1 second after the last period before processing
     if (cursorMoveDebounceTimer) {
       clearTimeout(cursorMoveDebounceTimer);
     }
 
     cursorMoveDebounceTimer = setTimeout(() => {
-      moveAgentCursor();
+      processDocumentWithLLM();
     }, 1000); // 1 second debounce
   }
 });
 
-function moveAgentCursor() {
-  try {
-    // Find the first paragraph (or create one if empty)
-    const firstChild = yXmlFragment.get(0);
+/**
+ * Extract all text nodes from the Y.js document with position tracking
+ */
+function getAllTextNodes(xmlFragment) {
+  const textNodes = [];
+  let currentOffset = 0;
 
-    if (!firstChild) {
-      console.log('[Agent] Document is empty, no cursor to set');
-      return;
-    }
+  function traverse(element) {
+    if (!element) return;
 
-    // Get the text content from the first child
-    let textNode = null;
-    let textLength = 0;
-
-    if (firstChild instanceof Y.XmlText) {
-      textNode = firstChild;
-      textLength = firstChild.length;
-    } else if (firstChild instanceof Y.XmlElement) {
-      // Look for text inside the element (e.g., inside a paragraph)
-      firstChild.forEach((child) => {
-        if (child instanceof Y.XmlText) {
-          textNode = child;
-          textLength = child.length;
-        }
+    if (element instanceof Y.XmlText) {
+      const text = element.toString();
+      textNodes.push({
+        node: element,
+        text: text,
+        startOffset: currentOffset,
+        endOffset: currentOffset + text.length
       });
+      currentOffset += text.length;
+    } else if (element instanceof Y.XmlElement || element instanceof Y.XmlFragment) {
+      // Iterate through children
+      let i = 0;
+      let child = element._first;
+      while (child) {
+        if (child.content) {
+          traverse(child.content.type);
+        }
+        child = child.right;
+        i++;
+      }
+    }
+  }
+
+  traverse(xmlFragment);
+  return textNodes;
+}
+
+/**
+ * Mock LLM function that analyzes document text and returns tool calls
+ * @param {string} documentText - The full document text
+ * @returns {Promise<{toolCalls: Array<{tool: string, args: object}>}>}
+ */
+async function callMockLLM(documentText) {
+  console.log('[Agent] 🤖 Calling mock LLM...');
+
+  // Simulate LLM processing time (500ms)
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  const toolCalls = [];
+
+  // Mock LLM logic: detect "Copenhagen" (case-insensitive) and create tool calls
+  const locationMatch = documentText.match(/copenhagen/i);
+
+  if (locationMatch) {
+    const matchedText = locationMatch[0];
+    const startOffset = locationMatch.index;
+    const endOffset = startOffset + matchedText.length;
+
+    console.log(`[Agent] 💭 LLM detected location: "${matchedText}"`);
+
+    // Tool call 1: Select the text
+    toolCalls.push({
+      tool: 'selectText',
+      args: {
+        text: matchedText,
+        startOffset,
+        endOffset
+      }
+    });
+
+    // Tool call 2: Geocode the location
+    toolCalls.push({
+      tool: 'geocode',
+      args: {
+        locationName: matchedText
+      }
+    });
+  }
+
+  return { toolCalls };
+}
+
+/**
+ * Tool registry - available tools for the LLM to call
+ */
+const tools = {
+  /**
+   * Select text in the document by setting the agent's cursor
+   */
+  selectText: async ({ text, startOffset, endOffset }) => {
+    console.log(`[Agent] 🔧 Tool: selectText("${text}", ${startOffset}, ${endOffset})`);
+
+    // Get all text nodes
+    const textNodes = getAllTextNodes(yXmlFragment);
+
+    // Find which text node contains the start and end positions
+    let startNode = null;
+    let startLocalOffset = 0;
+    let endNode = null;
+    let endLocalOffset = 0;
+
+    for (const textNode of textNodes) {
+      if (startOffset >= textNode.startOffset && startOffset < textNode.endOffset) {
+        startNode = textNode.node;
+        startLocalOffset = startOffset - textNode.startOffset;
+      }
+
+      if (endOffset > textNode.startOffset && endOffset <= textNode.endOffset) {
+        endNode = textNode.node;
+        endLocalOffset = endOffset - textNode.startOffset;
+      }
     }
 
-    if (!textNode || textLength === 0) {
-      console.log('[Agent] No text content found');
-      return;
+    if (!startNode || !endNode) {
+      throw new Error('Could not locate text nodes for selection');
     }
 
-    // Pick a random position within the text
-    const randomPosition = Math.floor(Math.random() * textLength);
+    // Create relative positions for the selection
+    const anchor = Y.createRelativePositionFromTypeIndex(startNode, startLocalOffset);
+    const head = Y.createRelativePositionFromTypeIndex(endNode, endLocalOffset);
 
-    // Create relative positions for y-prosemirror using the text node
-    const anchor = Y.createRelativePositionFromTypeIndex(textNode, randomPosition);
-    const head = Y.createRelativePositionFromTypeIndex(textNode, randomPosition);
-
+    // Set the awareness cursor to select the text
     provider.awareness.setLocalStateField('cursor', {
       anchor: anchor,
       head: head
     });
 
-    console.log(`[Agent] Moved cursor to position ${randomPosition} (text length: ${textLength})`);
+    return {
+      success: true,
+      selected: text,
+      positions: { startOffset, endOffset }
+    };
+  },
+
+  /**
+   * Geocode a location name by delegating to client
+   */
+  geocode: async ({ locationName }) => {
+    console.log(`[Agent] 🔧 Tool: geocode("${locationName}") - selecting target client`);
+
+    // Get all connected clients from awareness
+    const states = provider.awareness.getStates();
+    const myClientId = ydoc.clientID;
+
+    // Find a non-agent client to delegate the task to
+    let targetClientId = null;
+    for (const [clientId, state] of states) {
+      // Skip if it's the agent itself
+      if (clientId === myClientId) continue;
+
+      // Found a non-agent client
+      targetClientId = clientId;
+      const clientName = state.user?.name || 'Unknown';
+      console.log(`[Agent] 🎯 Selected client ${clientId} (${clientName}) for geocoding`);
+      break;
+    }
+
+    if (!targetClientId) {
+      throw new Error('No client available to handle geocode task');
+    }
+
+    // Generate unique task ID
+    const taskId = `geocode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Send geocode task to specific client via custom message
+    provider.sendMessage(JSON.stringify({
+      type: 'geocode_task',
+      taskId,
+      locationName,
+      targetClientId  // Target specific client
+    }));
+
+    console.log(`[Agent] 📤 Sent geocode task ${taskId} to client ${targetClientId}`);
+
+    // Wait for result with timeout
+    return new Promise((resolve, reject) => {
+      pendingGeocodeTasks.set(taskId, { resolve, reject });
+
+      // Timeout after 10 seconds
+      const timeoutId = setTimeout(() => {
+        if (pendingGeocodeTasks.has(taskId)) {
+          pendingGeocodeTasks.delete(taskId);
+          console.error(`[Agent] ⏱️  Geocode task ${taskId} timed out`);
+          reject(new Error(`Geocode task timeout for "${locationName}"`));
+        }
+      }, 10000);
+
+      // Clear timeout when promise resolves
+      const originalResolve = pendingGeocodeTasks.get(taskId).resolve;
+      pendingGeocodeTasks.get(taskId).resolve = (result) => {
+        clearTimeout(timeoutId);
+        originalResolve(result);
+      };
+    });
+  }
+};
+
+/**
+ * Execute a single tool call
+ * @param {object} toolCall - {tool: string, args: object}
+ * @returns {Promise<any>} Tool execution result
+ */
+async function executeTool(toolCall) {
+  const toolFn = tools[toolCall.tool];
+
+  if (!toolFn) {
+    console.error(`[Agent] ❌ Unknown tool: ${toolCall.tool}`);
+    return null;
+  }
+
+  try {
+    const result = await toolFn(toolCall.args);
+    console.log(`[Agent] ✅ Tool result:`, result);
+    return result;
   } catch (error) {
-    console.error('[Agent] Error moving cursor:', error);
+    console.error(`[Agent] ❌ Tool execution error:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Process document with LLM and execute returned tool calls
+ */
+async function processDocumentWithLLM() {
+  try {
+    console.log('[Agent] 🔎 Analyzing document with LLM...');
+
+    // Get all text nodes
+    const textNodes = getAllTextNodes(yXmlFragment);
+
+    if (textNodes.length === 0) {
+      console.log('[Agent] ❌ Document is empty');
+      return;
+    }
+
+    // Combine all text
+    const fullText = textNodes.map(n => n.text).join('');
+    console.log(`[Agent] Document text: "${fullText}"`);
+
+    // Call mock LLM
+    const { toolCalls } = await callMockLLM(fullText);
+
+    if (toolCalls.length === 0) {
+      console.log('[Agent] 💭 LLM returned no tool calls');
+      return;
+    }
+
+    console.log(`[Agent] 📋 LLM returned ${toolCalls.length} tool call(s)`);
+
+    // Execute each tool call sequentially
+    for (const toolCall of toolCalls) {
+      await executeTool(toolCall);
+
+      // Small delay between tool executions for visibility
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    console.log('[Agent] ✅ All tool calls executed successfully');
+  } catch (error) {
+    console.error('[Agent] ❌ Error processing with LLM:', error);
   }
 }
 

@@ -96,6 +96,47 @@ export class Document extends YServer<Env> {
           connection,
           JSON.stringify({ action: "pong", timestamp: Date.now() })
         );
+      } else if (data.type === "geocode_task") {
+        console.log(`[Server] Geocode task from agent: ${data.locationName} (task: ${data.taskId})`);
+
+        // Check if message is targeted to a specific client
+        if (data.targetClientId) {
+          console.log(`[Server] 🎯 Forwarding to target client: ${data.targetClientId}`);
+
+          // Find the connection for the target client ID
+          // document.conns is Map<Connection, Set<clientId>>
+          let targetFound = false;
+          const awarenessStates = this.document.awareness.getStates();
+          const targetState = awarenessStates.get(data.targetClientId);
+
+          // Iterate through connections to find the one controlling this client ID
+          this.document.conns.forEach((controlledIds, conn) => {
+            if (controlledIds.has(data.targetClientId)) {
+              // Found the connection that controls this client ID
+              this.sendCustomMessage(conn, message);
+              targetFound = true;
+              const clientName = targetState?.user?.name || 'Unknown';
+              console.log(`[Server] ✅ Task sent to client ${data.targetClientId} (${clientName})`);
+            }
+          });
+
+          if (!targetFound) {
+            console.warn(`[Server] ⚠️  Target client ${data.targetClientId} not found, broadcasting to all`);
+            this.broadcastCustomMessage(message);
+          }
+        } else {
+          // No target specified, broadcast to all
+          this.broadcastCustomMessage(message);
+        }
+      } else if (data.type === "geocode_result") {
+        console.log(`[Server] Geocode result from client (task: ${data.taskId})`);
+
+        // Broadcast result back to all connections (so agent receives it)
+        this.broadcastCustomMessage(message);
+      } else {
+        // Unknown message type - broadcast to all other clients
+        console.log(`[Server] Unknown message type, broadcasting: ${JSON.stringify(data).substring(0, 100)}`);
+        this.broadcastCustomMessage(message);
       }
     } catch (error) {
       console.error("Failed to handle custom message:", error);

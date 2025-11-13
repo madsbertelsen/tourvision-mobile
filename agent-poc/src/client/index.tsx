@@ -26,6 +26,43 @@ const MY_COLOR = colours[Math.floor(Math.random() * colours.length)];
 // Generate a random username
 const MY_USERNAME = `User-${Math.floor(Math.random() * 1000)}`;
 
+// Geocode a location using Nominatim API
+async function geocodeLocation(locationName: string) {
+  try {
+    console.log(`[Client] Geocoding "${locationName}"...`);
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}&limit=1`,
+      {
+        headers: {
+          'User-Agent': 'TourVision-Agent/1.0'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.error('[Client] Nominatim API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data && data.length > 0) {
+      const result = data[0];
+      return {
+        lat: parseFloat(result.lat),
+        lng: parseFloat(result.lon),
+        displayName: result.display_name
+      };
+    }
+
+    console.log(`[Client] No results found for "${locationName}"`);
+    return null;
+  } catch (error) {
+    console.error('[Client] Geocoding error:', error);
+    return null;
+  }
+}
+
 function ProseMirrorEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Array<{ id: string; text: string }>>(
@@ -63,10 +100,37 @@ function ProseMirrorEditor() {
     setProvider(prov);
 
     // Listen for custom messages
-    const handleCustomMessage = (message: string) => {
+    const handleCustomMessage = async (message: string) => {
       try {
-        console.log("Received custom message:", message);
+        console.log("[Client] Received custom message:", message);
         const data = JSON.parse(message);
+
+        // Handle geocode task from agent
+        if (data.type === 'geocode_task') {
+          // Check if this task is targeted to this specific client
+          const myClientId = yDoc.clientID;
+
+          if (data.targetClientId && data.targetClientId !== myClientId) {
+            console.log(`[Client] ⏭️  Ignoring task ${data.taskId} (targeted to client ${data.targetClientId}, I am ${myClientId})`);
+            return;
+          }
+
+          console.log(`[Client] 📍 Received geocode task: "${data.locationName}" (task: ${data.taskId})`);
+
+          // Execute geocoding
+          const result = await geocodeLocation(data.locationName);
+
+          // Send result back to agent
+          prov.sendMessage(JSON.stringify({
+            type: 'geocode_result',
+            taskId: data.taskId,
+            result: result
+          }));
+
+          console.log(`[Client] ✅ Sent geocode result for task ${data.taskId}:`, result);
+        }
+
+        // Display message in UI
         setMessages((prev) => [
           ...prev,
           {
@@ -75,7 +139,7 @@ function ProseMirrorEditor() {
           }
         ]);
       } catch (error) {
-        console.error("Failed to parse custom message:", error);
+        console.error("[Client] Failed to handle custom message:", error);
       }
     };
 
