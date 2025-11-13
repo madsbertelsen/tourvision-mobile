@@ -496,14 +496,15 @@ async function generateAndInsertAnswer(
     const firstWordNode = customSchema.text(words[0], [aiResponseMark]);
     const paragraph = customSchema.nodes.paragraph.create(null, firstWordNode);
 
-    // Insert paragraph with first word and set selection after it
+    // Insert paragraph with first word
     let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
-    const firstWordEndPos = insertAfterPos + 1 + words[0].length;
-    tr = tr.setSelection(TextSelection.near(tr.doc.resolve(firstWordEndPos)));
     editorView.dispatch(tr);
 
     // Calculate position where next words will be inserted
-    let currentPos = firstWordEndPos;
+    let currentPos = insertAfterPos + 1 + words[0].length;
+
+    // Set awareness field for typing position (as plain data, not as ProseMirror cursor)
+    provider.awareness.setLocalStateField('typingPosition', currentPos);
 
     // Add small delay after first word
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -518,21 +519,20 @@ async function generateAndInsertAnswer(
       // Insert word with the AI response mark
       const wordNode = customSchema.text(word, [aiResponseMark]);
       tr = state.tr.insert(currentPos, wordNode);
-
-      // Move selection to end of newly inserted word
-      currentPos += word.length;
-      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(currentPos)));
-
       editorView.dispatch(tr);
+
+      // Update position based on word length
+      currentPos += word.length;
+
+      // Update awareness typing position
+      provider.awareness.setLocalStateField('typingPosition', currentPos);
 
       // Add small delay between words (100ms)
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Clear selection by setting it to document start
-    const finalState = editorView.state;
-    const clearTr = finalState.tr.setSelection(TextSelection.atStart(finalState.doc));
-    editorView.dispatch(clearTr);
+    // Clear typing position
+    provider.awareness.setLocalStateField('typingPosition', null);
 
     console.log(`[Agent] ✅ Finished typing answer`);
 
