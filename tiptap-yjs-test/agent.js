@@ -37,15 +37,54 @@ provider.on('sync', (isSynced) => {
   console.log('[Agent] Synced:', isSynced);
 
   if (isSynced) {
-    // Start moving cursor periodically after sync
-    setInterval(() => {
-      moveAgentCursor();
-    }, 3000);
+    console.log('[Agent] 💡 Period-triggered cursor movement enabled');
+    console.log('[Agent] Type a "." to trigger cursor movement');
   }
 });
 
 provider.on('status', ({ status }) => {
   console.log('[Agent] Status:', status);
+});
+
+// Set up observer for document changes
+let isInitialSync = true;
+let cursorMoveDebounceTimer = null;
+
+yXmlFragment.observeDeep((events) => {
+  if (isInitialSync) {
+    console.log('[Agent] Initial sync completed, document state loaded');
+    isInitialSync = false;
+    return;
+  }
+
+  console.log('[Agent] Document changed');
+
+  let periodDetected = false;
+
+  // Check if any of the changes contain a period
+  events.forEach((event) => {
+    if (event.changes && event.changes.delta) {
+      event.changes.delta.forEach((change) => {
+        if (change.insert && typeof change.insert === 'string' && change.insert.includes('.')) {
+          periodDetected = true;
+        }
+      });
+    }
+  });
+
+  // Trigger cursor movement if a period was detected
+  if (periodDetected) {
+    console.log('[Agent] 🔴 Period detected! Moving cursor...');
+
+    // Debounce: wait 1 second after the last period before moving cursor
+    if (cursorMoveDebounceTimer) {
+      clearTimeout(cursorMoveDebounceTimer);
+    }
+
+    cursorMoveDebounceTimer = setTimeout(() => {
+      moveAgentCursor();
+    }, 1000); // 1 second debounce
+  }
 });
 
 function moveAgentCursor() {
@@ -101,6 +140,9 @@ function moveAgentCursor() {
 // Handle process termination
 process.on('SIGINT', () => {
   console.log('\n[Agent] Shutting down...');
+  if (cursorMoveDebounceTimer) {
+    clearTimeout(cursorMoveDebounceTimer);
+  }
   provider.destroy();
   ydoc.destroy();
   process.exit(0);
