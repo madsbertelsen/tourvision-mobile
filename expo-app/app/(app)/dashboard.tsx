@@ -209,7 +209,7 @@ export default function TripListScreen() {
         <Text style={styles.title}>My Documents</Text>
         <TouchableOpacity
           style={styles.testButton}
-          onPress={() => router.push('/(app)/yjs-test')}
+          onPress={() => router.push('/(app)/agent-editor-test')}
         >
           <Ionicons name="flask-outline" size={24} color="#8B5CF6" />
         </TouchableOpacity>

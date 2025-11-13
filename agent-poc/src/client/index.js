@@ -1,4 +1,4 @@
-import { EditorState } from "prosemirror-state";
+import { EditorState, NodeSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { keymap } from "prosemirror-keymap";
 import { history, undo, redo } from "prosemirror-history";
@@ -564,6 +564,88 @@ class DocumentEditor {
       mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
       dom.appendChild(mapContainer);
 
+      // Create clickable overlay on top of map
+      const clickOverlay = document.createElement('div');
+      clickOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+        cursor: pointer;
+        background: transparent;
+      `;
+
+      // Track press timing for long press detection
+      let pressStartTime = 0;
+      let longPressTimer = null;
+      let isLongPress = false;
+      const LONG_PRESS_DURATION = 500; // 500ms for long press
+
+      // Handle mouse/touch start
+      const handlePressStart = (e) => {
+        pressStartTime = Date.now();
+        isLongPress = false;
+
+        // Set a timer for long press
+        longPressTimer = setTimeout(() => {
+          isLongPress = true;
+          console.log('[MapView] Long press detected - selecting node');
+          // Manually trigger node selection
+          const pos = this.editorView.posAtDOM(dom, 0);
+          if (pos !== null) {
+            const tr = this.editorView.state.tr.setSelection(
+              NodeSelection.create(this.editorView.state.doc, pos)
+            );
+            this.editorView.dispatch(tr);
+          }
+        }, LONG_PRESS_DURATION);
+      };
+
+      // Handle mouse/touch end (or use 'click' for simpler detection)
+      const handleClick = (e) => {
+        // If this was a long press, don't handle as click
+        if (isLongPress) {
+          isLongPress = false;
+          return;
+        }
+
+        // Short click/tap - open fullscreen map
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[MapView] Click detected - opening fullscreen map');
+        const locations = extractLocations();
+        console.log('[MapView] Collected locations:', locations);
+
+        // Send message to React Native WebView if available
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'openFullscreenMap',
+            locations: locations
+          }));
+          console.log('[MapView] Sent openFullscreenMap message to React Native');
+        } else {
+          console.log('[MapView] Not in React Native WebView - message not sent');
+        }
+      };
+
+      // Handle mouse/touch cancel
+      const handlePressCancel = () => {
+        clearTimeout(longPressTimer);
+        pressStartTime = 0;
+        isLongPress = false;
+      };
+
+      // Add event listeners for both mouse and touch
+      clickOverlay.addEventListener('mousedown', handlePressStart);
+      clickOverlay.addEventListener('touchstart', handlePressStart);
+      clickOverlay.addEventListener('mouseleave', handlePressCancel);
+      clickOverlay.addEventListener('touchcancel', handlePressCancel);
+      clickOverlay.addEventListener('click', handleClick);
+
+      dom.appendChild(clickOverlay);
+
       let currentMap = null;
       let currentMarkers = [];
       let previousLocationCount = 0;
@@ -678,7 +760,15 @@ class DocumentEditor {
             container: mapContainer,
             style: 'mapbox://styles/mapbox/light-v11',
             center: [0, 0],
-            zoom: 2
+            zoom: 2,
+            // Disable all map interactions
+            dragPan: false,
+            scrollZoom: false,
+            boxZoom: false,
+            dragRotate: false,
+            keyboard: false,
+            doubleClickZoom: false,
+            touchZoomRotate: false
           });
 
           // Track user interaction
@@ -709,6 +799,17 @@ class DocumentEditor {
           if (currentMap) {
             currentMap.remove();
           }
+        },
+        selectNode: () => {
+          dom.classList.add('ProseMirror-selectednode');
+        },
+        deselectNode: () => {
+          dom.classList.remove('ProseMirror-selectednode');
+        },
+        stopEvent: (event) => {
+          // Stop all events from reaching the map
+          // We handle clicks via the overlay's event listeners
+          return true;
         }
       };
     };

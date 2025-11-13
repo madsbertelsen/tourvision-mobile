@@ -2083,6 +2083,14 @@
           }
         }
 
+        selectNode() {
+          this.dom.classList.add('ProseMirror-selectednode');
+        }
+
+        deselectNode() {
+          this.dom.classList.remove('ProseMirror-selectednode');
+        }
+
         stopEvent() {
           return true; // Prevent ProseMirror from handling events inside the map
         }

@@ -32,6 +32,16 @@
         flex-shrink: 0;
       }
 
+      /* Hide header when hideHeader param is present */
+      body.hide-header #editor-header {
+        display: none;
+      }
+
+      /* Adjust root height when header is hidden */
+      body.hide-header #root {
+        height: 100vh;
+      }
+
       #editor-info {
         display: flex;
         align-items: center;
@@ -64,9 +74,11 @@
         background-color: #1d4ed8;
       }
 
-      /* Make root fill remaining screen height */
+      /* Make root fill remaining screen height and prevent body scroll */
       #root {
         height: calc(100vh - 49px); /* Subtract header height */
+        overflow: hidden;
+        position: relative;
       }
 
       /* Hide all UI elements from index.js except the editor */
@@ -74,9 +86,13 @@
         display: none !important;
       }
 
-      /* Make editor fill the screen */
+      /* Make editor fill the screen and scroll internally */
       #editor {
-        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         overflow-y: auto;
         padding: 16px;
         border: none !important;
@@ -115,9 +131,22 @@
       .ProseMirror h1 { font-size: 2em; }
       .ProseMirror h2 { font-size: 1.5em; }
       .ProseMirror h3 { font-size: 1.25em; }
+
+      /* ProseMirror's own selection styling */
+      .ProseMirror-selectednode {
+        outline: 3px solid #3b82f6;
+        outline-offset: 2px;
+      }
     </style>
   </head>
   <body>
+    <script>
+      // Check for hideHeader parameter immediately (before body renders)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('hideHeader') === 'true') {
+        document.body.classList.add('hide-header');
+      }
+    </script>
     <div id="editor-header">
       <div id="editor-info">
         <span id="doc-id">Loading...</span>
@@ -126,11 +155,12 @@
     </div>
     <div id="root"></div>
     <script type="module">
-      // Get document ID from URL and display it
-      const params = new URLSearchParams(window.location.search);
-      const docId = params.get('doc');
-      const docIdElement = document.getElementById('doc-id');
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const docId = urlParams.get('doc');
 
+      // Display document ID
+      const docIdElement = document.getElementById('doc-id');
       if (docId) {
         docIdElement.textContent = docId;
       } else {

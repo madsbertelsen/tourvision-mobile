@@ -3,7 +3,7 @@ import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { PROSE_STYLES, toCSS } from '@/styles/prose-styles';
 import { extractLocationsFromText } from '@/utils/extract-locations-from-text';
-// v110 - Added detailed logging to yCursorPlugin to diagnose cursor rendering errors
+// v111 - Added selectNode/deselectNode methods to MapView for proper selection styling
 
 // Web-only iframe component
 const IframeWebView = forwardRef<any, any>(({ source, onMessage, onLoadEnd, onLoadStart, style }: any, ref) => {
