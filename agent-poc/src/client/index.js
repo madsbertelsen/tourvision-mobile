@@ -566,6 +566,8 @@ class DocumentEditor {
 
       let currentMap = null;
       let currentMarkers = [];
+      let previousLocationCount = 0;
+      let isUserInteracting = false;
 
       // Extract locations from document
       const extractLocations = () => {
@@ -593,7 +595,7 @@ class DocumentEditor {
       };
 
       // Update markers on map
-      const updateMarkers = (locations) => {
+      const updateMarkers = (locations, shouldAnimate = true) => {
         if (!currentMap) return;
 
         // Remove old markers
@@ -618,25 +620,27 @@ class DocumentEditor {
           currentMarkers.push(marker);
         });
 
-        // Animate to fit bounds
-        if (locations.length === 1) {
-          currentMap.flyTo({
-            center: [locations[0].lng, locations[0].lat],
-            zoom: 12,
-            duration: 1500
-          });
-        } else if (locations.length > 1) {
-          const lngs = locations.map(l => l.lng);
-          const lats = locations.map(l => l.lat);
-          const bounds = new mapboxgl.LngLatBounds(
-            [Math.min(...lngs), Math.min(...lats)],
-            [Math.max(...lngs), Math.max(...lats)]
-          );
-          currentMap.fitBounds(bounds, {
-            padding: 50,
-            maxZoom: 15,
-            duration: 1500
-          });
+        // Only animate to fit bounds if we should (new locations added and user not interacting)
+        if (shouldAnimate && !isUserInteracting) {
+          if (locations.length === 1) {
+            currentMap.flyTo({
+              center: [locations[0].lng, locations[0].lat],
+              zoom: 12,
+              duration: 1500
+            });
+          } else if (locations.length > 1) {
+            const lngs = locations.map(l => l.lng);
+            const lats = locations.map(l => l.lat);
+            const bounds = new mapboxgl.LngLatBounds(
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            );
+            currentMap.fitBounds(bounds, {
+              padding: 50,
+              maxZoom: 15,
+              duration: 1500
+            });
+          }
         }
       };
 
@@ -663,6 +667,9 @@ class DocumentEditor {
           return;
         }
 
+        const locationCountChanged = locations.length !== previousLocationCount;
+        previousLocationCount = locations.length;
+
         if (!currentMap) {
           mapContainer.innerHTML = '';
           mapboxgl.accessToken = mapboxToken;
@@ -674,23 +681,23 @@ class DocumentEditor {
             zoom: 2
           });
 
+          // Track user interaction
+          currentMap.on('movestart', (e) => {
+            if (e.originalEvent) { // Only user-initiated movements
+              isUserInteracting = true;
+            }
+          });
+
           currentMap.on('load', () => {
-            updateMarkers(locations);
+            updateMarkers(locations, true);
           });
         } else {
-          // Map already exists, just update markers
-          updateMarkers(locations);
+          // Map already exists, only animate if location count changed
+          updateMarkers(locations, locationCountChanged);
         }
       };
 
       setTimeout(renderMap, 100);
-
-      // Listen for document changes
-      const updateInterval = setInterval(() => {
-        if (this.editorView) {
-          renderMap();
-        }
-      }, 1000);
 
       return {
         dom,
@@ -699,7 +706,6 @@ class DocumentEditor {
           return true;
         },
         destroy: () => {
-          clearInterval(updateInterval);
           if (currentMap) {
             currentMap.remove();
           }

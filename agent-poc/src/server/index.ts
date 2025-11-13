@@ -21,10 +21,23 @@ export class Document extends YServer<Env> {
     timeout: 10000
   };
 
-  // Track connected users for activity detection
-  private userCount = 0;
+  // Track activity detection
   private supabase: SupabaseClient | null = null;
   private idleTimeoutId: number | null = null;
+
+  /**
+   * Count only real users (excluding AI agents)
+   * Agents are identified by their awareness user.name === 'AI Agent'
+   */
+  private countRealUsers(): number {
+    const states = Array.from(this.document.awareness.getStates().values());
+    const realUsers = states.filter(state => {
+      const user = state.user;
+      // Exclude agents (name === 'AI Agent')
+      return user && user.name && user.name !== 'AI Agent';
+    });
+    return realUsers.length;
+  }
 
   async onStart() {
     console.log("onStart", this.name);
@@ -54,79 +67,92 @@ export class Document extends YServer<Env> {
 
   async onConnect(connection: Connection) {
     await super.onConnect(connection);
-    this.userCount++;
 
-    console.log(`[DO] User connected to ${this.name} (count: ${this.userCount})`);
-
-    // Cancel any pending idle timeout
+    // Cancel any pending idle timeout immediately
     if (this.idleTimeoutId !== null) {
       clearTimeout(this.idleTimeoutId);
       this.idleTimeoutId = null;
       console.log(`[DO] Cancelled idle timeout for ${this.name}`);
     }
 
-    // First user joined - document became active
-    if (this.userCount === 1 && this.supabase) {
-      try {
-        const { error } = await this.supabase
-          .from('document_activity')
-          .insert({
-            document_id: this.name,
-            event_type: 'active',
-            user_count: this.userCount
-          });
+    // Wait briefly for awareness to sync, then check real user count
+    setTimeout(async () => {
+      const realUserCount = this.countRealUsers();
+      const totalConnections = this.document.conns.size;
 
-        if (error) {
-          console.error(`[DO] Failed to log active event:`, error);
-        } else {
-          console.log(`[DO] ✅ Document ${this.name} became ACTIVE`);
+      console.log(`[DO] Connection to ${this.name} - Real users: ${realUserCount}, Total connections: ${totalConnections}`);
+
+      // First real user joined - document became active
+      if (realUserCount === 1 && this.supabase) {
+        try {
+          const { error } = await this.supabase
+            .from('document_activity')
+            .insert({
+              document_id: this.name,
+              event_type: 'active',
+              user_count: realUserCount
+            });
+
+          if (error) {
+            console.error(`[DO] Failed to log active event:`, error);
+          } else {
+            console.log(`[DO] ✅ Document ${this.name} became ACTIVE (real users: ${realUserCount})`);
+          }
+        } catch (error) {
+          console.error(`[DO] Error writing to Supabase:`, error);
         }
-      } catch (error) {
-        console.error(`[DO] Error writing to Supabase:`, error);
       }
-    }
+    }, 500); // 500ms delay to allow awareness state to sync
   }
 
   async onDisconnect(connection: Connection) {
     await super.onDisconnect(connection);
-    this.userCount = Math.max(0, this.userCount - 1);
 
-    console.log(`[DO] User disconnected from ${this.name} (count: ${this.userCount})`);
+    // Wait briefly for awareness to update after disconnect
+    setTimeout(async () => {
+      const realUserCount = this.countRealUsers();
+      const totalConnections = this.document.conns.size;
 
-    // Last user left - schedule idle notification
-    if (this.userCount === 0 && this.supabase) {
-      console.log(`[DO] Starting 30s idle timeout for ${this.name}`);
+      console.log(`[DO] Disconnection from ${this.name} - Real users: ${realUserCount}, Total connections: ${totalConnections}`);
 
-      // Cancel any previous timeout
-      if (this.idleTimeoutId !== null) {
-        clearTimeout(this.idleTimeoutId);
-      }
+      // Last real user left - schedule idle notification
+      if (realUserCount === 0 && this.supabase) {
+        console.log(`[DO] No real users remaining - starting 30s idle timeout for ${this.name}`);
 
-      // Schedule idle notification after 30 seconds
-      this.idleTimeoutId = setTimeout(async () => {
-        // Double-check that no users reconnected
-        if (this.userCount === 0 && this.supabase) {
-          try {
-            const { error } = await this.supabase
-              .from('document_activity')
-              .insert({
-                document_id: this.name,
-                event_type: 'idle',
-                user_count: 0
-              });
-
-            if (error) {
-              console.error(`[DO] Failed to log idle event:`, error);
-            } else {
-              console.log(`[DO] ✅ Document ${this.name} became IDLE`);
-            }
-          } catch (error) {
-            console.error(`[DO] Error writing to Supabase:`, error);
-          }
+        // Cancel any previous timeout
+        if (this.idleTimeoutId !== null) {
+          clearTimeout(this.idleTimeoutId);
         }
-        this.idleTimeoutId = null;
-      }, 30000) as unknown as number; // 30 second grace period
-    }
+
+        // Schedule idle notification after 30 seconds
+        this.idleTimeoutId = setTimeout(async () => {
+          // Double-check that no real users reconnected
+          const finalUserCount = this.countRealUsers();
+          if (finalUserCount === 0 && this.supabase) {
+            try {
+              const { error } = await this.supabase
+                .from('document_activity')
+                .insert({
+                  document_id: this.name,
+                  event_type: 'idle',
+                  user_count: 0
+                });
+
+              if (error) {
+                console.error(`[DO] Failed to log idle event:`, error);
+              } else {
+                console.log(`[DO] ✅ Document ${this.name} became IDLE (no real users for 30s)`);
+              }
+            } catch (error) {
+              console.error(`[DO] Error writing to Supabase:`, error);
+            }
+          } else {
+            console.log(`[DO] Real user reconnected - idle timeout cancelled (count: ${finalUserCount})`);
+          }
+          this.idleTimeoutId = null;
+        }, 30000) as unknown as number; // 30 second grace period
+      }
+    }, 500); // 500ms delay to allow awareness state to update
   }
   async onLoad() {
     console.log("onLoad", this.name);

@@ -317,8 +317,8 @@ async function geocodeLocation(locationName: string): Promise<GeocodeResult> {
 /**
  * Create a geo-mark in the document
  */
-function createGeoMark(locationText: string, geocodeResult: GeocodeResult): void {
-  console.log(`[Agent] 🔧 Creating geo-mark for "${locationText}"`);
+function createGeoMark(locationText: string, geocodeResult: GeocodeResult, colorIndex: number): void {
+  console.log(`[Agent] 🔧 Creating geo-mark for "${locationText}" with color index ${colorIndex}`);
 
   const doc = editorView.state.doc;
 
@@ -344,7 +344,6 @@ function createGeoMark(locationText: string, geocodeResult: GeocodeResult): void
 
   // Create geo-mark
   const geoId: string = `geo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const colorIndex: number = geoMarkColorIndex++;
 
   const markType = customSchema.marks.geoMark;
   const mark = markType.create({
@@ -369,6 +368,38 @@ function createGeoMark(locationText: string, geocodeResult: GeocodeResult): void
       agentId: AGENT_ID
     });
   }
+}
+
+/**
+ * Ensure a map block exists in the document
+ * Inserts one at the end if it doesn't already exist
+ */
+function ensureMapExists(): void {
+  const doc = editorView.state.doc;
+
+  // Check if map already exists
+  let mapExists = false;
+  doc.descendants((node) => {
+    if (node.type.name === 'map') {
+      mapExists = true;
+      return false; // Stop traversing
+    }
+  });
+
+  if (mapExists) {
+    console.log('[Agent] ⏭️  Map already exists, skipping insertion');
+    return;
+  }
+
+  // Create map node with default height
+  const mapNode = customSchema.nodes.map.create({ height: 400 });
+
+  // Insert at end of document (before closing tag)
+  const insertPos = doc.content.size - 1;
+  const tr = editorView.state.tr.insert(insertPos, mapNode);
+  editorView.dispatch(tr);
+
+  console.log('[Agent] 🗺️  Inserted map block at position', insertPos);
 }
 
 /**
@@ -427,6 +458,10 @@ async function callRealLLM(): Promise<any> {
 
   console.log(`[Agent] 🔍 Already marked locations:`, Array.from(alreadyMarked));
 
+  // Create a map to track location names to color indices
+  // This ensures duplicate location names get the same color
+  const locationColorMap: Record<string, number> = {};
+
   // Process each location: geocode then create geo-mark
   for (const location of result.object.locations) {
     // Skip if already marked
@@ -438,12 +473,33 @@ async function callRealLLM(): Promise<any> {
     try {
       console.log(`[Agent] Processing: "${location.name}"`);
 
+      // Normalize location name for color mapping
+      const normalizedName = location.name.toLowerCase().trim();
+
+      // Check if we've seen this location before
+      let colorIndex: number;
+      if (locationColorMap[normalizedName] !== undefined) {
+        // Reuse existing color
+        colorIndex = locationColorMap[normalizedName];
+        console.log(`[Agent] 🎨 Reusing color index ${colorIndex} for "${location.name}"`);
+      } else {
+        // Assign new color
+        colorIndex = geoMarkColorIndex++;
+        locationColorMap[normalizedName] = colorIndex;
+        console.log(`[Agent] 🎨 Assigned new color index ${colorIndex} for "${location.name}"`);
+      }
+
       // Geocode the location
       const geocodeResult = await geocodeLocation(location.fullName);
       console.log(`[Agent] ✅ Geocoded: ${geocodeResult.displayName}`);
 
-      // Create geo-mark in document
-      createGeoMark(location.name, geocodeResult);
+      // Create geo-mark in document with the assigned color
+      createGeoMark(location.name, geocodeResult, colorIndex);
+
+      // If this is the first location, ensure a map block exists
+      if (Object.keys(locationColorMap).length === 1) {
+        ensureMapExists();
+      }
 
     } catch (error) {
       console.error(`[Agent] ❌ Failed to process "${location.name}":`, error);
@@ -451,6 +507,7 @@ async function callRealLLM(): Promise<any> {
   }
 
   console.log('[Agent] ✅ All locations processed');
+  console.log('[Agent] 🎨 Final color map:', locationColorMap);
 
   return result;
 }
@@ -493,7 +550,8 @@ async function generateAndInsertAnswer(
     console.log(`[Agent] 📝 Typing answer word by word (${words.length} words)...`);
 
     // Create paragraph with first word
-    const firstWordNode = customSchema.text(words[0], [aiResponseMark]);
+    const firstWord = words[0]!; // Safe: we already checked words.length > 0
+    const firstWordNode = customSchema.text(firstWord, [aiResponseMark]);
     const paragraph = customSchema.nodes.paragraph.create(null, firstWordNode);
 
     // Insert paragraph with first word
@@ -501,7 +559,7 @@ async function generateAndInsertAnswer(
     editorView.dispatch(tr);
 
     // Calculate position where next words will be inserted
-    let currentPos = insertAfterPos + 1 + words[0].length;
+    let currentPos = insertAfterPos + 1 + firstWord.length;
 
     // Set awareness field for typing position (as plain data, not as ProseMirror cursor)
     provider.awareness.setLocalStateField('typingPosition', currentPos);

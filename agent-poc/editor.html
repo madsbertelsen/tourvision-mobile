@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Editor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        color: #1f2937;
+        background-color: #ffffff;
+      }
+
+      /* Custom header for editor page */
+      #editor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+      }
+
+      #editor-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      #doc-id {
+        font-size: 13px;
+        color: #6b7280;
+        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      }
+
+      #new-doc-btn {
+        padding: 8px 16px;
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      #new-doc-btn:hover {
+        background-color: #2563eb;
+      }
+
+      #new-doc-btn:active {
+        background-color: #1d4ed8;
+      }
+
+      /* Make root fill remaining screen height */
+      #root {
+        height: calc(100vh - 49px); /* Subtract header height */
+      }
+
+      /* Hide all UI elements from index.js except the editor */
+      #root > div > div:not(#editor) {
+        display: none !important;
+      }
+
+      /* Make editor fill the screen */
+      #editor {
+        height: 100%;
+        overflow-y: auto;
+        padding: 16px;
+        border: none !important;
+      }
+
+      /* ProseMirror editor styling */
+      .ProseMirror {
+        outline: none;
+        min-height: 100%;
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .ProseMirror p {
+        margin: 0 0 16px 0;
+      }
+
+      .ProseMirror p:last-child {
+        margin-bottom: 0;
+      }
+
+      .ProseMirror h1,
+      .ProseMirror h2,
+      .ProseMirror h3 {
+        font-weight: 600;
+        margin: 24px 0 12px 0;
+        line-height: 1.3;
+      }
+
+      .ProseMirror h1:first-child,
+      .ProseMirror h2:first-child,
+      .ProseMirror h3:first-child {
+        margin-top: 0;
+      }
+
+      .ProseMirror h1 { font-size: 2em; }
+      .ProseMirror h2 { font-size: 1.5em; }
+      .ProseMirror h3 { font-size: 1.25em; }
+    </style>
+  </head>
+  <body>
+    <div id="editor-header">
+      <div id="editor-info">
+        <span id="doc-id">Loading...</span>
+      </div>
+      <button id="new-doc-btn">+ New Document</button>
+    </div>
+    <div id="root"></div>
+    <script type="module">
+      // Get document ID from URL and display it
+      const params = new URLSearchParams(window.location.search);
+      const docId = params.get('doc');
+      const docIdElement = document.getElementById('doc-id');
+
+      if (docId) {
+        docIdElement.textContent = docId;
+      } else {
+        docIdElement.textContent = 'No document loaded';
+      }
+
+      // Handle new document button
+      document.getElementById('new-doc-btn').addEventListener('click', () => {
+        const newDocId = `doc-${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
+        window.location.href = `/editor.html?doc=${newDocId}`;
+      });
+    </script>
+    <script src="/src/client/index.js" type="module"></script>
+  </body>
+</html>
