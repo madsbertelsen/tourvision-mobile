@@ -129,8 +129,7 @@ export const customSchema = new Schema({
       toDOM(mark) {
         return ['span', {
           class: 'ai-response',
-          'data-question-id': mark.attrs.questionId,
-          style: 'background-color: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 2px 4px; border-radius: 3px; font-style: italic;'
+          'data-question-id': mark.attrs.questionId
         }, 0];
       }
     })

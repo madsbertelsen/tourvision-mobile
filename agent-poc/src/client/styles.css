@@ -104,18 +104,9 @@
   border-bottom-color: #d97706;
 }
 
-/* AI-generated response styling */
+/* AI-generated response styling - no visual distinction */
 .ai-response {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-style: italic;
-  transition: all 0.2s ease;
-}
-
-.ai-response:hover {
-  background-color: rgba(59, 130, 246, 0.15);
+  /* No special styling - appears as regular text */
 }
 
 /* User presence styling */
