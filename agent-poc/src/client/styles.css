@@ -89,6 +89,21 @@
   }
 }
 
+/* Question mark styling */
+.question-mark {
+  background-color: rgba(251, 191, 36, 0.2);
+  border-bottom: 2px dashed #f59e0b;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.question-mark:hover {
+  background-color: rgba(251, 191, 36, 0.35);
+  border-bottom-color: #d97706;
+}
+
 /* User presence styling */
 #presence-avatars > div {
   transition: all 0.2s ease;

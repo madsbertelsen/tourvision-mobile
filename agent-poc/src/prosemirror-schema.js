@@ -92,4 +92,25 @@ export const customSchema = new Schema({
         return ['span', attrs, 0];
       }
     })
+    .addToEnd('question', {
+      attrs: {
+        questionId: { default: null }
+      },
+      inclusive: false,
+      parseDOM: [{
+        tag: 'span.question-mark',
+        getAttrs(dom) {
+          return {
+            questionId: dom.getAttribute('data-question-id')
+          };
+        }
+      }],
+      toDOM(mark) {
+        return ['span', {
+          class: 'question-mark',
+          'data-question-id': mark.attrs.questionId,
+          style: 'background-color: rgba(251, 191, 36, 0.2); border-bottom: 2px dashed #f59e0b; padding: 2px 4px; border-radius: 3px; cursor: help; transition: all 0.2s ease;'
+        }, 0];
+      }
+    })
 });

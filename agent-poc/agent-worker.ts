@@ -127,6 +127,7 @@ provider.on('sync', (isSynced: boolean) => {
   if (isSynced) {
     console.log('[Agent Worker] 💡 Period-triggered LLM processing enabled');
     console.log('[Agent Worker] Type a "." to trigger LLM analysis with tool calling');
+    console.log('[Agent Worker] Type a "?" to automatically mark questions');
 
     // Notify manager that we're connected and ready
     if (process.send) {
@@ -181,13 +182,19 @@ yXmlFragment.observeDeep((events: Y.YEvent<any>[]) => {
   console.log('[Agent] Document changed');
 
   let periodDetected: boolean = false;
+  let questionMarkDetected: boolean = false;
 
-  // Check if any of the changes contain a period
+  // Check if any of the changes contain a period or question mark
   events.forEach((event) => {
     if (event.changes && event.changes.delta) {
       event.changes.delta.forEach((change) => {
-        if (change.insert && typeof change.insert === 'string' && change.insert.includes('.')) {
-          periodDetected = true;
+        if (change.insert && typeof change.insert === 'string') {
+          if (change.insert.includes('.')) {
+            periodDetected = true;
+          }
+          if (change.insert.includes('?')) {
+            questionMarkDetected = true;
+          }
         }
       });
     }
@@ -205,6 +212,20 @@ yXmlFragment.observeDeep((events: Y.YEvent<any>[]) => {
     cursorMoveDebounceTimer = setTimeout(() => {
       processDocumentWithLLM();
     }, 1000); // 1 second debounce
+  }
+
+  // Mark questions if a question mark was detected
+  if (questionMarkDetected) {
+    console.log('[Agent] ❓ Question mark detected! Marking questions...');
+
+    // Debounce: wait 500ms after the last question mark
+    if (cursorMoveDebounceTimer) {
+      clearTimeout(cursorMoveDebounceTimer);
+    }
+
+    cursorMoveDebounceTimer = setTimeout(() => {
+      markQuestions();
+    }, 500); // 500ms debounce
   }
 });
 
@@ -432,6 +453,121 @@ async function callRealLLM(): Promise<any> {
   console.log('[Agent] ✅ All locations processed');
 
   return result;
+}
+
+/**
+ * Mark all sentences containing question marks with the question mark
+ */
+function markQuestions(): void {
+  console.log('[Agent] 🔍 Finding and marking questions...');
+
+  const doc = editorView.state.doc;
+  let tr = editorView.state.tr;
+  let modified = false;
+
+  // Track already marked question IDs to avoid duplicates
+  const alreadyMarkedRanges = new Set<string>();
+
+  doc.descendants((node, pos) => {
+    if (node.isText && node.marks.length > 0) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'question') {
+          // Record this range as already marked
+          alreadyMarkedRanges.add(`${pos}-${pos + node.nodeSize}`);
+        }
+      }
+    }
+  });
+
+  // Find all sentences containing question marks
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text && node.text.includes('?')) {
+      const text = node.text;
+
+      // Find all question marks in this text node
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === '?') {
+          // Find sentence boundaries
+          // Look backwards for sentence start (. ! ? or start of text)
+          let sentenceStart = 0;
+          for (let j = i - 1; j >= 0; j--) {
+            if (text[j] === '.' || text[j] === '!' || text[j] === '?') {
+              sentenceStart = j + 1;
+              break;
+            }
+          }
+
+          // Trim whitespace from start
+          while (sentenceStart < i && /\s/.test(text[sentenceStart])) {
+            sentenceStart++;
+          }
+
+          // Sentence end is the question mark + 1
+          const sentenceEnd = i + 1;
+
+          // Calculate absolute positions
+          const absoluteStart = pos + sentenceStart;
+          const absoluteEnd = pos + sentenceEnd;
+
+          // Check if this range is already marked
+          const rangeKey = `${absoluteStart}-${absoluteEnd}`;
+          if (alreadyMarkedRanges.has(rangeKey)) {
+            console.log(`[Agent] ⏭️  Skipping question at ${absoluteStart}-${absoluteEnd} (already marked)`);
+            continue;
+          }
+
+          // Check if any part of this range overlaps with existing marks
+          let hasOverlap = false;
+          for (const existing of alreadyMarkedRanges) {
+            const [existingStart, existingEnd] = existing.split('-').map(Number);
+            if (
+              (absoluteStart >= existingStart && absoluteStart < existingEnd) ||
+              (absoluteEnd > existingStart && absoluteEnd <= existingEnd) ||
+              (absoluteStart <= existingStart && absoluteEnd >= existingEnd)
+            ) {
+              hasOverlap = true;
+              break;
+            }
+          }
+
+          if (hasOverlap) {
+            console.log(`[Agent] ⏭️  Skipping question at ${absoluteStart}-${absoluteEnd} (overlaps existing mark)`);
+            continue;
+          }
+
+          // Create question mark
+          const questionId = `q-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const questionMark = customSchema.marks.question.create({ questionId });
+
+          console.log(`[Agent] ✅ Marking question: "${text.substring(sentenceStart, sentenceEnd)}" at ${absoluteStart}-${absoluteEnd}`);
+
+          // Add mark to transaction
+          tr = tr.addMark(absoluteStart, absoluteEnd, questionMark);
+          modified = true;
+
+          // Record this range
+          alreadyMarkedRanges.add(rangeKey);
+        }
+      }
+    }
+  });
+
+  // Apply transaction if any marks were added
+  if (modified) {
+    editorView.dispatch(tr);
+    console.log('[Agent] ✅ Questions marked successfully');
+
+    // Report to manager
+    if (process.send) {
+      process.send({
+        type: 'questions_marked',
+        documentId: DOCUMENT_ID,
+        agentId: AGENT_ID
+      });
+    }
+  } else {
+    console.log('[Agent] ℹ️  No new questions to mark');
+  }
 }
 
 /**
