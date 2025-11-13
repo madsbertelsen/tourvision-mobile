@@ -511,6 +511,9 @@ class DocumentEditor {
       mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
       dom.appendChild(mapContainer);
 
+      let currentMap = null;
+      let currentMarkers = [];
+
       // Extract locations from document
       const extractLocations = () => {
         const locations = [];
@@ -532,7 +535,56 @@ class DocumentEditor {
             }
           }
         });
+        console.log('[MapNodeView] Extracted locations:', locations.length);
         return locations;
+      };
+
+      // Update markers on map
+      const updateMarkers = (locations) => {
+        if (!currentMap) return;
+
+        // Remove old markers
+        currentMarkers.forEach(marker => marker.remove());
+        currentMarkers = [];
+
+        // Add new markers
+        locations.forEach((location) => {
+          const bgColor = COLORS[location.colorIndex % COLORS.length];
+          const el = document.createElement('div');
+          el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+          const inner = document.createElement('div');
+          inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+          el.appendChild(inner);
+
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([location.lng, location.lat])
+            .setPopup(new mapboxgl.Popup().setText(location.placeName))
+            .addTo(currentMap);
+
+          currentMarkers.push(marker);
+        });
+
+        // Animate to fit bounds
+        if (locations.length === 1) {
+          currentMap.flyTo({
+            center: [locations[0].lng, locations[0].lat],
+            zoom: 12,
+            duration: 1500
+          });
+        } else if (locations.length > 1) {
+          const lngs = locations.map(l => l.lng);
+          const lats = locations.map(l => l.lat);
+          const bounds = new mapboxgl.LngLatBounds(
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)]
+          );
+          currentMap.fitBounds(bounds, {
+            padding: 50,
+            maxZoom: 15,
+            duration: 1500
+          });
+        }
       };
 
       // Render map
@@ -540,67 +592,65 @@ class DocumentEditor {
         const locations = extractLocations();
         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
-        if (!mapboxToken || locations.length === 0) {
+        if (!mapboxToken) {
           mapContainer.innerHTML = `
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
-              🗺️ ${!mapboxToken ? 'Mapbox token required' : 'No locations found'}
+              🗺️ Mapbox token required
             </div>
           `;
           return;
         }
 
-        mapContainer.innerHTML = '';
-        mapboxgl.accessToken = mapboxToken;
+        if (locations.length === 0) {
+          mapContainer.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
+              🗺️ No locations found
+            </div>
+          `;
+          return;
+        }
 
-        const map = new mapboxgl.Map({
-          container: mapContainer,
-          style: 'mapbox://styles/mapbox/light-v11',
-          center: [0, 0],
-          zoom: 2
-        });
+        if (!currentMap) {
+          mapContainer.innerHTML = '';
+          mapboxgl.accessToken = mapboxToken;
 
-        // Add markers and fit bounds
-        map.on('load', () => {
-          // Add markers
-          locations.forEach((location) => {
-            const bgColor = COLORS[location.colorIndex % COLORS.length];
-            const el = document.createElement('div');
-            el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
-
-            const inner = document.createElement('div');
-            inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
-            el.appendChild(inner);
-
-            new mapboxgl.Marker(el)
-              .setLngLat([location.lng, location.lat])
-              .setPopup(new mapboxgl.Popup().setText(location.placeName))
-              .addTo(map);
+          currentMap = new mapboxgl.Map({
+            container: mapContainer,
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: [0, 0],
+            zoom: 2
           });
 
-          // Fit bounds
-          if (locations.length === 1) {
-            map.flyTo({
-              center: [locations[0].lng, locations[0].lat],
-              zoom: 12
-            });
-          } else if (locations.length > 1) {
-            const lngs = locations.map(l => l.lng);
-            const lats = locations.map(l => l.lat);
-            const bounds = new mapboxgl.LngLatBounds(
-              [Math.min(...lngs), Math.min(...lats)],
-              [Math.max(...lngs), Math.max(...lats)]
-            );
-            map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-          }
-        });
+          currentMap.on('load', () => {
+            updateMarkers(locations);
+          });
+        } else {
+          // Map already exists, just update markers
+          updateMarkers(locations);
+        }
       };
 
       setTimeout(renderMap, 100);
 
+      // Listen for document changes
+      const updateInterval = setInterval(() => {
+        if (this.editorView) {
+          renderMap();
+        }
+      }, 1000);
+
       return {
         dom,
-        update: () => false, // Don't update, always recreate
-        destroy: () => {}
+        update: () => {
+          renderMap();
+          return true;
+        },
+        destroy: () => {
+          clearInterval(updateInterval);
+          if (currentMap) {
+            currentMap.remove();
+          }
+        }
       };
     };
 
