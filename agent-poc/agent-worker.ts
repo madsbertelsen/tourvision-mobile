@@ -500,14 +500,18 @@ async function generateAndInsertAnswer(
     let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
     editorView.dispatch(tr);
 
-    // Calculate position where next words will be inserted
+    // Calculate position where next words will be inserted (after dispatching)
     let currentPos = insertAfterPos + 1 + words[0].length; // Position after first word
 
-    // Set agent cursor
-    provider.awareness.setLocalStateField('cursor', {
-      anchor: currentPos,
-      head: currentPos
-    });
+    // Wrap cursor updates in try-catch to handle Y.js sync issues
+    try {
+      provider.awareness.setLocalStateField('cursor', {
+        anchor: currentPos,
+        head: currentPos
+      });
+    } catch (error) {
+      console.log('[Agent] ⚠️  Could not set cursor position (Y.js sync issue)');
+    }
 
     // Add small delay after first word
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -516,17 +520,26 @@ async function generateAndInsertAnswer(
     for (let i = 1; i < words.length; i++) {
       const word = words[i];
 
+      // Get fresh state position before each insert
+      const state = editorView.state;
+
       // Insert word with the AI response mark
       const wordNode = customSchema.text(word, [aiResponseMark]);
-      tr = editorView.state.tr.insert(currentPos, wordNode);
+      tr = state.tr.insert(currentPos, wordNode);
       editorView.dispatch(tr);
 
-      // Move cursor forward
+      // Update position based on word length
       currentPos += word.length;
-      provider.awareness.setLocalStateField('cursor', {
-        anchor: currentPos,
-        head: currentPos
-      });
+
+      // Try to update cursor position
+      try {
+        provider.awareness.setLocalStateField('cursor', {
+          anchor: currentPos,
+          head: currentPos
+        });
+      } catch (error) {
+        // Silently continue if cursor update fails
+      }
 
       // Add small delay between words (100ms)
       await new Promise(resolve => setTimeout(resolve, 100));
