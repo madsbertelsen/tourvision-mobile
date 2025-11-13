@@ -17,6 +17,9 @@ console.log('[Agent] Connecting to:', `localhost:${WS_PORT}/parties/${PARTY_NAME
 const ydoc = new Y.Doc();
 const yXmlFragment = ydoc.getXmlFragment('prosemirror');
 
+// Track geo-marks for color assignment
+let geoMarkColorIndex = 0;
+
 // Create YProvider (custom provider with message support)
 const provider = new YProvider(
   `localhost:${WS_PORT}`,
@@ -193,6 +196,18 @@ async function callMockLLM(documentText) {
         locationName: matchedText
       }
     });
+
+    // Tool call 3: Create geo-mark (will use result from geocode)
+    toolCalls.push({
+      tool: 'createGeoMark',
+      args: {
+        text: matchedText,
+        startOffset,
+        endOffset,
+        // geocodeResult will be populated after geocode tool executes
+        geocodeResult: null
+      }
+    });
   }
 
   return { toolCalls };
@@ -247,6 +262,82 @@ const tools = {
       success: true,
       selected: text,
       positions: { startOffset, endOffset }
+    };
+  },
+
+  /**
+   * Create a geo-mark at the specified text range
+   */
+  createGeoMark: async ({ text, startOffset, endOffset, geocodeResult }) => {
+    console.log(`[Agent] 🔧 Tool: createGeoMark("${text}", ${startOffset}, ${endOffset})`);
+
+    if (!geocodeResult || !geocodeResult.lat || !geocodeResult.lng) {
+      throw new Error('Invalid geocode result - missing coordinates');
+    }
+
+    // Get all text nodes
+    const textNodes = getAllTextNodes(yXmlFragment);
+
+    // Find which text node contains the start and end positions
+    let startNode = null;
+    let startLocalOffset = 0;
+    let endNode = null;
+    let endLocalOffset = 0;
+
+    for (const textNode of textNodes) {
+      if (startOffset >= textNode.startOffset && startOffset < textNode.endOffset) {
+        startNode = textNode.node;
+        startLocalOffset = startOffset - textNode.startOffset;
+      }
+
+      if (endOffset > textNode.startOffset && endOffset <= textNode.endOffset) {
+        endNode = textNode.node;
+        endLocalOffset = endOffset - textNode.startOffset;
+      }
+    }
+
+    if (!startNode || !endNode) {
+      throw new Error('Could not locate text nodes for geo-mark');
+    }
+
+    // Generate unique geo ID
+    const geoId = `geo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    // Assign color index
+    const colorIndex = geoMarkColorIndex++;
+
+    // Create geo-mark attributes
+    const geoMarkAttrs = {
+      geoId: geoId,
+      placeName: geocodeResult.displayName || text,
+      lat: geocodeResult.lat.toString(),
+      lng: geocodeResult.lng.toString(),
+      colorIndex: colorIndex,
+      coordSource: 'nominatim'
+    };
+
+    console.log(`[Agent] 📍 Creating geo-mark with ID: ${geoId}, color: ${colorIndex}`);
+
+    // Apply the mark to the text range
+    // Y.js formatting: textNode.format(startOffset, length, {markName: attributes})
+    if (startNode === endNode) {
+      // Single text node
+      const length = endLocalOffset - startLocalOffset;
+      startNode.format(startLocalOffset, length, { geoMark: geoMarkAttrs });
+      console.log(`[Agent] ✅ Geo-mark applied to single text node`);
+    } else {
+      // Spans multiple nodes (unlikely but handle it)
+      console.warn('[Agent] ⚠️  Geo-mark spans multiple text nodes - applying to first node only');
+      const length = startNode.toString().length - startLocalOffset;
+      startNode.format(startLocalOffset, length, { geoMark: geoMarkAttrs });
+    }
+
+    return {
+      success: true,
+      geoId: geoId,
+      colorIndex: colorIndex,
+      placeName: geoMarkAttrs.placeName,
+      coordinates: { lat: geocodeResult.lat, lng: geocodeResult.lng }
     };
   },
 
@@ -366,8 +457,23 @@ async function processDocumentWithLLM() {
     console.log(`[Agent] 📋 LLM returned ${toolCalls.length} tool call(s)`);
 
     // Execute each tool call sequentially
-    for (const toolCall of toolCalls) {
-      await executeTool(toolCall);
+    // Store results for passing between tools
+    const toolResults = {};
+
+    for (let i = 0; i < toolCalls.length; i++) {
+      const toolCall = toolCalls[i];
+
+      // If this is createGeoMark, inject the geocode result
+      if (toolCall.tool === 'createGeoMark' && toolResults.geocode) {
+        toolCall.args.geocodeResult = toolResults.geocode;
+      }
+
+      const result = await executeTool(toolCall);
+
+      // Store result for other tools to use
+      if (result) {
+        toolResults[toolCall.tool] = result;
+      }
 
       // Small delay between tool executions for visibility
       await new Promise(resolve => setTimeout(resolve, 500));

@@ -3,13 +3,13 @@ import { useEffect, useState, useRef } from "react";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { Schema, DOMParser } from "prosemirror-model";
-import { schema } from "prosemirror-schema-basic";
 import { keymap } from "prosemirror-keymap";
 import { history, undo, redo } from "prosemirror-history";
 import { baseKeymap } from "prosemirror-commands";
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from "y-prosemirror";
 import YProvider from "../y-partyserver/provider";
 import * as Y from "yjs";
+import { customSchema } from "../prosemirror-schema";
 
 import "./styles.css";
 
@@ -190,7 +190,7 @@ function ProseMirrorEditor() {
 
     // Create ProseMirror EditorState with Y.js plugins
     const state = EditorState.create({
-      schema,
+      schema: customSchema,
       plugins: [
         ySyncPlugin(yXmlFragment),
         yCursorPlugin(prov.awareness, { cursorBuilder }),
