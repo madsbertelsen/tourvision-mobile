@@ -503,16 +503,6 @@ async function generateAndInsertAnswer(
     // Calculate position where next words will be inserted (after dispatching)
     let currentPos = insertAfterPos + 1 + words[0].length; // Position after first word
 
-    // Wrap cursor updates in try-catch to handle Y.js sync issues
-    try {
-      provider.awareness.setLocalStateField('cursor', {
-        anchor: currentPos,
-        head: currentPos
-      });
-    } catch (error) {
-      console.log('[Agent] ⚠️  Could not set cursor position (Y.js sync issue)');
-    }
-
     // Add small delay after first word
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -531,22 +521,9 @@ async function generateAndInsertAnswer(
       // Update position based on word length
       currentPos += word.length;
 
-      // Try to update cursor position
-      try {
-        provider.awareness.setLocalStateField('cursor', {
-          anchor: currentPos,
-          head: currentPos
-        });
-      } catch (error) {
-        // Silently continue if cursor update fails
-      }
-
       // Add small delay between words (100ms)
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-
-    // Clear agent cursor after typing
-    provider.awareness.setLocalStateField('cursor', null);
 
     console.log(`[Agent] ✅ Finished typing answer`);
 
@@ -561,8 +538,6 @@ async function generateAndInsertAnswer(
     }
   } catch (error) {
     console.error(`[Agent] ❌ Failed to generate answer for "${questionText}":`, error);
-    // Clear cursor on error
-    provider.awareness.setLocalStateField('cursor', null);
   }
 }
 
