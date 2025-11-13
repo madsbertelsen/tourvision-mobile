@@ -496,12 +496,14 @@ async function generateAndInsertAnswer(
     const firstWordNode = customSchema.text(words[0], [aiResponseMark]);
     const paragraph = customSchema.nodes.paragraph.create(null, firstWordNode);
 
-    // Insert paragraph with first word
+    // Insert paragraph with first word and set selection after it
     let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
+    const firstWordEndPos = insertAfterPos + 1 + words[0].length;
+    tr = tr.setSelection(editorView.state.selection.constructor.near(tr.doc.resolve(firstWordEndPos)));
     editorView.dispatch(tr);
 
-    // Calculate position where next words will be inserted (after dispatching)
-    let currentPos = insertAfterPos + 1 + words[0].length; // Position after first word
+    // Calculate position where next words will be inserted
+    let currentPos = firstWordEndPos;
 
     // Add small delay after first word
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -510,20 +512,27 @@ async function generateAndInsertAnswer(
     for (let i = 1; i < words.length; i++) {
       const word = words[i];
 
-      // Get fresh state position before each insert
+      // Get fresh state before each insert
       const state = editorView.state;
 
       // Insert word with the AI response mark
       const wordNode = customSchema.text(word, [aiResponseMark]);
       tr = state.tr.insert(currentPos, wordNode);
-      editorView.dispatch(tr);
 
-      // Update position based on word length
+      // Move selection to end of newly inserted word
       currentPos += word.length;
+      tr = tr.setSelection(state.selection.constructor.near(tr.doc.resolve(currentPos)));
+
+      editorView.dispatch(tr);
 
       // Add small delay between words (100ms)
       await new Promise(resolve => setTimeout(resolve, 100));
     }
+
+    // Clear selection by setting it to a neutral position
+    const finalState = editorView.state;
+    const clearTr = finalState.tr.setSelection(finalState.selection.constructor.atStart(finalState.doc));
+    editorView.dispatch(clearTr);
 
     console.log(`[Agent] ✅ Finished typing answer`);
 
