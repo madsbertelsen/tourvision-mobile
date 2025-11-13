@@ -456,6 +456,55 @@ async function callRealLLM(): Promise<any> {
 }
 
 /**
+ * Generate an AI answer to a question and insert it as a new paragraph
+ */
+async function generateAndInsertAnswer(
+  questionText: string,
+  questionId: string,
+  insertAfterPos: number
+): Promise<void> {
+  try {
+    console.log(`[Agent] 🤖 Generating answer for: "${questionText}"`);
+
+    // Call LLM to generate answer
+    const result = await generateObject({
+      model: 'openai/gpt-4o-mini',
+      schema: z.object({
+        answer: z.string().describe('Brief answer to the question (1-2 sentences)')
+      }),
+      prompt: `Question: ${questionText}\n\nProvide a brief, helpful answer in 1-2 sentences.`
+    });
+
+    const answerText = result.object.answer;
+    console.log(`[Agent] ✅ Generated answer: "${answerText}"`);
+
+    // Create paragraph with AI response mark
+    const aiResponseMark = customSchema.marks.aiResponse.create({ questionId });
+    const textNode = customSchema.text(answerText, [aiResponseMark]);
+    const paragraph = customSchema.nodes.paragraph.create(null, textNode);
+
+    // Insert paragraph after the question's paragraph
+    const tr = editorView.state.tr.insert(insertAfterPos, paragraph);
+    editorView.dispatch(tr);
+
+    console.log(`[Agent] 📝 Inserted AI answer at position ${insertAfterPos}`);
+
+    // Report to manager
+    if (process.send) {
+      process.send({
+        type: 'answer_generated',
+        documentId: DOCUMENT_ID,
+        agentId: AGENT_ID,
+        questionId
+      });
+    }
+  } catch (error) {
+    console.error(`[Agent] ❌ Failed to generate answer for "${questionText}":`, error);
+    // Silent failure - question mark remains, no answer added
+  }
+}
+
+/**
  * Mark all sentences containing question marks with the question mark
  */
 function markQuestions(): void {
@@ -467,6 +516,14 @@ function markQuestions(): void {
 
   // Track already marked question IDs to avoid duplicates
   const alreadyMarkedRanges = new Set<string>();
+
+  // Track questions that need answers generated
+  interface QuestionToAnswer {
+    questionId: string;
+    questionText: string;
+    paragraphEndPos: number;
+  }
+  const questionsToAnswer: QuestionToAnswer[] = [];
 
   doc.descendants((node, pos) => {
     if (node.isText && node.marks.length > 0) {
@@ -547,6 +604,27 @@ function markQuestions(): void {
 
           // Record this range
           alreadyMarkedRanges.add(rangeKey);
+
+          // Find the paragraph this question is in and get its end position
+          let paragraphEndPos = pos + node.nodeSize; // Default to end of current node
+          doc.descendants((parentNode, parentPos) => {
+            if (parentNode.type.name === 'paragraph') {
+              const nodeStart = parentPos;
+              const nodeEnd = parentPos + parentNode.nodeSize;
+              // Check if our question is inside this paragraph
+              if (absoluteStart >= nodeStart && absoluteEnd <= nodeEnd) {
+                paragraphEndPos = nodeEnd;
+                return false; // Stop traversing
+              }
+            }
+          });
+
+          // Store question for async answer generation
+          questionsToAnswer.push({
+            questionId,
+            questionText: text.substring(sentenceStart, sentenceEnd),
+            paragraphEndPos
+          });
         }
       }
     }
@@ -563,6 +641,15 @@ function markQuestions(): void {
         type: 'questions_marked',
         documentId: DOCUMENT_ID,
         agentId: AGENT_ID
+      });
+    }
+
+    // Generate answers asynchronously (don't block)
+    if (questionsToAnswer.length > 0) {
+      console.log(`[Agent] 🤖 Generating answers for ${questionsToAnswer.length} question(s)...`);
+      questionsToAnswer.forEach(q => {
+        // Call async but don't await - let it run in background
+        generateAndInsertAnswer(q.questionText, q.questionId, q.paragraphEndPos);
       });
     }
   } else {

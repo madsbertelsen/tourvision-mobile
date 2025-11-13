@@ -104,6 +104,20 @@
   border-bottom-color: #d97706;
 }
 
+/* AI-generated response styling */
+.ai-response {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-style: italic;
+  transition: all 0.2s ease;
+}
+
+.ai-response:hover {
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
 /* User presence styling */
 #presence-avatars > div {
   transition: all 0.2s ease;

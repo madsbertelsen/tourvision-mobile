@@ -113,4 +113,25 @@ export const customSchema = new Schema({
         }, 0];
       }
     })
+    .addToEnd('aiResponse', {
+      attrs: {
+        questionId: { default: null }
+      },
+      inclusive: false,
+      parseDOM: [{
+        tag: 'span.ai-response',
+        getAttrs(dom) {
+          return {
+            questionId: dom.getAttribute('data-question-id')
+          };
+        }
+      }],
+      toDOM(mark) {
+        return ['span', {
+          class: 'ai-response',
+          'data-question-id': mark.attrs.questionId,
+          style: 'background-color: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 2px 4px; border-radius: 3px; font-style: italic;'
+        }, 0];
+      }
+    })
 });
