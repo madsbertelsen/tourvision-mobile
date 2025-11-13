@@ -457,6 +457,7 @@ async function callRealLLM(): Promise<any> {
 
 /**
  * Generate an AI answer to a question and insert it as a new paragraph
+ * Types the answer word-by-word with agent cursor movement
  */
 async function generateAndInsertAnswer(
   questionText: string,
@@ -466,7 +467,7 @@ async function generateAndInsertAnswer(
   try {
     console.log(`[Agent] 🤖 Generating answer for: "${questionText}"`);
 
-    // Call LLM to generate answer
+    // Generate full answer first
     const result = await generateObject({
       model: 'openai/gpt-4o-mini',
       schema: z.object({
@@ -478,16 +479,51 @@ async function generateAndInsertAnswer(
     const answerText = result.object.answer;
     console.log(`[Agent] ✅ Generated answer: "${answerText}"`);
 
-    // Create paragraph with AI response mark
+    // Create empty paragraph with AI response mark
     const aiResponseMark = customSchema.marks.aiResponse.create({ questionId });
-    const textNode = customSchema.text(answerText, [aiResponseMark]);
-    const paragraph = customSchema.nodes.paragraph.create(null, textNode);
+    const emptyTextNode = customSchema.text('', [aiResponseMark]);
+    const paragraph = customSchema.nodes.paragraph.create(null, emptyTextNode);
 
-    // Insert paragraph after the question's paragraph
-    const tr = editorView.state.tr.insert(insertAfterPos, paragraph);
+    // Insert empty paragraph first
+    let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
     editorView.dispatch(tr);
 
-    console.log(`[Agent] 📝 Inserted AI answer at position ${insertAfterPos}`);
+    // Calculate position where text will be inserted (inside the new paragraph)
+    let currentPos = insertAfterPos + 1; // +1 to get inside the paragraph
+
+    console.log(`[Agent] 📝 Typing answer word by word...`);
+
+    // Split into words (keeping spaces)
+    const words = answerText.match(/\S+\s*/g) || [];
+
+    // Set agent cursor at the starting position
+    provider.awareness.setLocalStateField('cursor', {
+      anchor: currentPos,
+      head: currentPos
+    });
+
+    // Type word by word
+    for (const word of words) {
+      // Insert word with the AI response mark
+      const wordNode = customSchema.text(word, [aiResponseMark]);
+      tr = editorView.state.tr.insert(currentPos, wordNode);
+      editorView.dispatch(tr);
+
+      // Move cursor forward
+      currentPos += word.length;
+      provider.awareness.setLocalStateField('cursor', {
+        anchor: currentPos,
+        head: currentPos
+      });
+
+      // Add small delay between words (100ms)
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Clear agent cursor after typing
+    provider.awareness.setLocalStateField('cursor', null);
+
+    console.log(`[Agent] ✅ Finished typing answer`);
 
     // Report to manager
     if (process.send) {
@@ -500,7 +536,8 @@ async function generateAndInsertAnswer(
     }
   } catch (error) {
     console.error(`[Agent] ❌ Failed to generate answer for "${questionText}":`, error);
-    // Silent failure - question mark remains, no answer added
+    // Clear cursor on error
+    provider.awareness.setLocalStateField('cursor', null);
   }
 }
 
