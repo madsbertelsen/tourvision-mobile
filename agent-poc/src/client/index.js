@@ -115,15 +115,23 @@ class DocumentEditor {
     const app = document.getElementById('root');
     app.innerHTML = `
       <div>
-        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <h1 style="margin: 0;">Multi-Document Editor</h1>
-          <button id="new-doc-btn" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            + New Document
-          </button>
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <h1 style="margin: 0;">Multi-Document Editor</h1>
+            <button id="new-doc-btn" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              + New Document
+            </button>
+            ${this.documentId ? `
+              <span style="padding: 10px; background-color: #f0f0f0; border-radius: 4px; font-size: 14px;">
+                Current: <strong>${this.documentId}</strong>
+              </span>
+            ` : ''}
+          </div>
           ${this.documentId ? `
-            <span style="padding: 10px; background-color: #f0f0f0; border-radius: 4px; font-size: 14px;">
-              Current: <strong>${this.documentId}</strong>
-            </span>
+            <div id="user-presence" style="display: flex; gap: 8px; align-items: center; padding: 8px 12px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+              <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Editing:</span>
+              <div id="presence-avatars" style="display: flex; gap: 6px;"></div>
+            </div>
           ` : ''}
         </div>
 
@@ -445,6 +453,33 @@ class DocumentEditor {
       }
     });
 
+    // Listen for awareness changes (users joining/leaving)
+    const updatePresence = () => {
+      const presenceAvatars = document.getElementById('presence-avatars');
+      if (!presenceAvatars) return;
+
+      const states = Array.from(prov.awareness.getStates().values());
+      const users = states
+        .filter(state => state.user)
+        .map(state => state.user);
+
+      if (users.length === 0) {
+        presenceAvatars.innerHTML = '<span style="font-size: 12px; color: #9ca3af;">No one else here</span>';
+      } else {
+        presenceAvatars.innerHTML = users.map(user => `
+          <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background-color: white; border: 1px solid ${user.color}; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${user.color};"></div>
+            <span style="font-size: 12px; font-weight: 500; color: #374151;">${user.name}</span>
+          </div>
+        `).join('');
+      }
+    };
+
+    prov.awareness.on('change', updatePresence);
+
+    // Initial presence update
+    setTimeout(updatePresence, 100);
+
     // Listen for custom messages
     const handleCustomMessage = (message) => {
       try {
@@ -473,19 +508,33 @@ class DocumentEditor {
 
     prov.on("custom-message", handleCustomMessage);
 
-    // Cursor builder for awareness
+    // Cursor builder for awareness - enhanced with better visuals
     const cursorBuilder = (user) => {
       const cursor = document.createElement("span");
       cursor.classList.add("ProseMirror-yjs-cursor");
       cursor.style.borderColor = user.color || "#000";
+      cursor.style.borderLeftWidth = "2px";
+      cursor.style.borderLeftStyle = "solid";
 
       const userLabel = document.createElement("div");
       userLabel.classList.add("ProseMirror-yjs-cursor-label");
       userLabel.style.backgroundColor = user.color || "#000";
       userLabel.textContent = user.name || "Anonymous";
 
+      // Add a subtle pulse effect for better visibility
+      userLabel.style.transition = "all 0.2s ease";
+
       cursor.appendChild(userLabel);
       return cursor;
+    };
+
+    // Selection builder for awareness - creates highlighted selections
+    const selectionBuilder = (user) => {
+      const selection = document.createElement("span");
+      selection.classList.add("ProseMirror-yjs-selection");
+      selection.style.backgroundColor = user.color || "#000";
+      selection.style.opacity = "0.25";
+      return selection;
     };
 
     // Create ProseMirror EditorState
@@ -493,7 +542,11 @@ class DocumentEditor {
       schema: customSchema,
       plugins: [
         ySyncPlugin(yXmlFragment),
-        yCursorPlugin(prov.awareness, { cursorBuilder }),
+        yCursorPlugin(prov.awareness, {
+          cursorBuilder,
+          selectionBuilder,
+          getSelection: (state) => state.selection
+        }),
         yUndoPlugin(),
         history(),
         keymap({ "Mod-z": undo, "Mod-y": redo }),
