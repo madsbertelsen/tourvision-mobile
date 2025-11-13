@@ -31,10 +31,7 @@ CREATE TABLE IF NOT EXISTS agent_connections (
   error_message TEXT,
   metadata JSONB,
 
-  -- Constraints
-  -- Only one active agent per document at a time
-  CONSTRAINT unique_active_document UNIQUE (document_id, status)
-    WHERE status IN ('connecting', 'active')
+  -- Note: Partial unique constraint handled via unique index below
 );
 
 -- Indexes for agent_connections
@@ -43,6 +40,11 @@ CREATE INDEX idx_agent_document ON agent_connections(document_id);
 CREATE INDEX idx_agent_manager ON agent_connections(manager_id);
 CREATE INDEX idx_agent_activity ON agent_connections(last_activity_at DESC);
 CREATE INDEX idx_agent_connected_at ON agent_connections(connected_at DESC);
+
+-- Partial unique index: Only one active agent per document at a time
+CREATE UNIQUE INDEX idx_unique_active_document
+  ON agent_connections(document_id)
+  WHERE status IN ('connecting', 'active');
 
 -- Table: document_activity
 -- Logs activity signals from Durable Objects
