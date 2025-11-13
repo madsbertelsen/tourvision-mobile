@@ -172,6 +172,51 @@
         const newDocId = `doc-${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
         window.location.href = `/editor.html?doc=${newDocId}`;
       });
+
+      // Store document ID globally for message handlers
+      window.editorDocumentId = docId;
+
+      // Listen for messages from parent frame (React Native WebView or iframe)
+      window.addEventListener('message', (event) => {
+        // Handle messages from parent
+        if (event.data) {
+          try {
+            const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            console.log('[Editor] Received message from parent:', message);
+
+            // Dispatch custom event that index.js can listen to
+            const customEvent = new CustomEvent('parentMessage', { detail: message });
+            window.dispatchEvent(customEvent);
+          } catch (error) {
+            console.error('[Editor] Error parsing message:', error);
+          }
+        }
+      });
+
+      // Helper function to send messages to parent
+      window.sendToParent = (message) => {
+        const messageString = JSON.stringify(message);
+
+        // Send to React Native WebView if available
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(messageString);
+        }
+        // Send to parent iframe if in iframe
+        else if (window.parent && window.parent !== window) {
+          window.parent.postMessage(messageString, '*');
+        }
+        // Log if neither is available
+        else {
+          console.log('[Editor] No parent to send message to:', message);
+        }
+      };
+
+      // Send ready message when page loads
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          window.sendToParent({ type: 'ready' });
+        }, 100);
+      });
     </script>
     <script src="/src/client/index.js" type="module"></script>
   </body>

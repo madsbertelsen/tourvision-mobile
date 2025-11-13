@@ -618,15 +618,22 @@ class DocumentEditor {
         const locations = extractLocations();
         console.log('[MapView] Collected locations:', locations);
 
-        // Send message to React Native WebView if available
-        if (window.ReactNativeWebView) {
+        // Send message to parent (works for both React Native WebView and iframe)
+        if (window.sendToParent) {
+          window.sendToParent({
+            type: 'openFullscreenMap',
+            locations: locations
+          });
+          console.log('[MapView] Sent openFullscreenMap message to parent');
+        } else if (window.ReactNativeWebView) {
+          // Fallback to direct React Native WebView if sendToParent not available
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'openFullscreenMap',
             locations: locations
           }));
           console.log('[MapView] Sent openFullscreenMap message to React Native');
         } else {
-          console.log('[MapView] Not in React Native WebView - message not sent');
+          console.log('[MapView] No parent communication available');
         }
       };
 
@@ -829,6 +836,8 @@ class DocumentEditor {
           setTimeout(() => {
             if (window.docEditor) {
               window.docEditor.updateLocations();
+              // Send document change to parent
+              window.docEditor.sendDocumentChange();
             }
           }, 0);
         }
@@ -918,7 +927,102 @@ class DocumentEditor {
         : this.messages.map(m => `<div>${m.text}</div>`).join('');
     }
   }
+
+  // Message handler methods for parent communication
+  setContent(content) {
+    if (!this.editorView || !content) return;
+
+    try {
+      console.log('[Editor] Setting content from parent');
+
+      // Convert JSON to ProseMirror state
+      const doc = customSchema.nodeFromJSON(content);
+      const newState = EditorState.create({
+        doc,
+        schema: customSchema,
+        plugins: this.editorView.state.plugins
+      });
+
+      this.editorView.updateState(newState);
+
+      // Update locations after content change
+      this.updateLocations();
+    } catch (error) {
+      console.error('[Editor] Error setting content:', error);
+    }
+  }
+
+  setEditable(editable) {
+    if (!this.editorView) return;
+
+    console.log('[Editor] Setting editable:', editable);
+    this.editorView.setProps({ editable: () => editable });
+  }
+
+  getState() {
+    if (!this.editorView) return null;
+
+    const doc = this.editorView.state.doc.toJSON();
+    console.log('[Editor] Getting state for parent');
+    return doc;
+  }
+
+  sendDocumentChange() {
+    if (!this.editorView || !window.sendToParent) return;
+
+    const doc = this.editorView.state.doc.toJSON();
+    window.sendToParent({
+      type: 'documentChange',
+      doc: doc
+    });
+  }
 }
 
 // Start the app
 window.docEditor = new DocumentEditor();
+
+// Listen for messages from parent (editor.html dispatches these)
+window.addEventListener('parentMessage', (event) => {
+  if (!window.docEditor || !event.detail) return;
+
+  const message = event.detail;
+  console.log('[Editor] Handling parent message:', message.type);
+
+  switch (message.type) {
+    case 'setContent':
+      window.docEditor.setContent(message.content);
+      break;
+
+    case 'setEditable':
+      window.docEditor.setEditable(message.editable);
+      break;
+
+    case 'getState':
+      const state = window.docEditor.getState();
+      if (state && window.sendToParent) {
+        window.sendToParent({
+          type: 'stateResponse',
+          doc: state
+        });
+      }
+      break;
+
+    case 'scrollToBottom':
+      // Scroll the editor to bottom
+      if (window.docEditor.editorView) {
+        const editorDom = window.docEditor.editorView.dom;
+        editorDom.scrollTop = editorDom.scrollHeight;
+      }
+      break;
+
+    case 'focusEditor':
+      // Focus the editor
+      if (window.docEditor.editorView) {
+        window.docEditor.editorView.focus();
+      }
+      break;
+
+    default:
+      console.log('[Editor] Unknown message type:', message.type);
+  }
+});

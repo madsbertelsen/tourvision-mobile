@@ -213,6 +213,12 @@ export default function TripListScreen() {
         >
           <Ionicons name="flask-outline" size={24} color="#8B5CF6" />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => router.push('/(app)/test-prosemirror-simple')}
+        >
+          <Ionicons name="code-outline" size={24} color="#10B981" />
+        </TouchableOpacity>
       </View>
 
       {/* URL Input Section */}
