@@ -2,7 +2,9 @@ import WebSocket from 'ws';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
-const WS_URL = 'ws://localhost:8787';
+// Default port 8787 matches Wrangler dev server default
+const WS_PORT = process.env.WS_PORT || '8787';
+const WS_URL = `ws://localhost:${WS_PORT}`;
 const PARTY_NAME = 'document';
 const DOCUMENT_NAME = 'y-partyserver-text-editor-example';
 

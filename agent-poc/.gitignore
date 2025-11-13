@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+.wrangler/
+dist/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+
+# Lock files (keep package-lock.json but not bun.lock if using npm)
+bun.lock

@@ -4,5 +4,12 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [cloudflare(), react(), tailwindcss()]
+  plugins: [
+    cloudflare({
+      configPath: "./wrangler.toml",
+      persist: { path: "./.wrangler/state" }
+    }),
+    react(),
+    tailwindcss()
+  ]
 });

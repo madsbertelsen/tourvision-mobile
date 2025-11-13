@@ -13,6 +13,10 @@ import * as Y from "yjs";
 
 import "./styles.css";
 
+// Default port 8787 matches Wrangler dev server default
+const WS_PORT = import.meta.env.VITE_WS_PORT || "8787";
+const WS_HOST = `localhost:${WS_PORT}`;
+
 // 5 pastel colors
 const colours = ["#FFC0CB", "#FFD700", "#98FB98", "#87CEFA", "#FFA07A"];
 
@@ -42,7 +46,7 @@ function ProseMirrorEditor() {
 
     // Create YProvider
     const prov = new YProvider(
-      "localhost:8787",  // Connect to Wrangler server, not Vite dev server
+      WS_HOST,  // Connect to Wrangler server, not Vite dev server
       "y-partyserver-text-editor-example",
       yDoc,
       {
