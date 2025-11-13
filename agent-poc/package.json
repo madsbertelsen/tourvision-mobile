@@ -7,9 +7,14 @@
     "dev:client": "vite dev",
     "dev:server": "wrangler dev",
     "start": "vite dev",
-    "agent": "tsx agent.ts"
+    "agent": "tsx agent.ts",
+    "agent-worker": "tsx agent-worker.ts",
+    "agent-manager": "tsx agent-manager.ts",
+    "build:worker": "tsc agent-worker.ts --outDir dist --esModuleInterop --resolveJsonModule --moduleResolution node --module esnext --target es2020",
+    "build:manager": "tsc agent-manager.ts --outDir dist --esModuleInterop --resolveJsonModule --moduleResolution node --module esnext --target es2020"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.46.2",
     "@tiptap/extension-collaboration": "^2.11.5",
     "@tiptap/extension-collaboration-cursor": "^2.11.5",
     "@tiptap/react": "^2.11.5",
@@ -18,6 +23,7 @@
     "dotenv": "^16.4.7",
     "jsdom": "^25.0.1",
     "partyserver": "^0.0.75",
+    "uuid": "^11.0.3",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-example-setup": "^1.2.3",
     "prosemirror-history": "^1.4.1",
@@ -46,6 +52,7 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^5.0.0",
     "tsx": "^4.19.2",

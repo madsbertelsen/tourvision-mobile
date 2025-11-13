@@ -2,6 +2,13 @@ name = "partyserver-fixture-tiptap-yjs"
 main = "src/server/index.ts"
 compatibility_date = "2024-04-19"
 
+# Environment variables for Durable Object
+[vars]
+SUPABASE_URL = "https://unocjfiipormnaujsuhk.supabase.co"
+
+# Secrets (set with: wrangler secret put SUPABASE_SERVICE_KEY)
+# SUPABASE_SERVICE_KEY = "..." (managed via wrangler secret)
+
 [[durable_objects.bindings]]
 name = "Document"
 class_name = "Document"

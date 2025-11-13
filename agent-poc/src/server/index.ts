@@ -2,11 +2,15 @@ import type { Connection } from "partyserver";
 import { routePartykitRequest } from "partyserver";
 import * as Y from "yjs";
 import { YServer } from "../y-partyserver"; // "y-partyserver";
-
 import type { CallbackOptions } from "../y-partyserver"; //"y-partyserver";
+
+// Import Supabase client for Cloudflare Workers
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 type Env = {
   Document: DurableObjectNamespace<YServer>;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_KEY: string;
 };
 
 export class Document extends YServer<Env> {
@@ -17,13 +21,112 @@ export class Document extends YServer<Env> {
     timeout: 10000
   };
 
+  // Track connected users for activity detection
+  private userCount = 0;
+  private supabase: SupabaseClient | null = null;
+  private idleTimeoutId: number | null = null;
+
   async onStart() {
     console.log("onStart", this.name);
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, content BLOB)"
     );
 
+    // Initialize Supabase client
+    if (this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_KEY) {
+      this.supabase = createClient(
+        this.env.SUPABASE_URL,
+        this.env.SUPABASE_SERVICE_KEY,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false
+          }
+        }
+      );
+      console.log("[DO] Supabase client initialized");
+    } else {
+      console.warn("[DO] Supabase credentials not configured");
+    }
+
     return super.onStart();
+  }
+
+  async onConnect(connection: Connection) {
+    await super.onConnect(connection);
+    this.userCount++;
+
+    console.log(`[DO] User connected to ${this.name} (count: ${this.userCount})`);
+
+    // Cancel any pending idle timeout
+    if (this.idleTimeoutId !== null) {
+      clearTimeout(this.idleTimeoutId);
+      this.idleTimeoutId = null;
+      console.log(`[DO] Cancelled idle timeout for ${this.name}`);
+    }
+
+    // First user joined - document became active
+    if (this.userCount === 1 && this.supabase) {
+      try {
+        const { error } = await this.supabase
+          .from('document_activity')
+          .insert({
+            document_id: this.name,
+            event_type: 'active',
+            user_count: this.userCount
+          });
+
+        if (error) {
+          console.error(`[DO] Failed to log active event:`, error);
+        } else {
+          console.log(`[DO] ✅ Document ${this.name} became ACTIVE`);
+        }
+      } catch (error) {
+        console.error(`[DO] Error writing to Supabase:`, error);
+      }
+    }
+  }
+
+  async onDisconnect(connection: Connection) {
+    await super.onDisconnect(connection);
+    this.userCount = Math.max(0, this.userCount - 1);
+
+    console.log(`[DO] User disconnected from ${this.name} (count: ${this.userCount})`);
+
+    // Last user left - schedule idle notification
+    if (this.userCount === 0 && this.supabase) {
+      console.log(`[DO] Starting 30s idle timeout for ${this.name}`);
+
+      // Cancel any previous timeout
+      if (this.idleTimeoutId !== null) {
+        clearTimeout(this.idleTimeoutId);
+      }
+
+      // Schedule idle notification after 30 seconds
+      this.idleTimeoutId = setTimeout(async () => {
+        // Double-check that no users reconnected
+        if (this.userCount === 0 && this.supabase) {
+          try {
+            const { error } = await this.supabase
+              .from('document_activity')
+              .insert({
+                document_id: this.name,
+                event_type: 'idle',
+                user_count: 0
+              });
+
+            if (error) {
+              console.error(`[DO] Failed to log idle event:`, error);
+            } else {
+              console.log(`[DO] ✅ Document ${this.name} became IDLE`);
+            }
+          } catch (error) {
+            console.error(`[DO] Error writing to Supabase:`, error);
+          }
+        }
+        this.idleTimeoutId = null;
+      }, 30000) as unknown as number; // 30 second grace period
+    }
   }
   async onLoad() {
     console.log("onLoad", this.name);
