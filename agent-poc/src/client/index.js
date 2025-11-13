@@ -501,9 +501,115 @@ class DocumentEditor {
       ]
     });
 
+    // NodeView for rendering maps
+    const mapNodeView = (node) => {
+      const dom = document.createElement('div');
+      dom.className = 'prosemirror-map';
+      dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative;`;
+
+      const mapContainer = document.createElement('div');
+      mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
+      dom.appendChild(mapContainer);
+
+      // Extract locations from document
+      const extractLocations = () => {
+        const locations = [];
+        this.editorView.state.doc.descendants((node) => {
+          if (node.isText && node.marks.length > 0) {
+            for (const mark of node.marks) {
+              if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+                locations.push({
+                  geoId: mark.attrs.geoId,
+                  placeName: mark.attrs.placeName,
+                  lat: parseFloat(mark.attrs.lat),
+                  lng: parseFloat(mark.attrs.lng),
+                  colorIndex: mark.attrs.colorIndex,
+                  transportFrom: mark.attrs.transportFrom,
+                  transportProfile: mark.attrs.transportProfile,
+                  waypoints: mark.attrs.waypoints
+                });
+              }
+            }
+          }
+        });
+        return locations;
+      };
+
+      // Render map
+      const renderMap = () => {
+        const locations = extractLocations();
+        const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+
+        if (!mapboxToken || locations.length === 0) {
+          mapContainer.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
+              🗺️ ${!mapboxToken ? 'Mapbox token required' : 'No locations found'}
+            </div>
+          `;
+          return;
+        }
+
+        mapContainer.innerHTML = '';
+        mapboxgl.accessToken = mapboxToken;
+
+        const map = new mapboxgl.Map({
+          container: mapContainer,
+          style: 'mapbox://styles/mapbox/light-v11',
+          center: [0, 0],
+          zoom: 2
+        });
+
+        // Add markers and fit bounds
+        map.on('load', () => {
+          // Add markers
+          locations.forEach((location) => {
+            const bgColor = COLORS[location.colorIndex % COLORS.length];
+            const el = document.createElement('div');
+            el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+            const inner = document.createElement('div');
+            inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+            el.appendChild(inner);
+
+            new mapboxgl.Marker(el)
+              .setLngLat([location.lng, location.lat])
+              .setPopup(new mapboxgl.Popup().setText(location.placeName))
+              .addTo(map);
+          });
+
+          // Fit bounds
+          if (locations.length === 1) {
+            map.flyTo({
+              center: [locations[0].lng, locations[0].lat],
+              zoom: 12
+            });
+          } else if (locations.length > 1) {
+            const lngs = locations.map(l => l.lng);
+            const lats = locations.map(l => l.lat);
+            const bounds = new mapboxgl.LngLatBounds(
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            );
+            map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+          }
+        });
+      };
+
+      setTimeout(renderMap, 100);
+
+      return {
+        dom,
+        update: () => false, // Don't update, always recreate
+        destroy: () => {}
+      };
+    };
+
     // Create ProseMirror EditorView
     this.editorView = new EditorView(editorElement, {
       state,
+      nodeViews: {
+        map: mapNodeView
+      },
       dispatchTransaction(tr) {
         const newState = this.state.apply(tr);
         this.updateState(newState);
