@@ -263,52 +263,39 @@ class DocumentEditor {
 
     mapboxgl.accessToken = mapboxToken;
 
-    // Calculate bounds
-    let center = [-0.1278, 51.5074];
-    let zoom = 3;
-
-    if (this.locations.length === 1) {
-      center = [this.locations[0].lng, this.locations[0].lat];
-      zoom = 12;
-    } else if (this.locations.length > 1) {
-      const lngs = this.locations.map(l => l.lng);
-      const lats = this.locations.map(l => l.lat);
-      center = [
-        (Math.min(...lngs) + Math.max(...lngs)) / 2,
-        (Math.min(...lats) + Math.max(...lats)) / 2
-      ];
-
-      const latDiff = Math.max(...lats) - Math.min(...lats);
-      const lngDiff = Math.max(...lngs) - Math.min(...lngs);
-      const maxDiff = Math.max(latDiff, lngDiff);
-
-      if (maxDiff > 10) zoom = 5;
-      else if (maxDiff > 5) zoom = 6;
-      else if (maxDiff > 2) zoom = 7;
-      else if (maxDiff > 1) zoom = 8;
-      else if (maxDiff > 0.5) zoom = 9;
-      else zoom = 10;
-    }
-
+    // Initialize map with default view
     this.map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/light-v11',
-      center,
-      zoom
+      center: [-0.1278, 51.5074], // London default
+      zoom: 3
     });
 
-    // Add markers
+    // Add markers with Expo-style design (colored circle with white center)
     this.locations.forEach((location) => {
       const bgColor = COLORS[location.colorIndex % COLORS.length];
 
+      // Create outer circle (colored)
       const el = document.createElement('div');
-      el.style.width = '24px';
-      el.style.height = '24px';
+      el.style.width = '32px';
+      el.style.height = '32px';
       el.style.borderRadius = '50%';
       el.style.backgroundColor = bgColor;
       el.style.border = '3px solid white';
       el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
       el.style.cursor = 'pointer';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+
+      // Create inner white circle
+      const inner = document.createElement('div');
+      inner.style.width = '12px';
+      inner.style.height = '12px';
+      inner.style.borderRadius = '50%';
+      inner.style.backgroundColor = 'white';
+
+      el.appendChild(inner);
 
       new mapboxgl.Marker(el)
         .setLngLat([location.lng, location.lat])
@@ -316,9 +303,35 @@ class DocumentEditor {
         .addTo(this.map);
     });
 
-    // Fetch and draw routes
-    if (this.locations.length > 1) {
-      this.map.on('load', async () => {
+    // On map load: fit bounds and draw routes
+    this.map.on('load', async () => {
+      // Fit bounds to locations
+      if (this.locations.length === 1) {
+        // Single location: center with zoom
+        this.map.flyTo({
+          center: [this.locations[0].lng, this.locations[0].lat],
+          zoom: 12,
+          duration: 1000
+        });
+      } else if (this.locations.length > 1) {
+        // Multiple locations: fit bounds
+        const lngs = this.locations.map(l => l.lng);
+        const lats = this.locations.map(l => l.lat);
+
+        const bounds = new mapboxgl.LngLatBounds(
+          [Math.min(...lngs), Math.min(...lats)], // Southwest
+          [Math.max(...lngs), Math.max(...lats)]  // Northeast
+        );
+
+        this.map.fitBounds(bounds, {
+          padding: 50,
+          maxZoom: 15,
+          duration: 1000
+        });
+      }
+
+      // Fetch and draw routes between locations
+      if (this.locations.length > 1) {
         for (let i = 1; i < this.locations.length; i++) {
           const from = this.locations[i - 1];
           const to = this.locations[i];
@@ -370,8 +383,8 @@ class DocumentEditor {
             console.error('[MapBlock] Error fetching route:', error);
           }
         }
-      });
-    }
+      }
+    });
   }
 
   createNewDocument() {
