@@ -479,31 +479,43 @@ async function generateAndInsertAnswer(
     const answerText = result.object.answer;
     console.log(`[Agent] ✅ Generated answer: "${answerText}"`);
 
-    // Create empty paragraph with AI response mark
+    // Create AI response mark
     const aiResponseMark = customSchema.marks.aiResponse.create({ questionId });
-    const emptyTextNode = customSchema.text('', [aiResponseMark]);
-    const paragraph = customSchema.nodes.paragraph.create(null, emptyTextNode);
-
-    // Insert empty paragraph first
-    let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
-    editorView.dispatch(tr);
-
-    // Calculate position where text will be inserted (inside the new paragraph)
-    let currentPos = insertAfterPos + 1; // +1 to get inside the paragraph
-
-    console.log(`[Agent] 📝 Typing answer word by word...`);
 
     // Split into words (keeping spaces)
     const words = answerText.match(/\S+\s*/g) || [];
 
-    // Set agent cursor at the starting position
+    if (words.length === 0) {
+      console.log(`[Agent] ⚠️  No words to type (empty answer)`);
+      return;
+    }
+
+    console.log(`[Agent] 📝 Typing answer word by word (${words.length} words)...`);
+
+    // Create paragraph with first word
+    const firstWordNode = customSchema.text(words[0], [aiResponseMark]);
+    const paragraph = customSchema.nodes.paragraph.create(null, firstWordNode);
+
+    // Insert paragraph with first word
+    let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
+    editorView.dispatch(tr);
+
+    // Calculate position where next words will be inserted
+    let currentPos = insertAfterPos + 1 + words[0].length; // Position after first word
+
+    // Set agent cursor
     provider.awareness.setLocalStateField('cursor', {
       anchor: currentPos,
       head: currentPos
     });
 
-    // Type word by word
-    for (const word of words) {
+    // Add small delay after first word
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Type remaining words
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+
       // Insert word with the AI response mark
       const wordNode = customSchema.text(word, [aiResponseMark]);
       tr = editorView.state.tr.insert(currentPos, wordNode);
