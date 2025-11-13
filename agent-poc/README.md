@@ -1,67 +1,117 @@
-# Agent POC - AI Agent with Y.js Collaborative Editing
+# Agent POC - Multi-Document AI Agent Management System
 
-This is a proof-of-concept demonstrating an AI agent that connects to a collaborative ProseMirror editor using Y.js and Cloudflare Durable Objects.
+This is an advanced proof-of-concept demonstrating **dynamic multi-document agent management** with collaborative ProseMirror editing using Y.js and Cloudflare Durable Objects.
+
+## 🎯 What's New: Multi-Document Architecture
+
+The system now supports **unlimited documents** with automatic agent attachment/detachment based on user activity:
+
+- **Event-Driven Coordination** - Durable Objects write activity signals to Supabase, Agent Manager subscribes via Realtime
+- **Process Pooling** - Manager spawns isolated agent worker processes per active document
+- **Resource Management** - LRU eviction when hitting max concurrent limit
+- **Observability** - Metrics tracking for memory, CPU, LLM calls, and location marks
+- **Fault Tolerance** - Crash recovery and health monitoring
 
 ## Features
 
-- **Collaborative Editor** - ProseMirror with Tiptap and Y.js CRDT sync
-- **Cloudflare Durable Objects** - Serverless backend with persistence
-- **AI Agent with LLM** - Node.js script that analyzes documents using a mock LLM
-- **Tool Calling System** - LLM can call tools like `selectText` and `geocode`
-- **Client-Delegated Geocoding** - Agent delegates geocoding tasks to clients via custom messages
-- **Period-triggered Analysis** - Agent processes document when users type a period (`.`)
-- **Smart Text Selection** - Agent automatically selects detected locations
+### Collaborative Editing
+- **ProseMirror Editor** - Rich text editing with Tiptap and Y.js CRDT sync
+- **Cloudflare Durable Objects** - Serverless WebSocket backend with persistence
 - **Real-time Presence** - See cursors and user names for all connected clients
+
+### AI Agent System
+- **Dynamic Agent Workers** - Isolated Node.js processes per active document
+- **Agent Manager** - Orchestrates worker lifecycle via Supabase Realtime
+- **LLM Processing** - Period-triggered document analysis using Vercel AI SDK
+- **Tool Calling** - Geo-mark creation, text selection, geocoding
+- **Client-Delegated Operations** - Agents delegate API calls to browser clients
+
+### Database & Monitoring
+- **Supabase PostgreSQL** - Tracks agent connections, activity, and metrics
+- **Realtime Subscriptions** - Event-driven coordination (no polling!)
+- **Performance Metrics** - Memory, CPU, WebSocket latency, LLM response times
+- **System Statistics** - Aggregated stats via SQL functions
+
+## 📚 Documentation
+
+- **[QUICKSTART.md](./QUICKSTART.md)** - Get started in 5 minutes (recommended)
+- **[LOCAL_SETUP.md](./LOCAL_SETUP.md)** - Detailed step-by-step setup guide
+- **[AGENT_MANAGER_README.md](./AGENT_MANAGER_README.md)** - Full architecture documentation
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Automated Setup (Recommended)
 
 ```bash
-npm install
+cd agent-poc
+./setup-local.sh
 ```
 
-### 2. Start the Backend Server (Wrangler)
+This will:
+1. Start local Supabase
+2. Apply database migrations
+3. Create configuration files (`.env.local`, `.dev.vars`)
+4. Install dependencies
+5. Verify setup
 
-In one terminal:
+### Manual Setup (3 Steps)
 
+**1. Start Supabase**
+```bash
+npx supabase start
+```
+
+**2. Install & Configure**
+```bash
+npm install
+
+# Create .env.local with credentials from supabase status
+cat > .env.local <<'EOF'
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_KEY=<from-npx-supabase-status>
+MANAGER_ID=manager-local-dev
+MAX_CONCURRENT_AGENTS=5
+WS_PORT=8787
+EOF
+```
+
+**3. Apply Migrations**
+```bash
+cd ..
+npx supabase db push --local
+cd agent-poc
+```
+
+### Running the System
+
+**Terminal 1: Durable Object Server**
 ```bash
 npm run dev:server
 ```
 
-This starts the **Wrangler dev server** (Durable Object) on `ws://localhost:8787`.
+**Terminal 2: Agent Manager**
+```bash
+npm run agent-manager
+```
 
-Wait for the message: `Ready on http://localhost:8787`
-
-### 3. Start the Frontend Client (Vite)
-
-In a **second terminal**:
-
+**Terminal 3: Test Client (optional)**
 ```bash
 npm run dev:client
+# Open http://localhost:8787
 ```
 
-This starts the **Vite dev server** (client UI) on `http://localhost:5173`.
+### Test the System
 
-Open your browser to `http://localhost:5173` and you'll see the collaborative editor.
+1. Open a document in the client
+2. Type text ending with `.` (e.g., "Trip to Paris.")
+3. Watch the logs:
+   - Durable Object: Document becomes active
+   - Agent Manager: Spawns agent worker
+   - Agent Worker: Detects location, creates geo-mark
+4. Close document and wait 30s
+   - Agent detaches automatically
 
-### 4. Run the AI Agent (Optional)
-
-In a separate terminal:
-
-```bash
-node agent.js
-```
-
-The agent will:
-- Connect to the same Y.js document
-- Show a red cursor labeled "AI Agent"
-- Detect when you type a period (`.`)
-- Send document text to a mock LLM for analysis
-- Execute tool calls returned by the LLM:
-  - `selectText` - Select and highlight text in the document
-  - `geocode` - Delegate geocoding to clients via custom messages
-- Display detailed logs of LLM reasoning and tool execution
+See **[QUICKSTART.md](./QUICKSTART.md)** for detailed testing instructions.
 
 ## Configuration
 
@@ -84,36 +134,102 @@ Then restart `npm start`.
 
 ## Architecture
 
+### Multi-Document Flow
+
 ```
-┌─────────────────────┐
-│  Browser (Client)   │
-│  ProseMirror Editor │
-└──────────┬──────────┘
-           │ WebSocket
-           │ (Y.js CRDT sync)
-           ▼
-┌─────────────────────┐
-│ Cloudflare Worker   │
-│  Durable Object     │
-│  (Document Server)  │
-└──────────┬──────────┘
-           │ WebSocket
-           │ (Y.js CRDT sync)
-           ▼
-┌─────────────────────┐
-│   Node.js Agent     │
-│  (AI Observer)      │
-└─────────────────────┘
+User opens document
+    ↓
+Durable Object tracks connection, writes to Supabase: event_type='active'
+    ↓
+Agent Manager subscribes via Realtime, receives event
+    ↓
+Manager spawns Agent Worker for that document
+    ↓
+Worker connects to Y.js document via WebSocket
+    ↓
+Worker monitors for periods, runs LLM, creates geo-marks
+    ↓
+User closes document
+    ↓
+After 30s idle: Durable Object writes event_type='idle'
+    ↓
+Manager detaches Agent Worker (graceful shutdown)
+```
+
+### System Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Browser (Clients)                         │
+│                 ProseMirror + Y.js                           │
+└───────────────────────┬─────────────────────────────────────┘
+                        │ WebSocket (Y.js CRDT sync)
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Cloudflare Workers (Edge)                       │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Durable Object (per document)                        │   │
+│  │ - Manages WebSocket connections                      │   │
+│  │ - Y.js document persistence                          │   │
+│  │ - Writes activity events to Supabase                 │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        │ INSERT document_activity events
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│               Supabase PostgreSQL                            │
+│  - agent_connections (tracks active agents)                 │
+│  - document_activity (activity log)                         │
+│  - agent_metrics (performance data)                         │
+│                 Realtime Subscriptions                       │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        │ Realtime INSERT events
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│            Agent Manager (Local Server)                      │
+│  - Subscribes to document_activity                          │
+│  - Spawns/kills agent workers                               │
+│  - LRU eviction, health checks                              │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+                        │ fork() child processes
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│          Agent Workers (one per active document)             │
+│  - Connect to Y.js document via WebSocket                   │
+│  - Monitor for period-triggered changes                     │
+│  - Run LLM processing (Vercel AI SDK)                       │
+│  - Create geo-marks in ProseMirror                          │
+│  - Report metrics via IPC                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Key Files
 
-- `agent.js` - Node.js agent script
-- `src/server/index.ts` - Cloudflare Durable Object with Y.js persistence
-- `src/client/index.tsx` - React/ProseMirror client UI
-- `src/y-partyserver/` - Custom Y.js PartyKit/PartyServer implementation
-- `wrangler.toml` - Cloudflare Workers configuration
-- `vite.config.ts` - Vite build configuration
+### Multi-Document System
+- **`agent-manager.ts`** - Orchestrates agent workers, subscribes to Realtime
+- **`agent-worker.ts`** - Individual agent process per document
+- **`shared/database.ts`** - Supabase client wrapper
+- **`shared/types.ts`** - TypeScript type definitions
+- **`setup-local.sh`** - Automated local setup script
+
+### Cloudflare Workers
+- **`src/server/index.ts`** - Durable Object with activity tracking
+- **`wrangler.toml`** - Cloudflare Workers configuration
+- **`.dev.vars`** - Local development secrets
+
+### Client
+- **`src/client/index.tsx`** - React/ProseMirror client UI
+- **`src/y-partyserver/`** - Custom Y.js provider with custom messages
+
+### Database
+- **`supabase/migrations/20251113000000_agent_connections.sql`** - Schema for agent management
+
+### Configuration
+- **`.env.local`** - Local development configuration
+- **`package.json`** - Dependencies and scripts
 
 ## Testing the POC
 
