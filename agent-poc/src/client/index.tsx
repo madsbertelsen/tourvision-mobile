@@ -70,12 +70,26 @@ function ProseMirrorEditor() {
   );
   const [provider, setProvider] = useState<YProvider | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(() => {
+    // Get document ID from URL or use existing one from sessionStorage
+    const params = new URLSearchParams(window.location.search);
+    const urlDocId = params.get('doc');
+    if (urlDocId) {
+      sessionStorage.setItem('currentDocId', urlDocId);
+      return urlDocId;
+    }
+    return sessionStorage.getItem('currentDocId');
+  });
+  const [documents, setDocuments] = useState<string[]>(() => {
+    const stored = localStorage.getItem('documents');
+    return stored ? JSON.parse(stored) : [];
+  });
 
   // Initialize Y.Doc, YProvider, and ProseMirror
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editorRef.current || !documentId) return;
 
-    console.log("Initializing Y.Doc, YProvider, and ProseMirror");
+    console.log("Initializing Y.Doc, YProvider, and ProseMirror for document:", documentId);
 
     // Create Y.Doc
     const yDoc = new Y.Doc();
@@ -84,7 +98,7 @@ function ProseMirrorEditor() {
     // Create YProvider
     const prov = new YProvider(
       WS_HOST,  // Connect to Wrangler server, not Vite dev server
-      "y-partyserver-text-editor-example",
+      documentId,
       yDoc,
       {
         party: "document"
@@ -215,7 +229,25 @@ function ProseMirrorEditor() {
       prov.disconnect();
       yDoc.destroy();
     };
-  }, []);
+  }, [documentId]);
+
+  const createNewDocument = () => {
+    const newDocId = `doc-${Date.now()}`;
+    setDocuments(prev => {
+      const updated = [...prev, newDocId];
+      localStorage.setItem('documents', JSON.stringify(updated));
+      return updated;
+    });
+    setDocumentId(newDocId);
+    sessionStorage.setItem('currentDocId', newDocId);
+    window.history.pushState({}, '', `?doc=${newDocId}`);
+  };
+
+  const switchDocument = (docId: string) => {
+    setDocumentId(docId);
+    sessionStorage.setItem('currentDocId', docId);
+    window.history.pushState({}, '', `?doc=${docId}`);
+  };
 
   const sendPing = () => {
     if (provider) {
@@ -228,44 +260,102 @@ function ProseMirrorEditor() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 20 }}>A ProseMirror Editor</h1>
-      {!provider && <p>Connecting to server...</p>}
-      <div
-        ref={editorRef}
-        style={{
-          border: "1px solid #ccc",
-          padding: "10px",
-          minHeight: "200px"
-        }}
-      />
-
-      <div style={{ marginTop: 20 }}>
-        <h2>Custom Messages Demo</h2>
+      <div style={{ marginBottom: 20, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0 }}>Multi-Document Editor</h1>
         <button
           type="button"
-          onClick={sendPing}
-          style={{ padding: "10px 20px" }}
-          disabled={!provider}
+          onClick={createNewDocument}
+          style={{ padding: "10px 20px", backgroundColor: "#4CAF50", color: "white", border: "none", borderRadius: 4, cursor: "pointer" }}
         >
-          Send Ping
+          + New Document
         </button>
-        <div
-          style={{
-            marginTop: 10,
-            padding: 10,
-            border: "1px solid #ccc",
-            maxHeight: 200,
-            overflowY: "auto"
-          }}
-        >
-          <h3>Messages:</h3>
-          {messages.length === 0 ? (
-            <p>No messages yet</p>
-          ) : (
-            messages.map((msg) => <div key={msg.id}>{msg.text}</div>)
-          )}
-        </div>
+        {documentId && (
+          <span style={{ padding: "10px", backgroundColor: "#f0f0f0", borderRadius: 4, fontSize: 14 }}>
+            Current: <strong>{documentId}</strong>
+          </span>
+        )}
       </div>
+
+      {documents.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 10 }}>Your Documents:</h3>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {documents.map(docId => (
+              <button
+                key={docId}
+                type="button"
+                onClick={() => switchDocument(docId)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: docId === documentId ? "#2196F3" : "#e0e0e0",
+                  color: docId === documentId ? "white" : "black",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer"
+                }}
+              >
+                {docId}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!documentId && (
+        <div style={{ padding: 40, textAlign: 'center', border: '2px dashed #ccc', borderRadius: 8, marginBottom: 20 }}>
+          <h2>No document selected</h2>
+          <p>Create a new document to get started</p>
+          <button
+            type="button"
+            onClick={createNewDocument}
+            style={{ padding: "15px 30px", backgroundColor: "#4CAF50", color: "white", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 16 }}
+          >
+            Create First Document
+          </button>
+        </div>
+      )}
+
+      {documentId && (
+        <>
+          {!provider && <p>Connecting to server...</p>}
+          <div
+            ref={editorRef}
+            style={{
+              border: "1px solid #ccc",
+              padding: "10px",
+              minHeight: "200px"
+            }}
+          />
+
+          <div style={{ marginTop: 20 }}>
+            <h2>Custom Messages Demo</h2>
+            <button
+              type="button"
+              onClick={sendPing}
+              style={{ padding: "10px 20px" }}
+              disabled={!provider}
+            >
+              Send Ping
+            </button>
+            <div
+              style={{
+                marginTop: 10,
+                padding: 10,
+                border: "1px solid #ccc",
+                maxHeight: 200,
+                overflowY: "auto"
+              }}
+            >
+              <h3>Messages:</h3>
+              {messages.length === 0 ? (
+                <p>No messages yet</p>
+              ) : (
+                messages.map((msg) => <div key={msg.id}>{msg.text}</div>)
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

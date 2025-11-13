@@ -15,14 +15,34 @@ import type {
 
 export class AgentDatabase {
   private supabase: SupabaseClient;
+  private supabaseRealtime: SupabaseClient;
 
-  constructor(supabaseUrl: string, supabaseServiceKey: string) {
+  constructor(supabaseUrl: string, supabaseServiceKey: string, supabaseAnonKey?: string) {
+    // Admin client for operations (service key)
     this.supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false
       }
     });
+
+    // Realtime client for subscriptions (anon key)
+    // Service role keys DO NOT work with Supabase realtime subscriptions
+    this.supabaseRealtime = createClient(
+      supabaseUrl,
+      supabaseAnonKey || supabaseServiceKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        },
+        realtime: {
+          params: {
+            eventsPerSecond: 10
+          }
+        }
+      }
+    );
   }
 
   /**
@@ -254,11 +274,13 @@ export class AgentDatabase {
 
   /**
    * Subscribe to document_activity changes
+   * NOTE: Uses supabaseRealtime client with anon key because
+   * service role keys DO NOT work with Supabase realtime subscriptions
    */
   subscribeToDocumentActivity(
     callback: (event: DocumentActivity) => void
   ): () => void {
-    const channel = this.supabase
+    const channel = this.supabaseRealtime
       .channel('document-activity-changes')
       .on(
         'postgres_changes',
@@ -275,7 +297,7 @@ export class AgentDatabase {
 
     // Return cleanup function
     return () => {
-      this.supabase.removeChannel(channel);
+      this.supabaseRealtime.removeChannel(channel);
     };
   }
 
@@ -288,6 +310,10 @@ export class AgentDatabase {
 }
 
 // Export singleton instance factory
-export function createAgentDatabase(supabaseUrl: string, supabaseServiceKey: string): AgentDatabase {
-  return new AgentDatabase(supabaseUrl, supabaseServiceKey);
+export function createAgentDatabase(
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  supabaseAnonKey?: string
+): AgentDatabase {
+  return new AgentDatabase(supabaseUrl, supabaseServiceKey, supabaseAnonKey);
 }

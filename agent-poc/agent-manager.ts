@@ -24,13 +24,15 @@ const MANAGER_ID = process.env.MANAGER_ID || `manager-${uuidv4().substring(0, 8)
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '10');
 const IDLE_TIMEOUT_MS = parseInt(process.env.IDLE_TIMEOUT_MS || '30000');
 const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
 
 // Validation
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
   console.error('[Manager] Missing required environment variables:');
   console.error('[Manager] - SUPABASE_URL');
-  console.error('[Manager] - SUPABASE_SERVICE_KEY');
+  console.error('[Manager] - SUPABASE_ANON_KEY (for realtime subscriptions)');
+  console.error('[Manager] - SUPABASE_SERVICE_KEY (for admin operations)');
   process.exit(1);
 }
 
@@ -42,7 +44,7 @@ class AgentManager {
   private realtimeUnsubscribe: (() => void) | null = null;
 
   constructor() {
-    this.db = createAgentDatabase(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    this.db = createAgentDatabase(SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY);
   }
 
   async initialize() {

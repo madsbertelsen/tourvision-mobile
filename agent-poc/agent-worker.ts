@@ -50,7 +50,15 @@ dotenv.config();
 const dom = new JSDOM('<!DOCTYPE html><html><body><div id="editor"></div></body></html>');
 (global as any).window = dom.window;
 (global as any).document = dom.window.document;
-(global as any).navigator = dom.window.navigator;
+
+// Define navigator property (it's read-only in Node.js, so we need defineProperty)
+if (!(global as any).navigator) {
+  Object.defineProperty(global, 'navigator', {
+    value: dom.window.navigator,
+    writable: true,
+    configurable: true
+  });
+}
 
 // Polyfill WebSocket for Node.js
 (global as any).WebSocket = WebSocket;

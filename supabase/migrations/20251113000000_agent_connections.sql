@@ -29,9 +29,7 @@ CREATE TABLE IF NOT EXISTS agent_connections (
 
   -- Metadata
   error_message TEXT,
-  metadata JSONB,
-
-  -- Note: Partial unique constraint handled via unique index below
+  metadata JSONB
 );
 
 -- Indexes for agent_connections
@@ -213,6 +211,13 @@ CREATE POLICY "Authenticated users can read agent_metrics"
   TO authenticated
   USING (true);
 
+-- RLS Policies: Anon users can read document_activity (for realtime subscriptions)
+CREATE POLICY "Anon users can read document_activity"
+  ON document_activity
+  FOR SELECT
+  TO anon
+  USING (true);
+
 -- Grant permissions to service role
 GRANT ALL ON agent_connections TO service_role;
 GRANT ALL ON document_activity TO service_role;
@@ -224,6 +229,12 @@ GRANT USAGE, SELECT ON SEQUENCE agent_metrics_id_seq TO service_role;
 GRANT SELECT ON agent_connections TO authenticated;
 GRANT SELECT ON document_activity TO authenticated;
 GRANT SELECT ON agent_metrics TO authenticated;
+
+-- Grant read permissions to anon users (for realtime subscriptions)
+GRANT SELECT ON document_activity TO anon;
+
+-- Enable Realtime for document_activity table
+ALTER PUBLICATION supabase_realtime ADD TABLE document_activity;
 
 -- Comments for documentation
 COMMENT ON TABLE agent_connections IS 'Tracks active agent processes managing document collaboration';
