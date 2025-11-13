@@ -7,7 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a monorepo with the following structure:
 - **`/expo-app`** - Expo React Native frontend (iOS, Android, Web)
 - **`/supabase`** - Database migrations and seed data
-- **`/scripts`** - Node.js scripts for AI chat listener and utilities
+- **`/scripts`** - Node.js scripts for AI chat listener and local agent
+- **`/agent-poc`** - Multi-document agent management system
+- **`/workers`** - Cloudflare Workers (chat system with Workers AI)
 
 ## Current Status
 
@@ -19,7 +21,9 @@ This is a monorepo with the following structure:
 - Web platform support
 - **Document Chat System** - Real-time WebSocket chat with Cloudflare Workers AI
 - **ProseMirror Editor** - Rich text editing with geo-marks for locations
-- **Real-time Collaboration** - Tiptap Cloud (Hocuspocus) with Y.js CRDT
+- **Real-time Collaboration** - Y.js CRDT with Cloudflare Durable Objects
+- **AI Agent System** - Period-triggered location detection with Y.js integration
+- **Multi-Document Agent Manager** - Dynamic agent orchestration with LRU eviction
 
 ### 📝 Known Limitations
 - Web platform primary focus (native iOS/Android support limited)
@@ -116,9 +120,11 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 - **Expo Router** - File-based routing in `/app` directory
 - **NativeWind v4** - Tailwind CSS for React Native styling
 - **ProseMirror** - Rich text editor (HTML-based via WebView)
+- **Y.js (Yjs)** - CRDT library for real-time collaborative editing
 - **Supabase** - Backend, auth, and real-time database
 - **Mistral AI** - Chat responses via document-chat-listener.js
-- **Tiptap Cloud** - Real-time collaboration with Y.js CRDT
+- **Cloudflare Workers AI** - LLM inference for chat (Llama-3.1-8b-instruct)
+- **Cloudflare Durable Objects** - Stateful WebSocket management and Y.js document sync
 
 ### Key Architectural Patterns
 
@@ -134,12 +140,24 @@ curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
 - **Realtime Subscriptions** - Uses anon key for subscriptions, service key for operations
 - **See**: DOCUMENT_CHAT_AI_SETUP.md for detailed setup instructions
 
+#### AI Agent System
+- **Local Agent** (`/scripts/local-agent-yjs.js`) - Period-triggered location detection for production
+- **Agent Manager** (`/agent-poc/agent-manager.ts`) - Orchestrates multiple agent workers
+- **Agent Worker** (`/agent-poc/agent-worker.ts`) - Isolated process for document-specific LLM processing
+- **Event-Driven Detection** - Agents trigger on "." character insertion with 1-second debounce
+- **Y.js Integration** - Direct observation of document changes via `observeDeep()`
+- **Supabase Realtime** - Coordinates agent attachment/detachment across documents
+- **See**: `/agent-poc/AGENT_MANAGER_README.md` for architecture details
+
 ### Database Schema
 
 Key tables in Supabase:
 - `profiles` - User profiles extending auth.users
 - `documents` - Document records with ProseMirror JSON content
 - `document_chats` - Chat messages for AI-powered document generation
+- `agent_connections` - Tracks active agent processes per document
+- `document_activity` - Activity event log from Durable Objects (active/idle events)
+- `agent_metrics` - Time-series performance data (memory, CPU, latency)
 - Row Level Security (RLS) is enabled on all tables
 
 ### Environment Configuration
@@ -952,56 +970,76 @@ renamed_classes = [{from = "ChatRoom", "to" = "ChatRoomV2"}]
 - Normal browser behavior - connections are maintained while page is open
 - Code 1005/1006 closures are expected on page unload
 
-## Tiptap Cloud Collaboration
+## Y.js Collaboration with Cloudflare Durable Objects
 
 ### Overview
-The app uses **Tiptap Cloud** (managed Hocuspocus) for real-time document collaboration via Y.js CRDT. This replaces the previous self-hosted Hocuspocus server.
+The app uses **Cloudflare Durable Objects** for real-time document collaboration via Y.js CRDT. Each document has its own Durable Object instance that manages Y.js state and WebSocket connections.
 
 ### Architecture
 
 **Components:**
-1. **Tiptap Cloud** - Managed WebSocket server at `wss://cloud.tiptap.dev/yko82w79`
-2. **JWT Authentication** - Supabase Edge Function generates signed tokens
-3. **HocuspocusProvider** - Y.js provider connecting to Tiptap Cloud
-4. **ProseMirror WebView** - Editor with Y.js sync plugins
+1. **Cloudflare Durable Object** - Stateful WebSocket server per document (extends Y.js YServer)
+2. **WebsocketProvider** - Y.js provider connecting clients to Durable Object
+3. **ProseMirror WebView** - Editor with Y.js sync plugins (`ySyncPlugin`, `yCursorPlugin`)
+4. **SQL Storage** - Document persistence in Durable Object SQL
 
 **Flow:**
 ```
 User opens document
     ↓
-Frontend requests token from Edge Function (/generate-tiptap-token)
+Frontend creates WebsocketProvider with document ID
     ↓
-Edge Function signs JWT with TIPTAP_APP_SECRET
+Provider connects to ws://localhost:8787/document/{documentId}
     ↓
-Frontend passes token + wss://cloud.tiptap.dev/yko82w79 to WebView
+Cloudflare Worker routes to Durable Object for that document
     ↓
-WebView creates HocuspocusProvider with token
+Durable Object loads Y.js state from SQL storage
     ↓
-Provider connects to Tiptap Cloud
+Y.js syncs document state via WebSocket
     ↓
-Y.js syncs document state via WebSocket + WebRTC
+Changes are persisted to SQL storage automatically
 ```
 
-### JWT Token Generation
+### Durable Object Implementation
 
-**Edge Function:** `/supabase/functions/generate-tiptap-token/index.ts`
+**File:** `/agent-poc/src/server/index.ts`
 
-Generates JWT with:
-- **Algorithm:** HS256
-- **Claims:**
-  - `iat` - Issued at timestamp
-  - `exp` - Expiration (24 hours)
-  - `allowedDocumentNames` - Array of document IDs this token can access
-  - `userId` - Supabase user ID
-  - `userName` - User's display name
-
-**Token Request:**
 ```typescript
-const { data: tokenData } = await supabase.functions.invoke('generate-tiptap-token', {
-  body: { documentName: tripId }
-});
+import { YServer } from '@y-sweet/yserver';
 
-const tiptapToken = tokenData.token;
+export class DocumentDurableObject extends YServer {
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env);
+  }
+
+  async onStart() {
+    // Create SQL table for document persistence
+    await this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS documents (
+        doc_name TEXT PRIMARY KEY,
+        data BLOB
+      )
+    `);
+  }
+
+  async onLoad(docName: string): Promise<Uint8Array | null> {
+    // Load Y.js document from SQL storage
+    const result = await this.sql.exec(
+      'SELECT data FROM documents WHERE doc_name = ?',
+      docName
+    );
+    return result.rows[0]?.data || null;
+  }
+
+  async onSave(docName: string, data: Uint8Array): Promise<void> {
+    // Save Y.js document to SQL storage
+    await this.sql.exec(
+      'INSERT OR REPLACE INTO documents (doc_name, data) VALUES (?, ?)',
+      docName,
+      data
+    );
+  }
+}
 ```
 
 ### WebView Integration
@@ -1009,18 +1047,23 @@ const tiptapToken = tokenData.token;
 **File:** `/expo-app/assets/prosemirror-editor-bundled.html`
 
 ```javascript
-// Receives startCollaboration message with token
-const { documentId, userId, userName, token, serverUrl } = data;
+const ydoc = new Y.Doc();
+const provider = new WebsocketProvider(
+  'ws://localhost:8787/document',
+  documentId,
+  ydoc
+);
 
-// Create HocuspocusProvider
-yProvider = new HocuspocusProvider({
-  url: serverUrl, // wss://cloud.tiptap.dev/yko82w79
-  name: documentId,
-  document: ydoc,
-  token: token,
-  awareness: awareness,
-  onConnect: () => console.log('Connected to Tiptap Cloud'),
-  onSynced: ({ state }) => console.log('Document synced')
+const yXmlFragment = ydoc.getXmlFragment('prosemirror');
+
+// ProseMirror plugins for Y.js sync
+const state = EditorState.create({
+  schema: schema,
+  plugins: [
+    ySyncPlugin(yXmlFragment),
+    yCursorPlugin(provider.awareness),
+    yUndoPlugin()
+  ]
 });
 ```
 
@@ -1028,24 +1071,29 @@ yProvider = new HocuspocusProvider({
 
 **Frontend** (`/expo-app/.env.local`):
 ```bash
-EXPO_PUBLIC_TIPTAP_APP_ID=yko82w79
-```
+# For local development
+EXPO_PUBLIC_YJS_WS_URL=ws://localhost:8787/document
 
-**Backend** (`/supabase/.env.local`):
-```bash
-TIPTAP_APP_SECRET=f6d9a7d903b990ce6b707be28ae19bf6941dcdc29a0137cd6233cd015a64fffe
+# For production (Cloudflare Workers)
+EXPO_PUBLIC_YJS_WS_URL=wss://your-worker.workers.dev/document
 ```
 
 ### Deployment
 
-**Deploy Edge Function:**
+**Deploy Durable Object to Cloudflare:**
 ```bash
-npx supabase functions deploy generate-tiptap-token --project-ref unocjfiipormnaujsuhk
+cd agent-poc
+npx wrangler deploy
 ```
 
-**Set Secret:**
-```bash
-npx supabase secrets set TIPTAP_APP_SECRET=<secret> --project-ref unocjfiipormnaujsuhk
+**Configuration** (`wrangler.toml`):
+```toml
+name = "yjs-collaboration"
+
+[[durable_objects.bindings]]
+name = "DOCUMENT"
+class_name = "DocumentDurableObject"
+script_name = "yjs-collaboration"
 ```
 
 ## Cloudflare Pages Deployment
@@ -1116,46 +1164,64 @@ find dist -type f | wc -l
 
 ### Testing Collaboration
 
-1. **Start Expo app:**
+1. **Start Durable Object server:**
    ```bash
+   cd agent-poc
+   npx wrangler dev --local --port 8787
+   ```
+
+2. **Start Agent Manager:**
+   ```bash
+   cd agent-poc
+   npm run agent-manager
+   ```
+
+3. **Start Expo app:**
+   ```bash
+   cd expo-app
    npx expo start --web --port 8082
    ```
 
-2. **Open a trip document** and click "Enable Collaboration"
+4. **Open a document** in the browser
 
-3. **Open the same trip in another browser tab**
+5. **Open the same document in another browser tab**
 
-4. **Make edits** - Changes should sync instantly via Tiptap Cloud
+6. **Make edits** - Changes should sync instantly via Y.js
 
-5. **Check browser console** for connection logs:
-   - `[WebView] Connected to Tiptap Cloud`
+7. **Check browser console** for connection logs:
+   - `[WebView] Provider connected`
    - `[WebView] Document synced`
+
+8. **Check agent logs** for period-triggered detection:
+   - `[Agent] 🔴 Period detected! Triggering location detection...`
 
 ### Benefits
 
-- ✅ **No server management** - Tiptap handles all infrastructure
-- ✅ **Automatic scaling** - Handles any number of collaborators
-- ✅ **JWT authentication** - Secure, document-level access control
-- ✅ **WebRTC + WebSocket** - Optimal P2P sync with server fallback
-- ✅ **Production-ready** - Managed service with SLA and monitoring
-- ✅ **Global CDN** - Low-latency connections worldwide
+- ✅ **Self-hosted** - Full control over infrastructure and data
+- ✅ **Automatic scaling** - Durable Objects scale per document automatically
+- ✅ **SQL persistence** - Documents persisted in Durable Object SQL storage
+- ✅ **WebSocket-based** - Direct WebSocket connections, no external dependencies
+- ✅ **Built-in awareness** - Cursor positions and user presence via Y.js awareness
+- ✅ **Cost-efficient** - Pay only for what you use with Cloudflare Workers
 
 ### Troubleshooting
 
-**Token generation fails:**
-- Check that `TIPTAP_APP_SECRET` is set in Supabase secrets
-- Verify user is authenticated (session available)
-- Check Edge Function logs for errors
-
 **WebSocket connection fails:**
-- Verify `EXPO_PUBLIC_TIPTAP_APP_ID` is correct
+- Verify Durable Object server is running (`npx wrangler dev`)
+- Check `EXPO_PUBLIC_YJS_WS_URL` is correct in `.env.local`
 - Check browser console for connection errors
-- Ensure token is being passed correctly to WebView
+- Verify Durable Object binding is configured in `wrangler.toml`
 
 **Document doesn't sync:**
 - Check that Y.js state is being initialized correctly
 - Verify `ySyncPlugin` is included in ProseMirror plugins
 - Look for errors in WebView console logs
+- Check Wrangler logs for Durable Object errors
+
+**Documents not persisting:**
+- Verify SQL storage is working (check Durable Object logs)
+- Check that `onSave()` is being called on document changes
+- Use Wrangler SQL inspector to check database state
 
 ## ProseMirror Editor Architecture
 
@@ -1425,3 +1491,387 @@ docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
 3. **Rebuild bundle**: `npm run build:prosemirror`
 4. **Trigger Metro reload**: Touch `ProseMirrorWebView.tsx` or change a log message
 5. **Test in app**: Create/edit locations and verify structure in logs or database
+
+## AI Agent System
+
+### Overview
+The AI Agent System provides **autonomous location detection** in collaborative documents. Agents observe document changes in real-time via Y.js and trigger LLM processing when users type a period (`.`), making the system responsive and efficient.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Cloudflare Workers                        │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Durable Object (per document)                        │   │
+│  │ - Tracks user connections (userCount)                │   │
+│  │ - Writes to Supabase on connect/disconnect           │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            │ INSERT to document_activity
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Supabase PostgreSQL                       │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Tables:                                              │   │
+│  │ - agent_connections  (tracks active agents)          │   │
+│  │ - document_activity  (activity event log)            │   │
+│  │ - agent_metrics      (performance data)              │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                    Realtime Subscription                     │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            │ INSERT events
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Agent Manager (Local Server)                    │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ - Subscribes to document_activity changes            │   │
+│  │ - Spawns agent workers (child processes)             │   │
+│  │ - Enforces max concurrent limit with LRU eviction    │   │
+│  │ - Health checks and crash recovery                   │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                            │                                 │
+│                            │ fork()                          │
+│                            ▼                                 │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Agent Worker (one per active document)               │   │
+│  │ - Connects to Y.js document via WebSocket            │   │
+│  │ - Observes document changes (observeDeep)            │   │
+│  │ - Detects period (.) character insertion             │   │
+│  │ - Runs LLM processing after 1-second debounce        │   │
+│  │ - Creates geo-marks via ProseMirror                  │   │
+│  │ - Reports metrics to manager via IPC                 │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Components
+
+#### 1. Local Agent (`/scripts/local-agent-yjs.js`)
+Production agent for location detection in collaborative documents.
+
+**Key Features:**
+- Connects to Y.js document via WebSocket
+- Observes document changes with `yXmlFragment.observeDeep()`
+- Detects period (`.`) character in inserted text
+- 1-second debounce to allow continued typing
+- Extracts locations from text using LLM
+- Geocodes locations using Nominatim API
+- Animates cursor to show processing
+- Creates geo-marks in ProseMirror document
+
+**Running:**
+```bash
+# From project root
+DOCUMENT_ID=test-document node scripts/local-agent-yjs.js
+```
+
+**Environment Variables:**
+- `DOCUMENT_ID` - Document to attach to
+- `WS_PORT` - WebSocket port (default: 8787)
+
+#### 2. Agent Manager (`/agent-poc/agent-manager.ts`)
+Orchestrates multiple agent workers across documents dynamically.
+
+**Key Features:**
+- Subscribes to Supabase Realtime (`document_activity` table)
+- Spawns agent workers when documents become active
+- Kills agents when documents become idle (after 30s grace period)
+- Enforces max concurrent agent limit (default: 10)
+- LRU eviction when limit reached
+- Health checks via ping/pong every 30 seconds
+- Crash recovery on restart
+- Graceful shutdown handling
+
+**Running:**
+```bash
+cd agent-poc
+npm run agent-manager
+```
+
+**Configuration:**
+```bash
+# .env file
+MANAGER_ID=manager-local-01
+MAX_CONCURRENT_AGENTS=10
+IDLE_TIMEOUT_MS=30000
+WS_PORT=8787
+```
+
+#### 3. Agent Worker (`/agent-poc/agent-worker.ts`)
+Individual worker process for document-specific LLM processing.
+
+**Key Features:**
+- Accepts `DOCUMENT_ID` and `AGENT_ID` via CLI args
+- Connects to Y.js document
+- Period-triggered location detection
+- Reports metrics to manager (memory, CPU, LLM calls)
+- Responds to shutdown and ping messages from manager
+
+**Running (managed by Agent Manager):**
+```bash
+DOCUMENT_ID=test-doc AGENT_ID=agent-123 node agent-poc/agent-worker.ts
+```
+
+### Period-Triggered Detection
+
+The agents use **event-driven detection** instead of time-based polling:
+
+```javascript
+// Set up observer for document changes
+let isInitialSync = true;
+let detectionDebounceTimer = null;
+
+yXmlFragment.observeDeep((events) => {
+  if (isInitialSync) {
+    isInitialSync = false;
+    return; // Skip initial sync
+  }
+
+  let periodDetected = false;
+
+  // Check if any changes contain a period
+  events.forEach((event) => {
+    if (event.changes && event.changes.delta) {
+      event.changes.delta.forEach((change) => {
+        if (change.insert &&
+            typeof change.insert === 'string' &&
+            change.insert.includes('.')) {
+          periodDetected = true;
+        }
+      });
+    }
+  });
+
+  // Trigger detection if period was detected
+  if (periodDetected) {
+    console.log('[Agent] 🔴 Period detected! Triggering location detection...');
+
+    // Debounce: wait 1 second after the last period
+    if (detectionDebounceTimer) {
+      clearTimeout(detectionDebounceTimer);
+    }
+
+    detectionDebounceTimer = setTimeout(() => {
+      runLocationDetection();
+    }, 1000);
+  }
+});
+```
+
+**Why Period-Triggered?**
+1. **Natural sentence boundaries** - Period marks end of thought
+2. **User intent signal** - Indicates complete sentence ready for analysis
+3. **Efficient** - Only triggers when meaningful content added
+4. **Non-intrusive** - 1-second debounce allows continued typing
+
+### Y.js Integration
+
+Agents connect directly to Y.js documents and observe changes:
+
+```javascript
+const ydoc = new Y.Doc();
+const provider = new WebsocketProvider(
+  `ws://localhost:${WS_PORT}`,
+  documentId,
+  ydoc
+);
+
+const yXmlFragment = ydoc.getXmlFragment('prosemirror');
+
+// Set cursor position for awareness
+provider.awareness.setLocalStateField('user', {
+  name: 'AI Agent',
+  color: '#FF6B6B'
+});
+
+// Create relative position for cursor
+const anchor = Y.createRelativePositionFromTypeIndex(textNode, position);
+provider.awareness.setLocalStateField('cursor', { anchor, head: anchor });
+```
+
+**Y.js Concepts:**
+- **Y.Doc** - Shared CRDT document
+- **WebsocketProvider** - Syncs document state via WebSocket
+- **Awareness** - Shares ephemeral state (cursors, user presence)
+- **Relative Positions** - Position format that adjusts with document edits
+- **XmlFragment** - Y.js type representing ProseMirror document structure
+
+### Database Schema
+
+#### `agent_connections`
+Tracks active agent processes per document.
+
+```sql
+CREATE TABLE agent_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL UNIQUE,
+  agent_pid INTEGER,
+  status TEXT NOT NULL, -- connecting, active, idle, detaching, disconnected, error
+  manager_id TEXT NOT NULL,
+  llm_calls_count INTEGER DEFAULT 0,
+  locations_marked_count INTEGER DEFAULT 0,
+  last_activity_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### `document_activity`
+Activity event log from Durable Objects.
+
+```sql
+CREATE TABLE document_activity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id TEXT NOT NULL,
+  event_type TEXT NOT NULL, -- active, idle, user_joined, user_left
+  user_count INTEGER NOT NULL DEFAULT 0,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### `agent_metrics`
+Time-series performance data for monitoring.
+
+```sql
+CREATE TABLE agent_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_connection_id UUID REFERENCES agent_connections(id),
+  memory_mb NUMERIC,
+  cpu_percent NUMERIC,
+  websocket_latency_ms INTEGER,
+  llm_response_time_ms INTEGER,
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Testing the Agent System
+
+#### Testing Agent Manager
+
+1. **Start Durable Object server:**
+   ```bash
+   cd agent-poc
+   npx wrangler dev --local --port 8787
+   ```
+
+2. **Start Agent Manager:**
+   ```bash
+   cd agent-poc
+   npm run agent-manager
+   ```
+
+3. **Open document in browser:**
+   - Navigate to `http://localhost:8787`
+   - Connect to a document via client
+
+4. **Verify agent spawns:**
+   ```
+   [Manager] 📨 Activity: active for test-document (users: 1)
+   [Manager] 🔄 Spawning agent agent-test-document-1731456789...
+   [Manager] ✅ Spawned agent for test-document (PID: 12345)
+   ```
+
+5. **Type text with period and verify:**
+   ```
+   [Agent Worker] 🔴 Period detected! Triggering location detection...
+   [Agent Worker] 🔎 Running location detection...
+   [Agent Worker] 🌍 Processing 2 new locations...
+   ```
+
+6. **Close document and verify detachment:**
+   ```
+   [Manager] 📨 Activity: idle for test-document (users: 0)
+   [Manager] 🔄 Detaching agent from test-document (Document became idle)
+   [Manager] 🛑 Agent exited (code: 0, signal: null)
+   ```
+
+#### Database Queries for Testing
+
+```bash
+# Check active agents
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
+  "SELECT document_id, agent_id, status, llm_calls_count FROM agent_connections WHERE status = 'active';"
+
+# Check recent activity
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
+  "SELECT document_id, event_type, user_count, timestamp FROM document_activity ORDER BY timestamp DESC LIMIT 10;"
+
+# Check agent metrics
+docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
+  "SELECT ac.agent_id, am.memory_mb, am.cpu_percent, am.recorded_at
+   FROM agent_metrics am
+   JOIN agent_connections ac ON ac.id = am.agent_connection_id
+   ORDER BY am.recorded_at DESC LIMIT 10;"
+```
+
+### Common Issues
+
+#### Agent doesn't connect to WebSocket
+**Symptom:** Agent logs show "Status: connecting" and never advances to "connected"
+
+**Solution:**
+1. Verify WebSocket server is running on correct port
+2. Check `WS_PORT` environment variable matches server
+3. For POC agent: Start Wrangler with `npx wrangler dev --local --port 8787`
+4. For production agent: Verify Durable Object WebSocket URL is correct
+
+#### Period detection not triggering
+**Symptom:** Typing period doesn't trigger agent processing
+
+**Solution:**
+1. Check agent logs for "Document changed" messages
+2. Verify `observeDeep` is set up correctly
+3. Ensure initial sync completed (check "Initial sync completed" log)
+4. Try typing multiple sentences to rule out timing issues
+
+#### Agent Manager not spawning agents
+**Symptom:** Opening document doesn't spawn agent worker
+
+**Solution:**
+1. Verify Durable Object server is running
+2. Check Supabase Realtime connection in manager logs
+3. Verify `document_activity` events are being inserted
+4. Check database credentials in `.env` file
+5. Look for errors in manager logs
+
+#### LRU eviction not working
+**Symptom:** More than `MAX_CONCURRENT_AGENTS` running simultaneously
+
+**Solution:**
+1. Check `MAX_CONCURRENT_AGENTS` setting in `.env`
+2. Verify `last_activity_at` timestamps are being updated
+3. Look for "Evicting least active document" in logs
+4. Check that idle agents are being properly detached
+
+### Architecture Benefits
+
+✅ **Event-Driven** - No polling, immediate response to document changes
+✅ **Scalability** - Manager coordinates multiple agents across documents
+✅ **Resource Efficiency** - Agents only run when documents are active
+✅ **Fault Tolerance** - Crash recovery on manager restart
+✅ **Observability** - Metrics tracking in database
+✅ **Process Isolation** - Each agent in separate process prevents cascading failures
+✅ **Graceful Degradation** - LRU eviction when hitting resource limits
+✅ **Non-Intrusive** - 1-second debounce allows natural typing flow
+
+### Production Deployment
+
+For production deployment, see `/agent-poc/AGENT_MANAGER_README.md` which includes:
+- PM2 configuration for process management
+- Horizontal scaling with multiple manager instances
+- Distributed locking for multi-manager coordination
+- Metrics export to monitoring systems
+- Agent health monitoring dashboard
+
+### Next Steps
+
+- [ ] Add horizontal scaling (multiple manager instances)
+- [ ] Implement agent health monitoring dashboard
+- [ ] Add distributed locking for multi-manager coordination
+- [ ] Implement agent warm-up pool for faster attachment
+- [ ] Add metrics export to monitoring systems (Prometheus, etc.)
+- [ ] Implement agent versioning and rolling updates
