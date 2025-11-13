@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import * as Y from 'yjs';
 import YProvider from './src/y-partyserver/provider.js';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { ySyncPlugin } from 'y-prosemirror';
 import { customSchema } from './src/prosemirror-schema.js';
@@ -499,7 +499,7 @@ async function generateAndInsertAnswer(
     // Insert paragraph with first word and set selection after it
     let tr = editorView.state.tr.insert(insertAfterPos, paragraph);
     const firstWordEndPos = insertAfterPos + 1 + words[0].length;
-    tr = tr.setSelection(editorView.state.selection.constructor.near(tr.doc.resolve(firstWordEndPos)));
+    tr = tr.setSelection(TextSelection.near(tr.doc.resolve(firstWordEndPos)));
     editorView.dispatch(tr);
 
     // Calculate position where next words will be inserted
@@ -521,7 +521,7 @@ async function generateAndInsertAnswer(
 
       // Move selection to end of newly inserted word
       currentPos += word.length;
-      tr = tr.setSelection(state.selection.constructor.near(tr.doc.resolve(currentPos)));
+      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(currentPos)));
 
       editorView.dispatch(tr);
 
@@ -529,9 +529,9 @@ async function generateAndInsertAnswer(
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Clear selection by setting it to a neutral position
+    // Clear selection by setting it to document start
     const finalState = editorView.state;
-    const clearTr = finalState.tr.setSelection(finalState.selection.constructor.atStart(finalState.doc));
+    const clearTr = finalState.tr.setSelection(TextSelection.atStart(finalState.doc));
     editorView.dispatch(clearTr);
 
     console.log(`[Agent] ✅ Finished typing answer`);
