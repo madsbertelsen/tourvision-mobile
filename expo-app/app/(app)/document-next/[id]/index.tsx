@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { ChromeTabBar } from '@/components/ChromeTabBar';
 import { useDocumentNextContext } from './_layout';
 import { testLocations, generateTestDocument } from '@/utils/test-locations';
 
@@ -209,7 +210,7 @@ export default function AgentEditorScreen() {
   const WebViewComponent = Platform.OS === 'web' ? IframeWebView : WebView;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -271,6 +272,9 @@ export default function AgentEditorScreen() {
           androidHardwareAccelerationDisabled={false}
         />
       </View>
+
+      {/* Chrome-style Tab Bar */}
+      <ChromeTabBar />
     </SafeAreaView>
   );
 }
