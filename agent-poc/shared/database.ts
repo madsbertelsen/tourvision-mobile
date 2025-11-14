@@ -293,7 +293,19 @@ export class AgentDatabase {
           callback(payload.new as DocumentActivity);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('[DB] Realtime subscription status:', status);
+        if (err) {
+          console.error('[DB] Realtime subscription error:', err);
+        }
+        if (status === 'SUBSCRIBED') {
+          console.log('[DB] ✅ Successfully subscribed to document_activity changes');
+        } else if (status === 'TIMED_OUT') {
+          console.error('[DB] ❌ Realtime subscription timed out');
+        } else if (status === 'CLOSED') {
+          console.error('[DB] ❌ Realtime subscription closed');
+        }
+      });
 
     // Return cleanup function
     return () => {
