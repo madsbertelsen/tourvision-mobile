@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet from '@gorhom/bottom-sheet';
 import Mapbox from '@rnmapbox/maps';
 import * as turfBbox from '@turf/bbox';
 import { Slot, useRouter, useSegments } from 'expo-router';
