@@ -74,14 +74,6 @@ export default function LocationDetailsRoute() {
   return (
     <BottomSheetScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Location details sections */}
-      <View style={styles.section}>
-        <View style={styles.sectionRow}>
-          <Ionicons name="location-outline" size={20} color="#6B7280" />
-          <Text style={styles.sectionLabel}>Full Address</Text>
-        </View>
-        <Text style={styles.sectionValue}>{location.placeName}</Text>
-      </View>
-
       {location.description && (
         <View style={styles.section}>
           <View style={styles.sectionRow}>
