@@ -657,6 +657,7 @@ class DocumentEditor {
       let currentMarkers = [];
       let previousLocationCount = 0;
       let isUserInteracting = false;
+      let isFirstLoad = true; // Track if this is the first time loading the map
 
       // Extract locations from document
       const extractLocations = () => {
@@ -709,14 +710,24 @@ class DocumentEditor {
           currentMarkers.push(marker);
         });
 
-        // Only animate to fit bounds if we should (new locations added and user not interacting)
+        // Position the map - instant on first load, animated on updates
         if (shouldAnimate && !isUserInteracting) {
           if (locations.length === 1) {
-            currentMap.flyTo({
-              center: [locations[0].lng, locations[0].lat],
-              zoom: 12,
-              duration: 1500
-            });
+            if (isFirstLoad) {
+              // First load - jump instantly to position
+              currentMap.jumpTo({
+                center: [locations[0].lng, locations[0].lat],
+                zoom: 12
+              });
+              console.log('[MapNodeView] Initial load - jumped to single location');
+            } else {
+              // Subsequent updates - animate
+              currentMap.flyTo({
+                center: [locations[0].lng, locations[0].lat],
+                zoom: 12,
+                duration: 1500
+              });
+            }
           } else if (locations.length > 1) {
             const lngs = locations.map(l => l.lng);
             const lats = locations.map(l => l.lat);
@@ -724,11 +735,28 @@ class DocumentEditor {
               [Math.min(...lngs), Math.min(...lats)],
               [Math.max(...lngs), Math.max(...lats)]
             );
-            currentMap.fitBounds(bounds, {
-              padding: 50,
-              maxZoom: 15,
-              duration: 1500
-            });
+
+            if (isFirstLoad) {
+              // First load - fit bounds instantly
+              currentMap.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: 15,
+                duration: 0  // Instant positioning
+              });
+              console.log('[MapNodeView] Initial load - fitted bounds instantly');
+            } else {
+              // Subsequent updates - animate
+              currentMap.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: 15,
+                duration: 1500
+              });
+            }
+          }
+
+          // After first positioning, set flag to false
+          if (isFirstLoad) {
+            isFirstLoad = false;
           }
         }
       };
@@ -761,13 +789,40 @@ class DocumentEditor {
 
         if (!currentMap) {
           mapContainer.innerHTML = '';
+
+          // Initially hide the map to prevent seeing any transitions
+          mapContainer.style.opacity = '0';
+
           mapboxgl.accessToken = mapboxToken;
+
+          // Calculate the exact bounds we want
+          let bounds = null;
+          let initialCenter = [0, 0];
+          let initialZoom = 2;
+
+          if (locations.length === 1) {
+            initialCenter = [locations[0].lng, locations[0].lat];
+            initialZoom = 12;
+          } else if (locations.length > 1) {
+            const lngs = locations.map(l => l.lng);
+            const lats = locations.map(l => l.lat);
+            bounds = new mapboxgl.LngLatBounds(
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            );
+
+            // Still calculate center for initial map creation
+            initialCenter = [
+              (Math.min(...lngs) + Math.max(...lngs)) / 2,
+              (Math.min(...lats) + Math.max(...lats)) / 2
+            ];
+          }
 
           currentMap = new mapboxgl.Map({
             container: mapContainer,
             style: 'mapbox://styles/mapbox/light-v11',
-            center: [0, 0],
-            zoom: 2,
+            center: initialCenter,
+            zoom: initialZoom,
             // Disable all map interactions
             dragPan: false,
             scrollZoom: false,
@@ -775,7 +830,10 @@ class DocumentEditor {
             dragRotate: false,
             keyboard: false,
             doubleClickZoom: false,
-            touchZoomRotate: false
+            touchZoomRotate: false,
+            // Disable any initial animations
+            fadeDuration: 0,
+            renderWorldCopies: false
           });
 
           // Track user interaction
@@ -785,8 +843,52 @@ class DocumentEditor {
             }
           });
 
-          currentMap.on('load', () => {
-            updateMarkers(locations, true);
+          // Once style is loaded, immediately position the map without animation
+          currentMap.once('style.load', () => {
+            // Add markers first
+            currentMarkers.forEach(marker => marker.remove());
+            currentMarkers = [];
+
+            locations.forEach((location) => {
+              const bgColor = COLORS[location.colorIndex % COLORS.length];
+              const el = document.createElement('div');
+              el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+              const inner = document.createElement('div');
+              inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+              el.appendChild(inner);
+
+              const marker = new mapboxgl.Marker(el)
+                .setLngLat([location.lng, location.lat])
+                .setPopup(new mapboxgl.Popup().setText(location.placeName))
+                .addTo(currentMap);
+
+              currentMarkers.push(marker);
+            });
+
+            // Now position the map instantly
+            if (locations.length === 1) {
+              currentMap.jumpTo({
+                center: [locations[0].lng, locations[0].lat],
+                zoom: 12
+              });
+            } else if (bounds) {
+              currentMap.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: 15,
+                duration: 0,
+                animate: false
+              });
+            }
+
+            // Mark first load as done
+            isFirstLoad = false;
+
+            // Show the map after positioning
+            setTimeout(() => {
+              mapContainer.style.transition = 'opacity 0.3s';
+              mapContainer.style.opacity = '1';
+            }, 50);
           });
         } else {
           // Map already exists, only animate if location count changed

@@ -1,9 +1,12 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Mapbox from '@rnmapbox/maps';
+import * as turf from '@turf/turf';
 
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -30,7 +33,9 @@ interface MapLocation {
   colorIndex: number;
   transportFrom?: string | null;
   transportProfile?: string | null;
-  waypoints?: any[] | null;
+  waypoints?: Array<{lat: number; lng: number; name?: string}> | null;
+  description?: string;
+  displayText?: string;
 }
 
 export default function FullscreenMap() {
@@ -43,51 +48,257 @@ export default function FullscreenMap() {
     ? JSON.parse(Array.isArray(params.locations) ? params.locations[0] : params.locations)
     : [];
 
-  useEffect(() => {
-    // Fit camera to show all markers
-    if (cameraRef.current && locations.length > 0) {
-      setTimeout(() => {
-        if (locations.length === 1) {
-          // Single location - zoom in
-          cameraRef.current?.setCamera({
-            centerCoordinate: [locations[0].lng, locations[0].lat],
-            zoomLevel: 12,
-            animationDuration: 1000,
-          });
-        } else {
-          // Multiple locations - fit bounds
-          const lngs = locations.map(l => l.lng);
-          const lats = locations.map(l => l.lat);
+  // State for routes
+  const [routes, setRoutes] = useState<any[]>([]);
 
-          const minLng = Math.min(...lngs);
-          const maxLng = Math.max(...lngs);
-          const minLat = Math.min(...lats);
-          const maxLat = Math.max(...lats);
+  // Bottom sheet state
+  const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
+  const [sheetView, setSheetView] = useState<'location' | 'route'>('location');
 
-          const centerLng = (minLng + maxLng) / 2;
-          const centerLat = (minLat + maxLat) / 2;
+  // Route editing state
+  const [pendingTransportMode, setPendingTransportMode] = useState<string | null>(null);
+  const [pendingWaypoints, setPendingWaypoints] = useState<Array<{lat: number; lng: number; name?: string}>>([]);
+  const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
 
-          // Calculate appropriate zoom level based on bounds
-          const lngDiff = maxLng - minLng;
-          const latDiff = maxLat - minLat;
-          const maxDiff = Math.max(lngDiff, latDiff);
+  // Bottom sheet ref and snap points
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
 
-          let zoomLevel = 10;
-          if (maxDiff < 0.01) zoomLevel = 14;
-          else if (maxDiff < 0.05) zoomLevel = 12;
-          else if (maxDiff < 0.1) zoomLevel = 11;
-          else if (maxDiff < 0.5) zoomLevel = 9;
-          else if (maxDiff < 1) zoomLevel = 8;
-          else zoomLevel = 7;
-
-          cameraRef.current?.setCamera({
-            centerCoordinate: [centerLng, centerLat],
-            zoomLevel: zoomLevel,
-            animationDuration: 1000,
-          });
-        }
-      }, 100);
+  // Calculate initial camera position based on locations
+  const getInitialCamera = () => {
+    if (locations.length === 0) {
+      return {
+        centerCoordinate: [0, 0] as [number, number],
+        zoomLevel: 2
+      };
     }
+
+    if (locations.length === 1) {
+      return {
+        centerCoordinate: [locations[0].lng, locations[0].lat] as [number, number],
+        zoomLevel: 12
+      };
+    }
+
+    // Multiple locations - calculate center and appropriate zoom
+    const lngs = locations.map(l => l.lng);
+    const lats = locations.map(l => l.lat);
+
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    // Calculate appropriate zoom level based on bounds
+    const lngDiff = maxLng - minLng;
+    const latDiff = maxLat - minLat;
+    const maxDiff = Math.max(lngDiff, latDiff);
+
+    let zoomLevel = 10;
+    if (maxDiff < 0.01) zoomLevel = 14;
+    else if (maxDiff < 0.05) zoomLevel = 12;
+    else if (maxDiff < 0.1) zoomLevel = 11;
+    else if (maxDiff < 0.5) zoomLevel = 9;
+    else if (maxDiff < 1) zoomLevel = 8;
+    else if (maxDiff < 5) zoomLevel = 7;
+    else zoomLevel = 5;
+
+    // Add some padding to the zoom level
+    zoomLevel = Math.max(1, zoomLevel - 0.5);
+
+    return {
+      centerCoordinate: [centerLng, centerLat] as [number, number],
+      zoomLevel
+    };
+  };
+
+  const initialCamera = getInitialCamera();
+
+  // Handle marker press
+  const handleMarkerPress = useCallback((location: MapLocation, index: number) => {
+    console.log('[FullscreenMap] Marker pressed:', location.displayText || location.placeName);
+    setSelectedLocation(location);
+    setSheetView('location');
+
+    // Find the route that ends at this location
+    const routeIndex = index - 1;
+    if (routeIndex >= 0 && routes[routeIndex]) {
+      setSelectedRoute({
+        ...routes[routeIndex],
+        fromLocation: locations[routeIndex],
+        toLocation: location,
+        routeIndex: routeIndex
+      });
+    } else {
+      setSelectedRoute(null);
+    }
+
+    bottomSheetRef.current?.expand();
+  }, [routes, locations]);
+
+  // Handle route line press
+  const handleRoutePress = useCallback((route: any, routeIndex: number) => {
+    console.log('[FullscreenMap] Route pressed:', route.id);
+
+    const fromLocation = locations[routeIndex];
+    const toLocation = locations[routeIndex + 1];
+
+    const enrichedRoute = {
+      ...route,
+      fromLocation,
+      toLocation,
+      routeIndex
+    };
+
+    setSelectedRoute(enrichedRoute);
+    setSelectedLocation(toLocation);
+    setSheetView('route');
+
+    // Initialize pendingWaypoints with existing waypoints
+    setPendingWaypoints(toLocation.waypoints || []);
+
+    bottomSheetRef.current?.expand();
+  }, [locations]);
+
+  // Navigate to route view from location view
+  const handleViewRoute = useCallback(() => {
+    if (selectedRoute) {
+      setSheetView('route');
+      setPendingWaypoints(selectedRoute.toLocation?.waypoints || []);
+    }
+  }, [selectedRoute]);
+
+  // Navigate back to location view
+  const handleBackToLocation = useCallback(() => {
+    setSheetView('location');
+  }, []);
+
+  // Handle bottom sheet close
+  const handleSheetClose = useCallback(() => {
+    setSelectedLocation(null);
+    setSelectedRoute(null);
+    setSheetView('location');
+    setPendingTransportMode(null);
+    setPendingWaypoints([]);
+    setIsAddingWaypoint(false);
+  }, []);
+
+  // Handle transport mode change
+  const handleTransportModeChange = useCallback(async (mode: string) => {
+    if (!selectedRoute) return;
+
+    console.log('[FullscreenMap] Changing transport mode to:', mode);
+    setPendingTransportMode(mode);
+
+    // Refetch the route with the new transport mode
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+    if (!mapboxToken) return;
+
+    const from = selectedRoute.fromLocation;
+    const to = selectedRoute.toLocation;
+
+    // Use pendingWaypoints if any
+    let coordinates;
+    const waypoints = pendingWaypoints.length > 0 ? pendingWaypoints : (to.waypoints || []);
+
+    if (waypoints.length > 0) {
+      const waypointCoords = waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
+      coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+    } else {
+      coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+    }
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/${mode}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.routes && data.routes[0]) {
+        // Update the route in the routes array
+        const newRoute = {
+          id: selectedRoute.id,
+          geometry: data.routes[0].geometry,
+          colorIndex: to.colorIndex || 0,
+        };
+
+        setRoutes(prevRoutes => {
+          const updatedRoutes = [...prevRoutes];
+          updatedRoutes[selectedRoute.routeIndex] = newRoute;
+          return updatedRoutes;
+        });
+
+        // Update selectedRoute with new geometry
+        setSelectedRoute({
+          ...selectedRoute,
+          geometry: data.routes[0].geometry,
+        });
+
+        console.log('[FullscreenMap] Route updated with new transport mode');
+      }
+    } catch (error) {
+      console.error('[FullscreenMap] Error fetching route:', error);
+    }
+  }, [selectedRoute, pendingWaypoints]);
+
+  // Fetch routes between locations
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      if (locations.length < 2) {
+        setRoutes([]);
+        return;
+      }
+
+      const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+      if (!mapboxToken) {
+        setRoutes([]);
+        return;
+      }
+
+      const routePromises = [];
+
+      // Create routes between consecutive locations
+      for (let i = 1; i < locations.length; i++) {
+        const from = locations[i - 1];
+        const to = locations[i];
+
+        let coordinates;
+        if (to.waypoints && to.waypoints.length > 0) {
+          const waypointCoords = to.waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
+          coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+        } else {
+          coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+        }
+
+        const profile = to.transportProfile || 'walking';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+        routePromises.push(
+          fetch(url)
+            .then(res => res.json())
+            .then(data => {
+              if (data.routes && data.routes[0]) {
+                return {
+                  id: `route-${from.geoId}-${to.geoId}`,
+                  geometry: data.routes[0].geometry,
+                  colorIndex: to.colorIndex || 0,
+                };
+              }
+              return null;
+            })
+            .catch(() => null)
+        );
+      }
+
+      const fetchedRoutes = await Promise.all(routePromises);
+      setRoutes(fetchedRoutes.filter(r => r !== null));
+    };
+
+    fetchRoutes();
   }, [locations]);
 
   // For web platform, render a simple message
@@ -108,7 +319,7 @@ export default function FullscreenMap() {
             {locations.length} location{locations.length !== 1 ? 's' : ''} to display
           </Text>
 
-          <View style={styles.locationsList}>
+          <ScrollView style={styles.locationsList}>
             {locations.map((location, index) => (
               <View key={location.geoId} style={styles.locationItem}>
                 <View
@@ -122,7 +333,7 @@ export default function FullscreenMap() {
                 </Text>
               </View>
             ))}
-          </View>
+          </ScrollView>
 
           <Text style={styles.webNote}>
             Note: Native map view is not available on web platform.
@@ -135,83 +346,247 @@ export default function FullscreenMap() {
 
   // Native platform - render actual map
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Map View</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Map View</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-      <Mapbox.MapView
-        style={styles.map}
-        styleURL="mapbox://styles/mapbox/light-v11"
-      >
-        <Mapbox.Camera
-          ref={cameraRef}
-          zoomLevel={locations.length === 1 ? 11 : 8}
-          centerCoordinate={
-            locations.length > 0
-              ? [locations[0].lng, locations[0].lat]
-              : [0, 0]
-          }
-        />
+        <Mapbox.MapView
+          style={styles.map}
+          styleURL="mapbox://styles/mapbox/light-v11"
+        >
+          <Mapbox.Camera
+            ref={cameraRef}
+            zoomLevel={initialCamera.zoomLevel}
+            centerCoordinate={initialCamera.centerCoordinate}
+            animationDuration={0}
+          />
 
-        {/* Location markers */}
-        {locations.map((location, index) => {
-          const colorIndex = (location.colorIndex || 0) % COLORS.length;
-          const bgColor = COLORS[colorIndex];
+          {/* Route lines */}
+          {routes.map((route, routeIndex) => {
+            const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
+            const isFocused = sheetView === 'route' && selectedRoute?.routeIndex === routeIndex;
+            const isOtherRoute = sheetView === 'route' && selectedRoute?.routeIndex !== routeIndex;
 
-          return (
-            <Mapbox.MarkerView
-              key={location.geoId || `marker-${index}`}
-              id={location.geoId || `marker-${index}`}
-              coordinate={[location.lng, location.lat]}
-            >
-              <View
-                style={[
-                  styles.marker,
-                  { backgroundColor: bgColor }
-                ]}
+            return (
+              <Mapbox.ShapeSource
+                key={route.id}
+                id={route.id}
+                shape={route.geometry}
+                onPress={() => handleRoutePress(route, routeIndex)}
               >
-                <View style={styles.markerInner} />
+                <Mapbox.LineLayer
+                  id={`${route.id}-line`}
+                  style={{
+                    lineColor: routeColor,
+                    lineWidth: isFocused ? 6 : 5,
+                    lineOpacity: isOtherRoute ? 0.2 : 0.75,
+                  }}
+                />
+              </Mapbox.ShapeSource>
+            );
+          })}
+
+          {/* Waypoint markers */}
+          {pendingWaypoints.map((waypoint, index) => (
+            <Mapbox.MarkerView
+              key={`waypoint-${index}`}
+              id={`waypoint-${index}`}
+              coordinate={[waypoint.lng, waypoint.lat]}
+            >
+              <View style={styles.waypointMarker}>
+                <Text style={styles.waypointNumber}>{index + 1}</Text>
               </View>
             </Mapbox.MarkerView>
-          );
-        })}
+          ))}
 
-        {/* Draw route lines between consecutive locations if we have more than one */}
-        {locations.length > 1 && (
-          <Mapbox.ShapeSource
-            id="route-line"
-            shape={{
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: locations.map(loc => [loc.lng, loc.lat])
-              }
-            }}
+          {/* Location markers */}
+          {locations.map((location, index) => {
+            const colorIndex = (location.colorIndex || 0) % COLORS.length;
+            const bgColor = COLORS[colorIndex];
+
+            // Determine if this marker should be muted
+            const isPartOfFocusedRoute = sheetView === 'route' && selectedRoute && (
+              index === selectedRoute.routeIndex || // From location
+              index === selectedRoute.routeIndex + 1 // To location
+            );
+            const shouldMute = sheetView === 'route' && !isPartOfFocusedRoute;
+
+            return (
+              <Mapbox.MarkerView
+                key={location.geoId || `marker-${index}`}
+                id={location.geoId || `marker-${index}`}
+                coordinate={[location.lng, location.lat]}
+              >
+                <TouchableOpacity
+                  onPress={() => handleMarkerPress(location, index)}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.marker,
+                      {
+                        backgroundColor: bgColor,
+                        opacity: shouldMute ? 0.3 : 1.0
+                      }
+                    ]}
+                  >
+                    <View style={styles.markerInner} />
+                  </View>
+                </TouchableOpacity>
+              </Mapbox.MarkerView>
+            );
+          })}
+        </Mapbox.MapView>
+
+        {/* Bottom Sheet for location details */}
+        {selectedLocation && (
+          <BottomSheet
+            ref={bottomSheetRef}
+            index={-1}
+            snapPoints={snapPoints}
+            enablePanDownToClose={true}
+            onClose={handleSheetClose}
+            backgroundStyle={styles.bottomSheetBackground}
+            handleIndicatorStyle={styles.bottomSheetIndicator}
           >
-            <Mapbox.LineLayer
-              id="route-line-layer"
-              style={{
-                lineColor: '#000',
-                lineWidth: 2,
-                lineOpacity: 0.3,
-                lineDasharray: [2, 1]
-              }}
-            />
-          </Mapbox.ShapeSource>
-        )}
-      </Mapbox.MapView>
+            <BottomSheetView style={styles.bottomSheetContent}>
+              {sheetView === 'location' ? (
+                // LOCATION VIEW
+                <>
+                  {/* Header with location name */}
+                  <View style={styles.sheetHeader}>
+                    <View style={[
+                      styles.sheetColorDot,
+                      { backgroundColor: COLORS[(selectedLocation.colorIndex || 0) % COLORS.length] }
+                    ]} />
+                    <Text style={styles.sheetTitle}>
+                      {selectedLocation.displayText || selectedLocation.placeName}
+                    </Text>
+                  </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {locations.length} location{locations.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
-    </SafeAreaView>
+                  {/* Location details */}
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="location-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>Full Address</Text>
+                    </View>
+                    <Text style={styles.sheetValue}>{selectedLocation.placeName}</Text>
+                  </View>
+
+                  {selectedLocation.description && (
+                    <View style={styles.sheetSection}>
+                      <View style={styles.sheetRow}>
+                        <Ionicons name="document-text-outline" size={20} color="#666" />
+                        <Text style={styles.sheetLabel}>Description</Text>
+                      </View>
+                      <Text style={styles.sheetValue}>{selectedLocation.description}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="navigate-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>Coordinates</Text>
+                    </View>
+                    <Text style={styles.sheetValue}>
+                      {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                    </Text>
+                  </View>
+
+                  {/* Action buttons */}
+                  <View style={styles.sheetActions}>
+                    {selectedRoute && (
+                      <TouchableOpacity
+                        style={styles.sheetButton}
+                        onPress={handleViewRoute}
+                      >
+                        <Ionicons name="arrow-forward" size={20} color="#007AFF" />
+                        <Text style={styles.sheetButtonText}>View Route</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </>
+              ) : (
+                // ROUTE VIEW
+                <>
+                  {/* Header with back button */}
+                  <View style={styles.sheetHeader}>
+                    <TouchableOpacity onPress={handleBackToLocation} style={styles.backButtonSheet}>
+                      <Ionicons name="chevron-back" size={24} color="#007AFF" />
+                    </TouchableOpacity>
+                    <View style={[
+                      styles.sheetColorDot,
+                      { backgroundColor: COLORS[(selectedRoute.colorIndex || 0) % COLORS.length] }
+                    ]} />
+                    <Text style={styles.sheetTitle}>Route Details</Text>
+                  </View>
+
+                  {/* Route info */}
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="navigate-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>From → To</Text>
+                    </View>
+                    <Text style={styles.sheetValue}>
+                      {selectedRoute.fromLocation?.displayText || selectedRoute.fromLocation?.placeName} → {selectedRoute.toLocation?.displayText || selectedRoute.toLocation?.placeName}
+                    </Text>
+                  </View>
+
+                  {/* Transportation Method Selector */}
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="car-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>Transportation Method</Text>
+                    </View>
+                    <View style={styles.transportOptions}>
+                      {['walking', 'driving', 'cycling'].map((mode) => {
+                        const currentMode = pendingTransportMode || selectedRoute.toLocation?.transportProfile || 'walking';
+                        const isActive = currentMode === mode;
+
+                        return (
+                          <TouchableOpacity
+                            key={mode}
+                            style={[
+                              styles.transportOption,
+                              isActive && styles.transportOptionActive
+                            ]}
+                            onPress={() => handleTransportModeChange(mode)}
+                          >
+                            <Ionicons
+                              name={mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bicycle'}
+                              size={24}
+                              color={isActive ? '#007AFF' : '#666'}
+                            />
+                            <Text style={[
+                              styles.transportOptionText,
+                              isActive && styles.transportOptionTextActive
+                            ]}>
+                              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Note about saving */}
+                  <Text style={styles.noteText}>
+                    Note: Route changes are view-only in this screen.
+                    Return to the document to save changes.
+                  </Text>
+                </>
+              )}
+            </BottomSheetView>
+          </BottomSheet>
+        )}
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -259,31 +634,155 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'white',
   },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    padding: 12,
+  waypointMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F59E0B',
+    borderWidth: 2,
+    borderColor: 'white',
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 3,
   },
-  footerText: {
+  waypointNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'white',
+  },
+  // Bottom sheet styles
+  bottomSheetBackground: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  bottomSheetIndicator: {
+    backgroundColor: '#ccc',
+    width: 40,
+    height: 4,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  sheetColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    flex: 1,
+  },
+  sheetSection: {
+    marginBottom: 16,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sheetLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    fontWeight: '600',
+    color: '#666',
+    marginLeft: 8,
+  },
+  sheetValue: {
+    fontSize: 15,
+    color: '#333',
+    marginLeft: 28,
+    lineHeight: 20,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  sheetButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  sheetButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginLeft: 6,
+  },
+  backButtonSheet: {
+    marginRight: 8,
+    padding: 4,
+  },
+  transportOptions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginLeft: 28,
+  },
+  transportOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  transportOptionActive: {
+    backgroundColor: '#f0f8ff',
+    borderColor: '#007AFF',
+  },
+  transportOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 4,
+  },
+  transportOptionTextActive: {
+    color: '#007AFF',
+  },
+  noteText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 16,
+    marginLeft: 28,
+    lineHeight: 18,
   },
   // Web-specific styles
   webContainer: {
     flex: 1,
     padding: 24,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   webTitle: {
     fontSize: 24,
@@ -299,6 +798,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     marginVertical: 24,
+    maxHeight: 400,
   },
   locationItem: {
     flexDirection: 'row',
