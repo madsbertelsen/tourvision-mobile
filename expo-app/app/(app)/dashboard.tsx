@@ -283,13 +283,13 @@ export default function TripListScreen() {
         ) : (
           <>
             {documents.map((document) => (
-              <TouchableOpacity
-                key={document.id}
-                style={styles.tripCard}
-                onPress={() => router.push(`/(app)/document-next/${document.id}`)}
-                activeOpacity={0.7}
-              >
-              <View style={styles.tripCardContent}>
+              <View key={document.id}>
+                <TouchableOpacity
+                  style={styles.tripCard}
+                  onPress={() => router.push(`/(app)/document-next/${document.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.tripCardContent}>
                 <View style={styles.tripCardHeader}>
                   <Text style={styles.tripTitle}>{getDocumentTitle(document)}</Text>
                   <TouchableOpacity
@@ -316,8 +316,9 @@ export default function TripListScreen() {
                   </View>
                   <Text style={styles.tripDate}>{formatDate(document.updatedAt)}</Text>
                 </View>
+                  </View>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
             ))}
           </>
         )}
