@@ -207,24 +207,6 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Documents</Text>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => router.push('/(app)/agent-editor-test')}
-        >
-          <Ionicons name="flask-outline" size={24} color="#8B5CF6" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => router.push('/(app)/test-prosemirror-simple')}
-        >
-          <Ionicons name="code-outline" size={24} color="#10B981" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => router.push('/(app)/document-next/test-doc')}
-        >
-          <Ionicons name="document-outline" size={24} color="#F59E0B" />
-        </TouchableOpacity>
       </View>
 
       {/* URL Input Section */}
