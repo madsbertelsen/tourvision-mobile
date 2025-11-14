@@ -72,10 +72,76 @@ export default function TransportConfigRoute() {
 
   // Refetch route when waypoints change
   useEffect(() => {
-    if (selectedSourceId && pendingTransportMode) {
-      handleTransportModeChange(pendingTransportMode);
-    }
-  }, [pendingWaypoints]);
+    // Only refetch if we already have a route configured
+    if (!selectedSourceId || !destinationLocation || !pendingTransportMode) return;
+
+    const sourceLocation = locations.find(loc => loc.geoId === selectedSourceId);
+    if (!sourceLocation) return;
+
+    const fetchRouteWithWaypoints = async () => {
+      setIsUpdating(true);
+      try {
+        const profile = pendingTransportMode === 'walking' ? 'walking' :
+                       pendingTransportMode === 'cycling' ? 'cycling' :
+                       'driving-traffic';
+
+        // Construct waypoints query if they exist
+        let waypointsQuery = '';
+        if (pendingWaypoints.length > 0) {
+          const waypointCoords = pendingWaypoints
+            .map(wp => `${wp.lng},${wp.lat}`)
+            .join(';');
+          waypointsQuery = `;${waypointCoords}`;
+        }
+
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${sourceLocation.lng},${sourceLocation.lat}${waypointsQuery};${destinationLocation.lng},${destinationLocation.lat}?geometries=geojson&overview=full&access_token=${process.env.EXPO_PUBLIC_MAPBOX_TOKEN}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const routeId = `route-${selectedSourceId}-${locationId}`;
+
+          // Update route visual only (skip geo-mark update to prevent loop)
+          await updateRoute(routeId, {
+            transportMode: pendingTransportMode,
+            geometry: route.geometry,
+            distance: route.distance,
+            duration: route.duration,
+            waypoints: pendingWaypoints,
+          }, true); // skipGeoMarkUpdate = true
+
+          // Focus on updated route
+          focusOnRoute({
+            id: routeId,
+            fromLocationId: selectedSourceId,
+            toLocationId: locationId as string,
+            transportMode: pendingTransportMode,
+            geometry: route.geometry,
+            distance: route.distance,
+            duration: route.duration,
+            waypoints: pendingWaypoints,
+            color: destinationLocation.color || '#3B82F6',
+          });
+
+          // Save waypoints to document
+          setGeoMarkUpdate({
+            geoId: destinationLocation.geoId,
+            updatedAttrs: {
+              waypoints: pendingWaypoints.length > 0 ? pendingWaypoints : null,
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching route with waypoints:', error);
+      } finally {
+        setIsUpdating(false);
+      }
+    };
+
+    fetchRouteWithWaypoints();
+  }, [pendingWaypoints.length]); // Only trigger when waypoint count changes
 
   const handleBackToLocation = () => {
     router.back();

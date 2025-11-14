@@ -58,7 +58,7 @@ interface MapContextType {
   bottomSheetRef: React.RefObject<BottomSheet>;
   focusOnRoute: (route: RouteData) => void;
   focusOnLocation: (location: MapLocation) => void;
-  updateRoute: (routeId: string, updates: Partial<RouteData>) => Promise<void>;
+  updateRoute: (routeId: string, updates: Partial<RouteData>, skipGeoMarkUpdate?: boolean) => Promise<void>;
   isAddingWaypoint: boolean;
   setIsAddingWaypoint: (adding: boolean) => void;
   pendingWaypoints: Array<{ lat: number; lng: number }>;
@@ -269,7 +269,7 @@ export default function MapLayout() {
   }, [insets]);
 
   // Update or create route function
-  const updateRoute = useCallback(async (routeId: string, updates: Partial<RouteData>) => {
+  const updateRoute = useCallback(async (routeId: string, updates: Partial<RouteData>, skipGeoMarkUpdate = false) => {
     // Check if route exists
     const existingRoute = routes.find(r => r.id === routeId);
 
@@ -298,20 +298,23 @@ export default function MapLayout() {
       }
     }
 
-    // Find the location that this route leads to
-    const match = routeId.match(/route-(.+)-(.+)/);
-    if (match && updates.transportMode) {
-      const [_, fromId, toId] = match;
-      const location = locations.find(loc => loc.geoId === toId);
-      if (location) {
-        // Update document via context
-        setGeoMarkUpdate({
-          geoId: location.geoId,
-          updatedAttrs: {
-            transportProfile: updates.transportMode,
-            waypoints: updates.waypoints || null,
-          }
-        });
+    // Only update geo-mark if explicitly requested (not skipped)
+    if (!skipGeoMarkUpdate) {
+      // Find the location that this route leads to
+      const match = routeId.match(/route-(.+)-(.+)/);
+      if (match && updates.transportMode) {
+        const [_, fromId, toId] = match;
+        const location = locations.find(loc => loc.geoId === toId);
+        if (location) {
+          // Update document via context
+          setGeoMarkUpdate({
+            geoId: location.geoId,
+            updatedAttrs: {
+              transportProfile: updates.transportMode,
+              waypoints: updates.waypoints || null,
+            }
+          });
+        }
       }
     }
   }, [routes, locations, setGeoMarkUpdate]);
