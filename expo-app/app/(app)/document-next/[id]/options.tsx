@@ -3,36 +3,33 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Share } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTripContext } from './_layout';
+import { useDocumentNextContext } from './_layout';
 
 export default function DocumentOptionsModal() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const documentTitle = params.title as string || 'Document';
-  const documentId = params.id as string;
-  const { isEditMode, setIsEditMode, tripId } = useTripContext();
+  const { documentId } = useDocumentNextContext();
 
   const handleAction = async (action: string) => {
     console.log(`Action: ${action}`);
 
-    // Handle specific actions that need to update state before closing
-    if (action === 'toggleEdit') {
-      setIsEditMode(!isEditMode);
-      router.back();
-      return;
-    }
-
     if (action === 'share') {
       try {
         await Share.share({
-          message: `Document ID: ${tripId}\n\nYou can use this ID to connect the local Y.js agent.`,
+          message: `Document ID: ${documentId}\n\nYou can use this ID to connect the local Y.js agent.`,
           title: 'Document ID',
         });
       } catch (error) {
         console.error('Error sharing:', error);
       }
       router.back();
+      return;
+    }
+
+    if (action === 'toggleMap') {
+      router.push(`/document-next/${documentId}/map`);
       return;
     }
 
@@ -48,9 +45,9 @@ export default function DocumentOptionsModal() {
       <View style={styles.quickActionsContainer}>
         <TouchableOpacity style={styles.quickAction} onPress={() => handleAction('toggleEdit')}>
           <View style={styles.quickActionIcon}>
-            <Ionicons name={isEditMode ? "book" : "create-outline"} size={24} color="#007AFF" />
+            <Ionicons name="create-outline" size={24} color="#007AFF" />
           </View>
-          <Text style={styles.quickActionLabel}>{isEditMode ? 'Læs' : 'Rediger'}</Text>
+          <Text style={styles.quickActionLabel}>Rediger</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.quickAction} onPress={() => handleAction('toggleMap')}>
