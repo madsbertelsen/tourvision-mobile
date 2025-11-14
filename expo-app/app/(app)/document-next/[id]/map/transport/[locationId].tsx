@@ -1,9 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useDocumentNextContext } from '../../_layout';
+import { Ionicons } from '@expo/vector-icons';
 import { useMapContext } from '../_layout';
+import { useDocumentNextContext } from '../../_layout';
 
 type TransportMode = 'walking' | 'driving' | 'cycling';
 
@@ -37,7 +37,7 @@ export default function TransportConfigRoute() {
 
   useEffect(() => {
     // Snap bottom sheet to 50% (index 1)
-    bottomSheetRef.current?.expand();
+    bottomSheetRef.current?.snapToIndex(1);
 
     // If there's an existing route to this location, pre-select the source
     const existingRouteToHere = routes.find(r => r.toLocationId === locationId);
