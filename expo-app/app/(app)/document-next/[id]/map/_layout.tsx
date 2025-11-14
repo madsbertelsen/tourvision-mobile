@@ -1,14 +1,13 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Alert } from 'react-native';
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Mapbox from '@rnmapbox/maps';
-import { Ionicons } from '@expo/vector-icons';
-import { useDocumentNextContext } from '../_layout';
-import * as turf from '@turf/helpers';
 import * as turfBbox from '@turf/bbox';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDocumentNextContext } from '../_layout';
 
 // Transport mode type
 type TransportMode = 'walking' | 'driving' | 'cycling';
@@ -226,14 +225,19 @@ export default function MapLayout() {
   const focusOnRoute = useCallback((route: RouteData) => {
     if (route.geometry && route.geometry.coordinates) {
       const bbox = turfBbox.default(route.geometry);
+
+      // Add extra bottom padding if bottom sheet is expanded (50% = half screen)
+      const screenHeight = insets.top + 600; // Approximate screen height
+      const bottomSheetHeight = screenHeight * 0.5; // 50% snap point
+
       cameraRef.current?.fitBounds(
         [bbox[0], bbox[1]], // SW
         [bbox[2], bbox[3]], // NE
-        100, // padding
+        [100, 100, 100, bottomSheetHeight + 50], // padding [top, right, bottom, left]
         1000 // animation duration
       );
     }
-  }, []);
+  }, [insets]);
 
   const focusOnLocation = useCallback((location: MapLocation) => {
     cameraRef.current?.setCamera({
@@ -363,7 +367,8 @@ export default function MapLayout() {
               ref={cameraRef}
               defaultSettings={{
                 bounds: initialBounds,
-                padding: { paddingTop: 50, paddingBottom: 50, paddingLeft: 50, paddingRight: 50 },
+                // Add extra bottom padding to account for 50% bottom sheet (approximately 300-400px)
+                padding: { paddingTop: 50, paddingBottom: 350, paddingLeft: 50, paddingRight: 50 },
               }}
               animationDuration={0}
             />
@@ -433,6 +438,7 @@ export default function MapLayout() {
           <BottomSheet
             ref={bottomSheetRef}
             index={-1}
+            enableDynamicSizing={false}
             snapPoints={snapPoints}
             enablePanDownToClose={true}
             onClose={() => {
