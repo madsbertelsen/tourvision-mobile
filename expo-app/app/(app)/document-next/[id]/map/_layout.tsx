@@ -333,8 +333,8 @@ export default function MapLayout() {
     router.back();
   }, [router]);
 
-  // Snap points for bottom sheet
-  const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
+  // Snap points for bottom sheet (max 50% to avoid blocking map)
+  const snapPoints = useMemo(() => ['25%', '50%'], []);
 
   return (
     <GestureHandlerRootView style={styles.container}>
