@@ -1205,11 +1205,18 @@ class DocumentEditor {
         }
       };
 
+      // Store renderMap reference for external triggers
+      if (!window.mapRenderCallbacks) {
+        window.mapRenderCallbacks = [];
+      }
+      window.mapRenderCallbacks.push(renderMap);
+
       setTimeout(renderMap, 100);
 
       return {
         dom,
         update: () => {
+          console.log('[MapNodeView] update() called');
           renderMap();
           return true;
         },
@@ -1303,9 +1310,21 @@ class DocumentEditor {
       locCount.innerHTML = `Locations: <strong>${this.locations.length}</strong>`;
     }
 
-    // Update map if showing
+    // Update map if showing (old header map)
     if (this.showMap) {
       this.renderMap();
+    }
+
+    // Trigger MapNodeView updates (embedded map)
+    if (window.mapRenderCallbacks) {
+      console.log('[Client] Triggering', window.mapRenderCallbacks.length, 'map render callbacks');
+      window.mapRenderCallbacks.forEach(callback => {
+        try {
+          callback();
+        } catch (error) {
+          console.error('[Client] Error in map render callback:', error);
+        }
+      });
     }
   }
 
