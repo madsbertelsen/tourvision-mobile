@@ -84,9 +84,13 @@ export default function TransportConfigRoute() {
       setPendingTransportMode(existing.transportMode);
       setPendingWaypoints(existing.waypoints || []);
     } else {
-      // Reset to defaults
-      setPendingTransportMode('driving');
+      // Reset to defaults and trigger route fetch
+      const defaultMode = 'driving';
+      setPendingTransportMode(defaultMode);
       setPendingWaypoints([]);
+
+      // Automatically fetch route with default mode
+      handleTransportModeChange(defaultMode);
     }
   };
 
@@ -143,6 +147,16 @@ export default function TransportConfigRoute() {
             waypoints: pendingWaypoints,
             color: destinationLocation.color || '#3B82F6',
           });
+
+          // Auto-save geo-mark attributes
+          setGeoMarkUpdate({
+            geoId: destinationLocation.geoId,
+            updatedAttrs: {
+              transportProfile: mode,
+              transportFrom: selectedSourceId,
+              waypoints: pendingWaypoints.length > 0 ? pendingWaypoints : null,
+            }
+          });
         }
       } catch (error) {
         console.error('Error updating route:', error);
@@ -150,39 +164,6 @@ export default function TransportConfigRoute() {
         setIsUpdating(false);
       }
     }
-  };
-
-  const handleSaveChanges = async () => {
-    console.log('[TransportConfig] ========== handleSaveChanges called ==========');
-    console.log('[TransportConfig] destinationLocation:', destinationLocation);
-    console.log('[TransportConfig] selectedSourceId:', selectedSourceId);
-    console.log('[TransportConfig] pendingTransportMode:', pendingTransportMode);
-    console.log('[TransportConfig] pendingWaypoints:', pendingWaypoints);
-
-    if (!destinationLocation || !selectedSourceId) {
-      console.log('[TransportConfig] Missing destination or source, returning early');
-      return;
-    }
-
-    // Save the transport configuration
-    // This could be stored in a more flexible way in the future
-    // For now, we'll update the destination location's transport info
-    const updateData = {
-      geoId: destinationLocation.geoId,
-      updatedAttrs: {
-        transportProfile: pendingTransportMode,
-        transportFrom: selectedSourceId,
-        waypoints: pendingWaypoints.length > 0 ? pendingWaypoints : null,
-      }
-    };
-
-    console.log('[TransportConfig] Calling setGeoMarkUpdate with:', JSON.stringify(updateData, null, 2));
-    setGeoMarkUpdate(updateData);
-    console.log('[TransportConfig] setGeoMarkUpdate called successfully');
-
-    // Navigate back to location view
-    console.log('[TransportConfig] Calling router.back()');
-    router.back();
   };
 
   const handleAddWaypoint = () => {
@@ -370,16 +351,6 @@ export default function TransportConfigRoute() {
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Save button */}
-          <TouchableOpacity
-            style={[styles.saveButton, isUpdating && styles.saveButtonDisabled]}
-            onPress={handleSaveChanges}
-            disabled={isUpdating}
-          >
-            <Ionicons name="checkmark" size={20} color="#fff" />
-            <Text style={styles.saveButtonText}>Save Configuration</Text>
-          </TouchableOpacity>
         </>
       )}
     </BottomSheetScrollView>
@@ -565,25 +536,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '500',
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    gap: 8,
-    marginTop: 8,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   loadingContainer: {
     flexDirection: 'row',
