@@ -282,8 +282,8 @@ export default function TripListScreen() {
           </View>
         ) : (
           <>
-            {documents.map((document) => (
-              <View key={document.id}>
+            {documents.map((document, index) => (
+              <View key={`${document.id}-${index}`}>
                 <TouchableOpacity
                   style={styles.tripCard}
                   onPress={() => router.push(`/(app)/document-next/${document.id}`)}
