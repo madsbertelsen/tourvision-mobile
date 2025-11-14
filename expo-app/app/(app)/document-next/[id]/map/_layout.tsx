@@ -61,6 +61,8 @@ interface MapContextType {
   updateRoute: (routeId: string, updates: Partial<RouteData>) => Promise<void>;
   isAddingWaypoint: boolean;
   setIsAddingWaypoint: (adding: boolean) => void;
+  pendingWaypoints: Array<{ lat: number; lng: number }>;
+  setPendingWaypoints: React.Dispatch<React.SetStateAction<Array<{ lat: number; lng: number }>>>;
   sheetHeaderInfo: SheetHeaderInfo | null;
   setSheetHeaderInfo: (info: SheetHeaderInfo | null) => void;
 }
@@ -111,6 +113,7 @@ export default function MapLayout() {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
+  const [pendingWaypoints, setPendingWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
   const [sheetHeaderInfo, setSheetHeaderInfo] = useState<SheetHeaderInfo | null>(null);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
@@ -340,15 +343,28 @@ export default function MapLayout() {
   }, [segments, documentId, router]);
 
   // Handle route line press
-  const handleRoutePress = useCallback((route: RouteData) => {
+  const handleRoutePress = useCallback((route: RouteData, event?: any) => {
     if (isAddingWaypoint) {
-      // In waypoint adding mode - handled elsewhere
+      // In waypoint adding mode - add waypoint at tap location
+      if (event && event.geometry && event.geometry.coordinates) {
+        const [lng, lat] = event.geometry.coordinates;
+        console.log(`[MapLayout] Adding waypoint at: ${lat}, ${lng}`);
+
+        // Add waypoint to pending list
+        setPendingWaypoints(prev => [...prev, { lat, lng }]);
+
+        // Exit waypoint adding mode
+        setIsAddingWaypoint(false);
+
+        // Expand bottom sheet back to 50%
+        bottomSheetRef.current?.snapToIndex(1);
+      }
       return;
     }
 
     // Navigate to transport config for the destination location
     router.push(`/document-next/${documentId}/map/transport/${route.toLocationId}`);
-  }, [isAddingWaypoint, documentId, router]);
+  }, [isAddingWaypoint, documentId, router, setPendingWaypoints, setIsAddingWaypoint, bottomSheetRef]);
 
   // Handle close button - always return to document view
   const handleClose = useCallback(() => {
@@ -397,6 +413,8 @@ export default function MapLayout() {
         updateRoute,
         isAddingWaypoint,
         setIsAddingWaypoint,
+        pendingWaypoints,
+        setPendingWaypoints,
         sheetHeaderInfo,
         setSheetHeaderInfo,
       }}>
@@ -421,7 +439,7 @@ export default function MapLayout() {
                 key={route.id}
                 id={route.id}
                 shape={route.geometry}
-                onPress={() => handleRoutePress(route)}
+                onPress={(event) => handleRoutePress(route, event)}
               >
                 <Mapbox.LineLayer
                   id={`${route.id}-line`}
@@ -434,6 +452,18 @@ export default function MapLayout() {
                   }}
                 />
               </Mapbox.ShapeSource>
+            ))}
+
+            {/* Waypoint markers */}
+            {pendingWaypoints.map((waypoint, index) => (
+              <Mapbox.MarkerView
+                key={`waypoint-${index}`}
+                coordinate={[waypoint.lng, waypoint.lat]}
+              >
+                <View style={styles.waypointMarker}>
+                  <Text style={styles.waypointNumber}>{index + 1}</Text>
+                </View>
+              </Mapbox.MarkerView>
             ))}
 
             {/* Location markers */}
@@ -599,5 +629,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     flex: 1,
+  },
+  waypointMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F59E0B',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  waypointNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

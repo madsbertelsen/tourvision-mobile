@@ -20,6 +20,8 @@ export default function TransportConfigRoute() {
     focusOnRoute,
     isAddingWaypoint,
     setIsAddingWaypoint,
+    pendingWaypoints,
+    setPendingWaypoints,
     setSheetHeaderInfo
   } = useMapContext();
 
@@ -29,7 +31,6 @@ export default function TransportConfigRoute() {
   // State for selected source location
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [pendingTransportMode, setPendingTransportMode] = useState<TransportMode>('driving');
-  const [pendingWaypoints, setPendingWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Find existing route if any
@@ -64,9 +65,17 @@ export default function TransportConfigRoute() {
     // Cleanup on unmount
     return () => {
       setIsAddingWaypoint(false);
+      setPendingWaypoints([]);
       setSheetHeaderInfo(null);
     };
-  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint, focusOnRoute, destinationLocation, setSheetHeaderInfo, router]);
+  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint, focusOnRoute, destinationLocation, setSheetHeaderInfo, router, setPendingWaypoints]);
+
+  // Refetch route when waypoints change
+  useEffect(() => {
+    if (selectedSourceId && pendingTransportMode) {
+      handleTransportModeChange(pendingTransportMode);
+    }
+  }, [pendingWaypoints]);
 
   const handleBackToLocation = () => {
     router.back();
