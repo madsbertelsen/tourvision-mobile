@@ -36,8 +36,8 @@ export default function TransportConfigRoute() {
     : null;
 
   useEffect(() => {
-    // Expand bottom sheet
-    bottomSheetRef.current?.expand();
+    // Snap bottom sheet to 50% (index 1)
+    bottomSheetRef.current?.snapToIndex(1);
 
     // If there's an existing route to this location, pre-select the source
     const existingRouteToHere = routes.find(r => r.toLocationId === locationId);

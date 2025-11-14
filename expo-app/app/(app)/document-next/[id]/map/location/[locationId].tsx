@@ -33,8 +33,8 @@ export default function LocationDetailsRoute() {
       // Set as selected location
       setSelectedLocationId(location.geoId);
 
-      // Expand bottom sheet
-      bottomSheetRef.current?.expand();
+      // Snap bottom sheet to 50% (index 1)
+      bottomSheetRef.current?.snapToIndex(1);
     }
 
     // Cleanup on unmount
