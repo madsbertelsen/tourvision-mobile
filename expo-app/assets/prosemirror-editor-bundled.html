@@ -3247,12 +3247,16 @@
                   });
 
                   if (data.params?.geoId && data.params?.updatedAttrs && schema.marks.geoMark) {
+                    // Get fresh state from editorView
+                    const updateState = editorView.state;
+                    const updateDispatch = editorView.dispatch.bind(editorView);
+
                     let geoMarkFound = false;
-                    const updateFullTr = state.tr;
+                    const updateFullTr = updateState.tr;
                     console.log('[WebView] Starting search for geo-mark in document');
 
                     // Find all geo-marks and update the one with matching geoId
-                    state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
+                    updateState.doc.nodesBetween(0, updateState.doc.content.size, (node, pos) => {
                       if (node.marks && node.marks.length > 0) {
                         const geoMark = node.marks.find(m => m.type === schema.marks.geoMark && m.attrs.geoId === data.params.geoId);
                         if (geoMark) {
@@ -3275,7 +3279,7 @@
                     });
 
                     if (geoMarkFound) {
-                      dispatch(updateFullTr);
+                      updateDispatch(updateFullTr);
                       console.log('[WebView] Geo-mark updated successfully, sending documentChanged');
 
                       // Force all maps to refresh after geo-mark update
@@ -3299,7 +3303,7 @@
                         });
 
                         if (mapPosition >= 0) {
-                          dispatch(removeTr);
+                          editorView.dispatch(removeTr);
                           console.log('[WebView] Map removed, waiting before re-adding...');
 
                           // Step 2: Re-add the map after a brief delay
@@ -3316,7 +3320,7 @@
                             const insertPos = Math.min(mapPosition, insertTr.doc.content.size);
                             insertTr.insert(insertPos, newMap);
 
-                            dispatch(insertTr);
+                            editorView.dispatch(insertTr);
                             console.log('[WebView] Map re-added successfully');
                           }, 50);
                         }

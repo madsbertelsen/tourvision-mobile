@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Debugging Mindset
+
+**DO NOT claim something works until the user confirms it.** You are often overconfident about fixes.
+
+- When you make a fix, say "This should fix..." or "Let me know if this resolves..."
+- **NEVER** say "This is now working!" or "The feature is fixed!" without user confirmation
+- If something fails 9 out of 10 times, investigate the root cause - don't just claim the 1 success means it's fixed
+- Logs showing a message was sent/received does NOT mean the feature works end-to-end
+- Always consider race conditions, timing issues, and persistence problems
+- Test thoroughly and wait for user feedback before declaring success
+
 ## Project Structure
 
 This is a monorepo with the following structure:
@@ -10,6 +21,24 @@ This is a monorepo with the following structure:
 - **`/scripts`** - Node.js scripts for AI chat listener and local agent
 - **`/agent-poc`** - Multi-document agent management system
 - **`/workers`** - Cloudflare Workers (chat system with Workers AI)
+
+### Important: Document Editor Structure
+
+**CRITICAL:** There are TWO document editor implementations in `/expo-app/app/(app)/`:
+
+1. **`document-next/[id]/`** - **NEW IMPLEMENTATION** (Active Development)
+   - Uses Y.js collaboration with Cloudflare Durable Objects
+   - AI agent system with period-triggered location detection
+   - Modern map system with flexible transport configuration
+   - **THIS IS THE CURRENT WORKING DIRECTORY**
+   - Loads editor from URL (not bundled assets)
+
+2. **`document/[id]/`** - **LEGACY IMPLEMENTATION** (Deprecated)
+   - Old Tiptap Cloud-based collaboration
+   - Uses bundled HTML from `/assets/prosemirror-editor-bundled.html`
+   - **DO NOT MODIFY - Will be removed**
+
+**When working on document editor features, ALWAYS work in `document-next/[id]/` folder.**
 
 ## Current Status
 

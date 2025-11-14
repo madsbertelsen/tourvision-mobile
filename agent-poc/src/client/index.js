@@ -458,11 +458,32 @@ class DocumentEditor {
         });
       }
 
-      // Fetch and draw routes between locations
+      // Fetch and draw routes between locations based on transportFrom relationships
+      console.log('[MapView] Map loaded, checking for routes. Locations count:', this.locations.length);
       if (this.locations.length > 1) {
-        for (let i = 1; i < this.locations.length; i++) {
-          const from = this.locations[i - 1];
+        console.log('[MapView] Starting route loop');
+        for (let i = 0; i < this.locations.length; i++) {
           const to = this.locations[i];
+          console.log(`[MapView] Checking location ${i}:`, {
+            placeName: to.placeName,
+            transportProfile: to.transportProfile,
+            transportFrom: to.transportFrom
+          });
+
+          // Skip if no transport configuration
+          if (!to.transportProfile || !to.transportFrom) {
+            console.log(`[MapView] Skipping ${to.placeName} - no transport configuration`);
+            continue;
+          }
+
+          // Find the source location
+          const from = this.locations.find(loc => loc.geoId === to.transportFrom);
+          if (!from) {
+            console.log(`[MapView] Could not find source location ${to.transportFrom} for ${to.placeName}`);
+            continue;
+          }
+
+          console.log(`[MapView] Rendering route: ${from.placeName} → ${to.placeName} (${to.transportProfile})`);
 
           let coordinates;
           if (to.waypoints && to.waypoints.length > 0) {
@@ -1003,6 +1024,89 @@ class DocumentEditor {
 
             // Mark first load as done
             isFirstLoad = false;
+
+            // Fetch and render routes
+            console.log('[MapNodeView] Map style loaded, fetching routes for', locations.length, 'locations');
+            if (locations.length > 1) {
+              locations.forEach((toLoc, i) => {
+                console.log(`[MapNodeView] Location ${i}:`, {
+                  placeName: toLoc.placeName,
+                  transportProfile: toLoc.transportProfile,
+                  transportFrom: toLoc.transportFrom
+                });
+
+                // Skip if no transport configuration
+                if (!toLoc.transportProfile || !toLoc.transportFrom) {
+                  console.log(`[MapNodeView] Skipping ${toLoc.placeName} - no transport configuration`);
+                  return;
+                }
+
+                // Find the source location
+                const fromLoc = locations.find(loc => loc.geoId === toLoc.transportFrom);
+                if (!fromLoc) {
+                  console.log(`[MapNodeView] Could not find source location ${toLoc.transportFrom} for ${toLoc.placeName}`);
+                  return;
+                }
+
+                console.log(`[MapNodeView] Rendering route: ${fromLoc.placeName} → ${toLoc.placeName} (${toLoc.transportProfile})`);
+
+                // Build coordinates string
+                let coordinates;
+                if (toLoc.waypoints && toLoc.waypoints.length > 0) {
+                  const waypointCoords = toLoc.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+                  coordinates = `${fromLoc.lng},${fromLoc.lat};${waypointCoords};${toLoc.lng},${toLoc.lat}`;
+                } else {
+                  coordinates = `${fromLoc.lng},${fromLoc.lat};${toLoc.lng},${toLoc.lat}`;
+                }
+
+                const profile = toLoc.transportProfile === 'walking' ? 'walking' :
+                               toLoc.transportProfile === 'cycling' ? 'cycling' :
+                               'driving-traffic';
+                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+                // Fetch and add route
+                fetch(url)
+                  .then(response => response.json())
+                  .then(data => {
+                    if (data.routes && data.routes.length > 0) {
+                      const route = data.routes[0];
+                      const routeColor = COLORS[toLoc.colorIndex % COLORS.length];
+                      const routeId = `route-${fromLoc.geoId}-${toLoc.geoId}`;
+
+                      console.log(`[MapNodeView] Adding route layer ${routeId} with color ${routeColor}`);
+
+                      currentMap.addSource(routeId, {
+                        type: 'geojson',
+                        data: {
+                          type: 'Feature',
+                          properties: {},
+                          geometry: route.geometry
+                        }
+                      });
+
+                      currentMap.addLayer({
+                        id: routeId,
+                        type: 'line',
+                        source: routeId,
+                        layout: {
+                          'line-join': 'round',
+                          'line-cap': 'round'
+                        },
+                        paint: {
+                          'line-color': routeColor,
+                          'line-width': 3,
+                          'line-opacity': 0.75
+                        }
+                      });
+                    } else {
+                      console.log(`[MapNodeView] No route found for ${fromLoc.placeName} → ${toLoc.placeName}`);
+                    }
+                  })
+                  .catch(error => {
+                    console.error(`[MapNodeView] Error fetching route:`, error);
+                  });
+              });
+            }
 
             // Show the map after positioning
             setTimeout(() => {

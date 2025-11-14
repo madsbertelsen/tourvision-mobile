@@ -88,11 +88,13 @@ export default function MapLayout() {
   const insets = useSafeAreaInsets();
   const { documentId, locations: docLocations, setGeoMarkUpdate } = useDocumentNextContext();
 
-  // Process locations to add colors
+  // Process locations to add colors and ensure numeric coordinates
   const locations: MapLocation[] = useMemo(() => {
     return docLocations.map((loc, index) => ({
       ...loc,
       geoId: loc.geoId || `loc-${index}`,
+      lat: typeof loc.lat === 'string' ? parseFloat(loc.lat) : loc.lat,
+      lng: typeof loc.lng === 'string' ? parseFloat(loc.lng) : loc.lng,
       colorIndex: loc.colorIndex ?? index,
       color: COLORS[(loc.colorIndex ?? index) % COLORS.length],
     }));
@@ -136,6 +138,18 @@ export default function MapLayout() {
   // Fetch routes between consecutive locations
   useEffect(() => {
     const fetchRoutes = async () => {
+      console.log('[MapLayout] ========== Fetching routes ==========');
+      console.log('[MapLayout] Total locations:', locations.length);
+      locations.forEach((loc, index) => {
+        console.log(`[MapLayout] Location ${index}:`, {
+          geoId: loc.geoId,
+          placeName: loc.placeName,
+          transportProfile: loc.transportProfile,
+          transportFrom: loc.transportFrom,
+          waypoints: loc.waypoints
+        });
+      });
+
       if (locations.length < 2) {
         setRoutes([]);
         return;
@@ -143,14 +157,25 @@ export default function MapLayout() {
 
       const newRoutes: RouteData[] = [];
 
-      for (let i = 0; i < locations.length - 1; i++) {
-        const fromLoc = locations[i];
-        const toLoc = locations[i + 1];
+      // Check all locations for transportFrom relationships
+      for (let i = 0; i < locations.length; i++) {
+        const toLoc = locations[i];
 
-        // Only create route if transportation is explicitly configured
-        if (!toLoc.transportProfile) {
+        // Skip if no transport configuration
+        if (!toLoc.transportProfile || !toLoc.transportFrom) {
           continue;
         }
+
+        // Find the source location
+        const fromLoc = locations.find(loc => loc.geoId === toLoc.transportFrom);
+        if (!fromLoc) {
+          console.log(`[MapLayout] Could not find source location ${toLoc.transportFrom} for ${toLoc.placeName}`);
+          continue;
+        }
+
+        console.log(`[MapLayout] Found route: ${fromLoc.placeName} → ${toLoc.placeName} (${toLoc.transportProfile})`);
+        console.log('[MapLayout] transportFrom:', toLoc.transportFrom);
+        console.log('[MapLayout] transportProfile:', toLoc.transportProfile);
 
         try {
           const transportMode = toLoc.transportProfile;

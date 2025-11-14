@@ -18,6 +18,7 @@ export interface ProseMirrorWebViewSimpleRef {
   getState: () => void;
   scrollToBottom: () => void;
   focusEditor: () => void;
+  postMessage: (message: any) => void;
 }
 
 // Web-only iframe component
@@ -170,6 +171,9 @@ const ProseMirrorWebViewSimple = forwardRef<ProseMirrorWebViewSimpleRef, ProseMi
     },
     focusEditor: () => {
       sendMessage({ type: 'focusEditor' });
+    },
+    postMessage: (message: any) => {
+      sendMessage(message);
     }
   }), [sendMessage]);
 

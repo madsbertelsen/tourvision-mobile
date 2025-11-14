@@ -99,7 +99,7 @@ export default function LocationDetailsRoute() {
           <Text style={styles.sectionLabel}>Coordinates</Text>
         </View>
         <Text style={styles.sectionValue}>
-          {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+          {Number(location.lat).toFixed(6)}, {Number(location.lng).toFixed(6)}
         </Text>
       </View>
 

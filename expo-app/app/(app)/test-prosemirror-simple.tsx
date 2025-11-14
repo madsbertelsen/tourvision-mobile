@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, Button, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import ProseMirrorWebViewSimple, { ProseMirrorWebViewSimpleRef } from '../../components/ProseMirrorWebViewSimple';
 
 // Sample document content
@@ -37,6 +37,7 @@ const sampleContent = {
 
 export default function TestProseMirrorSimple() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const editorRef = useRef<ProseMirrorWebViewSimpleRef>(null);
   const [isEditable, setIsEditable] = useState(true);
   const [documentContent, setDocumentContent] = useState(sampleContent);
@@ -67,6 +68,36 @@ export default function TestProseMirrorSimple() {
       });
     }
   };
+
+  // Handle updated locations returned from fullscreen map
+  useEffect(() => {
+    if (params.updatedLocations && params.updateType === 'transport') {
+      console.log('[TestPage] Received updated locations from map:', params.updatedLocations);
+
+      try {
+        const updatedLocations = JSON.parse(params.updatedLocations as string);
+        const updateIndex = parseInt(params.updateIndex as string);
+
+        // Send update message to the editor to update the document
+        if (editorRef.current) {
+          editorRef.current.postMessage({
+            type: 'updateTransportMode',
+            locationIndex: updateIndex,
+            locations: updatedLocations
+          });
+        }
+
+        // Clear the params to prevent re-processing
+        router.setParams({
+          updatedLocations: undefined,
+          updateType: undefined,
+          updateIndex: undefined
+        });
+      } catch (error) {
+        console.error('[TestPage] Error processing updated locations:', error);
+      }
+    }
+  }, [params.updatedLocations, params.updateType, params.updateIndex]);
 
   const handleGetState = () => {
     if (editorRef.current) {

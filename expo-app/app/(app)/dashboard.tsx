@@ -219,6 +219,12 @@ export default function TripListScreen() {
         >
           <Ionicons name="code-outline" size={24} color="#10B981" />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => router.push('/(app)/document-next/test-doc')}
+        >
+          <Ionicons name="document-outline" size={24} color="#F59E0B" />
+        </TouchableOpacity>
       </View>
 
       {/* URL Input Section */}

@@ -43,10 +43,24 @@ export default function FullscreenMap() {
   const params = useLocalSearchParams();
   const cameraRef = useRef<Mapbox.Camera>(null);
 
-  // Parse locations from params
-  const locations: MapLocation[] = params.locations
-    ? JSON.parse(Array.isArray(params.locations) ? params.locations[0] : params.locations)
-    : [];
+  // Parse locations from params - memoize to prevent infinite loops
+  const locations: MapLocation[] = useMemo(() => {
+    if (!params.locations) return [];
+    const locationsData = Array.isArray(params.locations) ? params.locations[0] : params.locations;
+    return JSON.parse(locationsData);
+  }, [params.locations]);
+
+  // Parse the callback if provided
+  const onUpdateTransport = useMemo(() => {
+    if (!params.onUpdateTransport) return null;
+    try {
+      // The callback is passed as a string identifier, not the actual function
+      // The document screen will handle this
+      return params.onUpdateTransport;
+    } catch (e) {
+      return null;
+    }
+  }, [params.onUpdateTransport]);
 
   // State for routes
   const [routes, setRoutes] = useState<any[]>([]);
@@ -54,7 +68,7 @@ export default function FullscreenMap() {
   // Bottom sheet state
   const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
-  const [sheetView, setSheetView] = useState<'location' | 'route'>('location');
+  const [viewType, setViewType] = useState<'location' | 'route' | 'transport'>('location');
 
   // Route editing state
   const [pendingTransportMode, setPendingTransportMode] = useState<string | null>(null);
@@ -63,7 +77,7 @@ export default function FullscreenMap() {
 
   // Bottom sheet ref and snap points
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
+  const snapPoints = useMemo(() => ['25%', '40%', '50%'], []);
 
   // Calculate initial camera position based on locations
   const getInitialCamera = () => {
@@ -122,7 +136,7 @@ export default function FullscreenMap() {
   const handleMarkerPress = useCallback((location: MapLocation, index: number) => {
     console.log('[FullscreenMap] Marker pressed:', location.displayText || location.placeName);
     setSelectedLocation(location);
-    setSheetView('location');
+    setViewType('location');
 
     // Find the route that ends at this location
     const routeIndex = index - 1;
@@ -156,7 +170,7 @@ export default function FullscreenMap() {
 
     setSelectedRoute(enrichedRoute);
     setSelectedLocation(toLocation);
-    setSheetView('route');
+    setViewType('route');
 
     // Initialize pendingWaypoints with existing waypoints
     setPendingWaypoints(toLocation.waypoints || []);
@@ -167,21 +181,26 @@ export default function FullscreenMap() {
   // Navigate to route view from location view
   const handleViewRoute = useCallback(() => {
     if (selectedRoute) {
-      setSheetView('route');
+      setViewType('route');
       setPendingWaypoints(selectedRoute.toLocation?.waypoints || []);
     }
   }, [selectedRoute]);
 
+  // Navigate to transport configuration view
+  const handleConfigureTransport = useCallback(() => {
+    setViewType('transport');
+  }, []);
+
   // Navigate back to location view
   const handleBackToLocation = useCallback(() => {
-    setSheetView('location');
+    setViewType('location');
   }, []);
 
   // Handle bottom sheet close
   const handleSheetClose = useCallback(() => {
     setSelectedLocation(null);
     setSelectedRoute(null);
-    setSheetView('location');
+    setViewType('location');
     setPendingTransportMode(null);
     setPendingWaypoints([]);
     setIsAddingWaypoint(false);
@@ -266,6 +285,14 @@ export default function FullscreenMap() {
         const from = locations[i - 1];
         const to = locations[i];
 
+        // Only fetch routes if transportation is explicitly configured
+        // Check if the location has a transport profile set
+        if (!to.transportProfile) {
+          // Skip this route - no transport configured
+          routePromises.push(Promise.resolve(null));
+          continue;
+        }
+
         let coordinates;
         if (to.waypoints && to.waypoints.length > 0) {
           const waypointCoords = to.waypoints.map((wp: any) => `${wp.lng},${wp.lat}`).join(';');
@@ -274,7 +301,7 @@ export default function FullscreenMap() {
           coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
         }
 
-        const profile = to.transportProfile || 'walking';
+        const profile = to.transportProfile;
         const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
 
         routePromises.push(
@@ -290,7 +317,10 @@ export default function FullscreenMap() {
               }
               return null;
             })
-            .catch(() => null)
+            .catch((error) => {
+              console.error(`[FullscreenMap] Error fetching route:`, error);
+              return null;
+            })
         );
       }
 
@@ -370,8 +400,8 @@ export default function FullscreenMap() {
           {/* Route lines */}
           {routes.map((route, routeIndex) => {
             const routeColor = COLORS[(route.colorIndex || 0) % COLORS.length];
-            const isFocused = sheetView === 'route' && selectedRoute?.routeIndex === routeIndex;
-            const isOtherRoute = sheetView === 'route' && selectedRoute?.routeIndex !== routeIndex;
+            const isFocused = viewType === 'route' && selectedRoute?.routeIndex === routeIndex;
+            const isOtherRoute = viewType === 'route' && selectedRoute?.routeIndex !== routeIndex;
 
             return (
               <Mapbox.ShapeSource
@@ -411,11 +441,11 @@ export default function FullscreenMap() {
             const bgColor = COLORS[colorIndex];
 
             // Determine if this marker should be muted
-            const isPartOfFocusedRoute = sheetView === 'route' && selectedRoute && (
+            const isPartOfFocusedRoute = viewType === 'route' && selectedRoute && (
               index === selectedRoute.routeIndex || // From location
               index === selectedRoute.routeIndex + 1 // To location
             );
-            const shouldMute = sheetView === 'route' && !isPartOfFocusedRoute;
+            const shouldMute = viewType === 'route' && !isPartOfFocusedRoute;
 
             return (
               <Mapbox.MarkerView
@@ -456,7 +486,7 @@ export default function FullscreenMap() {
             handleIndicatorStyle={styles.bottomSheetIndicator}
           >
             <BottomSheetView style={styles.bottomSheetContent}>
-              {sheetView === 'location' ? (
+              {viewType === 'location' ? (
                 // LOCATION VIEW
                 <>
                   {/* Header with location name */}
@@ -499,8 +529,17 @@ export default function FullscreenMap() {
                     </Text>
                   </View>
 
+
                   {/* Action buttons */}
                   <View style={styles.sheetActions}>
+                    <TouchableOpacity
+                      style={styles.sheetButton}
+                      onPress={handleConfigureTransport}
+                    >
+                      <Ionicons name="car-outline" size={20} color="#007AFF" />
+                      <Text style={styles.sheetButtonText}>Transportation</Text>
+                    </TouchableOpacity>
+
                     {selectedRoute && (
                       <TouchableOpacity
                         style={styles.sheetButton}
@@ -581,7 +620,97 @@ export default function FullscreenMap() {
                     Return to the document to save changes.
                   </Text>
                 </>
-              )}
+              ) : viewType === 'transport' ? (
+                // TRANSPORT VIEW
+                <>
+                  {/* Header with back button */}
+                  <View style={styles.sheetHeader}>
+                    <TouchableOpacity onPress={handleBackToLocation} style={styles.backButtonSheet}>
+                      <Ionicons name="chevron-back" size={24} color="#007AFF" />
+                    </TouchableOpacity>
+                    <View style={[
+                      styles.sheetColorDot,
+                      { backgroundColor: COLORS[(selectedLocation?.colorIndex || 0) % COLORS.length] }
+                    ]} />
+                    <Text style={styles.sheetTitle}>Transportation</Text>
+                  </View>
+
+                  {/* Location info */}
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="location-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>Arriving at</Text>
+                    </View>
+                    <Text style={styles.sheetValue}>
+                      {selectedLocation?.displayText || selectedLocation?.placeName}
+                    </Text>
+                  </View>
+
+                  {/* Transportation Method Selector */}
+                  <View style={styles.sheetSection}>
+                    <View style={styles.sheetRow}>
+                      <Ionicons name="car-outline" size={20} color="#666" />
+                      <Text style={styles.sheetLabel}>How to arrive</Text>
+                    </View>
+                    <View style={styles.transportOptions}>
+                      {['walking', 'driving', 'cycling'].map((mode) => {
+                        const isActive = selectedLocation?.transportProfile === mode;
+
+                        return (
+                          <TouchableOpacity
+                            key={mode}
+                            style={[
+                              styles.transportOption,
+                              isActive && styles.transportOptionActive
+                            ]}
+                            onPress={() => {
+                              // Update transport mode for current location
+                              console.log(`[FullscreenMap] Setting transport ${mode} for location`);
+
+                              const currentIndex = locations.indexOf(selectedLocation!);
+                              const updatedLocations = [...locations];
+                              updatedLocations[currentIndex] = {
+                                ...updatedLocations[currentIndex],
+                                transportProfile: mode
+                              };
+
+                              // Navigate back to document with updated data
+                              router.back();
+                              router.setParams({
+                                updatedLocations: JSON.stringify(updatedLocations),
+                                updateType: 'transport',
+                                updateIndex: currentIndex.toString()
+                              });
+                            }}
+                          >
+                            <Ionicons
+                              name={mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bicycle'}
+                              size={24}
+                              color={isActive ? '#007AFF' : '#666'}
+                            />
+                            <Text style={[
+                              styles.transportOptionText,
+                              isActive && styles.transportOptionTextActive
+                            ]}>
+                              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Save button */}
+                  <View style={styles.sheetActions}>
+                    <TouchableOpacity
+                      style={[styles.sheetButton, { backgroundColor: '#007AFF' }]}
+                      onPress={handleBackToLocation}
+                    >
+                      <Text style={[styles.sheetButtonText, { color: '#fff' }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : null}
             </BottomSheetView>
           </BottomSheet>
         )}
@@ -769,6 +898,12 @@ const styles = StyleSheet.create({
   },
   transportOptionTextActive: {
     color: '#007AFF',
+  },
+  transportDescription: {
+    fontSize: 13,
+    color: '#999',
+    marginLeft: 28,
+    marginBottom: 8,
   },
   noteText: {
     fontSize: 12,

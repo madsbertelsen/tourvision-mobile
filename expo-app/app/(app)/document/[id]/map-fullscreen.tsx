@@ -455,8 +455,10 @@ export default function MapFullscreenModal() {
                 id={`${route.id}-line`}
                 style={{
                   lineColor: routeColor,
-                  lineWidth: isFocused ? 6 : 5,
-                  lineOpacity: isOtherRoute ? 0.2 : 0.75,
+                  lineWidth: isFocused ? 5 : 4,
+                  lineOpacity: isOtherRoute ? 0.3 : 0.7,
+                  lineCap: 'round',
+                  lineJoin: 'round',
                 }}
               />
             </Mapbox.ShapeSource>
@@ -816,17 +818,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   marker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 3,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     borderColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   markerInner: {
     width: 12,
