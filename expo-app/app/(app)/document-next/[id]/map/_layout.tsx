@@ -1,14 +1,13 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Alert } from 'react-native';
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Mapbox from '@rnmapbox/maps';
-import { Ionicons } from '@expo/vector-icons';
-import { useDocumentNextContext } from '../_layout';
-import * as turf from '@turf/helpers';
 import * as turfBbox from '@turf/bbox';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDocumentNextContext } from '../_layout';
 
 // Transport mode type
 type TransportMode = 'walking' | 'driving' | 'cycling';
@@ -226,22 +225,36 @@ export default function MapLayout() {
   const focusOnRoute = useCallback((route: RouteData) => {
     if (route.geometry && route.geometry.coordinates) {
       const bbox = turfBbox.default(route.geometry);
+              
+      const screenHeight = insets.top + 600; // Approximate screen height
+     const bottomSheetHeight = screenHeight * 0.5; // 50% snap point
+        
       cameraRef.current?.fitBounds(
         [bbox[0], bbox[1]], // SW
         [bbox[2], bbox[3]], // NE
-        100, // padding
+        [0, 100, bottomSheetHeight,100], // padding
         1000 // animation duration
       );
     }
   }, []);
 
   const focusOnLocation = useCallback((location: MapLocation) => {
-    cameraRef.current?.setCamera({
-      centerCoordinate: [location.lng, location.lat],
-      zoomLevel: 14,
-      animationDuration: 1000,
-    });
-  }, []);
+    // Create a small bounding box around the location (approximately zoom level 14)
+    const offset = 0.01; // ~1km radius
+    const sw: [number, number] = [location.lng - offset, location.lat - offset];
+    const ne: [number, number] = [location.lng + offset, location.lat + offset];
+
+    // Calculate bottom sheet height for padding
+    const screenHeight = insets.top + 600; // Approximate screen height
+    const bottomSheetHeight = screenHeight * 0.5; // 50% snap point
+
+    cameraRef.current?.fitBounds(
+      sw, // SW
+      ne, // NE
+      [0, 100, bottomSheetHeight, 100], // padding [top, right, bottom, left]
+      1000 // animation duration
+    );
+  }, [insets]);
 
   // Update or create route function
   const updateRoute = useCallback(async (routeId: string, updates: Partial<RouteData>) => {
