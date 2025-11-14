@@ -913,13 +913,40 @@ class DocumentEditor {
           return;
         }
 
-        // Wait for style to load if it's not ready yet
+        // Wait for style to load if it's not ready yet (with timeout)
         if (!currentMap.isStyleLoaded()) {
           console.log('[MapNodeView] Style not loaded yet, waiting...');
+
+          // Try waiting with both event listener and polling
+          const maxWait = 5000; // 5 seconds max
+          const startTime = Date.now();
+
           await new Promise(resolve => {
-            currentMap.once('style.load', resolve);
+            const checkInterval = setInterval(() => {
+              if (currentMap.isStyleLoaded()) {
+                console.log('[MapNodeView] Style loaded (via polling)');
+                clearInterval(checkInterval);
+                resolve();
+              } else if (Date.now() - startTime > maxWait) {
+                console.log('[MapNodeView] Timeout waiting for style to load');
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 100);
+
+            // Also listen for the event in case it fires
+            currentMap.once('style.load', () => {
+              console.log('[MapNodeView] Style loaded (via event)');
+              clearInterval(checkInterval);
+              resolve();
+            });
           });
-          console.log('[MapNodeView] Style loaded, continuing with route update');
+        }
+
+        // Double-check style is loaded before proceeding
+        if (!currentMap.isStyleLoaded()) {
+          console.log('[MapNodeView] Style still not loaded after waiting, skipping route update');
+          return;
         }
 
         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
