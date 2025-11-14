@@ -343,7 +343,7 @@ export default function MapLayout() {
 
   // Handle close button - always return to document view
   const handleClose = useCallback(() => {
-    router.push(`/document-next/${documentId}`);
+    router.dismissTo(`/document-next/${documentId}`);
   }, [router, documentId]);
 
   // Snap points for bottom sheet (max 50% to avoid blocking map)
