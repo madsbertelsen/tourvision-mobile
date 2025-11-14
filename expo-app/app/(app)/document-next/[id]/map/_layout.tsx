@@ -341,10 +341,10 @@ export default function MapLayout() {
     router.push(`/document-next/${documentId}/map/transport/${route.toLocationId}`);
   }, [isAddingWaypoint, documentId, router]);
 
-  // Handle close button
+  // Handle close button - always return to document view
   const handleClose = useCallback(() => {
-    router.back();
-  }, [router]);
+    router.push(`/document-next/${documentId}`);
+  }, [router, documentId]);
 
   // Snap points for bottom sheet (max 50% to avoid blocking map)
   const snapPoints = useMemo(() => ['25%', '50%'], []);
