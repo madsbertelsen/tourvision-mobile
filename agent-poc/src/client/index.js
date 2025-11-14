@@ -12,6 +12,126 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 import "./styles.css";
 
+// ============================================================================
+// BOOTSTRAP: Set up message handlers and console override
+// This must run BEFORE the DocumentEditor class is instantiated
+// ============================================================================
+
+// Get URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+const docId = urlParams.get('doc');
+
+// Display document ID
+const docIdElement = document.getElementById('doc-id');
+if (docIdElement) {
+  if (docId) {
+    docIdElement.textContent = docId;
+  } else {
+    docIdElement.textContent = 'No document loaded';
+  }
+}
+
+// Handle new document button
+const newDocBtn = document.getElementById('new-doc-btn');
+if (newDocBtn) {
+  newDocBtn.addEventListener('click', () => {
+    const newDocId = `doc-${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
+    window.location.href = `/editor.html?doc=${newDocId}`;
+  });
+}
+
+// Store document ID globally for message handlers
+window.editorDocumentId = docId;
+
+// Helper function to send messages to parent
+window.sendToParent = (message) => {
+  const messageString = JSON.stringify(message);
+
+  // Send to React Native WebView if available
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(messageString);
+  }
+  // Send to parent iframe if in iframe
+  else if (window.parent && window.parent !== window) {
+    window.parent.postMessage(messageString, '*');
+  }
+};
+
+// Listen for messages from parent frame (React Native WebView or iframe)
+window.addEventListener('message', (event) => {
+  // Handle messages from parent
+  if (event.data) {
+    try {
+      const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      console.log('[Editor] Received message from parent:', message);
+
+      // Dispatch custom event that the parentMessage listener can handle
+      const customEvent = new CustomEvent('parentMessage', { detail: message });
+      window.dispatchEvent(customEvent);
+    } catch (error) {
+      console.error('[Editor] Error parsing message:', error);
+    }
+  }
+});
+
+// Override console methods to forward logs to parent window
+// This allows React Native to see WebView console logs
+(function() {
+  const originalConsole = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+    debug: console.debug
+  };
+
+  const sendLogToParent = (level, args) => {
+    // Call original console method
+    originalConsole[level].apply(console, args);
+
+    // Format the message
+    const message = args.map(arg => {
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch (e) {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    }).join(' ');
+
+    // Send to parent via postMessage if available
+    if (window.sendToParent) {
+      window.sendToParent({
+        type: 'editorLog',
+        message: `[${level.toUpperCase()}] ${message}`
+      });
+    }
+  };
+
+  console.log = function(...args) { sendLogToParent('log', args); };
+  console.warn = function(...args) { sendLogToParent('warn', args); };
+  console.error = function(...args) { sendLogToParent('error', args); };
+  console.info = function(...args) { sendLogToParent('info', args); };
+  console.debug = function(...args) { sendLogToParent('debug', args); };
+})();
+
+// Test that console override is working
+console.log('[Editor] Bootstrap complete, sendToParent available:', typeof window.sendToParent);
+
+// Send ready message when page loads
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    console.log('[Editor] Sending ready message');
+    window.sendToParent({ type: 'ready' });
+  }, 100);
+});
+
+// ============================================================================
+// END BOOTSTRAP
+// ============================================================================
+
 // Default port 8787 matches Wrangler dev server default
 const WS_PORT = import.meta.env.VITE_WS_PORT || "8787";
 const WS_HOST = `localhost:${WS_PORT}`;
@@ -979,6 +1099,15 @@ class DocumentEditor {
     this.locations = foundLocations;
     console.log("[Client] Extracted locations:", foundLocations);
 
+    // Send locations update to parent
+    if (window.sendToParent) {
+      window.sendToParent({
+        type: 'locationsUpdate',
+        locations: this.locations
+      });
+      console.log("[Client] Sent locationsUpdate to parent");
+    }
+
     // Update UI
     const locCount = document.querySelector('[style*="Locations"]');
     if (locCount) {
@@ -1078,6 +1207,75 @@ class DocumentEditor {
       doc: doc
     });
   }
+
+  updateGeoMark(geoId, updatedAttrs) {
+    console.log('[Editor] ========== updateGeoMark called ==========');
+    console.log('[Editor] geoId:', geoId);
+    console.log('[Editor] updatedAttrs:', updatedAttrs);
+
+    if (!this.editorView || !geoId || !updatedAttrs) {
+      console.log('[Editor] Missing editorView, geoId, or updatedAttrs - returning early');
+      return;
+    }
+
+    const { state } = this.editorView;
+    const { tr } = state;
+    let found = false;
+
+    console.log('[Editor] Starting document traversal to find geo-mark');
+
+    // Traverse the document to find and update the geo-mark
+    state.doc.descendants((node, pos) => {
+      if (node.marks) {
+        const geoMark = node.marks.find(mark =>
+          mark.type.name === 'geoMark' && mark.attrs.geoId === geoId
+        );
+
+        if (geoMark) {
+          console.log(`[Editor] Found geo-mark to update at position:`, pos);
+          console.log(`[Editor] Current attrs:`, geoMark.attrs);
+
+          // Create new mark with updated attributes
+          const newAttrs = { ...geoMark.attrs, ...updatedAttrs };
+          console.log(`[Editor] New attrs:`, newAttrs);
+
+          const newMark = state.schema.marks.geoMark.create(newAttrs);
+
+          // Remove old mark and add new one
+          tr.removeMark(pos, pos + node.nodeSize, geoMark);
+          tr.addMark(pos, pos + node.nodeSize, newMark);
+          found = true;
+        }
+      }
+    });
+
+    if (found) {
+      console.log('[Editor] Applying transaction to update geo-mark');
+      // Apply the transaction
+      this.editorView.dispatch(tr);
+      console.log('[Editor] Transaction dispatched successfully');
+
+      // Update locations and send change notification
+      console.log('[Editor] Calling updateLocations()');
+      this.updateLocations();
+
+      console.log('[Editor] Calling sendDocumentChange()');
+      this.sendDocumentChange();
+
+      // Also send locations update
+      if (window.sendToParent) {
+        console.log('[Editor] Sending locationsUpdate to parent');
+        window.sendToParent({
+          type: 'locationsUpdate',
+          locations: this.locations
+        });
+      }
+
+      console.log('[Editor] ========== updateGeoMark completed successfully ==========');
+    } else {
+      console.warn(`[Editor] Geo-mark not found with geoId: ${geoId}`);
+    }
+  }
 }
 
 // Start the app
@@ -1121,6 +1319,22 @@ window.addEventListener('parentMessage', (event) => {
       // Focus the editor
       if (window.docEditor.editorView) {
         window.docEditor.editorView.focus();
+      }
+      break;
+
+    case 'updateGeoMark':
+      // Update a geo-mark with new attributes
+      console.log('[Editor] Received updateGeoMark message');
+
+      if (message.params && message.params.geoId && message.params.updatedAttrs) {
+        console.log('[Editor] Calling updateGeoMark with geoId:', message.params.geoId);
+
+        window.docEditor.updateGeoMark(
+          message.params.geoId,
+          message.params.updatedAttrs
+        );
+      } else {
+        console.error('[Editor] updateGeoMark missing required params:', message);
       }
       break;
 
