@@ -209,61 +209,14 @@ export default function TripListScreen() {
         <Text style={styles.title}>My Documents</Text>
       </View>
 
-      {/* URL Input Section */}
-      <View style={styles.urlInputSection}>
-        <View style={styles.urlInputContainer}>
-          <Ionicons name="link-outline" size={20} color="#6B7280" style={styles.urlInputIcon} />
-          <TextInput
-            style={styles.urlInput}
-            placeholder="Paste a travel guide URL to get started..."
-            value={urlInput}
-            onChangeText={setUrlInput}
-            onSubmitEditing={handleSubmitUrl}
-            returnKeyType="go"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isCreating}
-          />
-          {urlInput.length > 0 && !isCreating && (
-            <TouchableOpacity onPress={() => setUrlInput('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          style={[styles.submitButton, !urlInput.trim() && styles.submitButtonDisabled]}
-          onPress={handleSubmitUrl}
-          disabled={!urlInput.trim() || isCreating}
-        >
-          {isCreating ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Info: How to use AI */}
-      <View style={styles.aiInfoSection}>
-        <View style={styles.aiInfoCard}>
-          <Ionicons name="sparkles" size={24} color="#8B5CF6" />
-          <View style={styles.aiInfoText}>
-            <Text style={styles.aiInfoTitle}>AI Assistant Available</Text>
-            <Text style={styles.aiInfoDescription}>
-              Create a document, then tap the ✨ icon in the editor to generate content with AI
-            </Text>
-          </View>
-        </View>
-      </View>
-
       {/* Document List */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {documents.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="link-outline" size={64} color="#9CA3AF" />
+            <Ionicons name="document-text-outline" size={64} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No documents yet</Text>
             <Text style={styles.emptyDescription}>
-              Paste a travel guide URL above to extract locations and create your first document
+              Create your first document to get started
             </Text>
             <TouchableOpacity
               style={styles.emptyCreateButton}
