@@ -456,10 +456,8 @@ export default function MapLayout() {
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
           >
-            <BottomSheetView style={styles.bottomSheetContent}>
-              {/* Slot renders the active Stack route */}
-              <Slot />
-            </BottomSheetView>
+            {/* Slot renders the active Stack route - no BottomSheetView wrapper needed */}
+            <Slot />
           </BottomSheet>
         </View>
       </MapContext.Provider>
