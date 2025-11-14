@@ -905,10 +905,28 @@ class DocumentEditor {
 
       // Update routes on map
       const updateRoutes = async (locations) => {
-        if (!currentMap || !currentMap.isStyleLoaded()) return;
+        console.log('[MapNodeView] updateRoutes called with', locations.length, 'locations');
+        console.log('[MapNodeView] currentMap exists:', !!currentMap);
+
+        if (!currentMap) {
+          console.log('[MapNodeView] Skipping route update - no map');
+          return;
+        }
+
+        // Wait for style to load if it's not ready yet
+        if (!currentMap.isStyleLoaded()) {
+          console.log('[MapNodeView] Style not loaded yet, waiting...');
+          await new Promise(resolve => {
+            currentMap.once('style.load', resolve);
+          });
+          console.log('[MapNodeView] Style loaded, continuing with route update');
+        }
 
         const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
-        if (!mapboxToken) return;
+        if (!mapboxToken) {
+          console.log('[MapNodeView] Skipping route update - no Mapbox token');
+          return;
+        }
 
         console.log('[MapNodeView] Updating routes for', locations.length, 'locations');
 
