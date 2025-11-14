@@ -145,11 +145,12 @@ export default function LocationDetailsRoute() {
       {/* Action buttons */}
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.button, styles.primaryButton]}
+          style={styles.linkButton}
           onPress={handleTransportation}
         >
-          <Ionicons name="car-outline" size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>Configure Transport</Text>
+          <Ionicons name="car-outline" size={20} color="#007AFF" />
+          <Text style={styles.linkButtonText}>Configure Transport</Text>
+          <Ionicons name="chevron-forward" size={20} color="#007AFF" style={styles.linkChevron} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -226,6 +227,26 @@ const styles = StyleSheet.create({
     marginTop: 20,
     gap: 12,
   },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  linkButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 12,
+  },
+  linkChevron: {
+    marginLeft: 8,
+  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,14 +255,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 10,
     gap: 8,
-  },
-  primaryButton: {
-    backgroundColor: '#007AFF',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   secondaryButton: {
     backgroundColor: '#F3F4F6',

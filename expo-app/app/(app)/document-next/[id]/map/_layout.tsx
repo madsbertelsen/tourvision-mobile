@@ -490,6 +490,7 @@ export default function MapLayout() {
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
             handleComponent={CustomHandle}
+            style={styles.bottomSheetShadow}
           >
             {/* Slot renders the active Stack route - no BottomSheetView wrapper needed */}
             <Slot />
@@ -560,6 +561,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#D1D5DB',
     width: 36,
     height: 4,
+  },
+  bottomSheetShadow: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   bottomSheetContent: {
     flex: 1,
