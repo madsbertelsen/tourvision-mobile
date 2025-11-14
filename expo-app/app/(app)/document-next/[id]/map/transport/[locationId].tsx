@@ -45,13 +45,16 @@ export default function TransportConfigRoute() {
       setSelectedSourceId(existingRouteToHere.fromLocationId);
       setPendingTransportMode(existingRouteToHere.transportMode);
       setPendingWaypoints(existingRouteToHere.waypoints || []);
+
+      // Focus map on the existing route
+      focusOnRoute(existingRouteToHere);
     }
 
     // Cleanup on unmount
     return () => {
       setIsAddingWaypoint(false);
     };
-  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint]);
+  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint, focusOnRoute]);
 
   const handleBackToLocation = () => {
     router.back();
