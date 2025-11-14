@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useMapContext } from '../_layout';
 import { useDocumentNextContext } from '../../_layout';
 
@@ -62,7 +63,7 @@ export default function LocationDetailsRoute() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <BottomSheetScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         <View style={[
@@ -169,7 +170,7 @@ export default function LocationDetailsRoute() {
           <Text style={styles.secondaryButtonText}>Edit Location</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </BottomSheetScrollView>
   );
 }
 

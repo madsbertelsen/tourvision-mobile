@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useMapContext } from '../_layout';
 import { useDocumentNextContext } from '../../_layout';
 
@@ -197,7 +198,7 @@ export default function TransportConfigRoute() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <BottomSheetScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header with back button */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackToLocation} style={styles.backButtonInline}>
@@ -382,7 +383,7 @@ export default function TransportConfigRoute() {
           </TouchableOpacity>
         </>
       )}
-    </ScrollView>
+    </BottomSheetScrollView>
   );
 }
 
