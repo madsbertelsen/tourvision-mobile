@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ export default function TransportConfigRoute() {
     setIsAddingWaypoint,
     pendingWaypoints,
     setPendingWaypoints,
+    waypointChangeVersion,
     setSheetHeaderInfo
   } = useMapContext();
 
@@ -141,7 +142,7 @@ export default function TransportConfigRoute() {
     };
 
     fetchRouteWithWaypoints();
-  }, [pendingWaypoints.length]); // Only trigger when waypoint count changes
+  }, [waypointChangeVersion]); // Trigger when waypoint version changes (add/remove/move)
 
   const handleBackToLocation = () => {
     router.back();

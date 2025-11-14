@@ -63,6 +63,8 @@ interface MapContextType {
   setIsAddingWaypoint: (adding: boolean) => void;
   pendingWaypoints: Array<{ lat: number; lng: number }>;
   setPendingWaypoints: React.Dispatch<React.SetStateAction<Array<{ lat: number; lng: number }>>>;
+  onWaypointsChanged: () => void;
+  waypointChangeVersion: number;
   sheetHeaderInfo: SheetHeaderInfo | null;
   setSheetHeaderInfo: (info: SheetHeaderInfo | null) => void;
 }
@@ -115,10 +117,16 @@ export default function MapLayout() {
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
   const [pendingWaypoints, setPendingWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
   const [draggingWaypointIndex, setDraggingWaypointIndex] = useState<number | null>(null);
+  const [waypointChangeVersion, setWaypointChangeVersion] = useState(0);
   const [sheetHeaderInfo, setSheetHeaderInfo] = useState<SheetHeaderInfo | null>(null);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
   const bottomSheetRef = useRef<BottomSheet>(null);
+
+  // Callback to trigger waypoint update
+  const onWaypointsChanged = useCallback(() => {
+    setWaypointChangeVersion(prev => prev + 1);
+  }, []);
 
   // Calculate initial camera bounds based on all locations
   const initialBounds = useMemo(() => {
@@ -423,6 +431,8 @@ export default function MapLayout() {
         setIsAddingWaypoint,
         pendingWaypoints,
         setPendingWaypoints,
+        onWaypointsChanged,
+        waypointChangeVersion,
         sheetHeaderInfo,
         setSheetHeaderInfo,
       }}>
@@ -492,10 +502,12 @@ export default function MapLayout() {
                       return updated;
                     });
                     setDraggingWaypointIndex(null);
+                    // Trigger waypoint update to refetch route
+                    onWaypointsChanged();
                   }}
                 >
-                  {/* Empty view - the visual marker is in MarkerView below */}
-                  <View style={{ width: 0, height: 0 }} />
+                  {/* Invisible content - must have size for drag to work */}
+                  <View style={{ width: 28, height: 28, opacity: 0 }} />
                 </Mapbox.PointAnnotation>
 
                 {/* Visual marker (non-interactive) */}
