@@ -6,6 +6,7 @@ import { baseKeymap } from "prosemirror-commands";
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from "y-prosemirror";
 import YProvider from "../y-partyserver/provider";
 import * as Y from "yjs";
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { customSchema } from "../prosemirror-schema";
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -572,7 +573,11 @@ class DocumentEditor {
     const yDoc = new Y.Doc();
     const yXmlFragment = yDoc.getXmlFragment("prosemirror");
 
-    // Create YProvider
+    // Add IndexedDB persistence for instant loading
+    const indexeddbProvider = new IndexeddbPersistence(documentId, yDoc);
+    this.indexeddbProvider = indexeddbProvider;
+
+    // Create YProvider (for collaboration)
     const prov = new YProvider(
       WS_HOST,
       documentId,

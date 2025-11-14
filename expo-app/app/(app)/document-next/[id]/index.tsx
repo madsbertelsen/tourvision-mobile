@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { View, Platform, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { View, Platform, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -59,6 +59,7 @@ export default function AgentEditorScreen() {
   } = useDocumentNextContext();
 
   const webViewRef = useRef<any>(null);
+  const [isEditorReady, setIsEditorReady] = useState(false);
 
   // Build the editor URL with document ID (stable URL to avoid reload loops)
   const editorUrl = `http://localhost:5174/editor.html?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
@@ -106,6 +107,7 @@ export default function AgentEditorScreen() {
 
         case 'ready':
           console.log('[AgentEditor] Editor ready');
+          setIsEditorReady(true);
           break;
 
         case 'error':
@@ -238,6 +240,12 @@ export default function AgentEditorScreen() {
 
       {/* Agent Editor WebView */}
       <View style={styles.editorContainer}>
+        {!isEditorReady && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading document...</Text>
+          </View>
+        )}
         <WebViewComponent
           ref={webViewRef}
           source={{ uri: editorUrl }}
@@ -300,6 +308,22 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    zIndex: 1,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
   },
   webView: {
     flex: 1,
