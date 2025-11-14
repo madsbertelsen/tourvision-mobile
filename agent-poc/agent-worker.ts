@@ -348,7 +348,8 @@ function createGeoMark(locationText: string, geocodeResult: GeocodeResult, color
   const markType = customSchema.marks.geoMark;
   const mark = markType.create({
     geoId,
-    placeName: geocodeResult.displayName,
+    displayText: locationText,  // The actual text in the document (e.g., "Copenhagen")
+    placeName: geocodeResult.displayName,  // Full geocoded name (e.g., "Copenhagen, Denmark")
     lat: geocodeResult.lat.toString(),
     lng: geocodeResult.lng.toString(),
     colorIndex,

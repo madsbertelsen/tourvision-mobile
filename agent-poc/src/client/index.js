@@ -810,6 +810,7 @@ class DocumentEditor {
               if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
                 locations.push({
                   geoId: mark.attrs.geoId,
+                  displayText: mark.attrs.displayText || node.text,  // Use displayText if available, fallback to node text
                   placeName: mark.attrs.placeName,
                   lat: parseFloat(mark.attrs.lat),
                   lng: parseFloat(mark.attrs.lng),
@@ -1279,6 +1280,7 @@ class DocumentEditor {
             const attrs = mark.attrs;
             foundLocations.push({
               geoId: attrs.geoId,
+              displayText: attrs.displayText || node.text,  // Use displayText if available, fallback to node text
               placeName: attrs.placeName,
               lat: parseFloat(attrs.lat),
               lng: parseFloat(attrs.lng),

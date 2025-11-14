@@ -447,6 +447,7 @@ export default function MapLayout() {
             ref={bottomSheetRef}
             index={-1}
             snapPoints={snapPoints}
+            enableDynamicSizing={false}
             enablePanDownToClose={true}
             onClose={() => {
               // When bottom sheet closes, navigate back to index

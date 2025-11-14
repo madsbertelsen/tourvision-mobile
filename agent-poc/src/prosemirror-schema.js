@@ -34,7 +34,8 @@ export const customSchema = new Schema({
     .addToEnd('geoMark', {
       attrs: {
         geoId: { default: null },
-        placeName: { default: '' },
+        displayText: { default: '' },  // Simple text from document (e.g., "Copenhagen")
+        placeName: { default: '' },  // Full geocoded name (e.g., "Copenhagen, Denmark")
         lat: { default: '' },
         lng: { default: '' },
         colorIndex: { default: 0 },
