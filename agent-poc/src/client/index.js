@@ -1,8 +1,9 @@
 import { EditorState, NodeSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { keymap } from "prosemirror-keymap";
-import { history, undo, redo } from "prosemirror-history";
-import { baseKeymap } from "prosemirror-commands";
+import { history, undo, redo, undoDepth, redoDepth } from "prosemirror-history";
+import { baseKeymap, setBlockType } from "prosemirror-commands";
+import { wrapInList } from "prosemirror-schema-list";
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from "y-prosemirror";
 import YProvider from "../y-partyserver/provider";
 import * as Y from "yjs";
@@ -1265,6 +1266,14 @@ class DocumentEditor {
             }
           }, 0);
         }
+
+        // Send history and selection updates to parent
+        setTimeout(() => {
+          if (window.docEditor) {
+            window.docEditor.sendHistoryUpdate();
+            window.docEditor.sendSelectionUpdate();
+          }
+        }, 0);
       }
     });
 
@@ -1491,6 +1500,85 @@ class DocumentEditor {
       console.warn(`[Editor] Geo-mark not found with geoId: ${geoId}`);
     }
   }
+
+  executeCommand(command, params) {
+    if (!this.editorView) {
+      console.error('[Editor] Cannot execute command: editorView not initialized');
+      return;
+    }
+
+    const { state, dispatch } = this.editorView;
+    const { schema } = state;
+
+    console.log('[Editor] Executing command:', command, params);
+
+    switch (command) {
+      case 'undo':
+        undo(state, dispatch);
+        break;
+
+      case 'redo':
+        redo(state, dispatch);
+        break;
+
+      case 'setHeading':
+        if (params && params.level) {
+          setBlockType(schema.nodes.heading, { level: params.level })(state, dispatch);
+        }
+        break;
+
+      case 'toggleBulletList':
+        wrapInList(schema.nodes.bullet_list)(state, dispatch);
+        break;
+
+      default:
+        console.warn('[Editor] Unknown command:', command);
+    }
+
+    // After executing command, send updated history state
+    this.sendHistoryUpdate();
+  }
+
+  sendHistoryUpdate() {
+    if (!this.editorView || !window.sendToParent) return;
+
+    const { state } = this.editorView;
+    const canUndo = undoDepth(state) > 0;
+    const canRedo = redoDepth(state) > 0;
+
+    window.sendToParent({
+      type: 'historyUpdate',
+      canUndo,
+      canRedo
+    });
+  }
+
+  sendSelectionUpdate() {
+    if (!this.editorView || !window.sendToParent) return;
+
+    const { state } = this.editorView;
+    const { selection } = state;
+    const selectionEmpty = selection.empty;
+
+    // Get active marks at current selection
+    const activeMarks = [];
+    if (!selectionEmpty) {
+      const { from, to } = selection;
+      state.doc.nodesBetween(from, to, (node) => {
+        if (node.isBlock) {
+          if (node.type.name === 'heading') {
+            activeMarks.push(`heading-${node.attrs.level}`);
+          }
+        }
+      });
+    }
+
+    window.sendToParent({
+      type: 'selectionUpdate',
+      selectionEmpty,
+      activeMarks
+    });
+  }
 }
 
 // Start the app
@@ -1551,6 +1639,12 @@ window.addEventListener('parentMessage', (event) => {
       } else {
         console.error('[Editor] updateGeoMark missing required params:', message);
       }
+      break;
+
+    case 'command':
+      // Execute editor commands (undo, redo, setHeading, etc.)
+      console.log('[Editor] Received command:', message.command, message.params);
+      window.docEditor.executeCommand(message.command, message.params);
       break;
 
     default:

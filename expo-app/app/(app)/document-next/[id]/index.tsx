@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ChromeTabBar } from '@/components/ChromeTabBar';
+import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
 import { useDocumentNextContext } from './_layout';
 import { testLocations, generateTestDocument } from '@/utils/test-locations';
 
@@ -61,6 +62,10 @@ export default function AgentEditorScreen() {
 
   const webViewRef = useRef<any>(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [hasTextSelection, setHasTextSelection] = useState(false);
+  const [highlightedButton, setHighlightedButton] = useState<string | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Build the editor URL with document ID (stable URL to avoid reload loops)
   const editorUrl = `http://localhost:5174/editor.html?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
@@ -111,6 +116,26 @@ export default function AgentEditorScreen() {
           setIsEditorReady(true);
           break;
 
+        case 'selectionUpdate':
+          console.log('[AgentEditor] Selection update:', data);
+          setHasTextSelection(!data.selectionEmpty);
+          if (data.activeMarks) {
+            // Update highlighted button based on active marks
+            const marks = data.activeMarks;
+            if (marks.includes('heading-2')) {
+              setHighlightedButton('h2');
+            } else {
+              setHighlightedButton(null);
+            }
+          }
+          break;
+
+        case 'historyUpdate':
+          console.log('[AgentEditor] History update:', data);
+          setCanUndo(data.canUndo ?? false);
+          setCanRedo(data.canRedo ?? false);
+          break;
+
         case 'error':
           console.error('[AgentEditor] Editor error:', data.error);
           break;
@@ -156,6 +181,16 @@ export default function AgentEditorScreen() {
       console.log('[AgentEditor.sendMessage] Message posted to native WebView');
     }
   }, []);
+
+  // Handle toolbar commands
+  const handleCommand = useCallback((command: string, params?: any) => {
+    console.log('[AgentEditor] Toolbar command:', command, params);
+    sendMessage({
+      type: 'command',
+      command,
+      params
+    });
+  }, [sendMessage]);
 
   // Handle geo-mark updates from other routes (like geo-edit)
   useEffect(() => {
@@ -238,6 +273,16 @@ export default function AgentEditorScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ProseMirror Toolbar */}
+      <ProseMirrorToolbar
+        editable={true}
+        selectionEmpty={!hasTextSelection}
+        highlightedButton={highlightedButton}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onCommand={handleCommand}
+      />
 
       {/* Agent Editor WebView */}
       <View style={styles.editorContainer}>
