@@ -114,6 +114,7 @@ export default function MapLayout() {
   const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
   const [pendingWaypoints, setPendingWaypoints] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [draggingWaypointIndex, setDraggingWaypointIndex] = useState<number | null>(null);
   const [sheetHeaderInfo, setSheetHeaderInfo] = useState<SheetHeaderInfo | null>(null);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
@@ -347,10 +348,12 @@ export default function MapLayout() {
 
   // Handle route line press
   const handleRoutePress = useCallback((route: RouteData, event?: any) => {
+    console.log('[MapLayout] Route pressed. isAddingWaypoint:', isAddingWaypoint);
+
     if (isAddingWaypoint) {
       // In waypoint adding mode - add waypoint at tap location
-      if (event && event.geometry && event.geometry.coordinates) {
-        const [lng, lat] = event.geometry.coordinates;
+      if (event && event.coordinates) {
+        const { latitude: lat, longitude: lng } = event.coordinates;
         console.log(`[MapLayout] Adding waypoint at: ${lat}, ${lng}`);
 
         // Add waypoint to pending list
@@ -361,6 +364,8 @@ export default function MapLayout() {
 
         // Expand bottom sheet back to 50%
         bottomSheetRef.current?.snapToIndex(1);
+      } else {
+        console.log('[MapLayout] Event does not have coordinates');
       }
       return;
     }
@@ -459,14 +464,54 @@ export default function MapLayout() {
 
             {/* Waypoint markers */}
             {pendingWaypoints.map((waypoint, index) => (
-              <Mapbox.MarkerView
-                key={`waypoint-${index}`}
-                coordinate={[waypoint.lng, waypoint.lat]}
-              >
-                <View style={styles.waypointMarker}>
-                  <Text style={styles.waypointNumber}>{index + 1}</Text>
-                </View>
-              </Mapbox.MarkerView>
+              <React.Fragment key={`waypoint-${index}`}>
+                {/* Invisible PointAnnotation for drag handling */}
+                <Mapbox.PointAnnotation
+                  draggable={true}
+                  id={`waypoint-draggable-${index}`}
+                  coordinate={[waypoint.lng, waypoint.lat]}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  onDragStart={() => {
+                    console.log('[MapLayout] Drag started for waypoint:', index);
+                    setDraggingWaypointIndex(index);
+                  }}
+                  onDrag={(event) => {
+                    const [lng, lat] = event.geometry.coordinates;
+                    setPendingWaypoints(prev => {
+                      const updated = [...prev];
+                      updated[index] = { lat, lng };
+                      return updated;
+                    });
+                  }}
+                  onDragEnd={(event) => {
+                    const [lng, lat] = event.geometry.coordinates;
+                    console.log('[MapLayout] Drag ended for waypoint:', index, 'at:', lat, lng);
+                    setPendingWaypoints(prev => {
+                      const updated = [...prev];
+                      updated[index] = { lat, lng };
+                      return updated;
+                    });
+                    setDraggingWaypointIndex(null);
+                  }}
+                >
+                  {/* Empty view - the visual marker is in MarkerView below */}
+                  <View style={{ width: 0, height: 0 }} />
+                </Mapbox.PointAnnotation>
+
+                {/* Visual marker (non-interactive) */}
+                <Mapbox.MarkerView
+                  id={`waypoint-visual-${index}`}
+                  coordinate={[waypoint.lng, waypoint.lat]}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                >
+                  <View style={[
+                    styles.waypointMarker,
+                    draggingWaypointIndex === index && styles.waypointMarkerDragging
+                  ]}>
+                    <Text style={styles.waypointNumber}>{index + 1}</Text>
+                  </View>
+                </Mapbox.MarkerView>
+              </React.Fragment>
             ))}
 
             {/* Location markers */}
@@ -647,6 +692,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  waypointMarkerDragging: {
+    transform: [{ scale: 1.2 }],
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
   },
   waypointNumber: {
     fontSize: 12,
