@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import BottomSheet from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetHandle, BottomSheetHandleProps } from '@gorhom/bottom-sheet';
 import Mapbox from '@rnmapbox/maps';
 import * as turfBbox from '@turf/bbox';
 import { Slot, useRouter, useSegments } from 'expo-router';
@@ -41,6 +41,12 @@ interface MapLocation {
 }
 
 // Context for sharing map state with routes
+interface SheetHeaderInfo {
+  title: string;
+  colorDot?: string;
+  onBack?: () => void;
+}
+
 interface MapContextType {
   locations: MapLocation[];
   routes: RouteData[];
@@ -55,6 +61,8 @@ interface MapContextType {
   updateRoute: (routeId: string, updates: Partial<RouteData>) => Promise<void>;
   isAddingWaypoint: boolean;
   setIsAddingWaypoint: (adding: boolean) => void;
+  sheetHeaderInfo: SheetHeaderInfo | null;
+  setSheetHeaderInfo: (info: SheetHeaderInfo | null) => void;
 }
 
 const MapContext = createContext<MapContextType | null>(null);
@@ -103,6 +111,7 @@ export default function MapLayout() {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<RouteData | null>(null);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
+  const [sheetHeaderInfo, setSheetHeaderInfo] = useState<SheetHeaderInfo | null>(null);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -349,6 +358,29 @@ export default function MapLayout() {
   // Snap points for bottom sheet (max 50% to avoid blocking map)
   const snapPoints = useMemo(() => ['25%', '50%'], []);
 
+  // Custom handle component with header
+  const CustomHandle = useCallback((props: BottomSheetHandleProps) => (
+    <View>
+      <BottomSheetHandle {...props} />
+      {sheetHeaderInfo && (
+        <View style={styles.sheetHeader}>
+          {sheetHeaderInfo.onBack && (
+            <TouchableOpacity onPress={sheetHeaderInfo.onBack} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+          {sheetHeaderInfo.colorDot && (
+            <View style={[
+              styles.headerColorDot,
+              { backgroundColor: sheetHeaderInfo.colorDot }
+            ]} />
+          )}
+          <Text style={styles.sheetHeaderTitle}>{sheetHeaderInfo.title}</Text>
+        </View>
+      )}
+    </View>
+  ), [sheetHeaderInfo]);
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <MapContext.Provider value={{
@@ -365,6 +397,8 @@ export default function MapLayout() {
         updateRoute,
         isAddingWaypoint,
         setIsAddingWaypoint,
+        sheetHeaderInfo,
+        setSheetHeaderInfo,
       }}>
         {/* Mapbox map - always visible as background */}
         <View style={styles.container}>
@@ -455,6 +489,7 @@ export default function MapLayout() {
             }}
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}
+            handleComponent={CustomHandle}
           >
             {/* Slot renders the active Stack route - no BottomSheetView wrapper needed */}
             <Slot />
@@ -529,5 +564,29 @@ const styles = StyleSheet.create({
   bottomSheetContent: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    marginRight: 12,
+  },
+  headerColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  sheetHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
   },
 });

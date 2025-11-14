@@ -16,7 +16,8 @@ export default function LocationDetailsRoute() {
     selectedLocationId,
     setSelectedLocationId,
     bottomSheetRef,
-    focusOnLocation
+    focusOnLocation,
+    setSheetHeaderInfo
   } = useMapContext();
 
   // Find the location by ID
@@ -28,6 +29,13 @@ export default function LocationDetailsRoute() {
 
   useEffect(() => {
     if (location) {
+      // Set sheet header info
+      setSheetHeaderInfo({
+        title: location.displayText || location.placeName,
+        colorDot: location.color,
+        onBack: undefined, // No back button on location details
+      });
+
       // Focus camera on location when this route mounts
       focusOnLocation(location);
 
@@ -41,8 +49,9 @@ export default function LocationDetailsRoute() {
     // Cleanup on unmount
     return () => {
       setSelectedLocationId(null);
+      setSheetHeaderInfo(null);
     };
-  }, [location, focusOnLocation, setSelectedLocationId, bottomSheetRef]);
+  }, [location, focusOnLocation, setSelectedLocationId, bottomSheetRef, setSheetHeaderInfo]);
 
   if (!location) {
     return (
@@ -64,17 +73,6 @@ export default function LocationDetailsRoute() {
 
   return (
     <BottomSheetScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={[
-          styles.colorDot,
-          { backgroundColor: location.color }
-        ]} />
-        <Text style={styles.title} numberOfLines={2}>
-          {location.displayText || location.placeName}
-        </Text>
-      </View>
-
       {/* Location details sections */}
       <View style={styles.section}>
         <View style={styles.sectionRow}>

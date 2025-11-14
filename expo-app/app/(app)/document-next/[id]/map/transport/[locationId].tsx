@@ -19,7 +19,8 @@ export default function TransportConfigRoute() {
     bottomSheetRef,
     focusOnRoute,
     isAddingWaypoint,
-    setIsAddingWaypoint
+    setIsAddingWaypoint,
+    setSheetHeaderInfo
   } = useMapContext();
 
   // Find the destination location
@@ -40,6 +41,15 @@ export default function TransportConfigRoute() {
     // Snap bottom sheet to 50% (index 1)
     bottomSheetRef.current?.snapToIndex(1);
 
+    // Set sheet header info
+    if (destinationLocation) {
+      setSheetHeaderInfo({
+        title: 'Transport Configuration',
+        colorDot: destinationLocation.color,
+        onBack: () => router.back(),
+      });
+    }
+
     // If there's an existing route to this location, pre-select the source
     const existingRouteToHere = routes.find(r => r.toLocationId === locationId);
     if (existingRouteToHere) {
@@ -54,8 +64,9 @@ export default function TransportConfigRoute() {
     // Cleanup on unmount
     return () => {
       setIsAddingWaypoint(false);
+      setSheetHeaderInfo(null);
     };
-  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint, focusOnRoute]);
+  }, [locationId, routes, bottomSheetRef, setIsAddingWaypoint, focusOnRoute, destinationLocation, setSheetHeaderInfo, router]);
 
   const handleBackToLocation = () => {
     router.back();
@@ -199,18 +210,6 @@ export default function TransportConfigRoute() {
 
   return (
     <BottomSheetScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header with back button */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBackToLocation} style={styles.backButtonInline}>
-          <Ionicons name="chevron-back" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <View style={[
-          styles.colorDot,
-          { backgroundColor: destinationLocation.color }
-        ]} />
-        <Text style={styles.title}>Transport Configuration</Text>
-      </View>
-
       {/* Destination info */}
       <View style={styles.section}>
         <View style={styles.sectionRow}>
