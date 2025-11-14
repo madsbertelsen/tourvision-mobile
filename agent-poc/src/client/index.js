@@ -796,6 +796,7 @@ class DocumentEditor {
 
       let currentMap = null;
       let currentMarkers = [];
+      let currentRoutes = new Map(); // Track route layers by ID
       let previousLocationCount = 0;
       let isUserInteracting = false;
       let isFirstLoad = true; // Track if this is the first time loading the map
@@ -898,6 +899,124 @@ class DocumentEditor {
           // After first positioning, set flag to false
           if (isFirstLoad) {
             isFirstLoad = false;
+          }
+        }
+      };
+
+      // Update routes on map
+      const updateRoutes = async (locations) => {
+        if (!currentMap || !currentMap.isStyleLoaded()) return;
+
+        const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+        if (!mapboxToken) return;
+
+        console.log('[MapNodeView] Updating routes for', locations.length, 'locations');
+
+        // Build a set of route IDs that should exist
+        const expectedRouteIds = new Set();
+
+        if (locations.length > 1) {
+          for (const toLoc of locations) {
+            if (!toLoc.transportProfile || !toLoc.transportFrom) continue;
+
+            const fromLoc = locations.find(loc => loc.geoId === toLoc.transportFrom);
+            if (!fromLoc) continue;
+
+            const routeId = `route-${fromLoc.geoId}-${toLoc.geoId}`;
+            expectedRouteIds.add(routeId);
+
+            // Check if this route needs updating
+            const existingRoute = currentRoutes.get(routeId);
+            const needsUpdate = !existingRoute ||
+                               existingRoute.transportProfile !== toLoc.transportProfile ||
+                               JSON.stringify(existingRoute.waypoints) !== JSON.stringify(toLoc.waypoints);
+
+            if (!needsUpdate) {
+              console.log(`[MapNodeView] Route ${routeId} is up to date`);
+              continue;
+            }
+
+            console.log(`[MapNodeView] Fetching route: ${fromLoc.placeName} → ${toLoc.placeName} (${toLoc.transportProfile})`);
+
+            // Remove old route if it exists
+            if (currentMap.getLayer(routeId)) {
+              currentMap.removeLayer(routeId);
+            }
+            if (currentMap.getSource(routeId)) {
+              currentMap.removeSource(routeId);
+            }
+
+            // Build coordinates string
+            let coordinates;
+            if (toLoc.waypoints && toLoc.waypoints.length > 0) {
+              const waypointCoords = toLoc.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+              coordinates = `${fromLoc.lng},${fromLoc.lat};${waypointCoords};${toLoc.lng},${toLoc.lat}`;
+            } else {
+              coordinates = `${fromLoc.lng},${fromLoc.lat};${toLoc.lng},${toLoc.lat}`;
+            }
+
+            const profile = toLoc.transportProfile === 'walking' ? 'walking' :
+                           toLoc.transportProfile === 'cycling' ? 'cycling' :
+                           'driving-traffic';
+            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+            try {
+              const response = await fetch(url);
+              const data = await response.json();
+
+              if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                const routeColor = COLORS[toLoc.colorIndex % COLORS.length];
+
+                console.log(`[MapNodeView] Adding route layer ${routeId} with color ${routeColor}`);
+
+                currentMap.addSource(routeId, {
+                  type: 'geojson',
+                  data: {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: route.geometry
+                  }
+                });
+
+                currentMap.addLayer({
+                  id: routeId,
+                  type: 'line',
+                  source: routeId,
+                  layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                  },
+                  paint: {
+                    'line-color': routeColor,
+                    'line-width': 3,
+                    'line-opacity': 0.75
+                  }
+                });
+
+                // Track this route
+                currentRoutes.set(routeId, {
+                  transportProfile: toLoc.transportProfile,
+                  waypoints: toLoc.waypoints
+                });
+              }
+            } catch (error) {
+              console.error(`[MapNodeView] Error fetching route:`, error);
+            }
+          }
+        }
+
+        // Remove routes that shouldn't exist anymore
+        for (const [routeId] of currentRoutes) {
+          if (!expectedRouteIds.has(routeId)) {
+            console.log(`[MapNodeView] Removing obsolete route ${routeId}`);
+            if (currentMap.getLayer(routeId)) {
+              currentMap.removeLayer(routeId);
+            }
+            if (currentMap.getSource(routeId)) {
+              currentMap.removeSource(routeId);
+            }
+            currentRoutes.delete(routeId);
           }
         }
       };
@@ -1026,87 +1145,7 @@ class DocumentEditor {
             isFirstLoad = false;
 
             // Fetch and render routes
-            console.log('[MapNodeView] Map style loaded, fetching routes for', locations.length, 'locations');
-            if (locations.length > 1) {
-              locations.forEach((toLoc, i) => {
-                console.log(`[MapNodeView] Location ${i}:`, {
-                  placeName: toLoc.placeName,
-                  transportProfile: toLoc.transportProfile,
-                  transportFrom: toLoc.transportFrom
-                });
-
-                // Skip if no transport configuration
-                if (!toLoc.transportProfile || !toLoc.transportFrom) {
-                  console.log(`[MapNodeView] Skipping ${toLoc.placeName} - no transport configuration`);
-                  return;
-                }
-
-                // Find the source location
-                const fromLoc = locations.find(loc => loc.geoId === toLoc.transportFrom);
-                if (!fromLoc) {
-                  console.log(`[MapNodeView] Could not find source location ${toLoc.transportFrom} for ${toLoc.placeName}`);
-                  return;
-                }
-
-                console.log(`[MapNodeView] Rendering route: ${fromLoc.placeName} → ${toLoc.placeName} (${toLoc.transportProfile})`);
-
-                // Build coordinates string
-                let coordinates;
-                if (toLoc.waypoints && toLoc.waypoints.length > 0) {
-                  const waypointCoords = toLoc.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-                  coordinates = `${fromLoc.lng},${fromLoc.lat};${waypointCoords};${toLoc.lng},${toLoc.lat}`;
-                } else {
-                  coordinates = `${fromLoc.lng},${fromLoc.lat};${toLoc.lng},${toLoc.lat}`;
-                }
-
-                const profile = toLoc.transportProfile === 'walking' ? 'walking' :
-                               toLoc.transportProfile === 'cycling' ? 'cycling' :
-                               'driving-traffic';
-                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
-
-                // Fetch and add route
-                fetch(url)
-                  .then(response => response.json())
-                  .then(data => {
-                    if (data.routes && data.routes.length > 0) {
-                      const route = data.routes[0];
-                      const routeColor = COLORS[toLoc.colorIndex % COLORS.length];
-                      const routeId = `route-${fromLoc.geoId}-${toLoc.geoId}`;
-
-                      console.log(`[MapNodeView] Adding route layer ${routeId} with color ${routeColor}`);
-
-                      currentMap.addSource(routeId, {
-                        type: 'geojson',
-                        data: {
-                          type: 'Feature',
-                          properties: {},
-                          geometry: route.geometry
-                        }
-                      });
-
-                      currentMap.addLayer({
-                        id: routeId,
-                        type: 'line',
-                        source: routeId,
-                        layout: {
-                          'line-join': 'round',
-                          'line-cap': 'round'
-                        },
-                        paint: {
-                          'line-color': routeColor,
-                          'line-width': 3,
-                          'line-opacity': 0.75
-                        }
-                      });
-                    } else {
-                      console.log(`[MapNodeView] No route found for ${fromLoc.placeName} → ${toLoc.placeName}`);
-                    }
-                  })
-                  .catch(error => {
-                    console.error(`[MapNodeView] Error fetching route:`, error);
-                  });
-              });
-            }
+            updateRoutes(locations);
 
             // Show the map after positioning
             setTimeout(() => {
@@ -1115,8 +1154,9 @@ class DocumentEditor {
             }, 50);
           });
         } else {
-          // Map already exists, only animate if location count changed
+          // Map already exists, update markers and routes
           updateMarkers(locations, locationCountChanged);
+          updateRoutes(locations);
         }
       };
 
