@@ -246,34 +246,6 @@ export default function AgentEditorScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Document {documentId}</Text>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push(`/document-next/${documentId}/map`)}
-          >
-            <Ionicons name="map-outline" size={24} color="#007AFF" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push(`/document-next/${documentId}/options`)}
-          >
-            <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {/* ProseMirror Toolbar */}
       <ProseMirrorToolbar
         editable={true}
