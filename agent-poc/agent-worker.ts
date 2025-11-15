@@ -74,13 +74,22 @@ if (!DOCUMENT_ID || !AGENT_ID) {
   process.exit(1);
 }
 
-// Default port 8787 matches Wrangler dev server default
-const WS_PORT = process.env.WS_PORT || '8787';
+// WebSocket configuration with environment variable support
+const WS_PROTOCOL = process.env.WS_PROTOCOL || 'ws';
+const WS_HOST = process.env.WS_HOST || 'localhost';
+const WS_PORT = process.env.WS_PORT; // Can be undefined, empty string, or a port number
 const PARTY_NAME = 'document';
+
+// Build WebSocket URL intelligently
+// If WS_PORT is provided and not empty, append it (for localhost)
+// If no port or empty string, assume it's a custom domain (Cloudflare) using standard ports
+const WS_URL = (WS_PORT && WS_PORT.trim() !== '')
+  ? `${WS_PROTOCOL}://${WS_HOST}:${WS_PORT}`
+  : `${WS_PROTOCOL}://${WS_HOST}`;
 
 console.log(`[Agent Worker] Starting for document: ${DOCUMENT_ID}`);
 console.log(`[Agent Worker] Agent ID: ${AGENT_ID}`);
-console.log(`[Agent Worker] Connecting to: localhost:${WS_PORT}/parties/${PARTY_NAME}/${DOCUMENT_ID}`);
+console.log(`[Agent Worker] Connecting to: ${WS_URL}/parties/${PARTY_NAME}/${DOCUMENT_ID}`);
 
 // Create Y.Doc
 const ydoc = new Y.Doc();
@@ -91,7 +100,7 @@ let geoMarkColorIndex: number = 0;
 
 // Create YProvider (custom provider with message support)
 const provider = new YProvider(
-  `localhost:${WS_PORT}`,
+  WS_URL,
   DOCUMENT_ID,  // ← Now dynamic based on input!
   ydoc,
   {
@@ -433,7 +442,7 @@ async function callRealLLM(): Promise<any> {
 
   // Call LLM to extract locations as structured data
   const result = await generateObject({
-    model: 'openai/gpt-4o-mini',
+    model: 'mistral/mistral-small',
     schema: z.object({
       locations: z.array(z.object({
         name: z.string().describe('The exact text from the document (e.g., "Copenhagen")'),
@@ -527,7 +536,7 @@ async function generateAndInsertAnswer(
 
     // Generate full answer first
     const result = await generateObject({
-      model: 'openai/gpt-4o-mini',
+      model: 'mistral/mistral-small',
       schema: z.object({
         answer: z.string().describe('Brief answer to the question (1-2 sentences)')
       }),
