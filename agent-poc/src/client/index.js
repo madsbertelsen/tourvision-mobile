@@ -552,7 +552,8 @@ class DocumentEditor {
     const newDocId = `doc-${Date.now()}`;
     this.documents.push(newDocId);
     localStorage.setItem('documents', JSON.stringify(this.documents));
-    this.switchDocument(newDocId);
+    // Stay on index route, just update URL parameter
+    window.location.href = `/?doc=${newDocId}`;
   }
 
   switchDocument(docId) {
