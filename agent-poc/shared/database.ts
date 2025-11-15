@@ -39,7 +39,9 @@ export class AgentDatabase {
         realtime: {
           params: {
             eventsPerSecond: 10
-          }
+          },
+          timeout: 30000, // 30 second timeout
+          heartbeatIntervalMs: 15000 // Send heartbeat every 15 seconds
         }
       }
     );
@@ -280,36 +282,121 @@ export class AgentDatabase {
   subscribeToDocumentActivity(
     callback: (event: DocumentActivity) => void
   ): () => void {
-    const channel = this.supabaseRealtime
-      .channel('document-activity-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'document_activity'
-        },
-        (payload) => {
-          callback(payload.new as DocumentActivity);
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('[DB] Realtime subscription status:', status);
-        if (err) {
-          console.error('[DB] Realtime subscription error:', err);
-        }
-        if (status === 'SUBSCRIBED') {
-          console.log('[DB] ✅ Successfully subscribed to document_activity changes');
-        } else if (status === 'TIMED_OUT') {
-          console.error('[DB] ❌ Realtime subscription timed out');
-        } else if (status === 'CLOSED') {
-          console.error('[DB] ❌ Realtime subscription closed');
-        }
-      });
+    let channel: any;
+    let retryAttempt = 0;
+    const maxRetries = 5;
+    const retryDelay = 5000; // 5 seconds
+    let fallbackToPolling = false;
+
+    const subscribe = () => {
+      channel = this.supabaseRealtime
+        .channel('document-activity-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'document_activity'
+          },
+          (payload) => {
+            callback(payload.new as DocumentActivity);
+          }
+        )
+        .subscribe((status, err) => {
+          console.log('[DB] Realtime subscription status:', status);
+          if (err) {
+            console.error('[DB] Realtime subscription error:', err);
+          }
+          if (status === 'SUBSCRIBED') {
+            console.log('[DB] ✅ Successfully subscribed to document_activity changes');
+            retryAttempt = 0; // Reset retry counter on success
+          } else if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            if (retryAttempt < maxRetries) {
+              retryAttempt++;
+              console.log(`[DB] ⚠️  Subscription failed (${status}). Retrying in ${retryDelay/1000}s (attempt ${retryAttempt}/${maxRetries})...`);
+
+              // Remove failed channel
+              this.supabaseRealtime.removeChannel(channel);
+
+              // Retry after delay
+              setTimeout(() => subscribe(), retryDelay);
+            } else {
+              console.error(`[DB] ❌ Realtime subscription failed after ${maxRetries} attempts`);
+              console.log('[DB] 🔄 Falling back to polling mode...');
+              fallbackToPolling = true;
+            }
+          }
+        });
+    };
+
+    // Initial subscription
+    subscribe();
 
     // Return cleanup function
     return () => {
-      this.supabaseRealtime.removeChannel(channel);
+      if (channel) {
+        this.supabaseRealtime.removeChannel(channel);
+      }
+    };
+  }
+
+  /**
+   * Poll for new document_activity events (fallback when Realtime fails)
+   */
+  pollDocumentActivity(
+    callback: (event: DocumentActivity) => void,
+    intervalMs: number = 5000
+  ): () => void {
+    let lastTimestamp: string | null = null;
+    let intervalId: NodeJS.Timeout;
+
+    const poll = async () => {
+      try {
+        const query = this.supabase
+          .from('document_activity')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(10);
+
+        // Only get events after last seen timestamp
+        if (lastTimestamp) {
+          query.gt('timestamp', lastTimestamp);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('[DB] Polling error:', error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          // Process in chronological order (oldest first)
+          const events = data.reverse() as DocumentActivity[];
+
+          for (const event of events) {
+            callback(event);
+          }
+
+          // Update last seen timestamp
+          lastTimestamp = data[0].timestamp;
+        }
+      } catch (error) {
+        console.error('[DB] Polling exception:', error);
+      }
+    };
+
+    // Initial poll
+    console.log(`[DB] 📊 Starting polling mode (interval: ${intervalMs}ms)`);
+    poll();
+
+    // Set up interval
+    intervalId = setInterval(poll, intervalMs);
+
+    // Return cleanup function
+    return () => {
+      clearInterval(intervalId);
+      console.log('[DB] Stopped polling');
     };
   }
 

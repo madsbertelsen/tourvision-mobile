@@ -1,35 +1,131 @@
 <!doctype html>
 <html>
   <head>
-    <title>Yjs editor</title>
+    <title>Editor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
       * {
         box-sizing: border-box;
       }
 
-      body {
+      html, body {
+        height: 100%;
         margin: 0;
-        padding: 20px;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        line-height: 1.6;
         color: #1f2937;
-        background-color: #f9fafb;
+        background-color: #ffffff;
+      }
+
+      /* Custom header for editor page */
+      #editor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+      }
+
+      /* Hide header when hideHeader param is present */
+      body.hide-header #editor-header {
+        display: none;
+      }
+
+      /* Adjust root height when header is hidden */
+      body.hide-header #root {
+        height: 100vh;
+      }
+
+      #editor-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      #doc-id {
+        font-size: 13px;
+        color: #6b7280;
+        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      }
+
+      #new-doc-btn {
+        padding: 8px 16px;
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      #new-doc-btn:hover {
+        background-color: #2563eb;
+      }
+
+      #new-doc-btn:active {
+        background-color: #1d4ed8;
+      }
+
+      /* Make root fill remaining screen height and prevent body scroll */
+      #root {
+        height: calc(100vh - 49px); /* Subtract header height */
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Hide all UI elements from index.js except the editor */
+      #root > div > div:not(#editor) {
+        display: none !important;
+      }
+
+      /* Make editor fill the screen and scroll internally */
+      #editor {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow-y: auto;
+        padding: 16px;
+        border: none !important;
+      }
+
+      /* Version indicator - visible even when header is hidden */
+      #version-indicator {
+        position: fixed;
+        top: 5px;
+        right: 5px;
+        background: red;
+        color: white;
+        padding: 4px 8px;
+        font-size: 10px;
+        font-weight: bold;
+        z-index: 9999;
+        border-radius: 3px;
       }
 
       /* ProseMirror editor styling */
       .ProseMirror {
         outline: none;
-        padding: 16px;
-        background: white;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-        min-height: 200px;
+        min-height: 100%;
         font-size: 16px;
         line-height: 1.75;
       }
 
       .ProseMirror p {
         margin: 0 0 16px 0;
+      }
+
+      .ProseMirror p:last-child {
+        margin-bottom: 0;
       }
 
       .ProseMirror h1,
@@ -40,54 +136,38 @@
         line-height: 1.3;
       }
 
+      .ProseMirror h1:first-child,
+      .ProseMirror h2:first-child,
+      .ProseMirror h3:first-child {
+        margin-top: 0;
+      }
+
       .ProseMirror h1 { font-size: 2em; }
       .ProseMirror h2 { font-size: 1.5em; }
       .ProseMirror h3 { font-size: 1.25em; }
 
-      /* Geo-mark styling */
-      .geo-mark {
-        background-color: rgba(59, 130, 246, 0.15);
-        color: inherit;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-      }
-
-      .geo-mark:hover {
-        background-color: rgba(59, 130, 246, 0.25);
-      }
-
-      /* Headings */
-      h1, h2, h3 {
-        font-weight: 600;
-        color: #111827;
-      }
-
-      /* Buttons */
-      button {
-        font-family: inherit;
-        font-size: 14px;
-        font-weight: 500;
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-
-      button:active {
-        transform: translateY(0);
+      /* ProseMirror's own selection styling */
+      .ProseMirror-selectednode {
+        outline: 3px solid #3b82f6;
+        outline-offset: 2px;
       }
     </style>
   </head>
   <body>
+    <script>
+      // Check for hideHeader parameter immediately (before body renders)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('hideHeader') === 'true') {
+        document.body.classList.add('hide-header');
+      }
+    </script>
+    <div id="editor-header">
+      <div id="editor-info">
+        <span id="doc-id">Loading...</span>
+        <span style="color: red; font-weight: bold; margin-left: 20px;">UPDATED VERSION</span>
+      </div>
+      <button id="new-doc-btn">+ New Document</button>
+    </div>
     <div id="root"></div>
     <script src="/src/client/index.js" type="module"></script>
   </body>

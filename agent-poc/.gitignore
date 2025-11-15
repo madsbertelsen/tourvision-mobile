@@ -22,3 +22,5 @@ Caddyfile.local
 
 # Lock files (keep package-lock.json but not bun.lock if using npm)
 bun.lock
+.env.cloudflare
+.env.manager

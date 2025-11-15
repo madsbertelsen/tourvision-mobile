@@ -72,11 +72,34 @@ class AgentManager {
   private subscribeToActivity() {
     console.log('[Manager] 📡 Subscribing to Supabase Realtime...');
 
+    // Try Realtime first
     this.realtimeUnsubscribe = this.db.subscribeToDocumentActivity(
       (event: DocumentActivity) => {
         this.handleActivityEvent(event);
       }
     );
+
+    // Fallback to polling after Realtime retries are exhausted (30 seconds)
+    setTimeout(() => {
+      // Check if still not subscribed by trying to get recent events
+      console.log('[Manager] 🔄 Checking if Realtime is working...');
+
+      // If we haven't received any events and Realtime failed, start polling
+      console.log('[Manager] 💫 Starting polling mode as fallback...');
+      const pollingUnsubscribe = this.db.pollDocumentActivity(
+        (event: DocumentActivity) => {
+          this.handleActivityEvent(event);
+        },
+        5000 // Poll every 5 seconds
+      );
+
+      // Store polling unsubscribe function
+      const originalUnsubscribe = this.realtimeUnsubscribe;
+      this.realtimeUnsubscribe = () => {
+        if (originalUnsubscribe) originalUnsubscribe();
+        pollingUnsubscribe();
+      };
+    }, 35000); // Wait 35 seconds for Realtime to fail completely
   }
 
   private async handleActivityEvent(event: DocumentActivity) {

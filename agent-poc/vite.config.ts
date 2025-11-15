@@ -2,11 +2,12 @@ import { defineConfig } from "vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     cloudflare({
       configPath: "./wrangler.toml",
-      persist: { path: "./.wrangler/state" }
+      persist: { path: "./.wrangler/state" },
+      environment: mode === 'production' ? 'production' : undefined
     }),
     tailwindcss()
   ],
@@ -16,6 +17,13 @@ export default defineConfig({
     cors: {
       origin: '*',  // Allow any origin for development
       credentials: true
-    }
+    },
+    allowedHosts: [
+      'localhost',
+      '192.168.1.223',
+      'dev.tourvision.com',
+      'yjs.tourvision.com',
+      'db.tourvision.com'
+    ]
   }
-});
+}));
