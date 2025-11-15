@@ -134,9 +134,19 @@ window.addEventListener('load', () => {
 // END BOOTSTRAP
 // ============================================================================
 
-// Default port 8787 matches Wrangler dev server default
+// WebSocket configuration with environment variable support
+const WS_PROTOCOL = import.meta.env.VITE_WS_PROTOCOL || "ws";
+const WS_HOST = import.meta.env.VITE_WS_HOST || "localhost";
 const WS_PORT = import.meta.env.VITE_WS_PORT || "8787";
-const WS_HOST = `localhost:${WS_PORT}`;
+
+// Build WebSocket URL intelligently
+// For custom domains (Caddy/ngrok), don't append port
+// For localhost, append port
+const WS_URL = import.meta.env.VITE_WS_HOST && !import.meta.env.VITE_WS_HOST.includes('localhost')
+  ? `${WS_PROTOCOL}://${WS_HOST}`
+  : `ws://${WS_HOST}:${WS_PORT}`;
+
+console.log('[Client] WebSocket URL:', WS_URL);
 
 // 5 pastel colors
 const colours = ["#FFC0CB", "#FFD700", "#98FB98", "#87CEFA", "#FFA07A"];
@@ -580,7 +590,7 @@ class DocumentEditor {
 
     // Create YProvider (for collaboration)
     const prov = new YProvider(
-      WS_HOST,
+      WS_URL,
       documentId,
       yDoc,
       {

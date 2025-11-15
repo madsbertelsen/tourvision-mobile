@@ -11,6 +11,11 @@ dist/
 # Environment variables
 .env
 .env.local
+.env.production
+.env.*.local
+
+# Caddy configuration
+Caddyfile.local
 
 # OS files
 .DS_Store
