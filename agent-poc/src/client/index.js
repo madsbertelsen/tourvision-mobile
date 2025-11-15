@@ -140,11 +140,11 @@ const WS_HOST = import.meta.env.VITE_WS_HOST || "localhost";
 const WS_PORT = import.meta.env.VITE_WS_PORT || "8787";
 
 // Build WebSocket URL intelligently
-// For custom domains (Caddy/ngrok), don't append port
-// For localhost, append port
-const WS_URL = import.meta.env.VITE_WS_HOST && !import.meta.env.VITE_WS_HOST.includes('localhost')
-  ? `${WS_PROTOCOL}://${WS_HOST}`
-  : `ws://${WS_HOST}:${WS_PORT}`;
+// If VITE_WS_PORT is provided, always append it
+// If no port, assume it's a custom domain (Caddy/ngrok) using standard ports
+const WS_URL = import.meta.env.VITE_WS_PORT
+  ? `${WS_PROTOCOL}://${WS_HOST}:${WS_PORT}`
+  : `${WS_PROTOCOL}://${WS_HOST}`;
 
 console.log('[Client] WebSocket URL:', WS_URL);
 
