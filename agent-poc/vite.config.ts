@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => ({
     }),
     tailwindcss()
   ],
+  publicDir: 'public',  // Copy public folder to dist during build
   server: {
     host: true,  // Expose to LAN (0.0.0.0)
     port: 5174,
