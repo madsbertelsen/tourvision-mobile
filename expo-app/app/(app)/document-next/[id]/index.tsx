@@ -68,7 +68,7 @@ export default function AgentEditorScreen() {
   const [canRedo, setCanRedo] = useState(false);
 
   // Build the editor URL with document ID (stable URL to avoid reload loops)
-  const editorUrl = `http://localhost:5174/editor.html?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
+  const editorUrl = `https://dash.tourvision.com/editor.html?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
 
   // Handle messages from the agent editor
   const handleMessage = useCallback((event: any) => {
