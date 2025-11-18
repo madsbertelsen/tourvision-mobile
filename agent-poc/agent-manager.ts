@@ -42,6 +42,7 @@ class AgentManager {
   private agentIds = new Map<string, string>();      // documentId -> agentId
   private healthCheckTimers = new Map<string, NodeJS.Timeout>();
   private realtimeUnsubscribe: (() => void) | null = null;
+  private punctuationUnsubscribe: (() => void) | null = null;
 
   constructor() {
     this.db = createAgentDatabase(SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY);
@@ -64,8 +65,11 @@ class AgentManager {
     // Subscribe to document activity events
     this.subscribeToActivity();
 
+    // Subscribe to punctuation detection broadcasts
+    this.subscribeToPunctuation();
+
     console.log('[Manager] 🚀 Ready to manage agents');
-    console.log('[Manager] Listening for document activity events...');
+    console.log('[Manager] Listening for document activity events and punctuation broadcasts...');
     console.log('');
   }
 
@@ -100,6 +104,51 @@ class AgentManager {
         pollingUnsubscribe();
       };
     }, 35000); // Wait 35 seconds for Realtime to fail completely
+  }
+
+  private subscribeToPunctuation() {
+    console.log('[Manager] 📡 Subscribing to punctuation broadcasts...');
+
+    this.punctuationUnsubscribe = this.db.subscribeToPunctuationEvents(
+      (event: any) => {
+        this.handlePunctuationEvent(event);
+      }
+    );
+  }
+
+  private async handlePunctuationEvent(event: any) {
+    console.log(`[Manager] 🔴 Punctuation detected: "${event.character}" in document ${event.documentId}`);
+
+    // Check if an agent is already attached to this document
+    const existingAgent = this.agents.get(event.documentId);
+
+    if (existingAgent) {
+      // Agent already attached - send it a message to trigger LLM processing
+      console.log(`[Manager] 📤 Sending punctuation trigger to existing agent for ${event.documentId}`);
+      const triggerMsg = {
+        type: 'punctuation_trigger',
+        character: event.character,
+        timestamp: event.timestamp
+      };
+      existingAgent.send(triggerMsg);
+    } else {
+      // No agent attached - spawn one to handle the punctuation event
+      console.log(`[Manager] 🚀 Spawning agent to process punctuation in ${event.documentId}`);
+      await this.attachAgent(event.documentId);
+
+      // After spawning, send the punctuation trigger
+      setTimeout(() => {
+        const agent = this.agents.get(event.documentId);
+        if (agent) {
+          const triggerMsg = {
+            type: 'punctuation_trigger',
+            character: event.character,
+            timestamp: event.timestamp
+          };
+          agent.send(triggerMsg);
+        }
+      }, 2000); // Give agent 2 seconds to connect
+    }
   }
 
   private async handleActivityEvent(event: DocumentActivity) {
@@ -157,12 +206,14 @@ class AgentManager {
     }
 
     try {
-      // Fork worker process
+      // Fork worker process (pass WS_PORT and AI_GATEWAY_API_KEY for correct WebSocket URL and LLM access)
       const child = fork('./agent-worker.js', [documentId], {
         env: {
           ...process.env,
           DOCUMENT_ID: documentId,
-          AGENT_ID: agentId
+          AGENT_ID: agentId,
+          WS_PORT: process.env.WS_PORT || '8787',  // Ensure WS_PORT is passed
+          AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY  // Pass AI Gateway key explicitly
         },
         stdio: ['ignore', 'inherit', 'inherit', 'ipc']  // Inherit stdout/stderr for logs
       });
@@ -361,6 +412,11 @@ class AgentManager {
     // Unsubscribe from realtime
     if (this.realtimeUnsubscribe) {
       this.realtimeUnsubscribe();
+    }
+
+    // Unsubscribe from punctuation broadcasts
+    if (this.punctuationUnsubscribe) {
+      this.punctuationUnsubscribe();
     }
 
     // Shutdown all agents

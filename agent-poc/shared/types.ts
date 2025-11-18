@@ -118,3 +118,10 @@ export interface CustomMessageData {
   targetClientId?: number;
   [key: string]: unknown;
 }
+
+// Punctuation detection event from Durable Object broadcasts
+export interface PunctuationEvent {
+  documentId: string;
+  timestamp: number;
+  character: '.' | '?';
+}

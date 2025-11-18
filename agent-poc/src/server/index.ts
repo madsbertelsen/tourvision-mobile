@@ -11,6 +11,7 @@ type Env = {
   Document: DurableObjectNamespace<YServer>;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
+  SUPABASE_ANON_KEY: string;
 };
 
 export class Document extends YServer<Env> {
@@ -23,6 +24,7 @@ export class Document extends YServer<Env> {
 
   // Track activity detection
   private supabase: SupabaseClient | null = null;
+  private supabaseRealtime: SupabaseClient | null = null; // Separate client for realtime broadcasts
   private idleTimeoutId: number | null = null;
 
   /**
@@ -45,8 +47,9 @@ export class Document extends YServer<Env> {
       "CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, content BLOB)"
     );
 
-    // Initialize Supabase client
+    // Initialize Supabase clients
     if (this.env.SUPABASE_URL && this.env.SUPABASE_SERVICE_KEY) {
+      // Admin client for database operations
       this.supabase = createClient(
         this.env.SUPABASE_URL,
         this.env.SUPABASE_SERVICE_KEY,
@@ -57,7 +60,28 @@ export class Document extends YServer<Env> {
           }
         }
       );
-      console.log("[DO] Supabase client initialized");
+
+      // Realtime client for broadcasts (requires anon key)
+      if (this.env.SUPABASE_ANON_KEY) {
+        this.supabaseRealtime = createClient(
+          this.env.SUPABASE_URL,
+          this.env.SUPABASE_ANON_KEY,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false
+            },
+            realtime: {
+              params: {
+                eventsPerSecond: 10
+              }
+            }
+          }
+        );
+        console.log("[DO] Supabase clients initialized (admin + realtime)");
+      } else {
+        console.log("[DO] Supabase admin client initialized (no anon key for realtime)");
+      }
     } else {
       console.warn("[DO] Supabase credentials not configured");
     }
@@ -262,6 +286,40 @@ export class Document extends YServer<Env> {
 
         // Broadcast result back to all connections (so agent receives it)
         this.broadcastCustomMessage(message);
+      } else if (data.type === "punctuation_detected") {
+        console.log(`[DO] 🔴 Punctuation detected: "${data.character}" in document ${data.documentId}`);
+
+        // Broadcast via Supabase Realtime (using realtime client with anon key)
+        if (this.supabaseRealtime) {
+          const channel = this.supabaseRealtime.channel('punctuation-broadcasts');
+
+          // Subscribe first (required for broadcasts to work)
+          channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              // Now send the broadcast
+              const result = await channel.send({
+                type: 'broadcast',
+                event: 'punctuation_detected',
+                payload: {
+                  documentId: data.documentId,
+                  timestamp: data.timestamp,
+                  character: data.character
+                }
+              });
+
+              if (result === 'ok') {
+                console.log(`[DO] ✅ Broadcast punctuation event to Supabase realtime`);
+              } else {
+                console.error(`[DO] ❌ Broadcast failed:`, result);
+              }
+
+              // Unsubscribe after sending
+              channel.unsubscribe();
+            }
+          });
+        } else {
+          console.warn(`[DO] ⚠️  Supabase realtime client not initialized, cannot broadcast`);
+        }
       } else {
         // Unknown message type - broadcast to all other clients
         console.log(`[Server] Unknown message type, broadcasting: ${JSON.stringify(data).substring(0, 100)}`);

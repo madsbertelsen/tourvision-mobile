@@ -401,6 +401,39 @@ export class AgentDatabase {
   }
 
   /**
+   * Subscribe to punctuation detection broadcasts from Durable Objects
+   * Uses wildcard subscription to listen to all document channels
+   */
+  subscribeToPunctuationEvents(
+    callback: (event: any) => void
+  ): () => void {
+    console.log('[DB] 📡 Subscribing to punctuation broadcasts...');
+
+    // Subscribe to broadcast events on document: channels
+    const channel = this.supabaseRealtime
+      .channel('punctuation-broadcasts')
+      .on('broadcast', { event: 'punctuation_detected' }, (payload) => {
+        console.log('[DB] 🔴 Received punctuation broadcast:', payload);
+        callback(payload.payload);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[DB] ✅ Subscribed to punctuation broadcasts');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[DB] ❌ Failed to subscribe to punctuation broadcasts');
+        } else if (status === 'TIMED_OUT') {
+          console.error('[DB] ⏱️  Subscription timed out for punctuation broadcasts');
+        }
+      });
+
+    // Return cleanup function
+    return () => {
+      channel.unsubscribe();
+      console.log('[DB] Unsubscribed from punctuation broadcasts');
+    };
+  }
+
+  /**
    * Get Supabase client (for custom queries)
    */
   getClient(): SupabaseClient {
