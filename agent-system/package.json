@@ -1,0 +1,29 @@
+{
+  "name": "tourvision-agent-system",
+  "version": "1.0.0",
+  "description": "AI agent system for Y.js collaborative document editing",
+  "type": "module",
+  "scripts": {
+    "agent-manager": "tsx agent-manager.ts",
+    "agent-worker": "tsx agent-worker.ts",
+    "cleanup": "tsx cleanup-agents.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "ai": "^4.1.10",
+    "dotenv": "^16.4.7",
+    "prosemirror-model": "^1.23.0",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-transform": "^1.10.2",
+    "ws": "^8.18.0",
+    "y-protocols": "^1.0.6",
+    "y-websocket": "^2.0.4",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
