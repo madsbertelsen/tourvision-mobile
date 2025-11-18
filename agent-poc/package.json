@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:client": "vite dev",
-    "dev:server": "wrangler dev",
+    "dev:server": "wrangler dev --port 8787",
     "start": "vite dev",
     "build": "vite build --mode cloudflare",
     "preview": "vite preview",

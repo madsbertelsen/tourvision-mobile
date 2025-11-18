@@ -816,6 +816,36 @@ process.on('message', (msg: any) => {
     if (process.send) {
       process.send({ type: 'pong' });
     }
+  } else if (msg.type === 'punctuation_trigger') {
+    // Handle punctuation detection trigger from manager
+    console.log(`[Agent Worker] 🔴 Received punctuation trigger: "${msg.character}" at ${msg.timestamp}`);
+    console.log('[Agent Worker] 🚀 Running LLM location detection...');
+
+    // Process the document with LLM to detect and create geo-marks
+    processDocumentWithLLM().then(() => {
+      console.log('[Agent Worker] ✅ LLM processing completed');
+
+      // Report back to manager
+      if (process.send) {
+        process.send({
+          type: 'location_marked',
+          documentId: DOCUMENT_ID,
+          agentId: AGENT_ID
+        });
+      }
+    }).catch((error) => {
+      console.error('[Agent Worker] ❌ LLM processing failed:', error);
+
+      // Report error to manager
+      if (process.send) {
+        process.send({
+          type: 'error',
+          documentId: DOCUMENT_ID,
+          agentId: AGENT_ID,
+          error: error.message
+        });
+      }
+    });
   }
 });
 

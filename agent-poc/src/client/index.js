@@ -1268,6 +1268,25 @@ class DocumentEditor {
         this.updateState(newState);
 
         if (tr.docChanged) {
+          // Check for period or question mark insertion
+          tr.steps.forEach((step) => {
+            if (step.slice && step.slice.content) {
+              const text = step.slice.content.textBetween(0, step.slice.content.size, '', '');
+              if (text.includes('.') || text.includes('?')) {
+                console.log('[Client] 🔴 Period/question mark detected, sending custom message to DO');
+                // Send custom message to Durable Object
+                if (prov && prov.sendMessage) {
+                  prov.sendMessage(JSON.stringify({
+                    type: 'punctuation_detected',
+                    documentId: documentId,
+                    timestamp: Date.now(),
+                    character: text.includes('?') ? '?' : '.'
+                  }));
+                }
+              }
+            }
+          });
+
           // Use setTimeout to avoid accessing this during construction
           setTimeout(() => {
             if (window.docEditor) {
