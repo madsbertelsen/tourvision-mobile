@@ -776,22 +776,34 @@ class DocumentEditor {
         const locations = extractLocations();
         console.log('[MapView] Collected locations:', locations);
 
-        // Send message to parent (works for both React Native WebView and iframe)
-        if (window.sendToParent) {
-          window.sendToParent({
-            type: 'openFullscreenMap',
-            locations: locations
-          });
-          console.log('[MapView] Sent openFullscreenMap message to parent');
-        } else if (window.ReactNativeWebView) {
-          // Fallback to direct React Native WebView if sendToParent not available
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'openFullscreenMap',
-            locations: locations
-          }));
-          console.log('[MapView] Sent openFullscreenMap message to React Native');
+        // Check if we're in a WebView/iframe or standalone browser
+        const isInWebView = window.ReactNativeWebView || (window.parent && window.parent !== window);
+
+        if (isInWebView) {
+          // Embedded context (React Native WebView or iframe) - send message to parent
+          if (window.sendToParent) {
+            window.sendToParent({
+              type: 'openFullscreenMap',
+              locations: locations
+            });
+            console.log('[MapView] Sent openFullscreenMap message to parent');
+          } else if (window.ReactNativeWebView) {
+            // Fallback to direct React Native WebView if sendToParent not available
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'openFullscreenMap',
+              locations: locations
+            }));
+            console.log('[MapView] Sent openFullscreenMap message to React Native');
+          }
         } else {
-          console.log('[MapView] No parent communication available');
+          // Standalone browser context - navigate to map page
+          const docId = window.editorDocumentId;
+          if (docId) {
+            console.log('[MapView] Navigating to map page for document:', docId);
+            window.location.href = `/map.html?doc=${docId}`;
+          } else {
+            console.error('[MapView] No document ID available for navigation');
+          }
         }
       };
 

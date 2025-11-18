@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from "path";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -12,6 +13,14 @@ export default defineConfig(({ mode }) => ({
     tailwindcss()
   ],
   publicDir: 'public',  // Copy public folder to dist during build
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        map: resolve(__dirname, 'map.html')
+      }
+    }
+  },
   server: {
     host: true,  // Expose to LAN (0.0.0.0)
     port: 5174,
