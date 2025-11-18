@@ -38,8 +38,15 @@ const closeBtn = document.getElementById('close-btn');
 // Handle close button
 if (closeBtn) {
   closeBtn.addEventListener('click', () => {
-    // Navigate back to editor
-    window.location.href = `/?doc=${docId}`;
+    // Check if we're in an iframe (preloaded fullscreen map)
+    if (window.parent && window.parent !== window) {
+      // Send message to parent to hide the fullscreen map
+      console.log('[Map] Sending close message to parent');
+      window.parent.postMessage({ type: 'closeFullscreenMap' }, '*');
+    } else {
+      // Standalone page - navigate back to editor
+      window.location.href = `/?doc=${docId}`;
+    }
   });
 }
 

@@ -796,13 +796,12 @@ class DocumentEditor {
             console.log('[MapView] Sent openFullscreenMap message to React Native');
           }
         } else {
-          // Standalone browser context - navigate to map page
-          const docId = window.editorDocumentId;
-          if (docId) {
-            console.log('[MapView] Navigating to map page for document:', docId);
-            window.location.href = `/map.html?doc=${docId}`;
+          // Standalone browser context - show preloaded fullscreen map
+          console.log('[MapView] Showing preloaded fullscreen map');
+          if (window.showFullscreenMap) {
+            window.showFullscreenMap();
           } else {
-            console.error('[MapView] No document ID available for navigation');
+            console.error('[MapView] showFullscreenMap function not available');
           }
         }
       };
@@ -1693,3 +1692,63 @@ window.addEventListener('parentMessage', (event) => {
       console.log('[Editor] Unknown message type:', message.type);
   }
 });
+
+// ==============================================================================
+// FULLSCREEN MAP IFRAME PRELOADING (BROWSER ONLY)
+// ==============================================================================
+// Check if we're in standalone browser (not WebView/iframe)
+const isStandaloneBrowser = !window.ReactNativeWebView && (!window.parent || window.parent === window);
+
+if (isStandaloneBrowser) {
+  console.log('[Preload] Setting up fullscreen map iframe preloading');
+
+  // Create iframe for fullscreen map
+  const fullscreenMapIframe = document.createElement('iframe');
+  const docId = window.editorDocumentId;
+  fullscreenMapIframe.id = 'fullscreen-map-iframe';
+  fullscreenMapIframe.src = `/map.html?doc=${docId}`;
+
+  // Style the iframe to be fullscreen and hidden initially
+  fullscreenMapIframe.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    z-index: 10000;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  `;
+
+  document.body.appendChild(fullscreenMapIframe);
+  console.log('[Preload] Fullscreen map iframe created and loading');
+
+  // Function to show fullscreen map
+  window.showFullscreenMap = () => {
+    console.log('[Preload] Showing fullscreen map');
+    fullscreenMapIframe.style.visibility = 'visible';
+    fullscreenMapIframe.style.opacity = '1';
+    fullscreenMapIframe.style.pointerEvents = 'auto';
+  };
+
+  // Function to hide fullscreen map
+  window.hideFullscreenMap = () => {
+    console.log('[Preload] Hiding fullscreen map');
+    fullscreenMapIframe.style.opacity = '0';
+    setTimeout(() => {
+      fullscreenMapIframe.style.visibility = 'hidden';
+      fullscreenMapIframe.style.pointerEvents = 'none';
+    }, 300); // Wait for fade-out transition
+  };
+
+  // Listen for close messages from the iframe
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'closeFullscreenMap') {
+      console.log('[Preload] Received close message from fullscreen map');
+      window.hideFullscreenMap();
+    }
+  });
+}
