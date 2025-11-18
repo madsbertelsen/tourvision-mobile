@@ -228,6 +228,28 @@ services:
       -c max_wal_senders=10
       -c max_replication_slots=10
 
+  # Agent Manager - Multi-document agent orchestration
+  agent-manager:
+    container_name: tourvision-agent-manager
+    build:
+      context: .
+      dockerfile: agent-manager/Dockerfile
+    restart: unless-stopped
+    environment:
+      MANAGER_ID: manager-docker-01
+      MAX_CONCURRENT_AGENTS: ${MAX_CONCURRENT_AGENTS:-10}
+      IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-30000}
+      WS_PORT: ${WS_PORT:-8787}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - db
+      - realtime
+    ports:
+      - "3001:3001"
+
 volumes:
   db-data:
   storage-data:
