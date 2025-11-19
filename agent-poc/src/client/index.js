@@ -1171,6 +1171,9 @@ class DocumentEditor {
             renderWorldCopies: false
           });
 
+          // Store map instance on DOM element for fullscreen access
+          dom._mapInstance = currentMap;
+
           // Track user interaction
           currentMap.on('movestart', (e) => {
             if (e.originalEvent) { // Only user-initiated movements
@@ -2001,7 +2004,7 @@ if (isStandaloneBrowser) {
   function extractLocationsForFullscreen() {
     const locations = [];
     // Find all geo-marks in the document
-    window.documentEditorInstance.editorView.state.doc.descendants((node) => {
+    window.docEditor.editorView.state.doc.descendants((node) => {
       if (node.isText && node.marks.length > 0) {
         for (const mark of node.marks) {
           if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
@@ -2033,7 +2036,7 @@ if (isStandaloneBrowser) {
     }
 
     // Find the first map container in the document to get its position
-    const mapContainers = document.querySelectorAll('[data-node-type="map"]');
+    const mapContainers = document.querySelectorAll('.prosemirror-map');
     if (mapContainers.length === 0) {
       console.warn('[Fullscreen] No map container found');
       return;
@@ -2053,13 +2056,15 @@ if (isStandaloneBrowser) {
     console.log('[Fullscreen] Container rect:', rect);
     console.log('[Fullscreen] Alignment padding:', padding);
 
-    // Calculate bounds from locations
-    const lngs = currentLocations.map(l => l.lng);
-    const lats = currentLocations.map(l => l.lat);
-    const boundsObj = new mapboxgl.LngLatBounds(
-      [Math.min(...lngs), Math.min(...lats)],
-      [Math.max(...lngs), Math.max(...lats)]
-    );
+    // Get bounds from the block map instead of recalculating from locations
+    // This ensures the fullscreen map shows the same geographic area
+    const blockMap = blockMapElement._mapInstance;
+    if (!blockMap) {
+      console.error('[Fullscreen] Block map instance not found');
+      return;
+    }
+
+    const boundsObj = blockMap.getBounds();
 
     // Show overlay
     const overlay = document.getElementById('fullscreen-overlay');
