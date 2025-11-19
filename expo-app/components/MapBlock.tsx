@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 // @ts-ignore
 import Map from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -19,6 +19,7 @@ interface GeoMarkLocation {
 interface MapBlockProps {
   locations: GeoMarkLocation[];
   height?: number;
+  onExpandToFullscreen?: (boundsData: { ne: [number, number]; sw: [number, number] }) => void;
 }
 
 // Color array - Blue first to match location marker colors (same as DocumentSplitMap)
@@ -30,6 +31,7 @@ const COLORS = [
 const MapBlock = memo(function MapBlock({
   locations,
   height = 400,
+  onExpandToFullscreen,
 }: MapBlockProps) {
   const mapRef = useRef<any>(null);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -153,13 +155,39 @@ const MapBlock = memo(function MapBlock({
     fetchRoutes();
   }, [locations]);
 
+  // Handle map click to expand to fullscreen
+  const handleMapClick = () => {
+    if (!onExpandToFullscreen || !mapRef.current) return;
+
+    try {
+      const mapInstance = mapRef.current.getMap();
+      const bounds = mapInstance.getBounds();
+
+      const boundsData = {
+        ne: [bounds.getNorthEast().lng, bounds.getNorthEast().lat] as [number, number],
+        sw: [bounds.getSouthWest().lng, bounds.getSouthWest().lat] as [number, number],
+      };
+
+      console.log('[MapBlock] Expanding to fullscreen with bounds:', boundsData);
+      onExpandToFullscreen(boundsData);
+    } catch (error) {
+      console.error('[MapBlock] Error getting bounds:', error);
+      // Fallback: call without bounds data
+      onExpandToFullscreen({ ne: [0, 0], sw: [0, 0] });
+    }
+  };
+
   return (
-    <View style={[styles.container, { height }]}>
+    <TouchableOpacity
+      style={[styles.container, { height }]}
+      onPress={handleMapClick}
+      activeOpacity={0.95}
+    >
       <Map
         ref={mapRef}
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/light-v11"
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
       >
@@ -218,7 +246,7 @@ const MapBlock = memo(function MapBlock({
             );
           })}
       </Map>
-    </View>
+    </TouchableOpacity>
   );
 });
 

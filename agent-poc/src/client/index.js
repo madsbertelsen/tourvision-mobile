@@ -376,10 +376,11 @@ class DocumentEditor {
         return;
       }
 
-      container.innerHTML = '<div id="map" style="height: 400px; margin: 16px 0; border-radius: 8px; overflow: hidden;"></div>';
+      container.innerHTML = '<div id="map" style="height: 400px; margin: 16px 0; border-radius: 8px; overflow: hidden; cursor: pointer;"></div>';
 
       setTimeout(() => {
         this.initializeMap(mapboxToken);
+        this.attachMapClickHandler();
       }, 100);
     } else if (this.showMap && this.locations.length === 0) {
       container.innerHTML = `
@@ -1618,6 +1619,269 @@ class DocumentEditor {
       type: 'selectionUpdate',
       selectionEmpty,
       activeMarks
+    });
+  }
+
+  attachMapClickHandler() {
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) return;
+
+    mapContainer.addEventListener('click', (e) => {
+      // Prevent click if it's on a marker or popup
+      if (e.target.closest('.mapboxgl-marker') || e.target.closest('.mapboxgl-popup')) {
+        return;
+      }
+
+      this.openFullscreenMap();
+    });
+  }
+
+  openFullscreenMap() {
+    if (!this.map || !this.locations.length) return;
+
+    // Get current map bounds
+    const bounds = this.map.getBounds();
+    const initialBounds = {
+      ne: [bounds.getNorthEast().lng, bounds.getNorthEast().lat],
+      sw: [bounds.getSouthWest().lng, bounds.getSouthWest().lat]
+    };
+
+    console.log('[MapView] Opening fullscreen map with bounds:', initialBounds);
+
+    // Create fullscreen overlay
+    this.createFullscreenOverlay(initialBounds);
+  }
+
+  createFullscreenOverlay(initialBounds) {
+    // Create overlay container
+    const overlay = document.createElement('div');
+    overlay.id = 'fullscreen-map-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10000;
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    `;
+
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.55);
+      z-index: 10001;
+    `;
+
+    // Create map container
+    const mapContainer = document.createElement('div');
+    mapContainer.id = 'fullscreen-map';
+    mapContainer.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10002;
+    `;
+
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '✕';
+    closeButton.style.cssText = `
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      background-color: rgba(255, 255, 255, 0.95);
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10003;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+    `;
+
+    closeButton.addEventListener('click', () => {
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        overlay.remove();
+        if (this.fullscreenMap) {
+          this.fullscreenMap.remove();
+          this.fullscreenMap = null;
+        }
+      }, 300);
+    });
+
+    // Assemble overlay
+    overlay.appendChild(backdrop);
+    overlay.appendChild(mapContainer);
+    overlay.appendChild(closeButton);
+    document.body.appendChild(overlay);
+
+    // Trigger fade-in
+    setTimeout(() => {
+      overlay.style.opacity = '1';
+    }, 10);
+
+    // Initialize fullscreen map
+    setTimeout(() => {
+      this.initializeFullscreenMap(mapContainer.id, initialBounds);
+    }, 100);
+  }
+
+  initializeFullscreenMap(containerId, initialBounds) {
+    const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!mapboxToken) return;
+
+    mapboxgl.accessToken = mapboxToken;
+
+    // Calculate center from initial bounds
+    const centerLat = (initialBounds.ne[1] + initialBounds.sw[1]) / 2;
+    const centerLng = (initialBounds.ne[0] + initialBounds.sw[0]) / 2;
+
+    // Create fullscreen map - start at a default view, we'll fit bounds immediately
+    this.fullscreenMap = new mapboxgl.Map({
+      container: containerId,
+      style: 'mapbox://styles/mapbox/light-v11',
+      center: [centerLng, centerLat],
+      zoom: 1
+    });
+
+    // Add markers
+    this.locations.forEach((location) => {
+      const bgColor = COLORS[location.colorIndex % COLORS.length];
+
+      const el = document.createElement('div');
+      el.style.width = '32px';
+      el.style.height = '32px';
+      el.style.borderRadius = '50%';
+      el.style.backgroundColor = bgColor;
+      el.style.border = '3px solid white';
+      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+
+      const inner = document.createElement('div');
+      inner.style.width = '12px';
+      inner.style.height = '12px';
+      inner.style.borderRadius = '50%';
+      inner.style.backgroundColor = 'white';
+
+      el.appendChild(inner);
+
+      new mapboxgl.Marker(el)
+        .setLngLat([location.lng, location.lat])
+        .setPopup(new mapboxgl.Popup().setText(location.placeName))
+        .addTo(this.fullscreenMap);
+    });
+
+    // On map load: first fit to initial bounds (instant), then expand
+    this.fullscreenMap.on('load', async () => {
+      // Step 1: Immediately fit to initial bounds (no animation) - this makes markers align
+      const initialBoundsObj = new mapboxgl.LngLatBounds(
+        initialBounds.sw,  // [lng, lat]
+        initialBounds.ne   // [lng, lat]
+      );
+
+      this.fullscreenMap.fitBounds(initialBoundsObj, {
+        padding: 0,
+        duration: 0  // Instant, no animation
+      });
+
+      // Step 2: Wait 300ms, then expand to show all locations
+      setTimeout(() => {
+        if (this.locations.length === 1) {
+          this.fullscreenMap.flyTo({
+            center: [this.locations[0].lng, this.locations[0].lat],
+            zoom: 12,
+            duration: 800
+          });
+        } else if (this.locations.length > 1) {
+          const lngs = this.locations.map(l => l.lng);
+          const lats = this.locations.map(l => l.lat);
+
+          const expandedBounds = new mapboxgl.LngLatBounds(
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)]
+          );
+
+          this.fullscreenMap.fitBounds(expandedBounds, {
+            padding: 80,
+            maxZoom: 15,
+            duration: 800
+          });
+        }
+      }, 300);
+
+      // Draw routes
+      for (let i = 0; i < this.locations.length; i++) {
+        const to = this.locations[i];
+
+        if (!to.transportProfile || !to.transportFrom) continue;
+
+        const from = this.locations.find(loc => loc.geoId === to.transportFrom);
+        if (!from) continue;
+
+        let coordinates;
+        if (to.waypoints && to.waypoints.length > 0) {
+          const waypointCoords = to.waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+          coordinates = `${from.lng},${from.lat};${waypointCoords};${to.lng},${to.lat}`;
+        } else {
+          coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+        }
+
+        const profile = to.transportProfile || 'walking';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&access_token=${mapboxToken}`;
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            const routeColor = COLORS[to.colorIndex % COLORS.length];
+
+            this.fullscreenMap.addSource(`route-${from.geoId}-${to.geoId}`, {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: route.geometry
+              }
+            });
+
+            this.fullscreenMap.addLayer({
+              id: `route-${from.geoId}-${to.geoId}`,
+              type: 'line',
+              source: `route-${from.geoId}-${to.geoId}`,
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': routeColor,
+                'line-width': 3,
+                'line-opacity': 0.75
+              }
+            });
+          }
+        } catch (error) {
+          console.error('[FullscreenMap] Error fetching route:', error);
+        }
+      }
     });
   }
 }
