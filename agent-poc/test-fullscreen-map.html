@@ -89,7 +89,10 @@
 
     #fullscreen-map-container {
       position: absolute;
-      overflow: hidden;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 10002;
     }
 
@@ -315,38 +318,29 @@
         [actualBounds.getNorthEast().lng, actualBounds.getNorthEast().lat]
       );
 
-      // Get block map element dimensions in viewport
+      // Get block map rect to calculate alignment padding
       const blockMapElement = document.getElementById('block-map');
       const rect = blockMapElement.getBoundingClientRect();
 
-      // Position container to match block map rect
-      const container = document.getElementById('fullscreen-map-container');
-      container.style.top = `${rect.top}px`;
-      container.style.left = `${rect.left}px`;
-      container.style.width = `${rect.width}px`;
-      container.style.height = `${rect.height}px`;
+      // Calculate padding to position map content at same screen location
+      const padding = {
+        top: rect.top,
+        left: rect.left,
+        right: window.innerWidth - rect.right,
+        bottom: window.innerHeight - rect.bottom
+      };
 
-      // Calculate negative margins to extend map canvas to viewport edges
-      const mapElement = document.getElementById('fullscreen-map');
-      mapElement.style.marginTop = `${-rect.top}px`;
-      mapElement.style.marginLeft = `${-rect.left}px`;
-      mapElement.style.marginRight = `${-(window.innerWidth - rect.right)}px`;
-      mapElement.style.marginBottom = `${-(window.innerHeight - rect.bottom)}px`;
+      console.log('[Test] Alignment padding:', padding);
 
-      console.log('[Test] Container positioning:');
-      console.log('  - Container:', { top: rect.top, left: rect.left, width: rect.width, height: rect.height });
-      console.log('  - Map margins:', {
-        top: -rect.top,
-        left: -rect.left,
-        right: -(window.innerWidth - rect.right),
-        bottom: -(window.innerHeight - rect.bottom)
-      });
-
-      // Create fullscreen map with same bounds (no padding needed)
+      // Create fullscreen map with padding for marker alignment
       fullscreenMap = new mapboxgl.Map({
         container: 'fullscreen-map',
         style: 'mapbox://styles/mapbox/light-v11',
         bounds: boundsObj,
+        fitBoundsOptions: {
+          padding: padding,
+          duration: 0
+        },
         interactive: true,
         trackResize: true,
         fadeDuration: 0
