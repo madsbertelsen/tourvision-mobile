@@ -1,1906 +1,305 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## CRITICAL: Debugging Mindset
-
-**DO NOT claim something works until the user confirms it.** You are often overconfident about fixes.
-
-- When you make a fix, say "This should fix..." or "Let me know if this resolves..."
-- **NEVER** say "This is now working!" or "The feature is fixed!" without user confirmation
-- If something fails 9 out of 10 times, investigate the root cause - don't just claim the 1 success means it's fixed
-- Logs showing a message was sent/received does NOT mean the feature works end-to-end
-- Always consider race conditions, timing issues, and persistence problems
-- Test thoroughly and wait for user feedback before declaring success
+# CLAUDE_NEXT.md - Essential Project Guide
 
 ## Project Structure
 
-This is a monorepo with the following structure:
-- **`/expo-app`** - Expo React Native frontend (iOS, Android, Web)
-- **`/supabase`** - Database migrations and seed data
-- **`/scripts`** - Node.js scripts for AI chat listener and local agent
-- **`/agent-poc`** - Multi-document agent management system
-- **`/workers`** - Cloudflare Workers (chat system with Workers AI)
+```
+tourvision-mobile/
+├── agent-poc/          # Y.js collaborative document editor (main development)
+│   ├── src/
+│   │   ├── client/     # ProseMirror editor with Y.js sync
+│   │   └── server/     # Cloudflare Durable Objects (WebSocket/Y.js)
+│   ├── index.html      # Main entry point
+│   ├── wrangler.toml   # Cloudflare Workers config
+│   └── package.json
+│
+├── agent-system/       # AI agent orchestration
+│   ├── agent-manager.ts   # Spawns/kills agent workers
+│   ├── agent-worker.ts    # Period-triggered location detection
+│   ├── Dockerfile         # For Docker deployment
+│   └── start-agent-manager.sh
+│
+├── scripts/            # Standalone Node.js scripts
+│   └── local-agent-yjs.js  # Single-document agent (for testing)
+│
+├── expo-app/           # Expo React Native app (separate system)
+├── supabase/           # Database migrations and schema
+├── docker-compose.yml  # Full stack deployment
+└── CLAUDE_NEXT.md      # This file
+```
 
-### Important: Document Editor Structure
+## Core Architecture
 
-**CRITICAL:** There are TWO document editor implementations in `/expo-app/app/(app)/`:
+### agent-poc (Primary Development Focus)
 
-1. **`document-next/[id]/`** - **NEW IMPLEMENTATION** (Active Development)
-   - Uses Y.js collaboration with Cloudflare Durable Objects
-   - AI agent system with period-triggered location detection
-   - Modern map system with flexible transport configuration
-   - **THIS IS THE CURRENT WORKING DIRECTORY**
-   - Loads editor from URL (not bundled assets)
+**Tech Stack:**
+- **ProseMirror** - Rich text editor (HTML in WebView)
+- **Y.js** - CRDT for real-time collaboration
+- **Cloudflare Durable Objects** - Stateful WebSocket server (one per document)
+- **Mapbox GL JS** - Map rendering with location markers
 
-2. **`document/[id]/`** - **LEGACY IMPLEMENTATION** (Deprecated)
-   - Old Tiptap Cloud-based collaboration
-   - Uses bundled HTML from `/assets/prosemirror-editor-bundled.html`
-   - **DO NOT MODIFY - Will be removed**
+**Document Structure:**
+- Geo-marks are **text marks** (not nodes) with attributes: `geoId`, `placeName`, `lat`, `lng`, `colorIndex`, etc.
+- Maps are custom ProseMirror node types rendered with Mapbox
+- Fullscreen map uses bounds from block map for proper alignment
 
-**When working on document editor features, ALWAYS work in `document-next/[id]/` folder.**
+**Key Files:**
+- `index.html` - Entry point (loads client/index.js)
+- `src/client/index.js` - Editor, Y.js provider, map rendering (large file ~2000+ lines)
+- `src/server/index.ts` - Durable Object for WebSocket/Y.js sync
 
-## Current Status
+### agent-system (AI Agent Orchestration)
 
-### ✅ Working Features
-- Authentication (login, register, logout, password reset)
-- Protected routes with automatic redirect
-- Dashboard with user profile display
-- Database seeding with test data
-- Web platform support
-- **Document Chat System** - Real-time WebSocket chat with Cloudflare Workers AI
-- **ProseMirror Editor** - Rich text editing with geo-marks for locations
-- **Real-time Collaboration** - Y.js CRDT with Cloudflare Durable Objects
-- **AI Agent System** - Period-triggered location detection with Y.js integration
-- **Multi-Document Agent Manager** - Dynamic agent orchestration with LRU eviction
+**Purpose:** Multi-document agent management with period-triggered location detection
 
-### 📝 Known Limitations
-- Web platform primary focus (native iOS/Android support limited)
-- Limited mobile responsiveness
-- Test coverage needed
+**Components:**
+1. **Agent Manager** (`agent-manager.ts`)
+   - Subscribes to Supabase Realtime for document activity events
+   - Spawns agent workers dynamically (child processes)
+   - Enforces max concurrent limit (default: 10) with LRU eviction
+
+2. **Agent Worker** (`agent-worker.ts`)
+   - Connects to Y.js document via WebSocket
+   - Detects period (`.`) character insertion
+   - Runs LLM location extraction after 1-second debounce
+   - Creates geo-marks in ProseMirror
+
+**Database Tables:**
+- `agent_connections` - Tracks active agents per document
+- `document_activity` - Activity events from Durable Objects (active/idle)
+- `agent_metrics` - Performance monitoring data
 
 ## Quick Start
 
-```bash
-# 1. Start Supabase locally (requires Docker)
-npx supabase start
-
-# 2. Reset database with seed data (optional, for fresh start)
-npx supabase db reset --local
-
-# 3. Navigate to frontend
-cd expo-app
-
-# 4. Install dependencies
-npm install
-
-# 5. Start the web app
-npx expo start --web --port 8082
-# Note: Use a specific port to avoid conflicts
-
-# 6. Open browser to http://localhost:8082
-# Login with test@example.com / TestPassword123!
-```
-
-## Test Credentials
-
-After running `npx supabase db reset`, you can login with:
-- **Email:** test@example.com
-- **Password:** TestPassword123!
-
-The seed data includes:
-- 5 sample trips (Barcelona, Tokyo, Paris, NYC, Bali)
-- Mix of public and private trips
-- Various planning stages
-
-## Commands
-
 ### Development
+
 ```bash
-# IMPORTANT: Always run from expo-app directory
-cd expo-app
+# 1. Start Cloudflare Durable Object server (agent-poc)
+cd agent-poc
+npx wrangler dev --local --port 8787
 
-# Start development server (web) - RECOMMENDED
-npx expo start --web --port 8082
+# 2. Start Vite client (separate terminal)
+npm run dev:client  # Port 5174
 
-# Start for iOS
-npx expo start --ios
+# 3. Start Agent Manager (separate terminal)
+cd ../agent-system
+bash start-agent-manager.sh
 
-# Start for Android  
-npx expo start --android
-
-# Start Expo with all platforms available
-npx expo start
+# 4. Open browser
+open http://localhost:5174/?doc=test-doc
 ```
 
-### Local Supabase Development
-```bash
-# Run from project root (not expo-app)
+### Docker (Full Stack)
 
-# Start local Supabase (requires Docker)
+```bash
+# Start Supabase + Agent System
+docker compose up -d
+
+# Or use Supabase CLI (lighter)
 npx supabase start
-
-# Check Supabase status and get credentials
-npx supabase status
-
-# Apply database migrations
-npx supabase db push --local
-
-# Stop local Supabase
-npx supabase stop
-
-# Reset database (applies migrations and seed.sql)
-npx supabase db reset --local
-
-# Create new migration
-npx supabase migration new <name>
-
-# Test authentication directly
-curl -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
-  -H "apikey: <anon_key_from_status>" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@example.com", "password": "TestPassword123!"}'
-```
-
-## Architecture Overview
-
-### Tech Stack
-- **Expo SDK 54** - React Native framework with web support
-- **Expo Router** - File-based routing in `/app` directory
-- **NativeWind v4** - Tailwind CSS for React Native styling
-- **ProseMirror** - Rich text editor (HTML-based via WebView)
-- **Y.js (Yjs)** - CRDT library for real-time collaborative editing
-- **Supabase** - Backend, auth, and real-time database
-- **Mistral AI** - Chat responses via document-chat-listener.js
-- **Cloudflare Workers AI** - LLM inference for chat (Llama-3.1-8b-instruct)
-- **Cloudflare Durable Objects** - Stateful WebSocket management and Y.js document sync
-
-### Key Architectural Patterns
-
-#### Routing Structure
-- `/expo-app/app/(app)/index.tsx` - Main app screen
-- `/expo-app/app/(auth)/` - Authentication screens
-- `/expo-app/app/(app)/document/[id]/` - Document editor with chat
-- `/expo-app/app/_layout.tsx` - Root layout with auth protection
-
-#### Document Chat System
-- **Node.js Listener** (`/scripts/document-chat-listener.js`) - Listens to `document_chats` table
-- **Mistral AI** - Generates responses to user messages
-- **Realtime Subscriptions** - Uses anon key for subscriptions, service key for operations
-- **See**: DOCUMENT_CHAT_AI_SETUP.md for detailed setup instructions
-
-#### AI Agent System
-- **Local Agent** (`/scripts/local-agent-yjs.js`) - Period-triggered location detection for production
-- **Agent Manager** (`/agent-poc/agent-manager.ts`) - Orchestrates multiple agent workers
-- **Agent Worker** (`/agent-poc/agent-worker.ts`) - Isolated process for document-specific LLM processing
-- **Event-Driven Detection** - Agents trigger on "." character insertion with 1-second debounce
-- **Y.js Integration** - Direct observation of document changes via `observeDeep()`
-- **Supabase Realtime** - Coordinates agent attachment/detachment across documents
-- **See**: `/agent-poc/AGENT_MANAGER_README.md` for architecture details
-
-### Database Schema
-
-Key tables in Supabase:
-- `profiles` - User profiles extending auth.users
-- `documents` - Document records with ProseMirror JSON content
-- `document_chats` - Chat messages for AI-powered document generation
-- `agent_connections` - Tracks active agent processes per document
-- `document_activity` - Activity event log from Durable Objects (active/idle events)
-- `agent_metrics` - Time-series performance data (memory, CPU, latency)
-- Row Level Security (RLS) is enabled on all tables
-
-### Environment Configuration
-
-Required environment variables in `expo-app/.env.local`:
-```
-EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon_key_from_supabase_status>
-EXPO_PUBLIC_MAPBOX_TOKEN=<optional_mapbox_token>
-```
-
-For local development:
-1. Run `npx supabase status` to get credentials
-2. Copy the `anon key` to your `.env.local`
-3. Use `http://127.0.0.1:54321` as the Supabase URL
-
-## Development Notes
-
-### TypeScript Configuration
-- Strict mode enabled
-- Path alias `@/` maps to expo-app root directory
-- Extends Expo's base tsconfig
-
-### Platform-Specific Code
-- Use `Platform.OS` to check platform ('web', 'ios', 'android')
-- SecureStore for auth tokens on native, localStorage on web
-- DOM components only work on platforms with WebView support
-- Logout uses `window.confirm()` on web, `Alert.alert()` on native
-
-### Authentication Flow
-1. Auth context (`/expo-app/lib/supabase/auth-context.tsx`) manages session
-2. Protected routes in `_layout.tsx` redirect to login when not authenticated
-3. Auth screens in `(auth)` folder handle login/register/password reset
-4. Session persists using platform-specific storage adapters
-
-### Common Issues & Solutions
-
-#### "Database error querying schema" on login
-- **Cause:** auth.flow_state table has RLS enabled in Postgres 17
-- **Solution:** Fixed in seed.sql with proper user insertion format
-
-#### Port conflicts when starting Expo
-- **Solution:** Use specific port: `npx expo start --web --port 8082`
-
-#### Logout button not responding on web
-- **Solution:** Platform-specific handling implemented in index.tsx
-
-#### Test users don't persist after DB reset
-- **Solution:** Use the seed.sql format from working project (full column specification)
-
-#### Diff Preview Not Showing
-- **Cause:** Content already exists in document (duplicate proposal) or positions out of bounds
-- **Solution:** System now dynamically recalculates positions and handles empty documents
-
-#### Document Chat Listener Not Running
-- **Symptom:** AI responses not appearing in chat
-- **Solution:** Run `node scripts/document-chat-listener.js` - see DOCUMENT_CHAT_AI_SETUP.md
-
-### Database Management
-
-#### IMPORTANT: Never Directly Mutate Database
-- **NEVER use INSERT, UPDATE, or DELETE statements directly** on the database
-- The database should only be modified through:
-  1. **Application code** (via Supabase client)
-  2. **Edge Functions** (for AI processing)
-  3. **Migrations** (for schema changes)
-  4. **Seed data** (only for initial setup)
-
-#### Querying Database (READ-ONLY)
-For debugging and inspection only:
-```bash
-# SELECT queries only - never INSERT/UPDATE/DELETE
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT * FROM table_name;"
-```
-
-#### Structural Changes
-For schema or structural changes:
-- **Create migrations** in `/supabase/migrations/` directory
-- Use naming convention: `YYYYMMDD_description.sql`
-- Example: `20250120_add_location_data.sql`
-- Run migrations: `npx supabase db push --local`
-
-#### Testing Features
-To test features that require data:
-1. Use the application UI to create data naturally
-2. Trigger Edge Functions via the app's chat/AI features
-3. Use the Supabase client in test scripts
-4. NEVER directly INSERT/UPDATE test data into the database
-
-#### Database Seeding
-
-The `supabase/seed.sql` file creates:
-- Test users with bcrypt-hashed passwords
-- 5 sample trips with various statuses
-- Sample places linked to trips
-- Proper auth.users and auth.identities entries
-
-**Important:** The seed uses a hardcoded bcrypt hash for "TestPassword123!" that works reliably.
-
-### Querying Local Database
-
-When Supabase is running locally via Docker, you can query the PostgreSQL database directly:
-
-```bash
-# Basic query syntax
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "YOUR_SQL_QUERY"
-
-# Examples:
-
-# List all trips
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT id, title FROM trips;"
-
-# Check a specific trip's document
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT itinerary_document FROM trips WHERE id = '28d7e539-4ed0-4f0f-9818-852b3474cfbc';"
-
-# Pretty print JSON columns
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT jsonb_pretty(itinerary_document) FROM trips WHERE title = 'sg';"
-
-# Check proposals with diff decorations
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT id, title, status, jsonb_array_length(diff_decorations) as num_decorations FROM proposals WHERE trip_id = '28d7e539-4ed0-4f0f-9818-852b3474cfbc';"
-
-# Check AI suggestions
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "SELECT * FROM ai_suggestions ORDER BY created_at DESC LIMIT 5;"
-
-# List all tables
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "\dt"
-
-# Describe a table structure
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "\d proposals"
-
-# Update data (be careful!)
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c "UPDATE proposals SET diff_decorations = '[{\"from\": 1, \"to\": 1, \"type\": \"addition\", \"content\": \"Your content\"}]' WHERE id = 'some-uuid';"
-```
-
-**Note:** The container name `supabase_db_tourvision-mobile` is based on your project folder name. The database is always `postgres` and the user is `postgres` with no password needed when accessing via Docker exec.
-
-### Starting Document Chat Listener
-
-To enable AI responses in document chat, run the listener:
-
-```bash
-# From project root
-node scripts/document-chat-listener.js
-```
-
-See DOCUMENT_CHAT_AI_SETUP.md for detailed setup instructions including:
-- Configuring MISTRAL_API_KEY in .env.local
-- How the listener works
-- Troubleshooting realtime subscriptions
-
-### Querying Remote Database
-
-The document-chat-listener and production systems connect to the remote Supabase database at `https://unocjfiipormnaujsuhk.supabase.co`. Use curl to query the database via Supabase's REST API:
-
-```bash
-# Basic query format
-curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/TABLE_NAME?select=COLUMNS&limit=5" \
-  -H "apikey: SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer SERVICE_ROLE_KEY" \
-  2>/dev/null | jq
-
-# Examples:
-# List all documents
-curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/documents?select=id,title,created_by&limit=5" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  2>/dev/null | jq
-
-# Check recent chat messages with ordering
-curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?select=id,role,content,created_at&order=created_at.desc&limit=5" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  2>/dev/null | jq
-
-# Filter by condition
-curl -X GET "https://unocjfiipormnaujsuhk.supabase.co/rest/v1/document_chats?role=eq.assistant&select=*" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVub2NqZmlpcG9ybW5hdWpzdWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIxNTY5MCwiZXhwIjoyMDc2NzkxNjkwfQ.Nwx4TbcvbfwfinAMAmHV2PomT0fqtV_oylOUEREOCL0" \
-  2>/dev/null | jq
-```
-
-**PostgREST Query Operators:**
-- `select=col1,col2` - Select specific columns
-- `order=col.desc` - Order by column descending
-- `limit=N` - Limit results
-- `col=eq.value` - Filter where col equals value
-- `col=gt.value` - Greater than
-- `col=lt.value` - Less than
-- See [PostgREST docs](https://postgrest.org/en/stable/references/api/tables_views.html) for more
-
-**Important Notes:**
-- Use service_role key to bypass RLS policies
-- `docker exec` is for LOCAL database only (supabase_db_tourvision-mobile container)
-- Password and credentials should not be committed to git
-
-### Testing Approach
-Currently no test framework is configured. When adding tests:
-1. Check README for any testing documentation
-2. Consider Jest with React Native Testing Library
-3. Test both native and DOM components separately
-4. Test auth flow with the seeded test users
-
-## Testing with Playwright MCP
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation tools for testing web features. It's particularly useful for testing complex UI interactions that involve iframes, text selection, and multi-step workflows.
-
-### Prerequisites
-
-1. **Playwright MCP server must be connected**:
-   - Check connection status with `/mcp` command
-   - If disconnected, reconnect using `/mcp` command
-   - Verify "Reconnected to playwright" message appears
-
-2. **App must be running**:
-   ```bash
-   cd expo-app
-   npx expo start --web --port 8082
-   ```
-
-3. **Test data should be available**:
-   - Document at `http://localhost:8082/document/test-id` should exist
-   - Or create test data through the app UI first
-
-### Available MCP Tools
-
-#### Navigation and Page Management
-- `browser_navigate` - Navigate to a URL
-- `browser_navigate_back` - Go back to previous page
-- `browser_tabs` - List, create, close, or select browser tabs
-- `browser_close` - Close the browser
-
-#### Content Inspection
-- `browser_snapshot` - Capture accessibility snapshot of current page (better than screenshot)
-- `browser_take_screenshot` - Take a PNG/JPEG screenshot
-- `browser_console_messages` - Returns all console messages
-
-#### User Interactions
-- `browser_click` - Click on elements
-- `browser_type` - Type text into editable elements
-- `browser_press_key` - Press keyboard keys (ArrowLeft, Enter, etc.)
-- `browser_fill_form` - Fill multiple form fields at once
-- `browser_select_option` - Select dropdown options
-- `browser_hover` - Hover over elements
-- `browser_drag` - Drag and drop between elements
-
-#### Advanced Operations
-- `browser_evaluate` - Execute JavaScript in page context
-- `browser_wait_for` - Wait for text to appear/disappear or time to pass
-- `browser_network_requests` - View all network requests
-
-### Common Testing Patterns
-
-#### Pattern 1: Testing Location Addition with Geo-Marks
-
-This pattern tests the complete flow of adding a location to a document, which involves:
-1. Navigating to document
-2. Typing text in ProseMirror iframe
-3. Selecting specific text
-4. Clicking location button
-5. Verifying the location was added with correct color
-
-**Full Example:**
-```javascript
-// 1. Navigate to test document
-await browser_navigate({ url: 'http://localhost:8082/document/test-id' });
-
-// 2. Wait for page to load
-await browser_wait_for({ time: 3 });
-
-// 3. Click in the iframe to focus it
-const snapshot = await browser_snapshot();
-// Find the iframe paragraph element from snapshot
-await browser_click({ element: 'paragraph in iframe', ref: '<ref-from-snapshot>' });
-
-// 4. Type text character by character (required for iframe)
-const text = 'Trip to Paris and Brussels.';
-for (const char of text) {
-  if (char === ' ') {
-    await browser_press_key({ key: 'Space' });
-  } else if (char === '.') {
-    await browser_press_key({ key: 'Period' });
-  } else {
-    await browser_press_key({ key: char });
-  }
-  await browser_wait_for({ time: 0.05 }); // Small delay between characters
-}
-
-// 5. Select "Paris" using JavaScript evaluation
-await browser_evaluate({
-  function: `() => {
-    const iframe = document.querySelector('iframe');
-    const iframeDoc = iframe.contentDocument;
-    const paragraph = iframeDoc.querySelector('p');
-    const text = paragraph.textContent;
-    const parisIndex = text.indexOf('Paris');
-
-    const selection = iframeDoc.getSelection();
-    const range = iframeDoc.createRange();
-    const textNode = paragraph.firstChild;
-
-    range.setStart(textNode, parisIndex);
-    range.setEnd(textNode, parisIndex + 5);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }`
-});
-
-// 6. Click location button
-await browser_click({ element: 'location button', ref: '<ref-for-location-btn>' });
-
-// 7. Wait for location search modal
-await browser_wait_for({ time: 2 });
-
-// 8. Click Continue button
-await browser_click({ element: 'Continue button', ref: '<ref-for-continue-btn>' });
-
-// 9. Click Add to Document button
-await browser_click({ element: 'Add to Document button', ref: '<ref-for-add-btn>' });
-
-// 10. Verify in console
-const messages = await browser_console_messages();
-// Look for "Created geo-mark NodeView with color: #3B82F6"
-```
-
-#### Pattern 2: Testing Multi-Node Text Selection
-
-When text contains geo-marks (colored location nodes), you need to traverse multiple text nodes:
-
-```javascript
-await browser_evaluate({
-  function: `() => {
-    const iframe = document.querySelector('iframe');
-    const iframeDoc = iframe.contentDocument;
-    const paragraph = iframeDoc.querySelector('p');
-
-    // Get all text nodes (plain text + text inside geo-marks)
-    function getAllTextNodes(node) {
-      let textNodes = [];
-      if (node.nodeType === Node.TEXT_NODE) {
-        textNodes.push(node);
-      } else {
-        for (let child of node.childNodes) {
-          textNodes = textNodes.concat(getAllTextNodes(child));
-        }
-      }
-      return textNodes;
-    }
-
-    const textNodes = getAllTextNodes(paragraph);
-    let allText = '';
-    const nodeMap = [];
-
-    // Build a map of text nodes with their positions
-    for (const node of textNodes) {
-      nodeMap.push({ node, start: allText.length, text: node.textContent });
-      allText += node.textContent;
-    }
-
-    // Find "Brussels" in the combined text
-    const brusselsIndex = allText.indexOf('Brussels');
-    const startOffset = brusselsIndex;
-    const endOffset = startOffset + 8;
-
-    // Map offsets back to actual text nodes
-    let startNode = null, endNode = null;
-    let startNodeOffset = 0, endNodeOffset = 0;
-
-    for (const item of nodeMap) {
-      if (startOffset >= item.start && startOffset < item.start + item.text.length) {
-        startNode = item.node;
-        startNodeOffset = startOffset - item.start;
-      }
-      if (endOffset > item.start && endOffset <= item.start + item.text.length) {
-        endNode = item.node;
-        endNodeOffset = endOffset - item.start;
-      }
-    }
-
-    // Create selection
-    const selection = iframeDoc.getSelection();
-    const range = iframeDoc.createRange();
-    range.setStart(startNode, startNodeOffset);
-    range.setEnd(endNode, endNodeOffset);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }`
-});
-```
-
-#### Pattern 3: Verifying Colors in Document
-
-After adding locations, verify they have the correct colors:
-
-```javascript
-// Extract color information from document
-const colorInfo = await browser_evaluate({
-  function: `() => {
-    const iframe = document.querySelector('iframe');
-    const iframeDoc = iframe.contentDocument;
-
-    const geoMarks = Array.from(iframeDoc.querySelectorAll('[data-geo-id]'));
-    const docColors = geoMarks.map(gm => {
-      const style = window.getComputedStyle(gm);
-      return {
-        name: gm.textContent,
-        backgroundColor: style.backgroundColor,
-        geoId: gm.getAttribute('data-geo-id')
-      };
-    });
-
-    return { docColors };
-  }`
-});
-
-console.log('Document colors:', colorInfo);
-// Expected: Paris=rgb(59, 130, 246), Brussels=rgb(139, 92, 246)
-```
-
-### Common Issues and Solutions
-
-#### Issue 1: Playwright MCP Disconnected
-**Symptom**: Tools return "Not connected" errors
-
-**Solution**:
-1. Use `/mcp` command to reconnect
-2. Wait for "Reconnected to playwright" message
-3. Try the operation again
-
-#### Issue 2: Text Not Typing in Iframe
-**Symptom**: `browser_type` doesn't work in ProseMirror iframe
-
-**Solution**:
-1. Click in the iframe first to focus it
-2. Use `browser_press_key` for individual characters instead of `browser_type`
-3. Add small delays between keystrokes (50ms)
-
-```javascript
-// WRONG - browser_type doesn't work in iframe
-await browser_type({ element: 'paragraph', ref: '<ref>', text: 'Paris' });
-
-// RIGHT - click first, then press keys individually
-await browser_click({ element: 'paragraph', ref: '<ref>' });
-await browser_press_key({ key: 'P' });
-await browser_wait_for({ time: 0.05 });
-await browser_press_key({ key: 'a' });
-// ... etc
-```
-
-#### Issue 3: Modal Not Opening on Second Interaction
-**Symptom**: After successfully adding first location, clicking location button for second location doesn't open modal
-
-**Possible Causes**:
-1. Text selection was lost after previous operation
-2. UI state not properly reset after first interaction
-3. Event listeners not properly attached after DOM update
-
-**Solutions**:
-1. Re-select the text again
-2. Add longer wait time after previous operation completes
-3. Verify selection is stored by checking console logs
-4. Click outside and back into iframe to reset focus
-
-#### Issue 4: Elements Not Found in Snapshot
-**Symptom**: `browser_snapshot` doesn't show expected elements
-
-**Solution**:
-1. Wait longer for page to load (`browser_wait_for`)
-2. Check if content is inside an iframe (iframe content may not appear in main snapshot)
-3. Use `browser_evaluate` to inspect iframe content separately
-4. Take a screenshot to visually verify what's on page
-
-### Best Practices
-
-1. **Always snapshot first**: Use `browser_snapshot` before clicking to get element refs
-2. **Add wait times**: Give UI time to update between actions (1-3 seconds typical)
-3. **Verify with console**: Use `browser_console_messages` to check application logs
-4. **Handle iframes specially**: Iframe content requires JavaScript evaluation, not direct MCP interaction
-5. **Use character-by-character typing**: For ProseMirror iframes, press individual keys instead of using `browser_type`
-6. **Check disconnections**: If tools fail, check MCP connection status first
-7. **Take screenshots for debugging**: When tests fail, capture screenshot to see actual state
-
-### Example Test Workflow
-
-Here's a complete example testing the color bug fix (DocumentSplitMap.tsx COLORS array):
-
-1. **Setup**: Navigate to test document
-2. **Type content**: "Trip to Paris and Brussels."
-3. **Add Paris**: Select "Paris", click location button, add it
-4. **Verify Paris color**: Check console for "#3B82F6" (Blue)
-5. **Add Brussels**: Select "Brussels", click location button, add it
-6. **Verify Brussels color**: Check console for "#8B5CF6" (Purple)
-7. **Take screenshot**: Capture final result
-8. **Extract data**: Use JavaScript to get computed colors from DOM
-
-This verifies that:
-- Paris (colorIndex: 0) → Blue (#3B82F6) ✓
-- Brussels (colorIndex: 1) → Purple (#8B5CF6) ✓
-
-### Resources
-
-- **Playwright MCP Documentation**: Check MCP server docs for full tool reference
-- **Manual Testing Fallback**: If MCP testing is too complex, document manual test steps in a `.md` file (see `/Users/mads/workspace/tourvision-mobile/MANUAL_COLOR_TEST.md` for example)
-
-### Code Quality
-
-When completing tasks, always run:
-```bash
-cd expo-app
-npm run lint      # If available
-npm run typecheck # If available
-```
-
-If these commands aren't configured, consider adding them to package.json:
-```json
-{
-  "scripts": {
-    "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
-  }
-}
-```
-
-### Git Workflow
-
-```bash
-# Check changes
-git status
-git diff
-
-# Commit with descriptive message
-git add -A
-git commit -m "feat: Description of changes"
-
-# Push to remote (if needed)
-git push origin main
-```
-
-### Realtime Subscription Important Note
-**Service role keys DO NOT work with Supabase realtime subscriptions.** When building listeners or background processes that need realtime updates:
-
-1. Create **two separate Supabase clients**:
-   - One with `SUPABASE_ANON_KEY` for realtime subscriptions
-   - One with `SUPABASE_SERVICE_KEY` for admin operations (insert, update, delete)
-
-2. Example pattern:
-```javascript
-const supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  realtime: { params: { eventsPerSecond: 10 } }
-});
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-// Use anon client for subscriptions
-supabaseRealtime.channel('my-channel')
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'my_table' }, callback)
-  .subscribe();
-
-// Use admin client for operations
-await supabaseAdmin.from('my_table').insert({ ... });
-```
-
-This is implemented in `/scripts/document-chat-listener.js`.
-
-## Debugging with Supabase MCP
-
-### Important: Use MCP Tools for Database Debugging
-The Supabase MCP (Model Context Protocol) server is configured and available for debugging database-related issues. **Always use these tools when debugging** instead of guessing about database state:
-
-- Query tables directly to verify data exists
-- Check table schemas and column types
-- Inspect foreign key relationships
-- Review Row Level Security policies
-- Understand trigger functions and their behavior
-- Verify data before and after operations
-
-### Available MCP Commands
-The MCP tools allow direct database queries through natural language:
-- "Show me the schema of the proposals table"
-- "List all trips for user X"
-- "Check if proposal_votes table has the comment column"
-- "Show the relationship between trips and places"
-- "What RLS policies exist for trip_chat_messages?"
-
-### When to Use MCP Tools
-- **Before debugging errors**: Check if expected data exists
-- **Schema issues**: Verify column names and types match your code
-- **Permission errors**: Review RLS policies for the table
-- **Foreign key errors**: Inspect relationships between tables
-- **Migration issues**: Confirm table structure after migrations
-- **Data validation**: Ensure seed data loaded correctly
-
-Using MCP tools provides accurate, real-time database information and significantly speeds up debugging compared to trial-and-error approaches.
-
-## Cloudflare Workers Chat System
-
-### Overview
-The document chat uses **Cloudflare Workers** with **Durable Objects** for real-time WebSocket communication and **Workers AI** (Llama-3.1-8b-instruct) for streaming AI responses.
-
-### Architecture
-
-**Components:**
-- **Cloudflare Worker** (`/workers/chat/src/index.ts`) - Main entry point with health check and WebSocket routing
-- **Durable Object** (`ChatRoomV2` class) - Manages WebSocket connections per document
-- **Workers AI Binding** - Provides LLM inference for chat responses
-- **Frontend Hook** (`/expo-app/hooks/useChatWebSocket.ts`) - React hook for WebSocket management
-- **UI Component** (`/expo-app/components/DocumentChat.tsx`) - Chat interface
-
-**Flow:**
-```
-User opens document
-    ↓
-Frontend connects to wss://tourvision-chat.mads-9b9.workers.dev/chat/{documentId}
-    ↓
-Worker routes to Durable Object for that documentId
-    ↓
-Durable Object creates WebSocket pair and accepts connection
-    ↓
-User sends chat_message
-    ↓
-Durable Object broadcasts message to all connected clients
-    ↓
-Durable Object generates AI response using Workers AI (streaming)
-    ↓
-AI response chunks broadcast to clients in real-time
-```
-
-### Durable Object Implementation
-
-The ChatRoomV2 class uses native Cloudflare Durable Objects API (not PartyKit):
-
-```typescript
-export class ChatRoomV2 {
-  constructor(private state: DurableObjectState, private env: Env) {}
-
-  async fetch(request: Request): Promise<Response> {
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-
-    this.state.acceptWebSocket(server);
-
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    // Handle incoming messages
-  }
-
-  private broadcast(message: string) {
-    for (const ws of this.state.getWebSockets()) {
-      ws.send(message);
-    }
-  }
-}
-```
-
-### Message Protocol
-
-**Client → Server:**
-```json
-{
-  "type": "chat_message",
-  "content": "User message text",
-  "user_id": "user-uuid",
-  "metadata": {}
-}
-```
-
-**Server → Client:**
-```json
-// History on connect
-{"type": "history", "messages": []}
-
-// User message broadcast
-{"type": "message", "message": {ChatMessage}}
-
-// AI streaming chunks
-{"type": "ai_chunk", "message_id": "uuid", "chunk": "text", "done": false}
-
-// AI completion
-{"type": "ai_chunk", "message_id": "uuid", "chunk": "", "done": true, "message": {ChatMessage}}
-
-// Tool execution request (NEW)
-{"type": "tool_request", "tool_id": "uuid", "tool_name": "geocode", "args": {"location": "Paris, France"}}
-
-// Errors
-{"type": "error", "error": "Error message"}
-```
-
-**Client → Server (Tool Results):**
-```json
-// Tool result success
-{
-  "type": "tool_result",
-  "tool_id": "uuid",
-  "result": {
-    "place_name": "Paris, France",
-    "lat": 48.8566,
-    "lng": 2.3522,
-    "source": "nominatim"
-  }
-}
-
-// Tool result error
-{
-  "type": "tool_result",
-  "tool_id": "uuid",
-  "error": "Location not found"
-}
-```
-
-### Frontend Tool Delegation (NEW)
-
-The chat system now supports **client-delegated tool execution**, allowing the LLM to request actions from the frontend. This avoids rate limits and leverages browser capabilities.
-
-**Architecture:**
-```
-User: "We'll meet in Lejre and drive to Copenhagen"
-    ↓
-Worker: LLM detects locations
-    ↓
-Worker → Frontend: tool_request (geocode Lejre)
-    ↓
-Frontend: Executes Nominatim geocoding (with rate limiting & caching)
-    ↓
-Frontend → Worker: tool_result (coordinates)
-    ↓
-Worker: LLM continues with accurate coordinates
-    ↓
-Worker → Frontend: Streaming response with geo-marks
-```
-
-**Available Tools:**
-- `geocode` - Get accurate coordinates for location names using Nominatim API
-
-**Frontend Tool Registry:** `/expo-app/utils/tool-registry.ts`
-**Worker Tool Schemas:** `/workers/chat/src/client-tools.ts`
-**Rate Limiting:** `/expo-app/utils/rate-limiter.ts` (1 req/sec for Nominatim)
-**Caching:** LRU cache (100 entries, 1 hour TTL)
-
-**How It Works:**
-1. LLM outputs tool call as HTML comment: `<!-- TOOL:geocode:{"location":"Paris, France"} -->`
-2. Worker parses tool call, sends `tool_request` to frontend via WebSocket
-3. Frontend executes tool using `tool-registry.ts`
-4. Frontend sends `tool_result` back to worker
-5. Worker removes tool comment and continues streaming
-
-**Adding New Tools:**
-1. Add schema to `/workers/chat/src/client-tools.ts`
-2. Implement handler in `/expo-app/utils/tool-registry.ts`
-3. Update system prompt in worker to describe tool usage
-
-### Deployment
-
-**Deploy to Cloudflare:**
-```bash
-cd workers/chat
-npx wrangler deploy
-```
-
-**Monitor logs:**
-```bash
-npx wrangler tail --format pretty
-```
-
-**Test connection:**
-```bash
-node test-chat-connection.js
 ```
 
 ### Environment Variables
 
-Frontend (`/expo-app/.env.local`):
+**agent-poc** (`.env`):
 ```bash
-EXPO_PUBLIC_CHAT_WS_URL=wss://tourvision-chat.mads-9b9.workers.dev
+WS_PORT=8787
+WS_HOST=localhost
+WS_PROTOCOL=ws
 ```
 
-### Configuration
-
-Worker configuration in `/workers/chat/wrangler.toml`:
-```toml
-name = "tourvision-chat"
-
-[ai]
-binding = "AI"
-
-[[durable_objects.bindings]]
-name = "CHAT_ROOM"
-class_name = "ChatRoomV2"
-script_name = "tourvision-chat"
-
-[[migrations]]
-tag = "v2"
-renamed_classes = [{from = "ChatRoom", "to" = "ChatRoomV2"}]
-```
-
-### Troubleshooting
-
-**Connection Issues:**
-- Check worker logs with `npx wrangler tail`
-- Verify WebSocket URL in `.env.local`
-- Test with `node test-chat-connection.js`
-
-**Empty AI Responses:**
-- Cloudflare Workers AI models sometimes return empty responses for simple queries
-- Try more detailed prompts
-- Check worker logs for AI generation errors
-
-**WebSocket Closes Immediately:**
-- Normal browser behavior - connections are maintained while page is open
-- Code 1005/1006 closures are expected on page unload
-
-## Y.js Collaboration with Cloudflare Durable Objects
-
-### Overview
-The app uses **Cloudflare Durable Objects** for real-time document collaboration via Y.js CRDT. Each document has its own Durable Object instance that manages Y.js state and WebSocket connections.
-
-### Architecture
-
-**Components:**
-1. **Cloudflare Durable Object** - Stateful WebSocket server per document (extends Y.js YServer)
-2. **WebsocketProvider** - Y.js provider connecting clients to Durable Object
-3. **ProseMirror WebView** - Editor with Y.js sync plugins (`ySyncPlugin`, `yCursorPlugin`)
-4. **SQL Storage** - Document persistence in Durable Object SQL
-
-**Flow:**
-```
-User opens document
-    ↓
-Frontend creates WebsocketProvider with document ID
-    ↓
-Provider connects to ws://localhost:8787/document/{documentId}
-    ↓
-Cloudflare Worker routes to Durable Object for that document
-    ↓
-Durable Object loads Y.js state from SQL storage
-    ↓
-Y.js syncs document state via WebSocket
-    ↓
-Changes are persisted to SQL storage automatically
-```
-
-### Durable Object Implementation
-
-**File:** `/agent-poc/src/server/index.ts`
-
-```typescript
-import { YServer } from '@y-sweet/yserver';
-
-export class DocumentDurableObject extends YServer {
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env);
-  }
-
-  async onStart() {
-    // Create SQL table for document persistence
-    await this.sql.exec(`
-      CREATE TABLE IF NOT EXISTS documents (
-        doc_name TEXT PRIMARY KEY,
-        data BLOB
-      )
-    `);
-  }
-
-  async onLoad(docName: string): Promise<Uint8Array | null> {
-    // Load Y.js document from SQL storage
-    const result = await this.sql.exec(
-      'SELECT data FROM documents WHERE doc_name = ?',
-      docName
-    );
-    return result.rows[0]?.data || null;
-  }
-
-  async onSave(docName: string, data: Uint8Array): Promise<void> {
-    // Save Y.js document to SQL storage
-    await this.sql.exec(
-      'INSERT OR REPLACE INTO documents (doc_name, data) VALUES (?, ?)',
-      docName,
-      data
-    );
-  }
-}
-```
-
-### WebView Integration
-
-**File:** `/expo-app/assets/prosemirror-editor-bundled.html`
-
-```javascript
-const ydoc = new Y.Doc();
-const provider = new WebsocketProvider(
-  'ws://localhost:8787/document',
-  documentId,
-  ydoc
-);
-
-const yXmlFragment = ydoc.getXmlFragment('prosemirror');
-
-// ProseMirror plugins for Y.js sync
-const state = EditorState.create({
-  schema: schema,
-  plugins: [
-    ySyncPlugin(yXmlFragment),
-    yCursorPlugin(provider.awareness),
-    yUndoPlugin()
-  ]
-});
-```
-
-### Environment Variables
-
-**Frontend** (`/expo-app/.env.local`):
+**agent-system** (`.env.manager`):
 ```bash
-# For local development
-EXPO_PUBLIC_YJS_WS_URL=ws://localhost:8787/document
-
-# For production (Cloudflare Workers)
-EXPO_PUBLIC_YJS_WS_URL=wss://your-worker.workers.dev/document
-```
-
-### Deployment
-
-**Deploy Durable Object to Cloudflare:**
-```bash
-cd agent-poc
-npx wrangler deploy
-```
-
-**Configuration** (`wrangler.toml`):
-```toml
-name = "yjs-collaboration"
-
-[[durable_objects.bindings]]
-name = "DOCUMENT"
-class_name = "DocumentDurableObject"
-script_name = "yjs-collaboration"
-```
-
-## Cloudflare Pages Deployment
-
-### Overview
-The Expo web app is deployed to Cloudflare Pages. A critical fix is implemented to ensure @expo/vector-icons fonts load correctly.
-
-### The Problem
-Wrangler (Cloudflare's deployment tool) has default ignore patterns that skip `node_modules` directories, even in build output. Expo exports font files to deeply nested paths like:
-```
-dist/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*.ttf
-```
-
-This caused only 42 of 82 files to upload, resulting in missing icons on the deployed site.
-
-### The Solution
-A post-build script (`scripts/fix-cloudflare-assets.js`) automatically:
-1. Moves all font files from `assets/node_modules/.../Fonts/` to `assets/fonts/`
-2. Removes the problematic `assets/node_modules` directory entirely
-3. Updates font path references in the bundled JavaScript files
-
-This ensures all 61+ files upload correctly to Cloudflare Pages.
-
-### Build & Deploy Commands
-
-**Build for web with Cloudflare fix:**
-```bash
-cd expo-app
-npm run build:web
-```
-
-This runs:
-1. `npx expo export -p web` - Exports static site to `dist/`
-2. `node scripts/fix-cloudflare-assets.js` - Moves fonts and updates references
-3. `node scripts/prepare-cloudflare-deploy.js` - Creates `_worker.js` and `_headers`
-
-**Deploy to production:**
-```bash
-npm run deploy
-```
-
-**Deploy to preview:**
-```bash
-npm run deploy:preview
-```
-
-### Manual Deployment
-```bash
-# Build first
-npm run build:web
-
-# Then deploy
-wrangler pages deploy dist --project-name tourvision
-```
-
-### Verifying the Fix
-After building, verify fonts are in the correct location:
-```bash
-ls -la dist/assets/fonts/
-# Should show 19 .ttf files (AntDesign, Ionicons, MaterialIcons, etc.)
-
-find dist/assets -name "node_modules"
-# Should return nothing (directory removed)
-
-find dist -type f | wc -l
-# Should show 61+ files (not just 42)
-```
-
-### Testing Collaboration
-
-1. **Start Durable Object server:**
-   ```bash
-   cd agent-poc
-   npx wrangler dev --local --port 8787
-   ```
-
-2. **Start Agent Manager:**
-   ```bash
-   cd agent-poc
-   npm run agent-manager
-   ```
-
-3. **Start Expo app:**
-   ```bash
-   cd expo-app
-   npx expo start --web --port 8082
-   ```
-
-4. **Open a document** in the browser
-
-5. **Open the same document in another browser tab**
-
-6. **Make edits** - Changes should sync instantly via Y.js
-
-7. **Check browser console** for connection logs:
-   - `[WebView] Provider connected`
-   - `[WebView] Document synced`
-
-8. **Check agent logs** for period-triggered detection:
-   - `[Agent] 🔴 Period detected! Triggering location detection...`
-
-### Benefits
-
-- ✅ **Self-hosted** - Full control over infrastructure and data
-- ✅ **Automatic scaling** - Durable Objects scale per document automatically
-- ✅ **SQL persistence** - Documents persisted in Durable Object SQL storage
-- ✅ **WebSocket-based** - Direct WebSocket connections, no external dependencies
-- ✅ **Built-in awareness** - Cursor positions and user presence via Y.js awareness
-- ✅ **Cost-efficient** - Pay only for what you use with Cloudflare Workers
-
-### Troubleshooting
-
-**WebSocket connection fails:**
-- Verify Durable Object server is running (`npx wrangler dev`)
-- Check `EXPO_PUBLIC_YJS_WS_URL` is correct in `.env.local`
-- Check browser console for connection errors
-- Verify Durable Object binding is configured in `wrangler.toml`
-
-**Document doesn't sync:**
-- Check that Y.js state is being initialized correctly
-- Verify `ySyncPlugin` is included in ProseMirror plugins
-- Look for errors in WebView console logs
-- Check Wrangler logs for Durable Object errors
-
-**Documents not persisting:**
-- Verify SQL storage is working (check Durable Object logs)
-- Check that `onSave()` is being called on document changes
-- Use Wrangler SQL inspector to check database state
-
-## ProseMirror Editor Architecture
-
-### IMPORTANT: HTML-Based ProseMirror (Not React DOM Components!)
-
-The trip document editor uses an **HTML-based ProseMirror implementation** loaded via WebView, **NOT** the React DOM component pattern used elsewhere in the app.
-
-#### Key Files
-
-**Schema Definition**: `/expo-app/assets/prosemirror-bundle-src.js`
-- Defines the ProseMirror schema with nodes and marks
-- This is the **actual schema** used by the editor
-- **NOT** `/expo-app/utils/prosemirror-schema.ts` (that file is for a different editor)
-
-**HTML Template**: `/expo-app/assets/prosemirror-editor-bundled.html`
-- Contains the editor UI and message handlers
-- Handles commands like `createGeoMark`, `setContent`, `toggleBold`, etc.
-- Processes messages from React Native via `window.addEventListener('message')`
-
-**Build Script**: `/expo-app/build-prosemirror.js`
-- Bundles `prosemirror-bundle-src.js` with esbuild
-- Inserts bundled JavaScript into HTML template
-- Outputs to `/expo-app/assets/prosemirror-editor-bundled-final.js`
-
-**WebView Wrapper**: `/expo-app/components/ProseMirrorWebView.tsx`
-- Loads the bundled HTML file
-- Sends messages to WebView via `postMessage`
-- Receives document updates from WebView
-
-#### Building the Bundle
-
-After making changes to the schema or HTML template:
-
-```bash
-cd expo-app
-npm run build:prosemirror
-```
-
-This command:
-1. Bundles `prosemirror-bundle-src.js` into a single file
-2. Inserts the bundle into `prosemirror-editor-bundled.html`
-3. Exports as a JavaScript module: `prosemirror-editor-bundled-final.js`
-
-**Metro Bundler Caching**: If changes don't appear after rebuilding:
-- Touch the ProseMirrorWebView.tsx file to trigger Metro reload
-- Clear Metro cache: `rm -rf .expo && rm -rf node_modules/.cache`
-- Change the log message in ProseMirrorWebView.tsx to force a new bundle
-
-### Geo-Mark Implementation
-
-#### Structure: Text Marks (Not Inline Nodes!)
-
-Geo-marks are **text marks** (like bold/italic), not inline nodes. They are applied to text content and carry location attributes.
-
-**Correct Structure** (mark):
-```json
-{
-  "type": "text",
-  "marks": [
-    {
-      "type": "geoMark",
-      "attrs": {
-        "geoId": "loc-123",
-        "placeName": "Copenhagen, Denmark",
-        "lat": 55.6867,
-        "lng": 12.5700,
-        "colorIndex": 0,
-        "coordSource": "manual",
-        "description": "Optional short text",
-        "visitDocument": {
-          "type": "doc",
-          "content": [
-            {"type": "paragraph", "content": [{"type": "text", "text": "Rich text notes"}]}
-          ]
-        },
-        "transportFrom": null,
-        "transportProfile": "walking",
-        "waypoints": null,
-        "photoName": null
-      }
-    }
-  ],
-  "text": "Copenhagen"
-}
-```
-
-**Wrong Structure** (inline node):
-```json
-{
-  "type": "geoMark",
-  "attrs": {...},
-  "content": [
-    {"type": "text", "text": "Copenhagen"}
-  ]
-}
-```
-
-#### Why Text Marks?
-
-1. **Text Integration**: Marks are applied to existing text, preserving document flow
-2. **Multiple Marks**: Text can have multiple marks (bold + geoMark)
-3. **Selection**: Works naturally with text selection
-4. **Background Colors**: Rendered via span elements with background styles
-
-#### Visit Document Structure
-
-The `visitDocument` attribute stores **rich text notes** about a location as a complete ProseMirror document:
-
-```typescript
-visitDocument: {
-  type: 'doc',
-  content: [
-    {
-      type: 'paragraph',
-      content: [
-        {type: 'text', text: 'Wonderful place to visit!'}
-      ]
-    },
-    {
-      type: 'heading',
-      attrs: {level: 2},
-      content: [
-        {type: 'text', text: 'What to do'}
-      ]
-    },
-    {
-      type: 'paragraph',
-      content: [
-        {type: 'text', text: 'Visit the harbor, see Nyhavn, etc.'}
-      ]
-    }
-  ]
-}
-```
-
-This allows users to:
-- Add formatted notes (headings, lists, bold, italic)
-- Write detailed visit descriptions
-- Keep notes separate from the main trip document
-
-#### Creating Geo-Marks
-
-When a location is saved from the create-location screen:
-
-1. **Plain text description** is converted to a `visitDocument`:
-   ```typescript
-   const visitDocument = description.trim() ? {
-     type: 'doc',
-     content: [{
-       type: 'paragraph',
-       content: [{type: 'text', text: description.trim()}]
-     }]
-   } : null;
-   ```
-
-2. **Geo-mark data** is passed to the editor:
-   ```typescript
-   const geoMarkData = {
-     geoId: 'loc-...',
-     placeName: 'Copenhagen, Denmark',
-     lat: 55.6867,
-     lng: 12.5700,
-     visitDocument: visitDocument,
-     // ... other fields
-   };
-   ```
-
-3. **WebView receives** the data via `createGeoMark` message
-
-4. **HTML template creates** the inline node:
-   ```javascript
-   const geoMarkNode = schema.nodes.geoMark.create(
-     {
-       geoId: data.geoMarkData.geoId,
-       visitDocument: data.geoMarkData.visitDocument,
-       // ... other attrs
-     },
-     schema.text(selectedText)  // Text content
-   );
-   ```
-
-#### Editing Visit Notes
-
-The edit-visit screen (`/expo-app/app/(mock)/trip/[id]/location/[locationId]/edit-visit.tsx`) allows editing the `visitDocument`:
-
-1. **Find the geo-mark node** by geoId:
-   ```typescript
-   if (node.type === 'geoMark' && node.attrs?.geoId === locationId) {
-     return {
-       ...node,
-       attrs: {
-         ...node.attrs,
-         visitDocument: currentDoc  // Updated document
-       }
-     };
-   }
-   ```
-
-2. **Update is recursive** - traverses the entire document tree
-
-3. **Saves back** to the trip document in local storage
-
-#### Read Mode Rendering
-
-In read mode, geo-marks are rendered with:
-- Parsed document JSON
-- Background colors for visual distinction
-- Clickable navigation to location details
-
-**Background color formula**:
-```typescript
-const colors = [
-  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
-  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
-];
-const bgColor = `${colors[colorIndex % colors.length]}33`; // 33 = 20% opacity
-```
-
-### Common Issues
-
-#### Geo-Marks Not Rendering with Background Colors
-
-**Symptom**: Geo-marks appear as plain text without highlighting in read mode
-
-**Cause**: Geo-marks are stored as marks instead of nodes
-
-**Solution**: Check the document structure - geo-marks must be nodes:
-```bash
-# Query to check structure
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
-  "SELECT jsonb_pretty(document) FROM trips WHERE id = 'YOUR_TRIP_ID' LIMIT 1;"
-```
-
-#### Bundle Changes Not Appearing
-
-**Symptom**: After running `npm run build:prosemirror`, changes don't appear in the app
-
-**Cause**: Metro bundler has cached the old bundle
-
-**Solution**:
-1. Make a small change to `ProseMirrorWebView.tsx` (e.g., update a log message)
-2. Or clear Metro cache: `rm -rf .expo && watchman watch-del-all`
-3. Or restart Expo with `--clear` flag
-
-#### Visit Notes Not Saving
-
-**Symptom**: After editing visit notes, they disappear or don't persist
-
-**Causes**:
-1. Edit-visit screen is looking for geo-mark as a mark instead of node
-2. Saving to wrong attribute (`contextDocument` instead of `visitDocument`)
-
-**Solution**: Ensure `edit-visit.tsx` searches for `node.type === 'geoMark'` and updates `visitDocument`
-
-#### Schema Mismatch Errors
-
-**Symptom**: `geoMark node type not found in schema` error in WebView
-
-**Cause**: The HTML template's message handler is trying to access the wrong schema type (e.g., `schema.marks.geoMark` instead of `schema.nodes.geoMark`)
-
-**Solution**: Check `prosemirror-editor-bundled.html` in the `createGeoMark` handler - it should use `schema.nodes.geoMark`
-
-### Development Workflow
-
-1. **Make schema changes** in `assets/prosemirror-bundle-src.js`
-2. **Update HTML handlers** in `assets/prosemirror-editor-bundled.html` if needed
-3. **Rebuild bundle**: `npm run build:prosemirror`
-4. **Trigger Metro reload**: Touch `ProseMirrorWebView.tsx` or change a log message
-5. **Test in app**: Create/edit locations and verify structure in logs or database
-
-## AI Agent System
-
-### Overview
-The AI Agent System provides **autonomous location detection** in collaborative documents. Agents observe document changes in real-time via Y.js and trigger LLM processing when users type a period (`.`), making the system responsive and efficient.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Cloudflare Workers                        │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Durable Object (per document)                        │   │
-│  │ - Tracks user connections (userCount)                │   │
-│  │ - Writes to Supabase on connect/disconnect           │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            │ INSERT to document_activity
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Supabase PostgreSQL                       │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Tables:                                              │   │
-│  │ - agent_connections  (tracks active agents)          │   │
-│  │ - document_activity  (activity event log)            │   │
-│  │ - agent_metrics      (performance data)              │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                    Realtime Subscription                     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            │ INSERT events
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Agent Manager (Local Server)                    │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ - Subscribes to document_activity changes            │   │
-│  │ - Spawns agent workers (child processes)             │   │
-│  │ - Enforces max concurrent limit with LRU eviction    │   │
-│  │ - Health checks and crash recovery                   │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                            │                                 │
-│                            │ fork()                          │
-│                            ▼                                 │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Agent Worker (one per active document)               │   │
-│  │ - Connects to Y.js document via WebSocket            │   │
-│  │ - Observes document changes (observeDeep)            │   │
-│  │ - Detects period (.) character insertion             │   │
-│  │ - Runs LLM processing after 1-second debounce        │   │
-│  │ - Creates geo-marks via ProseMirror                  │   │
-│  │ - Reports metrics to manager via IPC                 │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Components
-
-#### 1. Local Agent (`/scripts/local-agent-yjs.js`)
-Production agent for location detection in collaborative documents.
-
-**Key Features:**
-- Connects to Y.js document via WebSocket
-- Observes document changes with `yXmlFragment.observeDeep()`
-- Detects period (`.`) character in inserted text
-- 1-second debounce to allow continued typing
-- Extracts locations from text using LLM
-- Geocodes locations using Nominatim API
-- Animates cursor to show processing
-- Creates geo-marks in ProseMirror document
-
-**Running:**
-```bash
-# From project root
-DOCUMENT_ID=test-document node scripts/local-agent-yjs.js
-```
-
-**Environment Variables:**
-- `DOCUMENT_ID` - Document to attach to
-- `WS_PORT` - WebSocket port (default: 8787)
-
-#### 2. Agent Manager (`/agent-poc/agent-manager.ts`)
-Orchestrates multiple agent workers across documents dynamically.
-
-**Key Features:**
-- Subscribes to Supabase Realtime (`document_activity` table)
-- Spawns agent workers when documents become active
-- Kills agents when documents become idle (after 30s grace period)
-- Enforces max concurrent agent limit (default: 10)
-- LRU eviction when limit reached
-- Health checks via ping/pong every 30 seconds
-- Crash recovery on restart
-- Graceful shutdown handling
-
-**Running:**
-```bash
-cd agent-poc
-npm run agent-manager
-```
-
-**Configuration:**
-```bash
-# .env file
 MANAGER_ID=manager-local-01
 MAX_CONCURRENT_AGENTS=10
 IDLE_TIMEOUT_MS=30000
 WS_PORT=8787
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=<from npx supabase status>
+SUPABASE_SERVICE_KEY=<from npx supabase status>
+AI_GATEWAY_API_KEY=<your-key>
 ```
 
-#### 3. Agent Worker (`/agent-poc/agent-worker.ts`)
-Individual worker process for document-specific LLM processing.
+## Key Concepts
 
-**Key Features:**
-- Accepts `DOCUMENT_ID` and `AGENT_ID` via CLI args
-- Connects to Y.js document
-- Period-triggered location detection
-- Reports metrics to manager (memory, CPU, LLM calls)
-- Responds to shutdown and ping messages from manager
+### Y.js Collaboration Flow
 
-**Running (managed by Agent Manager):**
-```bash
-DOCUMENT_ID=test-doc AGENT_ID=agent-123 node agent-poc/agent-worker.ts
+```
+User edits document
+    ↓
+ProseMirror change
+    ↓
+Y.js sync plugin applies change to yXmlFragment
+    ↓
+WebsocketProvider sends update to Durable Object
+    ↓
+Durable Object broadcasts to all connected clients
+    ↓
+Other clients receive and apply update
 ```
 
-### Period-Triggered Detection
+### Agent Trigger Flow
 
-The agents use **event-driven detection** instead of time-based polling:
-
-```javascript
-// Set up observer for document changes
-let isInitialSync = true;
-let detectionDebounceTimer = null;
-
-yXmlFragment.observeDeep((events) => {
-  if (isInitialSync) {
-    isInitialSync = false;
-    return; // Skip initial sync
-  }
-
-  let periodDetected = false;
-
-  // Check if any changes contain a period
-  events.forEach((event) => {
-    if (event.changes && event.changes.delta) {
-      event.changes.delta.forEach((change) => {
-        if (change.insert &&
-            typeof change.insert === 'string' &&
-            change.insert.includes('.')) {
-          periodDetected = true;
-        }
-      });
-    }
-  });
-
-  // Trigger detection if period was detected
-  if (periodDetected) {
-    console.log('[Agent] 🔴 Period detected! Triggering location detection...');
-
-    // Debounce: wait 1 second after the last period
-    if (detectionDebounceTimer) {
-      clearTimeout(detectionDebounceTimer);
-    }
-
-    detectionDebounceTimer = setTimeout(() => {
-      runLocationDetection();
-    }, 1000);
-  }
-});
+```
+User types "."
+    ↓
+Client detects via Y.js observeDeep()
+    ↓
+Agent worker detects period after 1s debounce
+    ↓
+LLM extracts locations from surrounding text
+    ↓
+Geocoding (Nominatim API)
+    ↓
+Create geo-marks in ProseMirror
 ```
 
-**Why Period-Triggered?**
-1. **Natural sentence boundaries** - Period marks end of thought
-2. **User intent signal** - Indicates complete sentence ready for analysis
-3. **Efficient** - Only triggers when meaningful content added
-4. **Non-intrusive** - 1-second debounce allows continued typing
+### Fullscreen Map Transition
 
-### Y.js Integration
-
-Agents connect directly to Y.js documents and observe changes:
-
-```javascript
-const ydoc = new Y.Doc();
-const provider = new WebsocketProvider(
-  `ws://localhost:${WS_PORT}`,
-  documentId,
-  ydoc
-);
-
-const yXmlFragment = ydoc.getXmlFragment('prosemirror');
-
-// Set cursor position for awareness
-provider.awareness.setLocalStateField('user', {
-  name: 'AI Agent',
-  color: '#FF6B6B'
-});
-
-// Create relative position for cursor
-const anchor = Y.createRelativePositionFromTypeIndex(textNode, position);
-provider.awareness.setLocalStateField('cursor', { anchor, head: anchor });
+```
+User clicks map block
+    ↓
+showFullscreenMap() retrieves block map instance
+    ↓
+Copy geographic bounds from block map
+    ↓
+Calculate container padding for alignment
+    ↓
+Create fullscreen map with same bounds
+    ↓
+Markers appear at same screen position
 ```
 
-**Y.js Concepts:**
-- **Y.Doc** - Shared CRDT document
-- **WebsocketProvider** - Syncs document state via WebSocket
-- **Awareness** - Shares ephemeral state (cursors, user presence)
-- **Relative Positions** - Position format that adjusts with document edits
-- **XmlFragment** - Y.js type representing ProseMirror document structure
+## Common Commands
 
-### Database Schema
-
-#### `agent_connections`
-Tracks active agent processes per document.
-
-```sql
-CREATE TABLE agent_connections (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  document_id TEXT NOT NULL,
-  agent_id TEXT NOT NULL UNIQUE,
-  agent_pid INTEGER,
-  status TEXT NOT NULL, -- connecting, active, idle, detaching, disconnected, error
-  manager_id TEXT NOT NULL,
-  llm_calls_count INTEGER DEFAULT 0,
-  locations_marked_count INTEGER DEFAULT 0,
-  last_activity_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### `document_activity`
-Activity event log from Durable Objects.
-
-```sql
-CREATE TABLE document_activity (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  document_id TEXT NOT NULL,
-  event_type TEXT NOT NULL, -- active, idle, user_joined, user_left
-  user_count INTEGER NOT NULL DEFAULT 0,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### `agent_metrics`
-Time-series performance data for monitoring.
-
-```sql
-CREATE TABLE agent_metrics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_connection_id UUID REFERENCES agent_connections(id),
-  memory_mb NUMERIC,
-  cpu_percent NUMERIC,
-  websocket_latency_ms INTEGER,
-  llm_response_time_ms INTEGER,
-  recorded_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### Testing the Agent System
-
-#### Testing Agent Manager
-
-1. **Start Durable Object server:**
-   ```bash
-   cd agent-poc
-   npx wrangler dev --local --port 8787
-   ```
-
-2. **Start Agent Manager:**
-   ```bash
-   cd agent-poc
-   npm run agent-manager
-   ```
-
-3. **Open document in browser:**
-   - Navigate to `http://localhost:8787`
-   - Connect to a document via client
-
-4. **Verify agent spawns:**
-   ```
-   [Manager] 📨 Activity: active for test-document (users: 1)
-   [Manager] 🔄 Spawning agent agent-test-document-1731456789...
-   [Manager] ✅ Spawned agent for test-document (PID: 12345)
-   ```
-
-5. **Type text with period and verify:**
-   ```
-   [Agent Worker] 🔴 Period detected! Triggering location detection...
-   [Agent Worker] 🔎 Running location detection...
-   [Agent Worker] 🌍 Processing 2 new locations...
-   ```
-
-6. **Close document and verify detachment:**
-   ```
-   [Manager] 📨 Activity: idle for test-document (users: 0)
-   [Manager] 🔄 Detaching agent from test-document (Document became idle)
-   [Manager] 🛑 Agent exited (code: 0, signal: null)
-   ```
-
-#### Database Queries for Testing
+### Agent-POC
 
 ```bash
-# Check active agents
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
-  "SELECT document_id, agent_id, status, llm_calls_count FROM agent_connections WHERE status = 'active';"
+cd agent-poc
 
-# Check recent activity
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
-  "SELECT document_id, event_type, user_count, timestamp FROM document_activity ORDER BY timestamp DESC LIMIT 10;"
+# Development
+npm run dev:client        # Vite dev server (5174)
+npx wrangler dev --local  # Durable Objects (8787)
 
-# Check agent metrics
-docker exec supabase_db_tourvision-mobile psql -U postgres -d postgres -c \
-  "SELECT ac.agent_id, am.memory_mb, am.cpu_percent, am.recorded_at
-   FROM agent_metrics am
-   JOIN agent_connections ac ON ac.id = am.agent_connection_id
-   ORDER BY am.recorded_at DESC LIMIT 10;"
+# Build
+npm run build
+
+# Deploy
+npx wrangler deploy
 ```
 
-### Common Issues
+### Agent-System
 
-#### Agent doesn't connect to WebSocket
-**Symptom:** Agent logs show "Status: connecting" and never advances to "connected"
+```bash
+cd agent-system
 
-**Solution:**
-1. Verify WebSocket server is running on correct port
-2. Check `WS_PORT` environment variable matches server
-3. For POC agent: Start Wrangler with `npx wrangler dev --local --port 8787`
-4. For production agent: Verify Durable Object WebSocket URL is correct
+# Development
+bash start-agent-manager.sh
 
-#### Period detection not triggering
-**Symptom:** Typing period doesn't trigger agent processing
+# Docker
+docker compose up -d agent-manager
 
-**Solution:**
-1. Check agent logs for "Document changed" messages
-2. Verify `observeDeep` is set up correctly
-3. Ensure initial sync completed (check "Initial sync completed" log)
-4. Try typing multiple sentences to rule out timing issues
+# Cleanup stale agents
+npx tsx cleanup-agents.ts
+```
 
-#### Agent Manager not spawning agents
-**Symptom:** Opening document doesn't spawn agent worker
+### Database
 
-**Solution:**
-1. Verify Durable Object server is running
-2. Check Supabase Realtime connection in manager logs
-3. Verify `document_activity` events are being inserted
-4. Check database credentials in `.env` file
-5. Look for errors in manager logs
+```bash
+# Start Supabase CLI
+npx supabase start
 
-#### LRU eviction not working
-**Symptom:** More than `MAX_CONCURRENT_AGENTS` running simultaneously
+# Stop and clean
+npx supabase stop
+docker compose down -v
 
-**Solution:**
-1. Check `MAX_CONCURRENT_AGENTS` setting in `.env`
-2. Verify `last_activity_at` timestamps are being updated
-3. Look for "Evicting least active document" in logs
-4. Check that idle agents are being properly detached
+# Apply migrations
+npx supabase db push --local
 
-### Architecture Benefits
+# Reset database with seed data
+npx supabase db reset --local
+```
 
-✅ **Event-Driven** - No polling, immediate response to document changes
-✅ **Scalability** - Manager coordinates multiple agents across documents
-✅ **Resource Efficiency** - Agents only run when documents are active
-✅ **Fault Tolerance** - Crash recovery on manager restart
-✅ **Observability** - Metrics tracking in database
-✅ **Process Isolation** - Each agent in separate process prevents cascading failures
-✅ **Graceful Degradation** - LRU eviction when hitting resource limits
-✅ **Non-Intrusive** - 1-second debounce allows natural typing flow
+## Git Workflow
 
-### Production Deployment
+Current branch: `chore/cleanup`
 
-For production deployment, see `/agent-poc/AGENT_MANAGER_README.md` which includes:
-- PM2 configuration for process management
-- Horizontal scaling with multiple manager instances
-- Distributed locking for multi-manager coordination
-- Metrics export to monitoring systems
-- Agent health monitoring dashboard
+```bash
+# Check status
+git status
 
-### Next Steps
+# Commit
+git add -A
+git commit -m "chore: Description"
 
-- [ ] Add horizontal scaling (multiple manager instances)
+# Switch branches
+git checkout main
+git checkout -b feat/new-feature
+```
+
+## Deprecated / Removed
+
+The following were removed during cleanup:
+
+- ❌ **agent-manager/** - Old agent implementation (use agent-system/)
+- ❌ **workers/** - Old Cloudflare Workers (chat, collab)
+- ❌ **Eruda debug console** - Removed from index.html
+
+## Important Notes
+
+### Code Organization
+
+- **agent-poc/src/client/index.js** is VERY large (~2000+ lines)
+  - Contains: Editor setup, Y.js sync, map rendering, geo-mark creation
+  - Fullscreen map logic starts around line 2000
+  - Consider refactoring into modules
+
+- **Geo-marks are marks, not nodes**
+  - Structure: `{type: "text", marks: [{type: "geoMark", attrs: {...}}]}`
+  - NOT: `{type: "geoMark", content: [...]}`
+
+### Docker Compose
+
+- Uses agent-system (not agent-manager)
+- Service name still "agent-manager" for backward compatibility
+- Builds from `agent-system/Dockerfile`
+
+### Development Focus
+
+Primary development happens in:
+1. `agent-poc/` - Document editor features
+2. `agent-system/` - Agent orchestration
+
+The `expo-app/` is a separate React Native frontend (not currently active development focus).
+
+## Troubleshooting
+
+**Agent not connecting:**
+- Check `WS_PORT=8787` matches Durable Object server
+- Verify Durable Object server is running: `npx wrangler dev --local --port 8787`
+
+**Period not triggering agent:**
+- Check Supabase Realtime connection in agent-manager logs
+- Verify `SUPABASE_ANON_KEY` is set (service key doesn't work for realtime)
+
+**Map not showing:**
+- Check Mapbox token in environment
+- Verify map style loaded: Look for "Style loaded" in console
+
+**Fullscreen map misaligned:**
+- Ensure map instance stored on DOM: `dom._mapInstance = currentMap`
+- Verify bounds copied from block map, not recalculated
+
+## Next Steps / TODO
+
+- [ ] Refactor agent-poc/src/client/index.js into modules
+- [ ] Add comprehensive error handling in agent workers
 - [ ] Implement agent health monitoring dashboard
-- [ ] Add distributed locking for multi-manager coordination
-- [ ] Implement agent warm-up pool for faster attachment
-- [ ] Add metrics export to monitoring systems (Prometheus, etc.)
-- [ ] Implement agent versioning and rolling updates
+- [ ] Add tests for geo-mark creation
+- [ ] Document map rendering architecture
+- [ ] Consider TypeScript migration for agent-poc client
+
+---
+
+**Last Updated:** November 19, 2025
+**Primary Focus:** agent-poc collaborative document editor with Y.js
+**Active Branch:** chore/cleanup
