@@ -255,5 +255,63 @@
     </div>
 
     <script src="/src/client/index.js" type="module"></script>
+
+    <!-- Debug Tools (for development and Android TV debugging) -->
+    <script>
+      (function() {
+        const params = new URLSearchParams(window.location.search);
+        const isDebugMode = params.get('debug') === 'true' ||
+                           location.hostname === 'localhost' ||
+                           location.hostname === '127.0.0.1';
+
+        // 1. Load Eruda - In-browser console for Android TV debugging
+        if (isDebugMode) {
+          const erudaScript = document.createElement('script');
+          erudaScript.src = 'https://cdn.jsdelivr.net/npm/eruda';
+          erudaScript.onload = function() {
+            eruda.init();
+            console.log('🐛 Eruda debug console loaded - Tap the floating button to open');
+            console.log('📱 Device Info:', {
+              userAgent: navigator.userAgent,
+              viewport: window.innerWidth + 'x' + window.innerHeight,
+              devicePixelRatio: window.devicePixelRatio,
+              platform: navigator.platform
+            });
+          };
+          erudaScript.onerror = function() {
+            console.error('❌ Failed to load Eruda debug console');
+          };
+          document.body.appendChild(erudaScript);
+        }
+
+        // 2. Global Error Logger - Captures all uncaught errors
+        window.addEventListener('error', function(e) {
+          console.error('❌ Uncaught Error:', {
+            message: e.message,
+            filename: e.filename,
+            lineno: e.lineno,
+            colno: e.colno,
+            stack: e.error?.stack,
+            timestamp: new Date().toISOString()
+          });
+        });
+
+        // 3. Capture Unhandled Promise Rejections
+        window.addEventListener('unhandledrejection', function(e) {
+          console.error('❌ Unhandled Promise Rejection:', {
+            reason: e.reason,
+            promise: e.promise,
+            timestamp: new Date().toISOString()
+          });
+        });
+
+        // 4. Log initial page load
+        console.log('✅ Page loaded successfully', {
+          url: location.href,
+          debugMode: isDebugMode,
+          timestamp: new Date().toISOString()
+        });
+      })();
+    </script>
   </body>
 </html>
