@@ -1,6 +1,7 @@
 name = "partyserver-fixture-tiptap-yjs"
 main = "src/server/index.ts"
-compatibility_date = "2024-04-19"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat_v2"]
 
 # Environment variables for Durable Object (PRODUCTION - for wrangler deploy)
 [vars]
