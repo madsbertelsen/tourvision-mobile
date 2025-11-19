@@ -10,6 +10,8 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "3001:3001"
+    volumes:
+      - ./shared:/shared:ro
     environment:
       MANAGER_ID: manager-docker-01
       MAX_CONCURRENT_AGENTS: ${MAX_CONCURRENT_AGENTS:-10}
