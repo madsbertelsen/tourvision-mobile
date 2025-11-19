@@ -1,19 +1,30 @@
 services:
+  # Redis - Message queue for agent orchestration
+  redis:
+    container_name: tourvision-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
   # Agent Manager - Multi-document agent orchestration
   agent-manager:
     container_name: tourvision-agent-manager
     build:
-      context: ./agent-system
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: agent-system/Dockerfile
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "3001:3001"
+    network_mode: "host"
+    depends_on:
+      - redis
     volumes:
       - ./shared:/shared:ro
     environment:
       MANAGER_ID: manager-docker-01
+      REDIS_URL: ${REDIS_URL:-redis://127.0.0.1:6379}
       MAX_CONCURRENT_AGENTS: ${MAX_CONCURRENT_AGENTS:-10}
       IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-30000}
       WS_HOST: ${WS_HOST:-host.docker.internal}
@@ -23,3 +34,6 @@ services:
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY}
+
+volumes:
+  redis-data:

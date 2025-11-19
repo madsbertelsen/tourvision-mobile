@@ -7,11 +7,15 @@ import type { CallbackOptions } from "y-partyserver";
 // Import Supabase client for Cloudflare Workers
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+// Import Redis client
+import { createClient as createRedisClient, RedisClientType } from 'redis';
+
 type Env = {
   Document: DurableObjectNamespace<YServer>;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
   SUPABASE_ANON_KEY: string;
+  REDIS_URL: string;
 };
 
 export class Document extends YServer<Env> {
@@ -26,6 +30,7 @@ export class Document extends YServer<Env> {
   private supabase: SupabaseClient | null = null;
   private supabaseRealtime: SupabaseClient | null = null; // Separate client for realtime broadcasts
   private idleTimeoutId: number | null = null;
+  private redis: RedisClientType | null = null;
 
   /**
    * Count only real users (excluding AI agents)
@@ -84,6 +89,20 @@ export class Document extends YServer<Env> {
       }
     } else {
       console.warn("[DO] Supabase credentials not configured");
+    }
+
+    // Initialize Redis client
+    if (this.env.REDIS_URL) {
+      try {
+        this.redis = createRedisClient({ url: this.env.REDIS_URL });
+        await this.redis.connect();
+        console.log("[DO] Redis client connected");
+      } catch (error) {
+        console.error("[DO] Failed to connect to Redis:", error);
+        this.redis = null;
+      }
+    } else {
+      console.warn("[DO] Redis URL not configured");
     }
 
     return super.onStart();
@@ -289,36 +308,21 @@ export class Document extends YServer<Env> {
       } else if (data.type === "punctuation_detected") {
         console.log(`[DO] 🔴 Punctuation detected: "${data.character}" in document ${data.documentId}`);
 
-        // Broadcast via Supabase Realtime (using realtime client with anon key)
-        if (this.supabaseRealtime) {
-          const channel = this.supabaseRealtime.channel('punctuation-broadcasts');
-
-          // Subscribe first (required for broadcasts to work)
-          channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-              // Now send the broadcast
-              const result = await channel.send({
-                type: 'broadcast',
-                event: 'punctuation_detected',
-                payload: {
-                  documentId: data.documentId,
-                  timestamp: data.timestamp,
-                  character: data.character
-                }
-              });
-
-              if (result === 'ok') {
-                console.log(`[DO] ✅ Broadcast punctuation event to Supabase realtime`);
-              } else {
-                console.error(`[DO] ❌ Broadcast failed:`, result);
-              }
-
-              // Unsubscribe after sending
-              channel.unsubscribe();
-            }
-          });
+        // Publish to Redis Streams
+        if (this.redis) {
+          try {
+            await this.redis.xAdd('punctuation:events', '*', {
+              type: 'punctuation_detected',
+              documentId: data.documentId,
+              timestamp: String(data.timestamp),
+              character: data.character
+            });
+            console.log(`[DO] ✅ Published punctuation event to Redis Streams`);
+          } catch (error) {
+            console.error(`[DO] ❌ Failed to publish to Redis:`, error);
+          }
         } else {
-          console.warn(`[DO] ⚠️  Supabase realtime client not initialized, cannot broadcast`);
+          console.warn(`[DO] ⚠️  Redis client not initialized, cannot publish event`);
         }
       } else {
         // Unknown message type - broadcast to all other clients

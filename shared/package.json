@@ -13,7 +13,8 @@
     "prosemirror-model": "^1.25.4",
     "prosemirror-schema-basic": "^1.2.4",
     "prosemirror-schema-list": "^1.4.1",
-    "@supabase/supabase-js": "^2.46.2"
+    "@supabase/supabase-js": "^2.46.2",
+    "redis": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

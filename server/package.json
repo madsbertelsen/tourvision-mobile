@@ -37,6 +37,7 @@
     "prosemirror-state": "^1.4.4",
     "prosemirror-transform": "^1.10.4",
     "prosemirror-view": "^1.41.3",
+    "redis": "^4.7.0",
     "tailwindcss": "^4.1.13",
     "uuid": "^11.0.3",
     "ws": "^8.18.0",

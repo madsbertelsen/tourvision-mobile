@@ -15,6 +15,7 @@ import * as os from 'os';
 import * as dotenv from 'dotenv';
 import { createAgentDatabase, AgentDatabase } from './shared/database.js';
 import type { DocumentActivity, AgentWorkerMessage, ManagerMessage } from './shared/types.js';
+import { RedisStreamsClient, PunctuationEvent } from './shared/redis-streams.js';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,7 @@ const IDLE_TIMEOUT_MS = parseInt(process.env.IDLE_TIMEOUT_MS || '30000');
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
+const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 // Validation
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
@@ -43,9 +45,11 @@ class AgentManager {
   private healthCheckTimers = new Map<string, NodeJS.Timeout>();
   private realtimeUnsubscribe: (() => void) | null = null;
   private punctuationUnsubscribe: (() => void) | null = null;
+  private redis: RedisStreamsClient;
 
   constructor() {
     this.db = createAgentDatabase(SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY);
+    this.redis = new RedisStreamsClient(REDIS_URL);
   }
 
   async initialize() {
@@ -57,7 +61,11 @@ class AgentManager {
     console.log(`[Manager] Host: ${os.hostname()}`);
     console.log(`[Manager] Max Concurrent: ${MAX_CONCURRENT}`);
     console.log(`[Manager] Idle Timeout: ${IDLE_TIMEOUT_MS}ms`);
+    console.log(`[Manager] Redis URL: ${REDIS_URL}`);
     console.log('');
+
+    // Connect to Redis
+    await this.redis.connect();
 
     // Recover existing agents on startup
     await this.recoverAgents();
@@ -65,11 +73,11 @@ class AgentManager {
     // Subscribe to document activity events
     this.subscribeToActivity();
 
-    // Subscribe to punctuation detection broadcasts
-    this.subscribeToPunctuation();
+    // Subscribe to punctuation detection from Redis
+    this.subscribeToPunctuationRedis();
 
     console.log('[Manager] 🚀 Ready to manage agents');
-    console.log('[Manager] Listening for document activity events and punctuation broadcasts...');
+    console.log('[Manager] Listening for document activity events and punctuation from Redis Streams...');
     console.log('');
   }
 
@@ -82,28 +90,6 @@ class AgentManager {
         this.handleActivityEvent(event);
       }
     );
-
-    // Fallback to polling after Realtime retries are exhausted (30 seconds)
-    setTimeout(() => {
-      // Check if still not subscribed by trying to get recent events
-      console.log('[Manager] 🔄 Checking if Realtime is working...');
-
-      // If we haven't received any events and Realtime failed, start polling
-      console.log('[Manager] 💫 Starting polling mode as fallback...');
-      const pollingUnsubscribe = this.db.pollDocumentActivity(
-        (event: DocumentActivity) => {
-          this.handleActivityEvent(event);
-        },
-        5000 // Poll every 5 seconds
-      );
-
-      // Store polling unsubscribe function
-      const originalUnsubscribe = this.realtimeUnsubscribe;
-      this.realtimeUnsubscribe = () => {
-        if (originalUnsubscribe) originalUnsubscribe();
-        pollingUnsubscribe();
-      };
-    }, 35000); // Wait 35 seconds for Realtime to fail completely
   }
 
   private subscribeToPunctuation() {
@@ -112,6 +98,21 @@ class AgentManager {
     this.punctuationUnsubscribe = this.db.subscribeToPunctuationEvents(
       (event: any) => {
         this.handlePunctuationEvent(event);
+      }
+    );
+  }
+
+  private async subscribeToPunctuationRedis() {
+    console.log('[Manager] 📡 Subscribing to Redis Streams for punctuation events...');
+
+    this.punctuationUnsubscribe = await this.redis.consumePunctuationEvents(
+      MANAGER_ID,
+      (event: PunctuationEvent) => {
+        this.handlePunctuationEvent({
+          documentId: event.documentId,
+          character: event.character,
+          timestamp: event.timestamp
+        });
       }
     );
   }
@@ -418,6 +419,9 @@ class AgentManager {
     if (this.punctuationUnsubscribe) {
       this.punctuationUnsubscribe();
     }
+
+    // Disconnect Redis
+    await this.redis.disconnect();
 
     // Shutdown all agents
     const documentIds = Array.from(this.agents.keys());

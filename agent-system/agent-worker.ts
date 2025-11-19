@@ -1,10 +1,10 @@
 import WebSocket from 'ws';
 import * as Y from 'yjs';
-import YProvider from '../shared/y-partyserver/provider.js';
+import YProvider from 'y-partyserver/provider';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { ySyncPlugin } from 'y-prosemirror';
-import { customSchema } from '../shared/prosemirror-schema.js';
+import { customSchema } from './prosemirror-schema.js';
 import { JSDOM } from 'jsdom';
 import { generateObject } from 'ai';
 import { Node as ProseMirrorNode, DOMSerializer } from 'prosemirror-model';
