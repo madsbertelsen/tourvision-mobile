@@ -6,15 +6,18 @@ services:
       context: ./agent-system
       dockerfile: Dockerfile
     restart: unless-stopped
-    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3001:3001"
     environment:
       MANAGER_ID: manager-docker-01
       MAX_CONCURRENT_AGENTS: ${MAX_CONCURRENT_AGENTS:-10}
       IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-30000}
-      WS_HOST: ${WS_HOST:-localhost}
+      WS_HOST: ${WS_HOST:-host.docker.internal}
       WS_PORT: ${WS_PORT:-8787}
       WS_PROTOCOL: ${WS_PROTOCOL:-ws}
-      SUPABASE_URL: ${SUPABASE_URL:-http://127.0.0.1:54321}
+      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY}

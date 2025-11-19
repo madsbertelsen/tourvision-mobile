@@ -1,4 +1,23 @@
 {
+  "name": "tourvision-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "y-partyserver",
+    "agent-poc",
+    "agent-system",
+    "frontend-prosemirror",
+    "server"
+  ],
+  "scripts": {
+    "build:y-partyserver": "cd y-partyserver && npm run build",
+    "build:agent-poc": "cd agent-poc && npm run build",
+    "build:frontend": "cd frontend-prosemirror && npm run build",
+    "build:server": "cd server && npm run build",
+    "build": "npm run build:y-partyserver && npm run build:agent-poc",
+    "dev:frontend": "cd frontend-prosemirror && npm run dev:client",
+    "dev:server": "cd server && npm run dev:server"
+  },
   "dependencies": {
     "@hocuspocus/provider": "^3.3.2",
     "@supabase/supabase-js": "^2.77.0",

@@ -1,0 +1,42 @@
+{
+  "name": "y-partyserver",
+  "version": "0.0.51",
+  "description": "Y.js collaboration server for PartyServer/Cloudflare Durable Objects",
+  "type": "module",
+  "license": "ISC",
+  "main": "./dist/server/index.js",
+  "types": "./dist/server/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider/index.d.ts",
+      "default": "./dist/provider/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "lib0": "^0.2.114",
+    "lodash.debounce": "^4.0.8",
+    "nanoid": "^5.1.6",
+    "y-protocols": "^1.0.6"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": "^4.20240729.0",
+    "partyserver": "^0.0.75",
+    "yjs": "^13.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240729.0",
+    "@types/lodash.debounce": "^4.0.9",
+    "partyserver": "^0.0.75",
+    "typescript": "^5.7.2",
+    "yjs": "^13.6.14"
+  }
+}
