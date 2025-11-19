@@ -232,18 +232,20 @@ services:
   agent-manager:
     container_name: tourvision-agent-manager
     build:
-      context: .
-      dockerfile: agent-manager/Dockerfile
+      context: ./agent-system
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       MANAGER_ID: manager-docker-01
       MAX_CONCURRENT_AGENTS: ${MAX_CONCURRENT_AGENTS:-10}
       IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-30000}
+      WS_HOST: ${WS_HOST:-localhost}
       WS_PORT: ${WS_PORT:-8787}
+      WS_PROTOCOL: ${WS_PROTOCOL:-ws}
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY}
     depends_on:
       - db
       - realtime
