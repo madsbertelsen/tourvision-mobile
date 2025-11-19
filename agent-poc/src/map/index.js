@@ -1,9 +1,9 @@
 import { EditorState } from "prosemirror-state";
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from "y-prosemirror";
-import YProvider from "../y-partyserver/provider";
+import YProvider from "../../../shared/y-partyserver/provider";
 import * as Y from "yjs";
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { customSchema } from "../prosemirror-schema";
+import { customSchema } from "../../../shared/prosemirror-schema";
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 

@@ -1,8 +1,8 @@
 import type { Connection } from "partyserver";
 import { routePartykitRequest } from "partyserver";
 import * as Y from "yjs";
-import { YServer } from "../y-partyserver"; // "y-partyserver";
-import type { CallbackOptions } from "../y-partyserver"; //"y-partyserver";
+import { YServer } from "../../../shared/y-partyserver";
+import type { CallbackOptions } from "../../../shared/y-partyserver";
 
 // Import Supabase client for Cloudflare Workers
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
