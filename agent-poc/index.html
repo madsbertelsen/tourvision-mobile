@@ -3,6 +3,11 @@
   <head>
     <title>Editor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Mapbox GL CSS and JS -->
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+
     <style>
       * {
         box-sizing: border-box;
@@ -151,6 +156,81 @@
         outline: 3px solid #3b82f6;
         outline-offset: 2px;
       }
+
+      /* Fullscreen Map Overlay */
+      #fullscreen-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10000;
+        display: none;
+        opacity: 0;
+        transition: opacity 300ms ease-in-out;
+      }
+
+      #fullscreen-overlay.visible {
+        display: block;
+      }
+
+      #fullscreen-overlay.fade-in {
+        opacity: 1;
+      }
+
+      .backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.55);
+        z-index: 10001;
+      }
+
+      #fullscreen-map-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10002;
+      }
+
+      #fullscreen-map {
+        width: 100vw;
+        height: 100vh;
+        opacity: 0.7;
+      }
+
+      #fullscreen-map .mapboxgl-canvas-container {
+        opacity: 0.7;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+        background-color: rgba(255, 255, 255, 0.95);
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 10003;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #000;
+        font-weight: 300;
+        transition: transform 0.2s;
+      }
+
+      .close-btn:hover {
+        transform: scale(1.1);
+      }
     </style>
   </head>
   <body>
@@ -169,6 +249,16 @@
       <button id="new-doc-btn">+ New Document</button>
     </div>
     <div id="root"></div>
+
+    <!-- Fullscreen Map Overlay (hidden by default) -->
+    <div id="fullscreen-overlay">
+      <div class="backdrop"></div>
+      <div id="fullscreen-map-container">
+        <div id="fullscreen-map"></div>
+      </div>
+      <button class="close-btn">✕</button>
+    </div>
+
     <script src="/src/client/index.js" type="module"></script>
   </body>
 </html>

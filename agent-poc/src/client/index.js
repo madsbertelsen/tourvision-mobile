@@ -1958,61 +1958,181 @@ window.addEventListener('parentMessage', (event) => {
 });
 
 // ==============================================================================
-// FULLSCREEN MAP IFRAME PRELOADING (BROWSER ONLY)
+// FULLSCREEN MAP (BROWSER ONLY - DIV OVERLAY)
 // ==============================================================================
 // Check if we're in standalone browser (not WebView/iframe)
 const isStandaloneBrowser = !window.ReactNativeWebView && (!window.parent || window.parent === window);
 
 if (isStandaloneBrowser) {
-  console.log('[Preload] Setting up fullscreen map iframe preloading');
+  console.log('[Fullscreen] Setting up fullscreen map with div overlay');
 
-  // Create iframe for fullscreen map
-  const fullscreenMapIframe = document.createElement('iframe');
-  const docId = window.editorDocumentId;
-  fullscreenMapIframe.id = 'fullscreen-map-iframe';
-  fullscreenMapIframe.src = `/map.html?doc=${docId}`;
+  // Mapbox token
+  const MAPBOX_TOKEN = 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
 
-  // Style the iframe to be fullscreen and hidden initially
-  fullscreenMapIframe.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    border: none;
-    z-index: 10000;
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-  `;
+  let fullscreenMap = null;
+  let currentLocations = [];
 
-  document.body.appendChild(fullscreenMapIframe);
-  console.log('[Preload] Fullscreen map iframe created and loading');
+  // Helper to create marker element
+  function createMarkerElement(colorIndex) {
+    const bgColor = COLORS[colorIndex % COLORS.length];
+
+    const el = document.createElement('div');
+    el.style.width = '32px';
+    el.style.height = '32px';
+    el.style.borderRadius = '50%';
+    el.style.backgroundColor = bgColor;
+    el.style.border = '3px solid white';
+    el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+
+    const inner = document.createElement('div');
+    inner.style.width = '12px';
+    inner.style.height = '12px';
+    inner.style.borderRadius = '50%';
+    inner.style.backgroundColor = 'white';
+
+    el.appendChild(inner);
+    return el;
+  }
+
+  // Function to extract locations from document
+  function extractLocationsForFullscreen() {
+    const locations = [];
+    // Find all geo-marks in the document
+    window.documentEditorInstance.editorView.state.doc.descendants((node) => {
+      if (node.isText && node.marks.length > 0) {
+        for (const mark of node.marks) {
+          if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+            locations.push({
+              geoId: mark.attrs.geoId,
+              placeName: mark.attrs.placeName,
+              lat: parseFloat(mark.attrs.lat),
+              lng: parseFloat(mark.attrs.lng),
+              colorIndex: mark.attrs.colorIndex || 0
+            });
+          }
+        }
+      }
+    });
+    console.log('[Fullscreen] Extracted locations:', locations.length);
+    return locations;
+  }
 
   // Function to show fullscreen map
   window.showFullscreenMap = () => {
-    console.log('[Preload] Showing fullscreen map');
-    fullscreenMapIframe.style.visibility = 'visible';
-    fullscreenMapIframe.style.opacity = '1';
-    fullscreenMapIframe.style.pointerEvents = 'auto';
+    console.log('[Fullscreen] Showing fullscreen map');
+
+    // Extract locations from document
+    currentLocations = extractLocationsForFullscreen();
+
+    if (currentLocations.length === 0) {
+      console.warn('[Fullscreen] No locations found to display');
+      return;
+    }
+
+    // Find the first map container in the document to get its position
+    const mapContainers = document.querySelectorAll('[data-node-type="map"]');
+    if (mapContainers.length === 0) {
+      console.warn('[Fullscreen] No map container found');
+      return;
+    }
+
+    const blockMapElement = mapContainers[0];
+    const rect = blockMapElement.getBoundingClientRect();
+
+    // Calculate padding to align markers
+    const padding = {
+      top: rect.top,
+      left: rect.left,
+      right: window.innerWidth - rect.right,
+      bottom: window.innerHeight - rect.bottom
+    };
+
+    console.log('[Fullscreen] Container rect:', rect);
+    console.log('[Fullscreen] Alignment padding:', padding);
+
+    // Calculate bounds from locations
+    const lngs = currentLocations.map(l => l.lng);
+    const lats = currentLocations.map(l => l.lat);
+    const boundsObj = new mapboxgl.LngLatBounds(
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)]
+    );
+
+    // Show overlay
+    const overlay = document.getElementById('fullscreen-overlay');
+    overlay.classList.add('visible');
+
+    // Trigger fade-in after DOM update
+    setTimeout(() => {
+      overlay.classList.add('fade-in');
+    }, 10);
+
+    // Initialize fullscreen map
+    setTimeout(() => {
+      // Remove existing map if any
+      if (fullscreenMap) {
+        fullscreenMap.remove();
+      }
+
+      console.log('[Fullscreen] Creating map with bounds:', boundsObj);
+
+      // Set Mapbox token
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+
+      // Create fullscreen map with padding for alignment
+      fullscreenMap = new mapboxgl.Map({
+        container: 'fullscreen-map',
+        style: 'mapbox://styles/mapbox/light-v11',
+        bounds: boundsObj,
+        fitBoundsOptions: {
+          padding: padding,
+          duration: 0
+        },
+        interactive: true,
+        trackResize: true,
+        fadeDuration: 0
+      });
+
+      // Add markers
+      fullscreenMap.on('load', () => {
+        console.log('[Fullscreen] Map loaded, adding markers');
+        currentLocations.forEach((location) => {
+          const el = createMarkerElement(location.colorIndex);
+
+          new mapboxgl.Marker(el)
+            .setLngLat([location.lng, location.lat])
+            .setPopup(new mapboxgl.Popup().setText(location.placeName))
+            .addTo(fullscreenMap);
+        });
+      });
+    }, 100);
   };
 
   // Function to hide fullscreen map
   window.hideFullscreenMap = () => {
-    console.log('[Preload] Hiding fullscreen map');
-    fullscreenMapIframe.style.opacity = '0';
+    console.log('[Fullscreen] Hiding fullscreen map');
+    const overlay = document.getElementById('fullscreen-overlay');
+    overlay.classList.remove('fade-in');
+
     setTimeout(() => {
-      fullscreenMapIframe.style.visibility = 'hidden';
-      fullscreenMapIframe.style.pointerEvents = 'none';
-    }, 300); // Wait for fade-out transition
+      overlay.classList.remove('visible');
+      if (fullscreenMap) {
+        fullscreenMap.remove();
+        fullscreenMap = null;
+      }
+    }, 300);
   };
 
-  // Listen for close messages from the iframe
-  window.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'closeFullscreenMap') {
-      console.log('[Preload] Received close message from fullscreen map');
-      window.hideFullscreenMap();
+  // Set up close button handler
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.querySelector('.close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        window.hideFullscreenMap();
+      });
     }
   });
 }
