@@ -210,6 +210,9 @@ let fullscreenMap: mapboxgl.Map | null = null;
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
 
+// Store the padding used when creating the fullscreen map
+let fullscreenMapPadding: { top: number; right: number; bottom: number; left: number } | null = null;
+
 // Storage for previous bounds (for animation)
 const previousBounds: Map<number, any> = new Map();
 
@@ -285,6 +288,9 @@ function extractLocationsForFullscreen() {
     right: window.innerWidth - rect.right,
     bottom: window.innerHeight - rect.bottom
   };
+
+  // Store padding globally for bounds calculation
+  fullscreenMapPadding = padding;
 
   console.log('[Fullscreen] Container rect:', rect);
   console.log('[Fullscreen] Alignment padding:', padding);
@@ -383,6 +389,9 @@ function extractLocationsForFullscreen() {
     console.log('[Awareness] Cleared map bounds');
   }
 
+  // Clear stored padding
+  fullscreenMapPadding = null;
+
   const overlay = document.getElementById('fullscreen-overlay');
   if (overlay) {
     overlay.classList.remove('fade-in');
@@ -403,35 +412,27 @@ function getVisibleBounds(map: mapboxgl.Map): any {
   // Check if this is the fullscreen map by checking if it's the global fullscreenMap
   const isFullscreenMap = map === fullscreenMap;
 
-  if (!isFullscreenMap) {
-    // For block maps, just return the regular bounds
+  if (!isFullscreenMap || !fullscreenMapPadding) {
+    // For block maps, or if padding isn't stored, return the regular bounds
     return map.getBounds();
   }
 
-  // For fullscreen map, calculate the visible bounds accounting for padding
-  // Get the block map container to calculate padding
-  const blockMapElement = document.querySelector('.prosemirror-map') as HTMLElement;
-  if (!blockMapElement) {
-    // Fallback to regular bounds if we can't find the block map
-    return map.getBounds();
-  }
-
-  const rect = blockMapElement.getBoundingClientRect();
-  const padding = {
-    top: rect.top,
-    left: rect.left,
-    right: window.innerWidth - rect.right,
-    bottom: window.innerHeight - rect.bottom
-  };
-
+  // For fullscreen map, calculate the visible bounds accounting for the stored padding
   // Get the map container dimensions
   const container = map.getContainer();
   const width = container.clientWidth;
   const height = container.clientHeight;
 
   // Calculate the visible area pixel coordinates (accounting for padding)
-  const topLeft = map.unproject([padding.left, padding.top]);
-  const bottomRight = map.unproject([width - padding.right, height - padding.bottom]);
+  const topLeft = map.unproject([fullscreenMapPadding.left, fullscreenMapPadding.top]);
+  const bottomRight = map.unproject([width - fullscreenMapPadding.right, height - fullscreenMapPadding.bottom]);
+
+  console.log('[Bounds] Fullscreen map container size:', { width, height });
+  console.log('[Bounds] Using stored padding:', fullscreenMapPadding);
+  console.log('[Bounds] Calculated visible area:', {
+    topLeft: topLeft.toArray(),
+    bottomRight: bottomRight.toArray()
+  });
 
   // Create a bounds object
   return new mapboxgl.LngLatBounds(topLeft, bottomRight);
