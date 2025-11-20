@@ -207,6 +207,13 @@ export default function TripListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Documents</Text>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => router.push('/(app)/document-next/test-doc')}
+        >
+          <Ionicons name="flask-outline" size={20} color="#ffffff" />
+          <Text style={styles.testButtonText}>Test WebRTC</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Document List */}
@@ -296,6 +303,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#fff',
@@ -306,6 +315,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
+    flex: 1,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  testButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   urlInputSection: {
     flexDirection: 'row',
