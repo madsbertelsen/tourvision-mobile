@@ -149,6 +149,27 @@
       white-space: pre-wrap;
     }
 
+    /* Hide header when hideHeader param is present */
+    body.hide-header header {
+      display: none;
+    }
+
+    /* Make app fullscreen when header is hidden */
+    body.hide-header #app {
+      max-width: none;
+      padding: 0;
+      height: 100vh;
+      margin: 0;
+    }
+
+    /* Make editor container fill screen when header is hidden */
+    body.hide-header #editor-container {
+      height: 100vh;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+
     /* Fullscreen Map Overlay */
     #fullscreen-overlay {
       position: fixed;
@@ -221,6 +242,13 @@
   </style>
 </head>
 <body>
+  <script>
+    // Check for hideHeader parameter immediately (before body renders)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('hideHeader') === 'true') {
+      document.body.classList.add('hide-header');
+    }
+  </script>
   <div id="app">
     <header>
       <h1>WebRTC Agent POC</h1>
