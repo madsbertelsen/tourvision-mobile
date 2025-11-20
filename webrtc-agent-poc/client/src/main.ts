@@ -279,8 +279,40 @@ async function main() {
   console.log('[Main] Application initialized successfully');
 }
 
+// Function to geocode a place name using Nominatim
+async function geocodePlace(placeName: string) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'WebRTC-Agent-POC/1.0'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Nominatim API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.length === 0) {
+      return null;
+    }
+
+    return {
+      placeName: data[0].display_name,
+      lat: data[0].lat,
+      lng: data[0].lon
+    };
+  } catch (error) {
+    console.error('[Main] Geocoding error:', error);
+    return null;
+  }
+}
+
 // Function to create a geo mark on selected text
-function createGeoMark(view: EditorView) {
+async function createGeoMark(view: EditorView) {
   const { state } = view;
   const { from, to } = state.selection;
 
@@ -292,13 +324,15 @@ function createGeoMark(view: EditorView) {
   // Get the selected text
   const selectedText = state.doc.textBetween(from, to);
 
-  // Prompt for location details
-  const placeName = prompt('Enter place name:', selectedText) || selectedText;
-  const lat = prompt('Enter latitude (e.g., 55.6761):') || '';
-  const lng = prompt('Enter longitude (e.g., 12.5683):') || '';
+  // Show loading state
+  updateStatus('Geocoding location...', 'connecting');
 
-  if (!lat || !lng) {
-    alert('Latitude and longitude are required');
+  // Geocode the selected text
+  const geocodeResult = await geocodePlace(selectedText);
+
+  if (!geocodeResult) {
+    updateStatus('Could not find location', 'disconnected');
+    alert(`Could not find coordinates for "${selectedText}". Please try a different location name.`);
     return;
   }
 
@@ -310,18 +344,25 @@ function createGeoMark(view: EditorView) {
   const mark = geoMarkType.create({
     geoId,
     displayText: selectedText,
-    placeName,
-    lat,
-    lng,
+    placeName: geocodeResult.placeName,
+    lat: geocodeResult.lat,
+    lng: geocodeResult.lng,
     colorIndex: Math.floor(Math.random() * 10),
-    coordSource: 'manual'
+    coordSource: 'nominatim'
   });
 
   // Apply the mark to the selection
   const tr = state.tr.addMark(from, to, mark);
   view.dispatch(tr);
 
-  console.log('[Main] Created geo mark:', { geoId, placeName, lat, lng });
+  updateStatus('Geo mark created', 'connected');
+  console.log('[Main] Created geo mark:', {
+    geoId,
+    selectedText,
+    placeName: geocodeResult.placeName,
+    lat: geocodeResult.lat,
+    lng: geocodeResult.lng
+  });
 }
 
 // Function to insert a map block
@@ -341,9 +382,30 @@ function insertMap(view: EditorView) {
 
 // Set up toolbar button event listeners
 function setupToolbarButtons(view: EditorView) {
-  const createGeoMarkBtn = document.getElementById('create-geomark-btn');
+  const createGeoMarkBtn = document.getElementById('create-geomark-btn') as HTMLButtonElement;
   const insertMapBtn = document.getElementById('insert-map-btn');
 
+  // Function to update button state based on selection
+  const updateButtonState = () => {
+    if (!createGeoMarkBtn) return;
+
+    const { state } = view;
+    const { from, to } = state.selection;
+    const hasSelection = from !== to;
+
+    createGeoMarkBtn.disabled = !hasSelection;
+    createGeoMarkBtn.style.opacity = hasSelection ? '1' : '0.5';
+    createGeoMarkBtn.style.cursor = hasSelection ? 'pointer' : 'not-allowed';
+  };
+
+  // Initial button state
+  updateButtonState();
+
+  // Update button state on selection change
+  view.dom.addEventListener('mouseup', updateButtonState);
+  view.dom.addEventListener('keyup', updateButtonState);
+
+  // Button click handlers
   if (createGeoMarkBtn) {
     createGeoMarkBtn.addEventListener('click', () => createGeoMark(view));
   }
