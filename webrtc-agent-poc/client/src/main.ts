@@ -210,6 +210,12 @@ let fullscreenMap: mapboxgl.Map | null = null;
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
 
+// Storage for previous bounds (for animation)
+const previousBounds: Map<number, any> = new Map();
+
+// Storage for active animation frames (for cancellation)
+const activeAnimations: Map<number, number> = new Map();
+
 // Helper function to create marker elements
 function createMarkerElement(colorIndex: number) {
   const bgColor = COLORS[colorIndex % COLORS.length];
@@ -473,10 +479,18 @@ function addBoundsOverlay(clientId: number, bounds: any, color: string) {
       },
     });
   });
+
+  // Store initial bounds for future animations
+  previousBounds.set(clientId, bounds);
 }
 
-// Update existing bounds overlay
-function updateBoundsOverlay(clientId: number, bounds: any, color: string) {
+// Easing function for smooth animation (easeInOutQuad)
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+// Update bounds overlay immediately (no animation)
+function updateBoundsOverlayImmediate(clientId: number, bounds: any) {
   const mapContainers = document.querySelectorAll('.prosemirror-map');
   mapContainers.forEach((container) => {
     const map = (container as any)._mapInstance;
@@ -502,11 +516,79 @@ function updateBoundsOverlay(clientId: number, bounds: any, color: string) {
           coordinates: coordinates,
         },
       });
-    } else {
-      // Source doesn't exist, create it
-      addBoundsOverlay(clientId, bounds, color);
     }
   });
+}
+
+// Animate bounds overlay transition
+function animateBoundsOverlay(clientId: number, oldBounds: any, newBounds: any, color: string, duration: number = 300) {
+  // Cancel any existing animation for this client
+  const existingAnimation = activeAnimations.get(clientId);
+  if (existingAnimation) {
+    cancelAnimationFrame(existingAnimation);
+  }
+
+  const startTime = Date.now();
+
+  function animate() {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = easeInOutQuad(progress);
+
+    // Interpolate bounds
+    const interpolatedBounds = {
+      north: oldBounds.north + (newBounds.north - oldBounds.north) * eased,
+      south: oldBounds.south + (newBounds.south - oldBounds.south) * eased,
+      east: oldBounds.east + (newBounds.east - oldBounds.east) * eased,
+      west: oldBounds.west + (newBounds.west - oldBounds.west) * eased,
+    };
+
+    // Update the overlay with interpolated coordinates
+    updateBoundsOverlayImmediate(clientId, interpolatedBounds);
+
+    if (progress < 1) {
+      // Continue animation
+      const frameId = requestAnimationFrame(animate);
+      activeAnimations.set(clientId, frameId);
+    } else {
+      // Animation complete
+      activeAnimations.delete(clientId);
+      previousBounds.set(clientId, newBounds);
+    }
+  }
+
+  animate();
+}
+
+// Update existing bounds overlay (with animation)
+function updateBoundsOverlay(clientId: number, bounds: any, color: string) {
+  // Check if we have previous bounds for animation
+  const oldBounds = previousBounds.get(clientId);
+
+  // Check if source exists
+  const mapContainers = document.querySelectorAll('.prosemirror-map');
+  let sourceExists = false;
+  mapContainers.forEach((container) => {
+    const map = (container as any)._mapInstance;
+    if (map && map.getSource(`bounds-overlay-${clientId}`)) {
+      sourceExists = true;
+    }
+  });
+
+  if (!sourceExists) {
+    // Source doesn't exist, create it
+    addBoundsOverlay(clientId, bounds, color);
+    return;
+  }
+
+  if (oldBounds) {
+    // We have previous bounds, animate the transition
+    animateBoundsOverlay(clientId, oldBounds, bounds, color);
+  } else {
+    // No previous bounds, update immediately
+    updateBoundsOverlayImmediate(clientId, bounds);
+    previousBounds.set(clientId, bounds);
+  }
 }
 
 // Remove bounds overlay from block maps
