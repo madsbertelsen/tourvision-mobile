@@ -175,27 +175,77 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 }
 
 // Auto-open agent tab (user mode only)
-function openAgentTab() {
+function openAgentTab(awareness: any) {
   if (isAgent) {
     console.log('[Main] Already in agent mode, skipping agent tab creation');
     return;
   }
 
-  const agentUrl = `${window.location.origin}${window.location.pathname}?doc=${documentId}&agent=true`;
-  console.log('[Main] Opening agent tab:', agentUrl);
+  // Track if we've already opened an agent tab in this session
+  let agentWindow: Window | null = null;
+  let hasCheckedForAgent = false;
 
-  const agentWindow = window.open(agentUrl, `agent-${documentId}`, 'width=800,height=600');
+  // Check if an agent is already connected
+  const checkForExistingAgent = () => {
+    const states = awareness.getStates();
+    let agentCount = 0;
+    let otherClients = 0;
 
-  if (!agentWindow) {
-    console.error('[Main] Failed to open agent tab - popup blocked?');
-    updateStatus('Failed to open agent tab (popup blocked)', 'disconnected');
-  } else {
-    console.log('[Main] Agent tab opened successfully');
-  }
+    console.log('[Main] Checking awareness states:', states.size);
+    states.forEach((state: any, clientId: number) => {
+      // Skip our own client
+      if (clientId === awareness.clientID) {
+        console.log(`[Main] Skipping own client ${clientId}`);
+        return;
+      }
+
+      otherClients++;
+      console.log(`[Main] Client ${clientId}: user=${JSON.stringify(state.user)}`);
+
+      // Check if this client is an agent
+      if (state.user?.name === 'Agent') {
+        agentCount++;
+      }
+    });
+
+    console.log(`[Main] Found ${otherClients} other clients, ${agentCount} agents`);
+    return agentCount > 0;
+  };
+
+  // Try to open agent tab after initial sync
+  const tryOpenAgent = () => {
+    if (hasCheckedForAgent) {
+      return;
+    }
+    hasCheckedForAgent = true;
+
+    // Check if there's already an agent connected
+    if (checkForExistingAgent()) {
+      console.log('[Main] Agent already connected to document, skipping agent tab creation');
+      return;
+    }
+
+    const agentUrl = `${window.location.origin}${window.location.pathname}?doc=${documentId}&agent=true`;
+    console.log('[Main] No agent found, opening agent tab:', agentUrl);
+
+    // Using named window target - if window with this name exists, it will be reused
+    agentWindow = window.open(agentUrl, `agent-${documentId}`, 'width=800,height=600');
+
+    if (!agentWindow) {
+      console.error('[Main] Failed to open agent tab - popup blocked?');
+      updateStatus('Failed to open agent tab (popup blocked)', 'disconnected');
+    } else {
+      console.log('[Main] Agent tab opened/focused successfully');
+    }
+  };
+
+  // Wait for initial sync before checking for agents
+  setTimeout(tryOpenAgent, 1500);
 
   // Close agent tab when user tab closes
   window.addEventListener('beforeunload', () => {
     if (agentWindow && !agentWindow.closed) {
+      console.log('[Main] Closing agent tab');
       agentWindow.close();
     }
   });
@@ -219,7 +269,7 @@ async function main() {
 
   // Open agent tab (user mode only)
   if (!isAgent) {
-    openAgentTab();
+    openAgentTab(awareness);
   }
 
   updateStatus('Connecting to peers...', 'connecting');
