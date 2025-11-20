@@ -428,6 +428,47 @@ webrtc-agent-poc/
 - Agent tab visible in browser
 - Could distract user (but useful for development)
 
+## Implemented Features
+
+### ✅ Core Editor (Completed)
+- **Custom ProseMirror Schema** - Geo marks and map nodes from frontend-prosemirror
+- **Y.js Collaboration** - Real-time document sync via y-webrtc (WebRTC P2P)
+- **Auto-opening Agent Tab** - User tab automatically opens agent companion tab
+- **Random User Identities** - Each tab gets unique name (User 1-10) and color for multi-tab testing
+
+### ✅ Geo-Marks (Completed)
+- **Create Geo Mark Button** - Select text and create location marks
+- **Geo Mark Attributes** - geoId, placeName, lat, lng, colorIndex, coordSource, etc.
+- **Visual Styling** - Color-coded background with semi-transparent highlighting
+- **Synced Across Tabs** - Geo marks replicate via Y.js CRDT
+
+### ✅ Map Rendering (Completed)
+- **Mapbox GL JS Integration** - Custom map block node type in ProseMirror
+- **Auto-refresh Markers** - Maps update every 1 second to show new geo-marks
+- **Map Bounds Fitting** - Automatically fits all locations with proper zoom
+- **Insert Map Button** - Adds map block at cursor position
+
+### ✅ Fullscreen Map (Completed)
+- **Click to Fullscreen** - Click any map block to open fullscreen overlay
+- **Visual Alignment** - Markers appear at same screen position during transition
+- **Adjusted Bounds** - Pre-calculates bounds accounting for block map position
+- **No Padding Issues** - Creates fullscreen map without fitBounds padding
+- **Smooth Animations** - 300ms fade-in/fade-out transitions
+- **Close Button** - X button to exit fullscreen
+
+### ✅ Collaborative Map Awareness (Completed)
+- **Map Bounds Tracking** - Awareness extended with mapBounds field
+- **Real-time Overlays** - Colored rectangles show other users' viewport bounds
+- **Smooth Animations** - requestAnimationFrame with easeInOutQuad easing (300ms)
+- **Accurate Bounds** - Uses getBounds() after removing padding from fullscreen map
+- **Color Coding** - Rectangles use user's awareness color
+
+### ✅ UI Features (Completed)
+- **hideHeader Query Param** - Add `?hideHeader=true` for fullscreen editor mode
+- **Responsive Layout** - Editor fills viewport when header is hidden
+- **Status Indicators** - Connection status, peer count, document ID
+- **Mode Badges** - Visual distinction between User and Agent tabs
+
 ## Success Criteria
 
 This POC is considered successful if:
@@ -438,14 +479,95 @@ This POC is considered successful if:
 4. ✅ Agent tab can create geo-marks in the shared document
 5. ✅ No Node.js processes required (pure browser)
 6. ✅ No platform-specific WebRTC issues
+7. ✅ **NEW:** Collaborative awareness with map bounds and smooth animations
+8. ✅ **NEW:** Fullscreen map with accurate bounds tracking
+9. ✅ **NEW:** Multi-tab testing with user identities
+
+## Usage
+
+### Development
+
+```bash
+# Terminal 1: Start Cloudflare Worker (signaling server)
+cd webrtc-agent-poc/worker
+npm run dev  # Port 8787 or 8788
+
+# Terminal 2: Start client
+cd webrtc-agent-poc/client
+npm run dev  # Port 5174
+```
+
+### URLs
+
+- **Normal mode:** `http://localhost:5174/?doc=test-doc`
+- **Fullscreen mode:** `http://localhost:5174/?doc=test-doc&hideHeader=true`
+- **Agent mode:** `http://localhost:5174/?doc=test-doc&agent=true`
+
+### Testing Collaborative Features
+
+1. Open user tab: `http://localhost:5174/?doc=collab-test`
+2. An agent tab will auto-open
+3. Open additional tabs with same URL to simulate multiple users
+4. Type text, create geo marks, insert map
+5. Click map to open fullscreen
+6. Pan/zoom - other tabs see colored awareness rectangles with smooth animations
+
+## Technical Implementation Notes
+
+### Map Bounds Awareness
+
+**Key insight:** Mapbox's `getBounds()` returns inset bounds when padding is set. Solution:
+1. Calculate adjusted bounds that account for block map position
+2. Create fullscreen map WITHOUT padding (padding: 0)
+3. Use `getBounds()` directly for accurate full viewport bounds
+
+**Implementation:**
+```typescript
+// Calculate fullscreen viewport edges in block map's coordinate system
+const fsTopLeft = { x: -rect.left, y: -rect.top };
+const fsBottomRight = { x: window.innerWidth - rect.left, y: window.innerHeight - rect.top };
+
+// Unproject using block map to get geographic coordinates
+const topLeft = blockMap.unproject([fsTopLeft.x, fsTopLeft.y]);
+const bottomRight = blockMap.unproject([fsBottomRight.x, fsBottomRight.y]);
+const adjustedBounds = new LngLatBounds(topLeft, bottomRight);
+
+// Create fullscreen map with adjusted bounds (no padding)
+new Map({ bounds: adjustedBounds, fitBoundsOptions: { padding: 0 } });
+```
+
+### Smooth Animations
+
+**Approach:** requestAnimationFrame with easing function
+```typescript
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function animateBoundsOverlay(clientId, oldBounds, newBounds, duration = 300) {
+  // Interpolate north, south, east, west over 300ms
+  // Apply easeInOutQuad for smooth motion
+  // Cancel existing animations before starting new ones
+}
+```
+
+## Known Issues / Limitations
+
+1. **Agent Logic** - Agent command execution not yet implemented (placeholder)
+2. **LLM Integration** - No actual LLM calls yet (needs API key management)
+3. **Period Detection** - Agent period trigger not hooked up yet
+4. **CORS Issues** - Browser-based LLM calls may need proxy
 
 ## Next Steps
 
-1. **Implement Phase 1-4** to validate y-webrtc sync
-2. **Test across browsers** (Chrome, Firefox, Safari)
-3. **Measure performance** (sync latency, WebRTC overhead)
-4. **Compare with current system** (pros/cons)
-5. **Decision point:** Proceed with full implementation or iterate
+1. ~~**Implement Phase 1-4**~~ ✅ Done - y-webrtc sync working
+2. ~~**Custom Schema**~~ ✅ Done - Geo marks and maps working
+3. ~~**Collaborative Awareness**~~ ✅ Done - Map bounds with animations
+4. **Agent Executor** - Implement actual LLM integration
+5. **Test across browsers** (Chrome, Firefox, Safari)
+6. **Measure performance** (sync latency, WebRTC overhead, animation smoothness)
+7. **Compare with current system** (pros/cons)
+8. **Decision point:** Proceed with full implementation or iterate
 
 ## References
 
