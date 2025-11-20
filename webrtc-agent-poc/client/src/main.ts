@@ -153,6 +153,162 @@ function customCursorBuilder(user: any): HTMLElement {
   return cursor;
 }
 
+// Global fullscreen map variable
+let fullscreenMap: mapboxgl.Map | null = null;
+
+// Helper function to create marker elements
+function createMarkerElement(colorIndex: number) {
+  const bgColor = COLORS[colorIndex % COLORS.length];
+  const el = document.createElement('div');
+  el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+  el.appendChild(inner);
+
+  return el;
+}
+
+// Declare global variable to store current editor view
+let globalEditorView: EditorView | null = null;
+
+// Extract locations from document (for fullscreen map)
+function extractLocationsForFullscreen() {
+  if (!globalEditorView) return [];
+
+  const locations: any[] = [];
+  globalEditorView.state.doc.descendants((node) => {
+    if (node.isText && node.marks.length > 0) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+          locations.push({
+            geoId: mark.attrs.geoId,
+            displayText: mark.attrs.displayText || node.text,
+            placeName: mark.attrs.placeName,
+            lat: parseFloat(mark.attrs.lat),
+            lng: parseFloat(mark.attrs.lng),
+            colorIndex: mark.attrs.colorIndex,
+          });
+        }
+      }
+    }
+  });
+  return locations;
+}
+
+// Show fullscreen map (using existing overlay from HTML)
+(window as any).showFullscreenMap = () => {
+  console.log('[Fullscreen] Showing fullscreen map');
+
+  // Extract locations from document
+  const currentLocations = extractLocationsForFullscreen();
+
+  if (currentLocations.length === 0) {
+    console.warn('[Fullscreen] No locations found to display');
+    return;
+  }
+
+  // Find the first map container in the document to get its position
+  const mapContainers = document.querySelectorAll('.prosemirror-map');
+  if (mapContainers.length === 0) {
+    console.warn('[Fullscreen] No map container found');
+    return;
+  }
+
+  const blockMapElement = mapContainers[0] as any;
+  const rect = blockMapElement.getBoundingClientRect();
+
+  // Calculate padding to align markers
+  const padding = {
+    top: rect.top,
+    left: rect.left,
+    right: window.innerWidth - rect.right,
+    bottom: window.innerHeight - rect.bottom
+  };
+
+  console.log('[Fullscreen] Container rect:', rect);
+  console.log('[Fullscreen] Alignment padding:', padding);
+
+  // Get bounds from the block map instead of recalculating from locations
+  const blockMap = blockMapElement._mapInstance;
+  if (!blockMap) {
+    console.error('[Fullscreen] Block map instance not found');
+    return;
+  }
+
+  const boundsObj = blockMap.getBounds();
+
+  // Show overlay
+  const overlay = document.getElementById('fullscreen-overlay');
+  if (!overlay) {
+    console.error('[Fullscreen] Overlay element not found');
+    return;
+  }
+  overlay.classList.add('visible');
+
+  // Trigger fade-in after DOM update
+  setTimeout(() => {
+    overlay.classList.add('fade-in');
+  }, 10);
+
+  // Initialize fullscreen map
+  setTimeout(() => {
+    // Remove existing map if any
+    if (fullscreenMap) {
+      fullscreenMap.remove();
+    }
+
+    console.log('[Fullscreen] Creating map with bounds:', boundsObj);
+
+    // Set Mapbox token
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    // Create fullscreen map with padding for alignment
+    fullscreenMap = new mapboxgl.Map({
+      container: 'fullscreen-map',
+      style: 'mapbox://styles/mapbox/light-v11',
+      bounds: boundsObj,
+      fitBoundsOptions: {
+        padding: padding,
+        duration: 0
+      },
+      interactive: true,
+      trackResize: true,
+      fadeDuration: 0
+    });
+
+    // Add markers
+    fullscreenMap.on('load', () => {
+      console.log('[Fullscreen] Map loaded, adding markers');
+      currentLocations.forEach((location) => {
+        const el = createMarkerElement(location.colorIndex);
+
+        new mapboxgl.Marker(el)
+          .setLngLat([location.lng, location.lat])
+          .setPopup(new mapboxgl.Popup().setText(location.placeName))
+          .addTo(fullscreenMap!);
+      });
+    });
+  }, 100);
+};
+
+// Hide fullscreen map
+(window as any).hideFullscreenMap = () => {
+  console.log('[Fullscreen] Hiding fullscreen map');
+  const overlay = document.getElementById('fullscreen-overlay');
+  if (overlay) {
+    overlay.classList.remove('fade-in');
+
+    setTimeout(() => {
+      overlay.classList.remove('visible');
+      if (fullscreenMap) {
+        fullscreenMap.remove();
+        fullscreenMap = null;
+      }
+    }, 300);
+  }
+};
+
 // Map Node View - renders Mapbox maps for map blocks
 function createMapNodeView(node: any, editorView: EditorView) {
     const dom = document.createElement('div');
@@ -162,6 +318,29 @@ function createMapNodeView(node: any, editorView: EditorView) {
     const mapContainer = document.createElement('div');
     mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
     dom.appendChild(mapContainer);
+
+    // Create clickable overlay for fullscreen
+    const clickOverlay = document.createElement('div');
+    clickOverlay.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      cursor: pointer;
+      background: transparent;
+    `;
+
+    clickOverlay.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if ((window as any).showFullscreenMap) {
+        (window as any).showFullscreenMap();
+      }
+    });
+
+    dom.appendChild(clickOverlay);
 
     let currentMap: mapboxgl.Map | null = null;
     let currentMarkers: mapboxgl.Marker[] = [];
@@ -238,16 +417,13 @@ function createMapNodeView(node: any, editorView: EditorView) {
           touchZoomRotate: false,
         });
 
+        // Store map instance on DOM for fullscreen access
+        (dom as any)._mapInstance = currentMap;
+
         currentMap.once('style.load', () => {
           // Add markers
           locations.forEach((location: any) => {
-            const bgColor = COLORS[location.colorIndex % COLORS.length];
-            const el = document.createElement('div');
-            el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
-
-            const inner = document.createElement('div');
-            inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
-            el.appendChild(inner);
+            const el = createMarkerElement(location.colorIndex);
 
             const marker = new mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
@@ -310,13 +486,7 @@ function createMapNodeView(node: any, editorView: EditorView) {
       } else {
         // Add new markers
         locations.forEach((location: any) => {
-          const bgColor = COLORS[location.colorIndex % COLORS.length];
-          const el = document.createElement('div');
-          el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
-
-          const inner = document.createElement('div');
-          inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
-          el.appendChild(inner);
+          const el = createMarkerElement(location.colorIndex);
 
           const marker = new mapboxgl.Marker(el)
             .setLngLat([location.lng, location.lat])
@@ -397,6 +567,9 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       map: createMapNodeView,
     },
   });
+
+  // Store global reference for fullscreen map
+  globalEditorView = view;
 
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
   return view;
@@ -644,6 +817,18 @@ function setupToolbarButtons(view: EditorView) {
 
   console.log('[Main] Toolbar buttons set up');
 }
+
+// Set up close button handler for fullscreen overlay
+document.addEventListener('DOMContentLoaded', () => {
+  const closeBtn = document.querySelector('.close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if ((window as any).hideFullscreenMap) {
+        (window as any).hideFullscreenMap();
+      }
+    });
+  }
+});
 
 // Start the application
 main().catch((error) => {

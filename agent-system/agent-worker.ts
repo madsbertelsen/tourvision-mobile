@@ -10,6 +10,7 @@ import { generateObject } from 'ai';
 import { Node as ProseMirrorNode, DOMSerializer } from 'prosemirror-model';
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'werift';
 
 // Type definitions
 interface GeocodeResult {

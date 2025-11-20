@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ES2020",
+    "target": "ES2020",
+    "moduleResolution": "bundler",
+    "noEmit": false,
+    "outDir": "./dist-browser"
+  },
+  "include": ["browser-agent.ts", "shared/**/*.ts"],
+  "exclude": ["node_modules", "**/*.spec.ts", "agent-manager.ts", "agent-worker.ts"]
+}

@@ -19,6 +19,14 @@ REDIS_URL = "redis://127.0.0.1:6379"
 name = "Document"
 class_name = "Document"
 
+[[durable_objects.bindings]]
+name = "SIGNALING"
+class_name = "SignalingChannel"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Document"]
+
+[[migrations]]
+tag = "v2"
+renamed_classes = [{from = "LobbyRoom", to = "SignalingChannel"}]

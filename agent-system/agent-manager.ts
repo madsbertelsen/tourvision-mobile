@@ -13,6 +13,7 @@ import { fork, ChildProcess } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
 import * as dotenv from 'dotenv';
+import express, { Express, Request, Response } from 'express';
 import { createAgentDatabase, AgentDatabase } from './shared/database.js';
 import type { DocumentActivity, AgentWorkerMessage, ManagerMessage } from './shared/types.js';
 import { RedisStreamsClient, PunctuationEvent } from './shared/redis-streams.js';
@@ -24,6 +25,7 @@ dotenv.config();
 const MANAGER_ID = process.env.MANAGER_ID || `manager-${uuidv4().substring(0, 8)}`;
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_AGENTS || '10');
 const IDLE_TIMEOUT_MS = parseInt(process.env.IDLE_TIMEOUT_MS || '30000');
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || '3000');
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
@@ -42,14 +44,18 @@ class AgentManager {
   private db: AgentDatabase;
   private agents = new Map<string, ChildProcess>();  // documentId -> process
   private agentIds = new Map<string, string>();      // documentId -> agentId
+  private agentOffers = new Map<string, any>();      // documentId -> WebRTC offer (SDP)
   private healthCheckTimers = new Map<string, NodeJS.Timeout>();
   private realtimeUnsubscribe: (() => void) | null = null;
   private punctuationUnsubscribe: (() => void) | null = null;
   private redis: RedisStreamsClient;
+  private httpServer: Express;
 
   constructor() {
     this.db = createAgentDatabase(SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY);
     this.redis = new RedisStreamsClient(REDIS_URL);
+    this.httpServer = express();
+    this.httpServer.use(express.json());
   }
 
   async initialize() {
@@ -76,9 +82,91 @@ class AgentManager {
     // Subscribe to punctuation detection from Redis
     this.subscribeToPunctuationRedis();
 
+    // Setup HTTP server for lobby notifications
+    this.setupHttpServer();
+
     console.log('[Manager] 🚀 Ready to manage agents');
     console.log('[Manager] Listening for document activity events and punctuation from Redis Streams...');
     console.log('');
+  }
+
+  /**
+   * Wait for agent to generate and send its WebRTC offer
+   * Returns the offer or null if timeout occurs
+   */
+  private async waitForAgentOffer(documentId: string, timeoutMs: number): Promise<any | null> {
+    return new Promise((resolve) => {
+      const checkInterval = 100; // Check every 100ms
+      let elapsed = 0;
+
+      const interval = setInterval(() => {
+        const offer = this.agentOffers.get(documentId);
+        if (offer) {
+          clearInterval(interval);
+          resolve(offer);
+          return;
+        }
+
+        elapsed += checkInterval;
+        if (elapsed >= timeoutMs) {
+          clearInterval(interval);
+          resolve(null);
+        }
+      }, checkInterval);
+    });
+  }
+
+  private setupHttpServer() {
+    // POST /agent/spawn - Receive spawn requests from signaling service
+    this.httpServer.post('/agent/spawn', async (req: Request, res: Response) => {
+      try {
+        const { documentId } = req.body;
+
+        if (!documentId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required field: documentId'
+          });
+        }
+
+        console.log(`[Manager] 📨 Spawn request from signaling service: document=${documentId}`);
+
+        // Spawn agent for this document
+        await this.attachAgent(documentId);
+
+        const agentId = this.agentIds.get(documentId);
+
+        // Wait for agent to generate WebRTC offer (with timeout)
+        const offer = await this.waitForAgentOffer(documentId, 5000);
+
+        if (!offer) {
+          console.error(`[Manager] ❌ Agent failed to generate offer within timeout`);
+          return res.status(500).json({
+            success: false,
+            error: 'Agent failed to generate WebRTC offer'
+          });
+        }
+
+        res.json({
+          success: true,
+          agentId,
+          documentId,
+          offer  // WebRTC offer from agent
+        });
+      } catch (error) {
+        console.error('[Manager] Error spawning agent:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to spawn agent'
+        });
+      }
+    });
+
+    // Start HTTP server
+    this.httpServer.listen(HTTP_PORT, () => {
+      console.log(`[Manager] 🌐 HTTP server listening on http://localhost:${HTTP_PORT}`);
+      console.log(`[Manager] Ready to receive lobby spawn requests at POST /agent/spawn`);
+    });
   }
 
   private subscribeToActivity() {
@@ -207,8 +295,8 @@ class AgentManager {
     }
 
     try {
-      // Fork worker process (pass WS_PORT and AI_GATEWAY_API_KEY for correct WebSocket URL and LLM access)
-      const child = fork('./agent-worker.js', [documentId], {
+      // Fork worker launcher process (Playwright-based browser agent)
+      const child = fork('./agent-worker-launcher.js', [documentId], {
         env: {
           ...process.env,
           DOCUMENT_ID: documentId,
@@ -258,6 +346,12 @@ class AgentManager {
       case 'connected':
         console.log(`[Manager] ✅ Agent ${agentId} connected and synced`);
         await this.db.updateAgentStatus(agentId, 'active');
+        break;
+
+      case 'webrtc_offer':
+        // Agent has generated its WebRTC offer
+        console.log(`[Manager] 📡 Received WebRTC offer from agent ${agentId}`);
+        this.agentOffers.set(documentId, msg.offer);
         break;
 
       case 'metrics':
