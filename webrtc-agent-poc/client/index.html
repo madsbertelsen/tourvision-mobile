@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Agent POC</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    #app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    #editor-container {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 400px;
+      margin-top: 20px;
+    }
+
+    .ProseMirror {
+      outline: none;
+      min-height: 350px;
+      padding: 10px;
+    }
+
+    .ProseMirror p {
+      margin-bottom: 1em;
+    }
+
+    header {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .mode-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .mode-badge.user {
+      background: #3B82F6;
+      color: white;
+    }
+
+    .mode-badge.agent {
+      background: #10B981;
+      color: white;
+    }
+
+    .doc-info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .status.connected {
+      background: #D1FAE5;
+      color: #065F46;
+    }
+
+    .status.connecting {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .status.disconnected {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    /* Ensure ProseMirror has proper white-space handling */
+    .ProseMirror {
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>WebRTC Agent POC</h1>
+      <div id="mode-indicator"></div>
+      <div id="doc-info" class="doc-info"></div>
+      <div id="status" class="status connecting">Initializing...</div>
+    </header>
+    <div id="editor-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

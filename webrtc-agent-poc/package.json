@@ -1,0 +1,28 @@
+{
+  "name": "webrtc-agent-poc",
+  "version": "0.1.0",
+  "description": "Browser-to-browser AI agent system using WebRTC and y-webrtc",
+  "private": true,
+  "workspaces": [
+    "client",
+    "worker",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev:worker & npm run dev:client",
+    "dev:worker": "cd worker && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:worker && npm run build:client",
+    "build:worker": "cd worker && npm run build",
+    "build:client": "cd client && npm run build"
+  },
+  "keywords": [
+    "webrtc",
+    "yjs",
+    "prosemirror",
+    "collaborative-editing",
+    "ai-agents"
+  ],
+  "author": "",
+  "license": "MIT"
+}
