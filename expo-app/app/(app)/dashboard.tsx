@@ -45,7 +45,7 @@ export default function TripListScreen() {
       setIsCreating(true);
       const newDocument = await createDocument('New Document');
       // Navigate to the new document
-      router.push(`/(app)/document-next/${newDocument.id}`);
+      router.push(`/(app)/document/${newDocument.id}`);
     } catch (error) {
       console.error('Error creating document:', error);
       Alert.alert('Error', 'Failed to create document');
@@ -239,7 +239,7 @@ export default function TripListScreen() {
               <View key={`${document.id}-${index}`}>
                 <TouchableOpacity
                   style={styles.tripCard}
-                  onPress={() => router.push(`/(app)/document-next/${document.id}`)}
+                  onPress={() => router.push(`/(app)/document/${document.id}`)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.tripCardContent}>

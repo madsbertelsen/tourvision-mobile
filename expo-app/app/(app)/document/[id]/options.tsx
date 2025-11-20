@@ -29,7 +29,7 @@ export default function DocumentOptionsModal() {
     }
 
     if (action === 'toggleMap') {
-      router.push(`/document-next/${documentId}/map`);
+      router.push(`/document/${documentId}/map`);
       return;
     }
 

@@ -63,12 +63,12 @@ export default function LocationDetailsRoute() {
 
   const handleTransportation = () => {
     // Navigate to transport config for this location
-    router.push(`/document-next/${documentId}/map/transport/${locationId}`);
+    router.push(`/document/${documentId}/map/transport/${locationId}`);
   };
 
   const handleEditLocation = () => {
     // Navigate to edit location within bottom sheet
-    router.push(`/document-next/${documentId}/map/edit/${location.geoId}`);
+    router.push(`/document/${documentId}/map/edit/${location.geoId}`);
   };
 
   return (

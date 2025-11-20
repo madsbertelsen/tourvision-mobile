@@ -351,7 +351,7 @@ export default function MapLayout() {
     }
 
     // Navigate to location view
-    router.push(`/document-next/${documentId}/map/location/${location.geoId}`);
+    router.push(`/document/${documentId}/map/location/${location.geoId}`);
   }, [segments, documentId, router]);
 
   // Handle route line press
@@ -379,12 +379,12 @@ export default function MapLayout() {
     }
 
     // Navigate to transport config for the destination location
-    router.push(`/document-next/${documentId}/map/transport/${route.toLocationId}`);
+    router.push(`/document/${documentId}/map/transport/${route.toLocationId}`);
   }, [isAddingWaypoint, documentId, router, setPendingWaypoints, setIsAddingWaypoint, bottomSheetRef]);
 
   // Handle close button - always return to document view
   const handleClose = useCallback(() => {
-    router.dismissTo(`/document-next/${documentId}`);
+    router.dismissTo(`/document/${documentId}`);
   }, [router, documentId]);
 
   // Snap points for bottom sheet (max 50% to avoid blocking map)
@@ -575,7 +575,7 @@ export default function MapLayout() {
             enablePanDownToClose={true}
             onClose={() => {
               // When bottom sheet closes, navigate back to index
-              router.replace(`/document-next/${documentId}/map`);
+              router.replace(`/document/${documentId}/map`);
             }}
             backgroundStyle={styles.bottomSheetBackground}
             handleIndicatorStyle={styles.bottomSheetIndicator}

@@ -1,4 +1,4 @@
-// Test location data for document-next map testing
+// Test location data for document map testing
 
 export interface TestLocation {
   geoId: string;

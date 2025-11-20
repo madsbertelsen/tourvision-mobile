@@ -13,8 +13,8 @@ export function ChromeTabBar() {
   const [documentCount, setDocumentCount] = useState(0);
   const [currentDocTitle, setCurrentDocTitle] = useState('Document');
 
-  // Extract document ID from pathname (supports both document and document-next routes)
-  const currentDocId = pathname.match(/\/document(?:-next)?\/([^\/]+)/)?.[1];
+  // Extract document ID from pathname
+  const currentDocId = pathname.match(/\/document\/([^\/]+)/)?.[1];
 
   useEffect(() => {
     loadDocumentCount();
@@ -99,7 +99,7 @@ export function ChromeTabBar() {
       setDocumentCount(documents.length);
 
       // Navigate to the new document
-      router.push(`/(app)/document-next/${newDocId}`);
+      router.push(`/(app)/document/${newDocId}`);
     } catch (error) {
       console.error('Error creating new document:', error);
     }
@@ -107,7 +107,7 @@ export function ChromeTabBar() {
 
   const handleMenuPress = () => {
     if (currentDocId) {
-      router.push(`/(app)/document-next/${currentDocId}/options?title=${encodeURIComponent(currentDocTitle)}`);
+      router.push(`/(app)/document/${currentDocId}/options?title=${encodeURIComponent(currentDocTitle)}`);
     }
   };
 

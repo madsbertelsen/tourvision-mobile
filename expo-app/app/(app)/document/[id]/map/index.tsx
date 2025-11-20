@@ -15,7 +15,7 @@ export default function MapIndexRoute() {
     // Uncomment to enable:
     /*
     if (locations.length > 0) {
-      router.replace(`/document-next/${documentId}/map/location/${locations[0].geoId}`);
+      router.replace(`/document/${documentId}/map/location/${locations[0].geoId}`);
     }
     */
 

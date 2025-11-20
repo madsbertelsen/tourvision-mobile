@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useMapContext } from '@/app/(app)/document-next/[id]/map/_layout';
+import { useMapContext } from '@/app/(app)/document/[id]/map/_layout';
 
 export default function MapDebugOverlay() {
   const { locations, routes, cameraRef } = useMapContext();

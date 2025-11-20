@@ -94,7 +94,7 @@ export default function AgentEditorScreen() {
           }
 
           // Navigate to map
-          router.push(`/document-next/${documentId}/map`);
+          router.push(`/document/${documentId}/map`);
           break;
 
         case 'documentChange':
