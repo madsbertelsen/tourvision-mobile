@@ -397,27 +397,64 @@ function extractLocationsForFullscreen() {
   }
 };
 
+// Helper function to calculate visible bounds accounting for padding
+function getVisibleBounds(map: mapboxgl.Map): any {
+  // For the fullscreen map, we need to account for padding
+  // Check if this is the fullscreen map by checking if it's the global fullscreenMap
+  const isFullscreenMap = map === fullscreenMap;
+
+  if (!isFullscreenMap) {
+    // For block maps, just return the regular bounds
+    return map.getBounds();
+  }
+
+  // For fullscreen map, calculate the visible bounds accounting for padding
+  // Get the block map container to calculate padding
+  const blockMapElement = document.querySelector('.prosemirror-map') as HTMLElement;
+  if (!blockMapElement) {
+    // Fallback to regular bounds if we can't find the block map
+    return map.getBounds();
+  }
+
+  const rect = blockMapElement.getBoundingClientRect();
+  const padding = {
+    top: rect.top,
+    left: rect.left,
+    right: window.innerWidth - rect.right,
+    bottom: window.innerHeight - rect.bottom
+  };
+
+  // Get the map container dimensions
+  const container = map.getContainer();
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  // Calculate the visible area pixel coordinates (accounting for padding)
+  const topLeft = map.unproject([padding.left, padding.top]);
+  const bottomRight = map.unproject([width - padding.right, height - padding.bottom]);
+
+  // Create a bounds object
+  return new mapboxgl.LngLatBounds(topLeft, bottomRight);
+}
+
 // Helper function to update awareness with current map bounds
 function updateMapBoundsAwareness(awareness: any, map: mapboxgl.Map) {
-  const bounds = map.getBounds();
+  const bounds = getVisibleBounds(map);
   const currentUser = awareness.getLocalState()?.user || {};
 
-  awareness.setLocalStateField('user', {
-    ...currentUser,
-    mapBounds: {
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest(),
-    },
-  });
-
-  console.log('[Awareness] Updated map bounds:', {
+  const boundsData = {
     north: bounds.getNorth(),
     south: bounds.getSouth(),
     east: bounds.getEast(),
     west: bounds.getWest(),
+  };
+
+  awareness.setLocalStateField('user', {
+    ...currentUser,
+    mapBounds: boundsData,
   });
+
+  console.log('[Awareness] Updated map bounds:', boundsData);
 }
 
 // Add bounds overlay to block maps
