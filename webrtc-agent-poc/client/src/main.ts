@@ -9,7 +9,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { Schema, DOMParser } from 'prosemirror-model';
-import { schema } from 'prosemirror-schema-basic';
+import { customSchema } from './prosemirror-schema';
 import { keymap } from 'prosemirror-keymap';
 import { history, undo, redo } from 'prosemirror-history';
 import { baseKeymap } from 'prosemirror-commands';
@@ -150,7 +150,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   }
 
   const state = EditorState.create({
-    schema,
+    schema: customSchema,
     plugins: [
       // Y.js sync plugins
       ySyncPlugin(yXmlFragment),
@@ -272,8 +272,87 @@ async function main() {
     openAgentTab(awareness);
   }
 
+  // Set up toolbar button handlers
+  setupToolbarButtons(editor);
+
   updateStatus('Connecting to peers...', 'connecting');
   console.log('[Main] Application initialized successfully');
+}
+
+// Function to create a geo mark on selected text
+function createGeoMark(view: EditorView) {
+  const { state } = view;
+  const { from, to } = state.selection;
+
+  if (from === to) {
+    alert('Please select some text to create a geo mark');
+    return;
+  }
+
+  // Get the selected text
+  const selectedText = state.doc.textBetween(from, to);
+
+  // Prompt for location details
+  const placeName = prompt('Enter place name:', selectedText) || selectedText;
+  const lat = prompt('Enter latitude (e.g., 55.6761):') || '';
+  const lng = prompt('Enter longitude (e.g., 12.5683):') || '';
+
+  if (!lat || !lng) {
+    alert('Latitude and longitude are required');
+    return;
+  }
+
+  // Generate a unique ID
+  const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Create the geo mark
+  const geoMarkType = customSchema.marks.geoMark;
+  const mark = geoMarkType.create({
+    geoId,
+    displayText: selectedText,
+    placeName,
+    lat,
+    lng,
+    colorIndex: Math.floor(Math.random() * 10),
+    coordSource: 'manual'
+  });
+
+  // Apply the mark to the selection
+  const tr = state.tr.addMark(from, to, mark);
+  view.dispatch(tr);
+
+  console.log('[Main] Created geo mark:', { geoId, placeName, lat, lng });
+}
+
+// Function to insert a map block
+function insertMap(view: EditorView) {
+  const { state } = view;
+  const { $from } = state.selection;
+
+  // Create the map node
+  const mapNode = customSchema.nodes.map.create({ height: 400 });
+
+  // Insert at the current position
+  const tr = state.tr.insert($from.pos, mapNode);
+  view.dispatch(tr);
+
+  console.log('[Main] Inserted map block');
+}
+
+// Set up toolbar button event listeners
+function setupToolbarButtons(view: EditorView) {
+  const createGeoMarkBtn = document.getElementById('create-geomark-btn');
+  const insertMapBtn = document.getElementById('insert-map-btn');
+
+  if (createGeoMarkBtn) {
+    createGeoMarkBtn.addEventListener('click', () => createGeoMark(view));
+  }
+
+  if (insertMapBtn) {
+    insertMapBtn.addEventListener('click', () => insertMap(view));
+  }
+
+  console.log('[Main] Toolbar buttons set up');
 }
 
 // Start the application

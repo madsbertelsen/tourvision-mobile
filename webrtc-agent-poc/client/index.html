@@ -55,6 +55,34 @@
       margin-bottom: 10px;
     }
 
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .toolbar button {
+      padding: 8px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toolbar button:hover {
+      background: #2563eb;
+    }
+
+    .toolbar button:active {
+      background: #1d4ed8;
+    }
+
     .mode-badge {
       display: inline-block;
       padding: 4px 12px;
@@ -115,6 +143,10 @@
       <div id="mode-indicator"></div>
       <div id="doc-info" class="doc-info"></div>
       <div id="status" class="status connecting">Initializing...</div>
+      <div class="toolbar">
+        <button id="create-geomark-btn">📍 Create Geo Mark</button>
+        <button id="insert-map-btn">🗺️ Insert Map</button>
+      </div>
     </header>
     <div id="editor-container"></div>
   </div>
