@@ -278,7 +278,7 @@ function extractLocationsForFullscreen() {
   const blockMapElement = mapContainers[0] as any;
   const rect = blockMapElement.getBoundingClientRect();
 
-  // Calculate padding to align markers
+  // Calculate padding for alignment reference
   const padding = {
     top: rect.top,
     left: rect.left,
@@ -289,14 +289,49 @@ function extractLocationsForFullscreen() {
   console.log('[Fullscreen] Container rect:', rect);
   console.log('[Fullscreen] Alignment padding:', padding);
 
-  // Get bounds from the block map instead of recalculating from locations
+  // Get block map instance
   const blockMap = blockMapElement._mapInstance;
   if (!blockMap) {
     console.error('[Fullscreen] Block map instance not found');
     return;
   }
 
-  const boundsObj = blockMap.getBounds();
+  // Calculate adjusted bounds that account for the fullscreen viewport
+  // We use the block map's unproject to find geographic coordinates
+  // at the fullscreen viewport edges, accounting for the block map's position
+
+  // The block map's pixel coordinates relative to viewport
+  const blockMapPixels = {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom
+  };
+
+  // Fullscreen viewport edges in the block map's coordinate system
+  // Negative values mean "outside" the block map
+  const fsTopLeftInBlockMap = {
+    x: -blockMapPixels.left,
+    y: -blockMapPixels.top
+  };
+  const fsBottomRightInBlockMap = {
+    x: window.innerWidth - blockMapPixels.left,
+    y: window.innerHeight - blockMapPixels.top
+  };
+
+  // Unproject these to get geographic coordinates
+  const topLeft = blockMap.unproject([fsTopLeftInBlockMap.x, fsTopLeftInBlockMap.y]);
+  const bottomRight = blockMap.unproject([fsBottomRightInBlockMap.x, fsBottomRightInBlockMap.y]);
+
+  // Create bounds from these coordinates
+  const adjustedBounds = new mapboxgl.LngLatBounds(topLeft, bottomRight);
+
+  console.log('[Fullscreen] Adjusted bounds for fullscreen:', {
+    north: adjustedBounds.getNorth(),
+    south: adjustedBounds.getSouth(),
+    east: adjustedBounds.getEast(),
+    west: adjustedBounds.getWest()
+  });
 
   // Show overlay
   const overlay = document.getElementById('fullscreen-overlay');
@@ -318,18 +353,19 @@ function extractLocationsForFullscreen() {
       fullscreenMap.remove();
     }
 
-    console.log('[Fullscreen] Creating map with bounds:', boundsObj);
+    console.log('[Fullscreen] Creating map with adjusted bounds');
 
     // Set Mapbox token
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
-    // Create fullscreen map with padding for alignment
+    // Create fullscreen map with adjusted bounds (NO padding)
+    // The bounds are pre-calculated to achieve the same visual alignment
     fullscreenMap = new mapboxgl.Map({
       container: 'fullscreen-map',
       style: 'mapbox://styles/mapbox/light-v11',
-      bounds: boundsObj,
+      bounds: adjustedBounds,
       fitBoundsOptions: {
-        padding: padding,
+        padding: 0,  // No padding needed - bounds are already adjusted
         duration: 0
       },
       interactive: true,
@@ -400,8 +436,8 @@ function extractLocationsForFullscreen() {
 // Helper function to get map bounds
 function getVisibleBounds(map: mapboxgl.Map): any {
   // Simply return the map's viewport bounds
-  // The padding is only for initial positioning, not for awareness tracking
-  // Once the map is interactive, we track the entire viewport
+  // Since we create the fullscreen map WITHOUT padding, getBounds() returns
+  // the correct full viewport bounds for all maps
   const bounds = map.getBounds();
 
   console.log('[Bounds] Map bounds:', {
