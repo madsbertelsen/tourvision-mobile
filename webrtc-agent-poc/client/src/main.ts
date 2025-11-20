@@ -929,6 +929,67 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   globalEditorView = view;
 
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
+
+  // Send ready message to parent (WebView/iframe)
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
+  } else if (window.parent !== window) {
+    window.parent.postMessage({ type: 'ready' }, '*');
+  }
+  console.log('[Main] Sent ready message to parent');
+
+  // Listen for messages from parent (React Native WebView)
+  window.addEventListener('message', (event) => {
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      console.log('[Main] Received message from parent:', data);
+
+      switch (data.type) {
+        case 'createGeoMark':
+          console.log('[Main] Creating geo-mark for selected text');
+          createGeoMark(view);
+          break;
+
+        case 'insertMap':
+          console.log('[Main] Inserting map block');
+          insertMap(view);
+          break;
+
+        default:
+          console.log('[Main] Unknown command:', data.type);
+      }
+    } catch (error) {
+      console.error('[Main] Error handling message from parent:', error);
+    }
+  });
+
+  // Track selection changes and send to parent
+  const sendSelectionUpdate = () => {
+    const { from, to } = view.state.selection;
+    const hasSelection = from !== to;
+
+    const message = {
+      type: 'selectionChange',
+      hasSelection
+    };
+
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify(message));
+    } else if (window.parent !== window) {
+      window.parent.postMessage(message, '*');
+    }
+
+    console.log('[Main] Selection changed:', { hasSelection, from, to });
+  };
+
+  // Send initial selection state
+  sendSelectionUpdate();
+
+  // Update on selection change
+  view.dom.addEventListener('mouseup', sendSelectionUpdate);
+  view.dom.addEventListener('keyup', sendSelectionUpdate);
+  view.dom.addEventListener('touchend', sendSelectionUpdate);
+
   return view;
 }
 

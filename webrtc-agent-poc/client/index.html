@@ -248,6 +248,65 @@
     if (params.get('hideHeader') === 'true') {
       document.body.classList.add('hide-header');
     }
+
+    // Intercept console logs and send them via postMessage for React Native WebView debugging
+    (function() {
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      const originalInfo = console.info;
+
+      function sendLog(level, args) {
+        const message = Array.from(args).map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg);
+            } catch (e) {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ');
+
+        // Send to parent/WebView
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }));
+        } else if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }, '*');
+        }
+      }
+
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        sendLog('log', args);
+      };
+
+      console.error = function(...args) {
+        originalError.apply(console, args);
+        sendLog('error', args);
+      };
+
+      console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        sendLog('warn', args);
+      };
+
+      console.info = function(...args) {
+        originalInfo.apply(console, args);
+        sendLog('info', args);
+      };
+
+      // Log that console interception is active
+      console.log('[Console] Log interception initialized for WebView debugging');
+    })();
   </script>
   <div id="app">
     <header>

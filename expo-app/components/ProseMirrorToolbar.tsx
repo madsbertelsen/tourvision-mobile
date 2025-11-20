@@ -85,6 +85,37 @@ export function ProseMirrorToolbar({ editable, selectionEmpty = true, highlighte
           </TouchableOpacity>
         </View>
 
+        <View style={styles.divider} />
+
+        {/* Geo Mark */}
+        <View style={styles.group}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              selectionEmpty && styles.buttonDisabled
+            ]}
+            onPress={() => !selectionEmpty && onCommand('createGeoMark')}
+            disabled={selectionEmpty}
+          >
+            <Text style={[
+              styles.buttonText,
+              selectionEmpty && styles.buttonTextDisabled
+            ]}>📍</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Insert Map */}
+        <View style={styles.group}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => onCommand('insertMap')}
+          >
+            <Text style={styles.buttonText}>🗺️</Text>
+          </TouchableOpacity>
+        </View>
+
         </View>
       </ScrollView>
     </View>

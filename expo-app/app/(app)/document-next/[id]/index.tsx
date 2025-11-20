@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { View, Platform, StyleSheet, ActivityIndicator } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { ChromeTabBar } from '@/components/ChromeTabBar';
 import { ProseMirrorToolbar } from '@/components/ProseMirrorToolbar';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import { useDocumentNextWebRTCContext } from './_layout';
 
 // Web-only iframe component
@@ -64,8 +64,9 @@ export default function DocumentNextWebRTCScreen() {
   const [canRedo, setCanRedo] = useState(false);
 
   // Build the WebRTC editor URL with document ID
-  // Port 5173 is the webrtc-agent-poc Vite server
-  const editorUrl = `http://localhost:5173/?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
+  // Use Mac's local IP address instead of localhost for React Native
+  // Port 5173 is the webrtc-agent-poc Vite server (with --host flag for network access)
+  const editorUrl = `http://192.168.1.223:5173/?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
 
   // Handle messages from the WebRTC editor
   const handleMessage = useCallback((event: any) => {
