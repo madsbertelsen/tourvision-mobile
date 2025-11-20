@@ -83,11 +83,13 @@ function setupYjs(documentId: string) {
 
   // Get awareness instance from provider (automatically created)
   const awareness = provider.awareness;
+  globalAwareness = awareness; // Store globally for window functions
 
   // Set local user info with meaningful name
   awareness.setLocalStateField('user', {
     name: isAgent ? 'Agent' : 'User',
     color: isAgent ? '#10b981' : '#3b82f6', // green for agent, blue for user
+    mapBounds: null, // Will be set when user opens fullscreen map
   });
 
   // Log provider events
@@ -113,6 +115,42 @@ function setupYjs(documentId: string) {
     if (totalPeers > 0) {
       updateStatus(`Connected to ${totalPeers} peer(s)`, 'connected');
     }
+  });
+
+  // Listen for awareness changes to show other users' map bounds
+  awareness.on('change', ({ added, updated, removed }: any) => {
+    console.log('[Awareness] Change event:', { added, updated, removed });
+
+    // Handle added users
+    added.forEach((clientId: number) => {
+      if (clientId === awareness.clientID) return; // Skip own client
+
+      const state = awareness.getStates().get(clientId);
+      if (state?.user?.mapBounds) {
+        console.log('[Awareness] User added with map bounds:', clientId, state.user);
+        addBoundsOverlay(clientId, state.user.mapBounds, state.user.color);
+      }
+    });
+
+    // Handle updated users
+    updated.forEach((clientId: number) => {
+      if (clientId === awareness.clientID) return; // Skip own client
+
+      const state = awareness.getStates().get(clientId);
+      if (state?.user?.mapBounds) {
+        console.log('[Awareness] User updated map bounds:', clientId);
+        updateBoundsOverlay(clientId, state.user.mapBounds, state.user.color);
+      } else {
+        console.log('[Awareness] User closed fullscreen map:', clientId);
+        removeBoundsOverlay(clientId);
+      }
+    });
+
+    // Handle removed users (disconnected)
+    removed.forEach((clientId: number) => {
+      console.log('[Awareness] User removed:', clientId);
+      removeBoundsOverlay(clientId);
+    });
   });
 
   console.log('[Y.js] Y.js document and WebRTC provider created');
@@ -155,6 +193,9 @@ function customCursorBuilder(user: any): HTMLElement {
 
 // Global fullscreen map variable
 let fullscreenMap: mapboxgl.Map | null = null;
+
+// Global awareness variable (for map bounds tracking)
+let globalAwareness: any = null;
 
 // Helper function to create marker elements
 function createMarkerElement(colorIndex: number) {
@@ -288,6 +329,18 @@ function extractLocationsForFullscreen() {
           .setPopup(new mapboxgl.Popup().setText(location.placeName))
           .addTo(fullscreenMap!);
       });
+
+      // Update awareness with initial bounds
+      if (globalAwareness && fullscreenMap) {
+        updateMapBoundsAwareness(globalAwareness, fullscreenMap);
+      }
+
+      // Listen for map movement to update awareness
+      fullscreenMap!.on('moveend', () => {
+        if (globalAwareness && fullscreenMap) {
+          updateMapBoundsAwareness(globalAwareness, fullscreenMap);
+        }
+      });
     });
   }, 100);
 };
@@ -295,6 +348,17 @@ function extractLocationsForFullscreen() {
 // Hide fullscreen map
 (window as any).hideFullscreenMap = () => {
   console.log('[Fullscreen] Hiding fullscreen map');
+
+  // Clear map bounds from awareness
+  if (globalAwareness) {
+    const currentUser = globalAwareness.getLocalState()?.user || {};
+    globalAwareness.setLocalStateField('user', {
+      ...currentUser,
+      mapBounds: null,
+    });
+    console.log('[Awareness] Cleared map bounds');
+  }
+
   const overlay = document.getElementById('fullscreen-overlay');
   if (overlay) {
     overlay.classList.remove('fade-in');
@@ -308,6 +372,149 @@ function extractLocationsForFullscreen() {
     }, 300);
   }
 };
+
+// Helper function to update awareness with current map bounds
+function updateMapBoundsAwareness(awareness: any, map: mapboxgl.Map) {
+  const bounds = map.getBounds();
+  const currentUser = awareness.getLocalState()?.user || {};
+
+  awareness.setLocalStateField('user', {
+    ...currentUser,
+    mapBounds: {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest(),
+    },
+  });
+
+  console.log('[Awareness] Updated map bounds:', {
+    north: bounds.getNorth(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    west: bounds.getWest(),
+  });
+}
+
+// Add bounds overlay to block maps
+function addBoundsOverlay(clientId: number, bounds: any, color: string) {
+  console.log('[Overlay] Adding bounds overlay for client', clientId, bounds);
+
+  const mapContainers = document.querySelectorAll('.prosemirror-map');
+  mapContainers.forEach((container) => {
+    const map = (container as any)._mapInstance;
+    if (!map) return;
+
+    const sourceId = `bounds-overlay-${clientId}`;
+    const layerId = `bounds-overlay-${clientId}`;
+    const outlineId = `bounds-overlay-${clientId}-outline`;
+
+    // Check if overlay already exists
+    if (map.getSource(sourceId)) {
+      updateBoundsOverlay(clientId, bounds, color);
+      return;
+    }
+
+    // Create polygon coordinates (rectangle)
+    const coordinates = [[
+      [bounds.west, bounds.north],  // NW
+      [bounds.east, bounds.north],  // NE
+      [bounds.east, bounds.south],  // SE
+      [bounds.west, bounds.south],  // SW
+      [bounds.west, bounds.north],  // Close polygon
+    ]];
+
+    // Add GeoJSON source
+    map.addSource(sourceId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: coordinates,
+        },
+      },
+    });
+
+    // Add fill layer (semi-transparent rectangle)
+    map.addLayer({
+      id: layerId,
+      type: 'fill',
+      source: sourceId,
+      paint: {
+        'fill-color': color,
+        'fill-opacity': 0.15,
+      },
+    });
+
+    // Add outline layer (solid border)
+    map.addLayer({
+      id: outlineId,
+      type: 'line',
+      source: sourceId,
+      paint: {
+        'line-color': color,
+        'line-width': 2,
+        'line-opacity': 0.8,
+      },
+    });
+  });
+}
+
+// Update existing bounds overlay
+function updateBoundsOverlay(clientId: number, bounds: any, color: string) {
+  const mapContainers = document.querySelectorAll('.prosemirror-map');
+  mapContainers.forEach((container) => {
+    const map = (container as any)._mapInstance;
+    if (!map) return;
+
+    const sourceId = `bounds-overlay-${clientId}`;
+    const source = map.getSource(sourceId);
+
+    if (source) {
+      const coordinates = [[
+        [bounds.west, bounds.north],
+        [bounds.east, bounds.north],
+        [bounds.east, bounds.south],
+        [bounds.west, bounds.south],
+        [bounds.west, bounds.north],
+      ]];
+
+      (source as any).setData({
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: coordinates,
+        },
+      });
+    } else {
+      // Source doesn't exist, create it
+      addBoundsOverlay(clientId, bounds, color);
+    }
+  });
+}
+
+// Remove bounds overlay from block maps
+function removeBoundsOverlay(clientId: number) {
+  console.log('[Overlay] Removing bounds overlay for client', clientId);
+
+  const mapContainers = document.querySelectorAll('.prosemirror-map');
+  mapContainers.forEach((container) => {
+    const map = (container as any)._mapInstance;
+    if (!map) return;
+
+    const sourceId = `bounds-overlay-${clientId}`;
+    const layerId = `bounds-overlay-${clientId}`;
+    const outlineId = `bounds-overlay-${clientId}-outline`;
+
+    // Remove layers first, then source
+    if (map.getLayer(outlineId)) map.removeLayer(outlineId);
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    if (map.getSource(sourceId)) map.removeSource(sourceId);
+  });
+}
 
 // Map Node View - renders Mapbox maps for map blocks
 function createMapNodeView(node: any, editorView: EditorView) {
