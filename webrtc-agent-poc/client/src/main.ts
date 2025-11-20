@@ -285,6 +285,71 @@ function createMapNodeView(node: any, editorView: EditorView) {
   // Initial render
   setTimeout(updateMap, 100);
 
+  // Set up periodic updates to detect new geo marks
+  let previousLocationCount = 0;
+  const updateInterval = setInterval(() => {
+    const locations = extractLocations();
+    if (locations.length !== previousLocationCount) {
+      console.log('[MapView] Location count changed:', previousLocationCount, '->', locations.length);
+      previousLocationCount = locations.length;
+
+      // Remove old markers
+      currentMarkers.forEach(marker => marker.remove());
+      currentMarkers = [];
+
+      if (locations.length === 0) {
+        if (currentMap) {
+          currentMap.remove();
+          currentMap = null;
+        }
+        return;
+      }
+
+      if (!currentMap) {
+        updateMap();
+      } else {
+        // Add new markers
+        locations.forEach((location: any) => {
+          const bgColor = COLORS[location.colorIndex % COLORS.length];
+          const el = document.createElement('div');
+          el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+          const inner = document.createElement('div');
+          inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+          el.appendChild(inner);
+
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([location.lng, location.lat])
+            .setPopup(new mapboxgl.Popup().setText(location.placeName))
+            .addTo(currentMap!);
+
+          currentMarkers.push(marker);
+        });
+
+        // Re-fit bounds to show all locations
+        if (locations.length === 1) {
+          currentMap.flyTo({
+            center: [locations[0].lng, locations[0].lat],
+            zoom: 12,
+            duration: 1500
+          });
+        } else if (locations.length > 1) {
+          const lngs = locations.map((l: any) => l.lng);
+          const lats = locations.map((l: any) => l.lat);
+          const bounds = new mapboxgl.LngLatBounds(
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)]
+          );
+          currentMap.fitBounds(bounds, {
+            padding: 50,
+            maxZoom: 15,
+            duration: 1500
+          });
+        }
+      }
+    }
+  }, 1000);
+
   return {
     dom,
     update(newNode: any) {
@@ -293,6 +358,7 @@ function createMapNodeView(node: any, editorView: EditorView) {
       return true;
     },
     destroy() {
+      clearInterval(updateInterval);
       if (currentMap) {
         currentMap.remove();
       }
