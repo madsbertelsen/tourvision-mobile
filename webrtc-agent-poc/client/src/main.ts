@@ -220,10 +220,25 @@ const activeAnimations: Map<number, number> = new Map();
 function createMarkerElement(colorIndex: number) {
   const bgColor = COLORS[colorIndex % COLORS.length];
   const el = document.createElement('div');
-  el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+  el.style.cssText = `
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: ${bgColor};
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    user-select: none;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+  `;
 
   const inner = document.createElement('div');
-  inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+  inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white; pointer-events: none;';
   el.appendChild(inner);
 
   return el;
@@ -259,6 +274,15 @@ function extractLocationsForFullscreen() {
 // Show fullscreen map (using existing overlay from HTML)
 (window as any).showFullscreenMap = () => {
   console.log('[Fullscreen] Showing fullscreen map');
+
+  // Notify parent that fullscreen map is opening
+  const openMessage = { type: 'fullscreenMapOpened' };
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(openMessage));
+  } else if (window.parent !== window) {
+    window.parent.postMessage(openMessage, '*');
+  }
+  console.log('[Fullscreen] Sent fullscreenMapOpened message to parent');
 
   // Extract locations from document
   const currentLocations = extractLocationsForFullscreen();
@@ -379,10 +403,54 @@ function extractLocationsForFullscreen() {
       currentLocations.forEach((location) => {
         const el = createMarkerElement(location.colorIndex);
 
-        new mapboxgl.Marker(el)
+        // Create marker
+        const marker = new mapboxgl.Marker(el)
           .setLngLat([location.lng, location.lat])
           .setPopup(new mapboxgl.Popup().setText(location.placeName))
           .addTo(fullscreenMap!);
+
+        // Add click handler to the actual marker element after it's been added
+        const markerElement = marker.getElement();
+
+        // Handler function for both click and touch events
+        const handleMarkerInteraction = (e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[Fullscreen] Marker interaction triggered:', e.type, location);
+          console.log('[Fullscreen] window.ReactNativeWebView exists:', !!window.ReactNativeWebView);
+          console.log('[Fullscreen] window.parent !== window:', window.parent !== window);
+
+          const message = {
+            type: 'openLocationDetails',
+            location: {
+              geoId: location.geoId,
+              displayText: location.displayText,
+              placeName: location.placeName,
+              lat: location.lat,
+              lng: location.lng,
+              colorIndex: location.colorIndex
+            }
+          };
+
+          console.log('[Fullscreen] Sending message:', message);
+
+          if (window.ReactNativeWebView) {
+            console.log('[Fullscreen] Using ReactNativeWebView.postMessage');
+            window.ReactNativeWebView.postMessage(JSON.stringify(message));
+            console.log('[Fullscreen] Message sent via ReactNativeWebView');
+          } else if (window.parent !== window) {
+            console.log('[Fullscreen] Using window.parent.postMessage');
+            window.parent.postMessage(message, '*');
+            console.log('[Fullscreen] Message sent via window.parent');
+          } else {
+            console.warn('[Fullscreen] No postMessage target available!');
+          }
+        };
+
+        // Listen to both click (browser) and touchend (mobile) events
+        markerElement.addEventListener('click', handleMarkerInteraction);
+        markerElement.addEventListener('touchend', handleMarkerInteraction);
+        console.log('[Fullscreen] Added click and touchend listeners to marker:', location.geoId);
       });
 
       // Listen for map movement to update awareness
@@ -408,6 +476,15 @@ function extractLocationsForFullscreen() {
 // Hide fullscreen map
 (window as any).hideFullscreenMap = () => {
   console.log('[Fullscreen] Hiding fullscreen map');
+
+  // Notify parent that fullscreen map is closing
+  const closeMessage = { type: 'fullscreenMapClosed' };
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(closeMessage));
+  } else if (window.parent !== window) {
+    window.parent.postMessage(closeMessage, '*');
+  }
+  console.log('[Fullscreen] Sent fullscreenMapClosed message to parent');
 
   // Clear map bounds from awareness
   if (globalAwareness) {

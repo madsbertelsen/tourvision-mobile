@@ -120,6 +120,37 @@ export default function DocumentNextWebRTCScreen() {
           console.log('[DocumentNextWebRTC] Geo-mark created:', data.geoMark);
           break;
 
+        case 'fullscreenMapOpened':
+          console.log('[DocumentNextWebRTC] Fullscreen map opened');
+          // Optional: Hide toolbar or adjust UI during fullscreen
+          break;
+
+        case 'fullscreenMapClosed':
+          console.log('[DocumentNextWebRTC] Fullscreen map closed');
+          // Optional: Show toolbar again
+          break;
+
+        case 'openLocationDetails':
+          console.log('[DocumentNextWebRTC] Opening location details:', data.location);
+          console.log("documentId", documentId);
+          console.log("documentId", documentId);
+          console.log("documentId", documentId);
+          console.log("documentId", documentId);
+          console.log("documentId", documentId);
+
+          // Update locations context
+          if (data.location) {
+            setLocations((prev) => {
+              const existing = prev.find((loc: any) => loc.geoId === data.location.geoId);
+              if (existing) return prev;
+              return [...prev, data.location];
+            });
+          }
+
+          // Navigate to location detail route (shows bottom sheet)
+          router.replace(`/document-next/${documentId}/location/${data.location.geoId}`);
+          break;
+
         default:
           console.log('[DocumentNextWebRTC] Unknown message type:', data.type);
       }

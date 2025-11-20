@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { createDocument, deleteDocument, getDocuments, type SavedDocument } from '@/utils/documents-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
   ActivityIndicator,
-  TextInput,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { getDocuments, createDocument, deleteDocument, type SavedDocument } from '@/utils/documents-storage';
 
 export default function TripListScreen() {
   const router = useRouter();
@@ -209,7 +208,7 @@ export default function TripListScreen() {
         <Text style={styles.title}>My Documents</Text>
         <TouchableOpacity
           style={styles.testButton}
-          onPress={() => router.push('/(app)/document-next/test-doc')}
+          onPress={() => router.push('/document-next/test-doc')}
         >
           <Ionicons name="flask-outline" size={20} color="#ffffff" />
           <Text style={styles.testButtonText}>Test WebRTC</Text>

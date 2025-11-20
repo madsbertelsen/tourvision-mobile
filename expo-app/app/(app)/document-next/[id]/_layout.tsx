@@ -1,8 +1,12 @@
-import { useGlobalSearchParams, Stack } from 'expo-router';
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
-import { storage } from '@/utils/storage';
 import { extractLocationsFromDoc } from '@/utils/extract-locations-from-doc';
+import { storage } from '@/utils/storage';
+import { Ionicons } from '@expo/vector-icons';
+import BottomSheet, { BottomSheetHandle, BottomSheetHandleProps } from '@gorhom/bottom-sheet';
+import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import DocumentNextWebRTCScreen from './index';
 
 // Transport mode type
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
@@ -34,6 +38,13 @@ interface GeoMarkUpdate {
   }>;
 }
 
+// Sheet header info interface
+interface SheetHeaderInfo {
+  title: string;
+  colorDot?: string;
+  onBack?: () => void;
+}
+
 // Context for sharing document state across nested routes
 interface DocumentNextWebRTCContextType {
   documentId: string;
@@ -47,6 +58,11 @@ interface DocumentNextWebRTCContextType {
   // Geo-mark update state
   geoMarkUpdate: GeoMarkUpdate | null;
   setGeoMarkUpdate: (update: GeoMarkUpdate | null) => void;
+
+  // Bottom sheet state
+  bottomSheetRef: React.RefObject<BottomSheet>;
+  sheetHeaderInfo: SheetHeaderInfo | null;
+  setSheetHeaderInfo: (info: SheetHeaderInfo | null) => void;
 }
 
 const DocumentNextWebRTCContext = createContext<DocumentNextWebRTCContextType | null>(null);
@@ -61,6 +77,8 @@ export function useDocumentNextWebRTCContext() {
 
 export default function DocumentNextWebRTCLayout() {
   const params = useGlobalSearchParams();
+  const router = useRouter();
+  const segments = useSegments();
   const documentId = params.id as string;
 
   const [currentDoc, setCurrentDocState] = useState<any>(null);
@@ -70,6 +88,10 @@ export default function DocumentNextWebRTCLayout() {
   // Ref to store the latest document for debounced saving
   const latestDocRef = useRef<any>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Bottom sheet refs and state
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [sheetHeaderInfo, setSheetHeaderInfo] = useState<SheetHeaderInfo | null>(null);
 
   // Geo-mark update state
   const [geoMarkUpdate, setGeoMarkUpdateState] = useState<GeoMarkUpdate | null>(null);
@@ -178,23 +200,144 @@ export default function DocumentNextWebRTCLayout() {
     }
   }, [currentDoc]);
 
+  // Auto-open bottom sheet when on location/edit routes
+  useEffect(() => {
+    const lastSegment = segments[segments.length - 1];
+
+    if (lastSegment === 'location' || lastSegment === 'edit') {
+      // Open bottom sheet to 50%
+      bottomSheetRef.current?.snapToIndex(0);
+    } else if (lastSegment === 'index') {
+      // Close bottom sheet on index route
+      bottomSheetRef.current?.close();
+    }
+  }, [segments]);
+
+  // Snap points for bottom sheet
+  const snapPoints = useMemo(() => ['50%', '90%'], []);
+
+  // Custom handle component with header
+  const CustomHandle = useCallback((props: BottomSheetHandleProps) => (
+    <View>
+      <BottomSheetHandle {...props} />
+      {sheetHeaderInfo && (
+        <View style={styles.sheetHeader}>
+          {sheetHeaderInfo.onBack && (
+            <TouchableOpacity onPress={sheetHeaderInfo.onBack} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+          {sheetHeaderInfo.colorDot && (
+            <View style={[
+              styles.headerColorDot,
+              { backgroundColor: sheetHeaderInfo.colorDot }
+            ]} />
+          )}
+          <Text style={styles.sheetHeaderTitle}>{sheetHeaderInfo.title}</Text>
+        </View>
+      )}
+    </View>
+  ), [sheetHeaderInfo]);
+
+  // Check if we're on a bottom sheet route (location or edit)
+  const lastSegment = segments[segments.length - 1];
+  const isBottomSheetRoute = lastSegment === 'location' || lastSegment === 'edit' ||
+                             segments.includes('location') || segments.includes('edit');
+
   return (
-    <DocumentNextWebRTCContext.Provider
-      value={{
-        documentId,
-        currentDoc,
-        setCurrentDoc,
-        isEditMode,
-        setIsEditMode,
-        locations,
-        setLocations,
-        geoMarkUpdate,
-        setGeoMarkUpdate,
-      }}
-    >
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-      </Stack>
-    </DocumentNextWebRTCContext.Provider>
+    <GestureHandlerRootView style={styles.container}>
+      <DocumentNextWebRTCContext.Provider
+        value={{
+          documentId,
+          currentDoc,
+          setCurrentDoc,
+          isEditMode,
+          setIsEditMode,
+          locations,
+          setLocations,
+          geoMarkUpdate,
+          setGeoMarkUpdate,
+          bottomSheetRef,
+          sheetHeaderInfo,
+          setSheetHeaderInfo,
+        }}
+      >
+        <View style={styles.container}>
+          {/* Main editor - always visible as background */}
+          <DocumentNextWebRTCScreen />
+
+          {/* Bottom sheet for location details/edit - overlays the editor */}
+          {/* Always render BottomSheet so it's mounted and ready */}
+          <BottomSheet
+            ref={bottomSheetRef}
+            index={-1}
+            snapPoints={snapPoints}
+            enableDynamicSizing={false}
+            enablePanDownToClose={true}
+            onClose={() => {
+              // When bottom sheet closes, navigate back to index
+              router.replace(`/document-next/${documentId}`);
+            }}
+            backgroundStyle={styles.bottomSheetBackground}
+            handleIndicatorStyle={styles.bottomSheetIndicator}
+            handleComponent={CustomHandle}
+            style={styles.bottomSheetShadow}
+          >
+            {/* Always render nested routes */}
+            <Slot />
+          </BottomSheet>
+        </View>
+      </DocumentNextWebRTCContext.Provider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  bottomSheetBackground: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  bottomSheetIndicator: {
+    backgroundColor: '#D1D5DB',
+    width: 36,
+    height: 4,
+  },
+  bottomSheetShadow: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    marginRight: 12,
+  },
+  headerColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  sheetHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+});
