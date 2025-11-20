@@ -38,6 +38,15 @@ const COLORS = [
   '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
 ];
 
+// Generate random user identity for testing with multiple tabs
+// Each tab gets a different number and color
+const userNumber = Math.floor(Math.random() * 10) + 1; // 1-10
+const userColor = COLORS[userNumber - 1]; // Use same index as user number
+const userName = isAgent ? 'Agent' : `User ${userNumber}`;
+const userDisplayColor = isAgent ? '#10b981' : userColor;
+
+console.log('[Main] User identity:', { userName, userDisplayColor });
+
 // Update UI
 const modeIndicator = document.getElementById('mode-indicator');
 const docInfo = document.getElementById('doc-info');
@@ -46,7 +55,9 @@ const statusEl = document.getElementById('status');
 if (modeIndicator) {
   const badge = document.createElement('span');
   badge.className = `mode-badge ${isAgent ? 'agent' : 'user'}`;
-  badge.textContent = isAgent ? 'Agent Mode' : 'User Mode';
+  badge.style.backgroundColor = userDisplayColor;
+  badge.style.color = 'white';
+  badge.textContent = userName;
   modeIndicator.appendChild(badge);
 }
 
@@ -85,12 +96,14 @@ function setupYjs(documentId: string) {
   const awareness = provider.awareness;
   globalAwareness = awareness; // Store globally for window functions
 
-  // Set local user info with meaningful name
+  // Set local user info with pre-generated identity
   awareness.setLocalStateField('user', {
-    name: isAgent ? 'Agent' : 'User',
-    color: isAgent ? '#10b981' : '#3b82f6', // green for agent, blue for user
+    name: userName,
+    color: userDisplayColor,
     mapBounds: null, // Will be set when user opens fullscreen map
   });
+
+  console.log('[Awareness] Local user set:', { name: userName, color: userDisplayColor });
 
   // Log provider events
   provider.on('status', (event: any) => {
