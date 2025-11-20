@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "mapbox-gl": "^3.16.0",
     "prosemirror-commands": "^1.6.0",
     "prosemirror-history": "^1.4.1",
     "prosemirror-keymap": "^1.2.2",

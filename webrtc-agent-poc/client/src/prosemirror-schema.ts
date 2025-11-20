@@ -24,10 +24,8 @@ export const customSchema = new Schema({
         return ['div', {
           class: 'prosemirror-map',
           'data-height': node.attrs.height,
-          style: `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative;`
-        }, ['div', {
-          style: 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;'
-        }, '🗺️ Map will be rendered here']];
+          style: `height: ${node.attrs.height}px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; overflow: hidden;`
+        }];
       }
     }),
   marks: schema.spec.marks

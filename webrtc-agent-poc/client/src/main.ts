@@ -19,12 +19,24 @@ import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo } from 'y-prosemirror';
 
+// Mapbox GL JS
+import mapboxgl from 'mapbox-gl';
+
 // Get URL parameters
 const params = new URL(window.location.href).searchParams;
 const documentId = params.get('doc') || 'default-doc';
 const isAgent = params.get('agent') === 'true';
 
 console.log('[Main] Starting application', { documentId, isAgent });
+
+// Mapbox token - use environment variable or hardcode for testing
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
+
+// Geo mark colors (matching frontend-prosemirror)
+const COLORS = [
+  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+];
 
 // Update UI
 const modeIndicator = document.getElementById('mode-indicator');
@@ -141,6 +153,153 @@ function customCursorBuilder(user: any): HTMLElement {
   return cursor;
 }
 
+// Map Node View - renders Mapbox maps for map blocks
+function createMapNodeView(node: any, editorView: EditorView) {
+    const dom = document.createElement('div');
+    dom.className = 'prosemirror-map';
+    dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; overflow: hidden;`;
+
+    const mapContainer = document.createElement('div');
+    mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
+    dom.appendChild(mapContainer);
+
+    let currentMap: mapboxgl.Map | null = null;
+    let currentMarkers: mapboxgl.Marker[] = [];
+
+    // Extract locations from document
+    const extractLocations = () => {
+      const locations: any[] = [];
+      editorView.state.doc.descendants((node) => {
+        if (node.isText && node.marks.length > 0) {
+          for (const mark of node.marks) {
+            if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+              locations.push({
+                geoId: mark.attrs.geoId,
+                displayText: mark.attrs.displayText || node.text,
+                placeName: mark.attrs.placeName,
+                lat: parseFloat(mark.attrs.lat),
+                lng: parseFloat(mark.attrs.lng),
+                colorIndex: mark.attrs.colorIndex,
+              });
+            }
+          }
+        }
+      });
+      return locations;
+    };
+
+    // Initialize and update map
+    const updateMap = () => {
+      const locations = extractLocations();
+
+      if (locations.length === 0) {
+        mapContainer.innerHTML = `
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
+            🗺️ No locations found
+          </div>
+        `;
+        if (currentMap) {
+          currentMap.remove();
+          currentMap = null;
+        }
+        return;
+      }
+
+      if (!currentMap) {
+        mapContainer.innerHTML = '';
+        mapboxgl.accessToken = MAPBOX_TOKEN;
+
+        let initialCenter: [number, number] = [0, 0];
+        let initialZoom = 2;
+
+        if (locations.length === 1) {
+          initialCenter = [locations[0].lng, locations[0].lat];
+          initialZoom = 12;
+        } else if (locations.length > 1) {
+          const lngs = locations.map((l: any) => l.lng);
+          const lats = locations.map((l: any) => l.lat);
+          initialCenter = [
+            (Math.min(...lngs) + Math.max(...lngs)) / 2,
+            (Math.min(...lats) + Math.max(...lats)) / 2
+          ];
+        }
+
+        currentMap = new mapboxgl.Map({
+          container: mapContainer,
+          style: 'mapbox://styles/mapbox/light-v11',
+          center: initialCenter,
+          zoom: initialZoom,
+          dragPan: false,
+          scrollZoom: false,
+          boxZoom: false,
+          dragRotate: false,
+          keyboard: false,
+          doubleClickZoom: false,
+          touchZoomRotate: false,
+        });
+
+        currentMap.once('style.load', () => {
+          // Add markers
+          locations.forEach((location: any) => {
+            const bgColor = COLORS[location.colorIndex % COLORS.length];
+            const el = document.createElement('div');
+            el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+            const inner = document.createElement('div');
+            inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+            el.appendChild(inner);
+
+            const marker = new mapboxgl.Marker(el)
+              .setLngLat([location.lng, location.lat])
+              .setPopup(new mapboxgl.Popup().setText(location.placeName))
+              .addTo(currentMap!);
+
+            currentMarkers.push(marker);
+          });
+
+          // Fit bounds
+          if (locations.length === 1) {
+            currentMap!.jumpTo({
+              center: [locations[0].lng, locations[0].lat],
+              zoom: 12
+            });
+          } else if (locations.length > 1) {
+            const lngs = locations.map((l: any) => l.lng);
+            const lats = locations.map((l: any) => l.lat);
+            const bounds = new mapboxgl.LngLatBounds(
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            );
+            currentMap!.fitBounds(bounds, {
+              padding: 50,
+              maxZoom: 15,
+              duration: 0
+            });
+          }
+
+          console.log('[MapView] Map initialized with', locations.length, 'locations');
+        });
+      }
+    };
+
+  // Initial render
+  setTimeout(updateMap, 100);
+
+  return {
+    dom,
+    update(newNode: any) {
+      if (newNode.type.name !== 'map') return false;
+      updateMap();
+      return true;
+    },
+    destroy() {
+      if (currentMap) {
+        currentMap.remove();
+      }
+    }
+  };
+}
+
 // Initialize ProseMirror editor with Y.js sync
 function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   const container = document.getElementById('editor-container');
@@ -167,6 +326,9 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     state,
     attributes: {
       class: 'ProseMirror',
+    },
+    nodeViews: {
+      map: createMapNodeView,
     },
   });
 
