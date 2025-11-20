@@ -13,8 +13,8 @@ export function ChromeTabBar() {
   const [documentCount, setDocumentCount] = useState(0);
   const [currentDocTitle, setCurrentDocTitle] = useState('Document');
 
-  // Extract document ID from pathname
-  const currentDocId = pathname.match(/\/document\/([^\/]+)/)?.[1];
+  // Extract document ID from pathname (supports both /document/ and /document-next/ routes)
+  const currentDocId = pathname.match(/\/document(?:-next)?\/([^\/]+)/)?.[1];
 
   useEffect(() => {
     loadDocumentCount();
