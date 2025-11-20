@@ -349,13 +349,18 @@ function extractLocationsForFullscreen() {
           .addTo(fullscreenMap!);
       });
 
-      // Update awareness with initial bounds
-      if (globalAwareness && fullscreenMap) {
-        updateMapBoundsAwareness(globalAwareness, fullscreenMap);
-      }
-
       // Listen for map movement to update awareness
       fullscreenMap!.on('moveend', () => {
+        console.log('[Fullscreen] Map moveend - updating awareness');
+        if (globalAwareness && fullscreenMap) {
+          updateMapBoundsAwareness(globalAwareness, fullscreenMap);
+        }
+      });
+
+      // Use 'idle' event instead of 'load' to ensure map has finished all operations
+      // This ensures getBounds() returns the correct bounds after fitBounds completes
+      fullscreenMap!.once('idle', () => {
+        console.log('[Fullscreen] Map idle - initial bounds update');
         if (globalAwareness && fullscreenMap) {
           updateMapBoundsAwareness(globalAwareness, fullscreenMap);
         }
