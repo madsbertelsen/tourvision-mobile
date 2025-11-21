@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useDocumentNextWebRTCContext } from '../_layout';
+import { useDocumentNextWebRTCContext } from '../../../_layout';
+import { useMapContext } from '../_layout';
 
 // Define color array (same as in ProseMirror)
 const COLORS = [
@@ -22,12 +23,16 @@ const COLORS = [
 export default function LocationDetailsRoute() {
   const { locationId } = useLocalSearchParams();
   const router = useRouter();
+
+  // Get parent context for document-level state
   const {
     documentId,
-    locations,
     bottomSheetRef,
     setSheetHeaderInfo
   } = useDocumentNextWebRTCContext();
+
+  // Get map context for locations and routes
+  const { mapId, locations } = useMapContext();
 
   // Find the location by ID
   const location = locations.find(loc => loc.geoId === locationId);
@@ -64,7 +69,7 @@ export default function LocationDetailsRoute() {
 
   const handleTransportation = () => {
     // Navigate to transport config for this location
-    router.push(`/document-next/${documentId}/transport/${locationId}`);
+    router.push(`/document-next/${documentId}/map/${mapId}/transport/${locationId}`);
   };
 
   const handleEditLocation = () => {

@@ -147,8 +147,8 @@ export default function DocumentNextWebRTCScreen() {
             });
           }
 
-          // Navigate to location detail route (shows bottom sheet)
-          router.replace(`/document-next/${documentId}/location/${data.location.geoId}`);
+          // Navigate to map location detail route (shows bottom sheet)
+          router.replace(`/document-next/${documentId}/map/main/location/${data.location.geoId}`);
           break;
 
         default:

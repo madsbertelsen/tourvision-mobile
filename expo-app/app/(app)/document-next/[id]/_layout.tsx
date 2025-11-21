@@ -200,11 +200,11 @@ export default function DocumentNextWebRTCLayout() {
     }
   }, [currentDoc]);
 
-  // Auto-open bottom sheet when on location/edit routes
+  // Auto-open bottom sheet when on location/edit/transport routes (including map routes)
   useEffect(() => {
     const lastSegment = segments[segments.length - 1];
 
-    if (lastSegment === 'location' || lastSegment === 'edit') {
+    if (lastSegment === 'location' || lastSegment === 'edit' || lastSegment === 'transport' || segments.includes('map')) {
       // Open bottom sheet to 50%
       bottomSheetRef.current?.snapToIndex(0);
     } else if (lastSegment === 'index') {
@@ -239,10 +239,10 @@ export default function DocumentNextWebRTCLayout() {
     </View>
   ), [sheetHeaderInfo]);
 
-  // Check if we're on a bottom sheet route (location or edit)
+  // Check if we're on a bottom sheet route (location, edit, transport, or map)
   const lastSegment = segments[segments.length - 1];
-  const isBottomSheetRoute = lastSegment === 'location' || lastSegment === 'edit' ||
-                             segments.includes('location') || segments.includes('edit');
+  const isBottomSheetRoute = lastSegment === 'location' || lastSegment === 'edit' || lastSegment === 'transport' ||
+                             segments.includes('location') || segments.includes('edit') || segments.includes('transport') || segments.includes('map');
 
   return (
     <GestureHandlerRootView style={styles.container}>

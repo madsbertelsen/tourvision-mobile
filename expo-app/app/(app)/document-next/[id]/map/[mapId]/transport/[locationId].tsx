@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useDocumentNextWebRTCContext } from '../_layout';
+import { useDocumentNextWebRTCContext } from '../../../_layout';
+import { useMapContext } from '../_layout';
 
 type TransportMode = 'walking' | 'driving' | 'cycling';
 
@@ -24,7 +25,12 @@ const COLORS = [
 export default function TransportConfigRoute() {
   const { locationId } = useLocalSearchParams();
   const router = useRouter();
-  const { documentId, locations, bottomSheetRef, setSheetHeaderInfo, setGeoMarkUpdate } = useDocumentNextWebRTCContext();
+
+  // Get parent context for document-level state
+  const { documentId, bottomSheetRef, setSheetHeaderInfo, setGeoMarkUpdate } = useDocumentNextWebRTCContext();
+
+  // Get map context for locations and routes
+  const { locations } = useMapContext();
 
   // Find the destination location
   const destinationLocation = locations.find(loc => loc.geoId === locationId);
