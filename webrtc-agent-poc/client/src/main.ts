@@ -1907,6 +1907,9 @@ async function createGeoMark(view: EditorView) {
     lat: geocodeResult.lat,
     lng: geocodeResult.lng
   });
+
+  // Notify listeners that a new geo-mark was created
+  notifyGeoMarkChange();
 }
 
 // Function to insert a map block
