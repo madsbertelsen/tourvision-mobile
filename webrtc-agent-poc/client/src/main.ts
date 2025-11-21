@@ -263,6 +263,94 @@ function buildWaypointsString(waypoints: Array<{ lat: number; lng: number }> = [
   return ';' + waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
 }
 
+// Global storage for waypoint markers
+const waypointMarkers: Map<string, mapboxgl.Marker[]> = new Map();
+
+// Helper function to render waypoint markers on the map
+function renderWaypointMarkers(map: mapboxgl.Map, routeId: string, waypoints: Array<{ lat: number; lng: number }>, color: string) {
+  // Remove existing markers for this route
+  const existingMarkers = waypointMarkers.get(routeId) || [];
+  existingMarkers.forEach(marker => marker.remove());
+
+  // Create new markers
+  const markers = waypoints.map((waypoint, index) => {
+    // Create marker element
+    const el = document.createElement('div');
+    el.className = 'waypoint-marker';
+    el.style.cssText = `
+      width: 28px;
+      height: 28px;
+      border-radius: 14px;
+      background-color: #F59E0B;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      cursor: grab;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    `;
+    el.textContent = String(index + 1);
+
+    // Create marker
+    const marker = new mapboxgl.Marker({
+      element: el,
+      draggable: true
+    })
+      .setLngLat([waypoint.lng, waypoint.lat])
+      .addTo(map);
+
+    // Handle drag end
+    marker.on('dragend', () => {
+      const lngLat = marker.getLngLat();
+      console.log('[Waypoint] Dragged to:', lngLat, 'index:', index);
+
+      // Update the waypoint in the geo-mark
+      if (globalEditorView) {
+        // Extract route destination geoId from routeId
+        const match = routeId.match(/route-.+-(.+)/);
+        if (match) {
+          const destGeoId = match[1];
+          let waypointUpdated = false;
+
+          globalEditorView.state.doc.descendants((node, pos) => {
+            if (waypointUpdated) return false;
+
+            if (node.isText && node.marks.length > 0) {
+              const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+              if (geoMark && geoMark.attrs.geoId === destGeoId) {
+                const currentWaypoints = [...(geoMark.attrs.waypoints || [])];
+                currentWaypoints[index] = { lat: lngLat.lat, lng: lngLat.lng };
+
+                const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
+                  ...geoMark.attrs,
+                  waypoints: currentWaypoints
+                });
+
+                const tr = globalEditorView.state.tr
+                  .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
+                  .addMark(pos, pos + node.nodeSize, updatedMark);
+
+                globalEditorView.dispatch(tr);
+                console.log('[Waypoint] Updated position:', { lat: lngLat.lat, lng: lngLat.lng });
+                notifyGeoMarkChange();
+                waypointUpdated = true;
+                return false;
+              }
+            }
+          });
+        }
+      }
+    });
+
+    return marker;
+  });
+
+  waypointMarkers.set(routeId, markers);
+}
+
 // Extract locations from document (for fullscreen map)
 function extractLocationsForFullscreen() {
   if (!globalEditorView) return [];
@@ -603,6 +691,11 @@ function extractLocationsForFullscreen() {
                 fullscreenMap!.getCanvas().style.cursor = '';
               });
 
+              // Render waypoint markers if waypoints exist
+              if (toLocation.waypoints && toLocation.waypoints.length > 0) {
+                renderWaypointMarkers(fullscreenMap!, routeId, toLocation.waypoints, toLocation.color || '#3B82F6');
+              }
+
               console.log('[Routes] Route rendered on map:', routeId);
             } else {
               console.warn('[Routes] No route found in Mapbox response');
@@ -765,6 +858,11 @@ function extractLocationsForFullscreen() {
                   fullscreenMap.on('mouseleave', routeId, () => {
                     fullscreenMap.getCanvas().style.cursor = '';
                   });
+
+                  // Render waypoint markers if waypoints exist
+                  if (toLocation.waypoints && toLocation.waypoints.length > 0) {
+                    renderWaypointMarkers(fullscreenMap, routeId, toLocation.waypoints, toLocation.color || '#3B82F6');
+                  }
 
                   console.log('[Fullscreen] Route updated:', routeId);
                 }
