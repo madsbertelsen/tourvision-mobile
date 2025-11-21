@@ -132,19 +132,22 @@ export default function DocumentNextWebRTCScreen() {
 
         case 'openLocationDetails':
           console.log('[DocumentNextWebRTC] Opening location details:', data.location);
-          console.log("documentId", documentId);
-          console.log("documentId", documentId);
-          console.log("documentId", documentId);
-          console.log("documentId", documentId);
-          console.log("documentId", documentId);
+          console.log('[DocumentNextWebRTC] All locations from WebView:', data.allLocations);
 
-          // Update locations context
-          if (data.location) {
-            setLocations((prev) => {
-              const existing = prev.find((loc: any) => loc.geoId === data.location.geoId);
-              if (existing) return prev;
-              return [...prev, data.location];
-            });
+          // Update locations context with ALL locations from document
+          if (data.allLocations && Array.isArray(data.allLocations)) {
+            console.log('[DocumentNextWebRTC] Setting all locations:', data.allLocations.length);
+            setLocations(data.allLocations);
+          } else {
+            // Fallback: just add the clicked location
+            console.log('[DocumentNextWebRTC] No allLocations field, adding single location');
+            if (data.location) {
+              setLocations((prev) => {
+                const existing = prev.find((loc: any) => loc.geoId === data.location.geoId);
+                if (existing) return prev;
+                return [...prev, data.location];
+              });
+            }
           }
 
           // Navigate to map location detail route (shows bottom sheet)

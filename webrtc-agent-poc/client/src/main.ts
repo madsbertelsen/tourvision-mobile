@@ -420,6 +420,10 @@ function extractLocationsForFullscreen() {
           console.log('[Fullscreen] window.ReactNativeWebView exists:', !!window.ReactNativeWebView);
           console.log('[Fullscreen] window.parent !== window:', window.parent !== window);
 
+          // Extract ALL locations from document
+          const allLocations = extractLocationsForFullscreen();
+          console.log('[Fullscreen] All locations from document:', allLocations);
+
           const message = {
             type: 'openLocationDetails',
             location: {
@@ -429,7 +433,8 @@ function extractLocationsForFullscreen() {
               lat: location.lat,
               lng: location.lng,
               colorIndex: location.colorIndex
-            }
+            },
+            allLocations: allLocations // Send all locations to React Native
           };
 
           console.log('[Fullscreen] Sending message:', message);
