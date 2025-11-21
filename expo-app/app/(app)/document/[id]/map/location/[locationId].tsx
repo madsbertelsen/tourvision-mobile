@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useMapContext } from '../_layout';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useDocumentNextContext } from '../../_layout';
+import { useMapContext } from '../_layout';
 
 export default function LocationDetailsRoute() {
   const { locationId } = useLocalSearchParams();

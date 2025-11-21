@@ -62,6 +62,11 @@ export default function LocationDetailsRoute() {
     );
   }
 
+  const handleTransportation = () => {
+    // Navigate to transport config for this location
+    router.push(`/document-next/${documentId}/transport/${locationId}`);
+  };
+
   const handleEditLocation = () => {
     // Navigate to edit location within bottom sheet
     router.push(`/document-next/${documentId}/edit/${location.geoId}`);
@@ -100,6 +105,15 @@ export default function LocationDetailsRoute() {
 
       {/* Action buttons */}
       <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.linkButton}
+          onPress={handleTransportation}
+        >
+          <Ionicons name="car-outline" size={20} color="#007AFF" />
+          <Text style={styles.linkButtonText}>Configure Transport</Text>
+          <Ionicons name="chevron-forward" size={20} color="#007AFF" style={styles.linkChevron} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.button, styles.secondaryButton]}
           onPress={handleEditLocation}
@@ -142,6 +156,26 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: 20,
     gap: 12,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  linkButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 12,
+  },
+  linkChevron: {
+    marginLeft: 8,
   },
   button: {
     flexDirection: 'row',
