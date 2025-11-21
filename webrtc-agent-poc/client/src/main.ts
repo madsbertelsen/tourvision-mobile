@@ -730,13 +730,14 @@ function extractLocationsForFullscreen() {
       if (!fullscreenMap) return;
 
       const locations = extractLocationsForFullscreen();
-      // Create hash of locations including transport attributes
+      // Create hash of locations including transport attributes and waypoints
       const locationsHash = JSON.stringify(locations.map(loc => ({
         geoId: loc.geoId,
         lat: loc.lat,
         lng: loc.lng,
         transportFrom: loc.transportFrom,
-        transportProfile: loc.transportProfile
+        transportProfile: loc.transportProfile,
+        waypoints: loc.waypoints
       })));
 
       if (locationsHash !== previousLocationsHash) {
@@ -1391,13 +1392,14 @@ function createMapNodeView(node: any, editorView: EditorView) {
   let previousLocationsHash = '';
   const updateMapIfChanged = () => {
     const locations = extractLocations();
-    // Create hash of locations including transport attributes
+    // Create hash of locations including transport attributes and waypoints
     const locationsHash = JSON.stringify(locations.map(loc => ({
       geoId: loc.geoId,
       lat: loc.lat,
       lng: loc.lng,
       transportFrom: loc.transportFrom,
-      transportProfile: loc.transportProfile
+      transportProfile: loc.transportProfile,
+      waypoints: loc.waypoints
     })));
 
     if (locationsHash !== previousLocationsHash) {
