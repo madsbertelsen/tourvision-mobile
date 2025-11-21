@@ -87,7 +87,10 @@ function setupYjs(documentId: string) {
   const provider = new WebrtcProvider(documentId, ydoc, {
     // WebSocket signaling server for cross-machine sync
     // BroadcastChannel will also handle local tab communication
-    signaling: ['ws://localhost:8788/signaling/' + documentId],
+    signaling: [
+      // Use production signaling server (wss for secure WebSocket)
+      'wss://webrtc-agent-poc-signaling.mads-9b9.workers.dev/signaling/' + documentId
+    ],
     // Enable password for room isolation (optional)
     password: null,
   });

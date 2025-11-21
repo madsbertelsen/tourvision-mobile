@@ -8,7 +8,7 @@ name = "SIGNALING"
 class_name = "SignalingDurableObject"
 script_name = "webrtc-agent-poc-signaling"
 
-# Migrations for Durable Objects
+# Migrations for Durable Objects (using SQLite for free plan)
 [[migrations]]
 tag = "v1"
-new_classes = ["SignalingDurableObject"]
+new_sqlite_classes = ["SignalingDurableObject"]
