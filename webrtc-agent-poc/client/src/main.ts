@@ -458,6 +458,73 @@ function extractLocationsForFullscreen() {
         console.log('[Fullscreen] Added click and touchend listeners to marker:', location.geoId);
       });
 
+      // Render routes for locations with transport configuration
+      console.log('[Routes] Checking for transport configurations...');
+      currentLocations.forEach(async (toLocation) => {
+        if (toLocation.transportFrom && toLocation.transportProfile) {
+          const fromLocation = currentLocations.find(loc => loc.geoId === toLocation.transportFrom);
+          if (!fromLocation) {
+            console.warn('[Routes] Source location not found:', toLocation.transportFrom);
+            return;
+          }
+
+          console.log(`[Routes] Found transport config: ${fromLocation.placeName} → ${toLocation.placeName} (${toLocation.transportProfile})`);
+
+          try {
+            // Determine Mapbox profile
+            const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                           toLocation.transportProfile === 'cycling' ? 'cycling' :
+                           'driving-traffic';
+
+            // Fetch route from Mapbox Directions API
+            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+            console.log('[Routes] Fetching route from Mapbox...');
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.routes && data.routes.length > 0) {
+              const route = data.routes[0];
+              const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+              console.log(`[Routes] Route fetched successfully: ${(route.distance / 1000).toFixed(1)}km, ${Math.round(route.duration / 60)}min`);
+
+              // Add route as GeoJSON source
+              fullscreenMap!.addSource(routeId, {
+                type: 'geojson',
+                data: {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: route.geometry
+                }
+              });
+
+              // Add route line layer
+              fullscreenMap!.addLayer({
+                id: routeId,
+                type: 'line',
+                source: routeId,
+                layout: {
+                  'line-join': 'round',
+                  'line-cap': 'round'
+                },
+                paint: {
+                  'line-color': toLocation.color || '#3B82F6',
+                  'line-width': 4,
+                  'line-opacity': 0.7
+                }
+              });
+
+              console.log('[Routes] Route rendered on map:', routeId);
+            } else {
+              console.warn('[Routes] No route found in Mapbox response');
+            }
+          } catch (error) {
+            console.error('[Routes] Error fetching/rendering route:', error);
+          }
+        }
+      });
+
       // Listen for map movement to update awareness
       fullscreenMap!.on('moveend', () => {
         console.log('[Fullscreen] Map moveend - updating awareness');
