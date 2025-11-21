@@ -206,6 +206,13 @@ function customCursorBuilder(user: any): HTMLElement {
 
 // Global fullscreen map variable
 let fullscreenMap: mapboxgl.Map | null = null;
+let fullscreenMapUpdateListener: (() => void) | null = null;
+
+// Global geo-mark change listeners
+const geoMarkChangeListeners: Set<() => void> = new Set();
+const notifyGeoMarkChange = () => {
+  geoMarkChangeListeners.forEach(listener => listener());
+};
 
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
@@ -256,13 +263,17 @@ function extractLocationsForFullscreen() {
     if (node.isText && node.marks.length > 0) {
       for (const mark of node.marks) {
         if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+          const colorIndex = mark.attrs.colorIndex ?? 0;
           locations.push({
             geoId: mark.attrs.geoId,
             displayText: mark.attrs.displayText || node.text,
             placeName: mark.attrs.placeName,
             lat: parseFloat(mark.attrs.lat),
             lng: parseFloat(mark.attrs.lng),
-            colorIndex: mark.attrs.colorIndex,
+            colorIndex: colorIndex,
+            color: COLORS[colorIndex % COLORS.length],
+            transportFrom: mark.attrs.transportFrom,
+            transportProfile: mark.attrs.transportProfile,
           });
         }
       }
@@ -460,6 +471,8 @@ function extractLocationsForFullscreen() {
 
       // Render routes for locations with transport configuration
       console.log('[Routes] Checking for transport configurations...');
+      console.log('[Routes] currentLocations at map load:', JSON.stringify(currentLocations, null, 2));
+      console.log('[Routes] Locations with transport:', currentLocations.filter(loc => loc.transportFrom || loc.transportProfile));
       currentLocations.forEach(async (toLocation) => {
         if (toLocation.transportFrom && toLocation.transportProfile) {
           const fromLocation = currentLocations.find(loc => loc.geoId === toLocation.transportFrom);
@@ -542,6 +555,108 @@ function extractLocationsForFullscreen() {
         }
       });
     });
+
+    // Set up Y.js observer to detect transport configuration changes
+    let previousLocationsHash = '';
+    const updateRoutesIfChanged = () => {
+      if (!fullscreenMap) return;
+
+      const locations = extractLocationsForFullscreen();
+      // Create hash of locations including transport attributes
+      const locationsHash = JSON.stringify(locations.map(loc => ({
+        geoId: loc.geoId,
+        lat: loc.lat,
+        lng: loc.lng,
+        transportFrom: loc.transportFrom,
+        transportProfile: loc.transportProfile
+      })));
+
+      if (locationsHash !== previousLocationsHash) {
+        console.log('[Fullscreen] Locations changed, updating routes');
+        previousLocationsHash = locationsHash;
+
+        // Remove old route layers and sources
+        const style = fullscreenMap.getStyle();
+        if (style && style.layers) {
+          style.layers.forEach((layer: any) => {
+            if (layer.id.startsWith('route-')) {
+              if (fullscreenMap!.getLayer(layer.id)) {
+                fullscreenMap!.removeLayer(layer.id);
+              }
+            }
+          });
+        }
+        if (style && style.sources) {
+          Object.keys(style.sources).forEach((sourceId: string) => {
+            if (sourceId.startsWith('route-')) {
+              if (fullscreenMap!.getSource(sourceId)) {
+                fullscreenMap!.removeSource(sourceId);
+              }
+            }
+          });
+        }
+
+        // Render routes for locations with transport configuration
+        console.log('[Fullscreen] Re-rendering routes...');
+        locations.forEach(async (toLocation) => {
+          if (toLocation.transportFrom && toLocation.transportProfile) {
+            const fromLocation = locations.find(loc => loc.geoId === toLocation.transportFrom);
+            if (!fromLocation) return;
+
+            try {
+              const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                             toLocation.transportProfile === 'cycling' ? 'cycling' :
+                             'driving-traffic';
+
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+              const response = await fetch(url);
+              const data = await response.json();
+
+              if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+                if (fullscreenMap && !fullscreenMap.getSource(routeId)) {
+                  fullscreenMap.addSource(routeId, {
+                    type: 'geojson',
+                    data: {
+                      type: 'Feature',
+                      properties: {},
+                      geometry: route.geometry
+                    }
+                  });
+
+                  fullscreenMap.addLayer({
+                    id: routeId,
+                    type: 'line',
+                    source: routeId,
+                    layout: {
+                      'line-join': 'round',
+                      'line-cap': 'round'
+                    },
+                    paint: {
+                      'line-color': toLocation.color || '#3B82F6',
+                      'line-width': 4,
+                      'line-opacity': 0.7
+                    }
+                  });
+
+                  console.log('[Fullscreen] Route updated:', routeId);
+                }
+              }
+            } catch (error) {
+              console.error('[Fullscreen] Error updating route:', error);
+            }
+          }
+        });
+      }
+    };
+
+    // Listen to geo-mark changes reactively
+    fullscreenMapUpdateListener = updateRoutesIfChanged;
+    geoMarkChangeListeners.add(updateRoutesIfChanged);
+    console.log('[Fullscreen] Added geo-mark change listener');
   }, 100);
 };
 
@@ -566,6 +681,13 @@ function extractLocationsForFullscreen() {
       mapBounds: null,
     });
     console.log('[Awareness] Cleared map bounds');
+  }
+
+  // Remove geo-mark change listener
+  if (fullscreenMapUpdateListener) {
+    geoMarkChangeListeners.delete(fullscreenMapUpdateListener);
+    fullscreenMapUpdateListener = null;
+    console.log('[Fullscreen] Removed geo-mark change listener');
   }
 
   const overlay = document.getElementById('fullscreen-overlay');
@@ -858,13 +980,17 @@ function createMapNodeView(node: any, editorView: EditorView) {
         if (node.isText && node.marks.length > 0) {
           for (const mark of node.marks) {
             if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+              const colorIndex = mark.attrs.colorIndex ?? 0;
               locations.push({
                 geoId: mark.attrs.geoId,
                 displayText: mark.attrs.displayText || node.text,
                 placeName: mark.attrs.placeName,
                 lat: parseFloat(mark.attrs.lat),
                 lng: parseFloat(mark.attrs.lng),
-                colorIndex: mark.attrs.colorIndex,
+                colorIndex: colorIndex,
+                color: COLORS[colorIndex % COLORS.length],
+                transportFrom: mark.attrs.transportFrom,
+                transportProfile: mark.attrs.transportProfile,
               });
             }
           }
@@ -939,6 +1065,74 @@ function createMapNodeView(node: any, editorView: EditorView) {
             currentMarkers.push(marker);
           });
 
+          // Render routes for locations with transport configuration
+          console.log('[BlockMap] Checking for transport configurations...');
+          locations.forEach(async (toLocation: any) => {
+            if (toLocation.transportFrom && toLocation.transportProfile) {
+              const fromLocation = locations.find((loc: any) => loc.geoId === toLocation.transportFrom);
+              if (!fromLocation) {
+                console.warn('[BlockMap] Source location not found:', toLocation.transportFrom);
+                return;
+              }
+
+              console.log(`[BlockMap] Found transport config: ${fromLocation.placeName} → ${toLocation.placeName} (${toLocation.transportProfile})`);
+
+              try {
+                // Determine Mapbox profile
+                const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                               toLocation.transportProfile === 'cycling' ? 'cycling' :
+                               'driving-traffic';
+
+                // Fetch route from Mapbox Directions API
+                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.routes && data.routes.length > 0) {
+                  const route = data.routes[0];
+                  const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+                  console.log(`[BlockMap] Route fetched: ${(route.distance / 1000).toFixed(1)}km`);
+
+                  // Add route as GeoJSON source
+                  if (currentMap && !currentMap.getSource(routeId)) {
+                    currentMap.addSource(routeId, {
+                      type: 'geojson',
+                      data: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: route.geometry
+                      }
+                    });
+
+                    // Add route line layer
+                    currentMap.addLayer({
+                      id: routeId,
+                      type: 'line',
+                      source: routeId,
+                      layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                      },
+                      paint: {
+                        'line-color': toLocation.color || '#3B82F6',
+                        'line-width': 3,
+                        'line-opacity': 0.7
+                      }
+                    });
+
+                    console.log('[BlockMap] Route rendered:', routeId);
+                  }
+                } else {
+                  console.warn('[BlockMap] No route found in Mapbox response');
+                }
+              } catch (error) {
+                console.error('[BlockMap] Error fetching/rendering route:', error);
+              }
+            }
+          });
+
           // Fit bounds
           if (locations.length === 1) {
             currentMap!.jumpTo({
@@ -967,13 +1161,22 @@ function createMapNodeView(node: any, editorView: EditorView) {
   // Initial render
   setTimeout(updateMap, 100);
 
-  // Set up periodic updates to detect new geo marks
-  let previousLocationCount = 0;
-  const updateInterval = setInterval(() => {
+  // Set up reactive updates to detect new geo marks and transport changes
+  let previousLocationsHash = '';
+  const updateMapIfChanged = () => {
     const locations = extractLocations();
-    if (locations.length !== previousLocationCount) {
-      console.log('[MapView] Location count changed:', previousLocationCount, '->', locations.length);
-      previousLocationCount = locations.length;
+    // Create hash of locations including transport attributes
+    const locationsHash = JSON.stringify(locations.map(loc => ({
+      geoId: loc.geoId,
+      lat: loc.lat,
+      lng: loc.lng,
+      transportFrom: loc.transportFrom,
+      transportProfile: loc.transportProfile
+    })));
+
+    if (locationsHash !== previousLocationsHash) {
+      console.log('[MapView] Locations changed, updating map');
+      previousLocationsHash = locationsHash;
 
       // Remove old markers
       currentMarkers.forEach(marker => marker.remove());
@@ -1002,6 +1205,84 @@ function createMapNodeView(node: any, editorView: EditorView) {
           currentMarkers.push(marker);
         });
 
+        // Remove old route layers and sources
+        if (currentMap) {
+          const style = currentMap.getStyle();
+          if (style && style.layers) {
+            style.layers.forEach((layer: any) => {
+              if (layer.id.startsWith('route-')) {
+                if (currentMap.getLayer(layer.id)) {
+                  currentMap.removeLayer(layer.id);
+                }
+              }
+            });
+          }
+          if (style && style.sources) {
+            Object.keys(style.sources).forEach((sourceId: string) => {
+              if (sourceId.startsWith('route-')) {
+                if (currentMap.getSource(sourceId)) {
+                  currentMap.removeSource(sourceId);
+                }
+              }
+            });
+          }
+        }
+
+        // Render routes for locations with transport configuration
+        console.log('[BlockMap] Updating routes...');
+        locations.forEach(async (toLocation: any) => {
+          if (toLocation.transportFrom && toLocation.transportProfile) {
+            const fromLocation = locations.find((loc: any) => loc.geoId === toLocation.transportFrom);
+            if (!fromLocation) return;
+
+            try {
+              const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                             toLocation.transportProfile === 'cycling' ? 'cycling' :
+                             'driving-traffic';
+
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+              const response = await fetch(url);
+              const data = await response.json();
+
+              if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+                if (currentMap && !currentMap.getSource(routeId)) {
+                  currentMap.addSource(routeId, {
+                    type: 'geojson',
+                    data: {
+                      type: 'Feature',
+                      properties: {},
+                      geometry: route.geometry
+                    }
+                  });
+
+                  currentMap.addLayer({
+                    id: routeId,
+                    type: 'line',
+                    source: routeId,
+                    layout: {
+                      'line-join': 'round',
+                      'line-cap': 'round'
+                    },
+                    paint: {
+                      'line-color': toLocation.color || '#3B82F6',
+                      'line-width': 3,
+                      'line-opacity': 0.7
+                    }
+                  });
+
+                  console.log('[BlockMap] Route updated:', routeId);
+                }
+              }
+            } catch (error) {
+              console.error('[BlockMap] Error updating route:', error);
+            }
+          }
+        });
+
         // Re-fit bounds to show all locations
         if (locations.length === 1) {
           currentMap.flyTo({
@@ -1024,7 +1305,10 @@ function createMapNodeView(node: any, editorView: EditorView) {
         }
       }
     }
-  }, 1000);
+  };
+
+  // Listen to geo-mark changes reactively
+  geoMarkChangeListeners.add(updateMapIfChanged);
 
   return {
     dom,
@@ -1034,7 +1318,8 @@ function createMapNodeView(node: any, editorView: EditorView) {
       return true;
     },
     destroy() {
-      clearInterval(updateInterval);
+      // Remove geo-mark change listener
+      geoMarkChangeListeners.delete(updateMapIfChanged);
       if (currentMap) {
         currentMap.remove();
       }
@@ -1139,6 +1424,10 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
                 view.dispatch(tr);
                 console.log('[Main] Geo-mark updated successfully');
                 console.log('[Main] New attrs:', updatedMark.attrs);
+
+                // Notify listeners that geo-marks changed
+                notifyGeoMarkChange();
+
                 found = true;
                 return false;
               }
