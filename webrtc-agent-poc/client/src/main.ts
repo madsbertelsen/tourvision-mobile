@@ -1819,6 +1819,16 @@ async function main() {
   // Set up toolbar button handlers
   setupToolbarButtons(editor);
 
+  // Watch for remote Y.js changes to trigger block map updates
+  // This ensures that when other clients add/modify geo-marks, local block maps update
+  yXmlFragment.observeDeep((events, transaction) => {
+    // Only trigger for remote changes (not local changes - those already call notifyGeoMarkChange)
+    if (!transaction.local) {
+      console.log('[Y.js] Remote document change detected, notifying listeners');
+      notifyGeoMarkChange();
+    }
+  });
+
   updateStatus('Connecting to peers...', 'connecting');
   console.log('[Main] Application initialized successfully');
 }
