@@ -64,9 +64,8 @@ export default function DocumentNextWebRTCScreen() {
   const [canRedo, setCanRedo] = useState(false);
 
   // Build the WebRTC editor URL with document ID
-  // Use Mac's local IP address instead of localhost for React Native
-  // Port 5173 is the webrtc-agent-poc Vite server (with --host flag for network access)
-  const editorUrl = `http://192.168.1.223:5173/?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
+  // Use production Cloudflare Pages deployment
+  const editorUrl = `https://webrtc-agent-poc.pages.dev/?doc=${encodeURIComponent(documentId)}&hideHeader=true`;
 
   // Handle messages from the WebRTC editor
   const handleMessage = useCallback((event: any) => {
