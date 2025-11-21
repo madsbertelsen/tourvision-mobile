@@ -314,7 +314,11 @@ function renderWaypointMarkers(map: mapboxgl.Map, routeId: string, waypoints: Ar
       }
 
       // Extract route destination geoId from routeId
-      const match = routeId.match(/route-(.+)-(.+)/);
+      // RouteId format: route-{fromGeoId}-{toGeoId}
+      // GeoIds are like: geo-1763726268324~bohvalqj1
+      // So we match: route-{stuff}-geo-{stuff}
+      // This way we explicitly find the separator between the two geoIds
+      const match = routeId.match(/^route-(.+)-(geo-.+)$/);
       if (!match) {
         console.error('[Waypoint] Could not extract geoIds from routeId:', routeId);
         return;
