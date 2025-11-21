@@ -744,28 +744,8 @@ function extractLocationsForFullscreen() {
         console.log('[Fullscreen] Locations changed, updating routes');
         previousLocationsHash = locationsHash;
 
-        // Remove old route layers and sources
-        const style = fullscreenMap.getStyle();
-        if (style && style.layers) {
-          style.layers.forEach((layer: any) => {
-            if (layer.id.startsWith('route-')) {
-              if (fullscreenMap!.getLayer(layer.id)) {
-                fullscreenMap!.removeLayer(layer.id);
-              }
-            }
-          });
-        }
-        if (style && style.sources) {
-          Object.keys(style.sources).forEach((sourceId: string) => {
-            if (sourceId.startsWith('route-')) {
-              if (fullscreenMap!.getSource(sourceId)) {
-                fullscreenMap!.removeSource(sourceId);
-              }
-            }
-          });
-        }
-
-        // Render routes for locations with transport configuration
+        // Update or create routes for locations with transport configuration
+        // No need to remove existing sources - we'll update them in place
         console.log('[Fullscreen] Re-rendering routes...');
         locations.forEach(async (toLocation) => {
           if (toLocation.transportFrom && toLocation.transportProfile) {
@@ -789,83 +769,96 @@ function extractLocationsForFullscreen() {
                 const route = data.routes[0];
                 const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
 
-                if (fullscreenMap && !fullscreenMap.getSource(routeId)) {
-                  fullscreenMap.addSource(routeId, {
-                    type: 'geojson',
-                    data: {
+                if (fullscreenMap) {
+                  const existingSource = fullscreenMap.getSource(routeId);
+
+                  if (existingSource) {
+                    // Update existing source data
+                    (existingSource as mapboxgl.GeoJSONSource).setData({
                       type: 'Feature',
                       properties: {},
                       geometry: route.geometry
-                    }
-                  });
+                    });
+                    console.log('[Fullscreen] Route source updated:', routeId);
+                  } else {
+                    // Add new source and layer
+                    fullscreenMap.addSource(routeId, {
+                      type: 'geojson',
+                      data: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: route.geometry
+                      }
+                    });
 
-                  fullscreenMap.addLayer({
-                    id: routeId,
-                    type: 'line',
-                    source: routeId,
-                    layout: {
-                      'line-join': 'round',
-                      'line-cap': 'round'
-                    },
-                    paint: {
-                      'line-color': toLocation.color || '#3B82F6',
-                      'line-width': 4,
-                      'line-opacity': 0.7
-                    }
-                  });
+                    fullscreenMap.addLayer({
+                      id: routeId,
+                      type: 'line',
+                      source: routeId,
+                      layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                      },
+                      paint: {
+                        'line-color': toLocation.color || '#3B82F6',
+                        'line-width': 4,
+                        'line-opacity': 0.7
+                      }
+                    });
 
-                  // Add click handler to route for adding waypoints
-                  fullscreenMap.on('click', routeId, (e) => {
-                    console.log('[Routes] Route clicked:', routeId, e.lngLat);
-                    const { lng, lat } = e.lngLat;
+                    // Add click handler to route for adding waypoints
+                    fullscreenMap.on('click', routeId, (e) => {
+                      console.log('[Routes] Route clicked:', routeId, e.lngLat);
+                      const { lng, lat } = e.lngLat;
 
-                    if (globalEditorView) {
-                      const destGeoId = toLocation.geoId;
-                      let waypointAdded = false;
+                      if (globalEditorView) {
+                        const destGeoId = toLocation.geoId;
+                        let waypointAdded = false;
 
-                      globalEditorView.state.doc.descendants((node, pos) => {
-                        if (waypointAdded) return false;
+                        globalEditorView.state.doc.descendants((node, pos) => {
+                          if (waypointAdded) return false;
 
-                        if (node.isText && node.marks.length > 0) {
-                          const geoMark = node.marks.find(m => m.type.name === 'geoMark');
-                          if (geoMark && geoMark.attrs.geoId === destGeoId) {
-                            const currentWaypoints = geoMark.attrs.waypoints || [];
-                            const newWaypoints = [...currentWaypoints, { lat, lng }];
+                          if (node.isText && node.marks.length > 0) {
+                            const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+                            if (geoMark && geoMark.attrs.geoId === destGeoId) {
+                              const currentWaypoints = geoMark.attrs.waypoints || [];
+                              const newWaypoints = [...currentWaypoints, { lat, lng }];
 
-                            const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
-                              ...geoMark.attrs,
-                              waypoints: newWaypoints
-                            });
+                              const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
+                                ...geoMark.attrs,
+                                waypoints: newWaypoints
+                              });
 
-                            const tr = globalEditorView.state.tr
-                              .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
-                              .addMark(pos, pos + node.nodeSize, updatedMark);
+                              const tr = globalEditorView.state.tr
+                                .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
+                                .addMark(pos, pos + node.nodeSize, updatedMark);
 
-                            globalEditorView.dispatch(tr);
-                            console.log('[Routes] Waypoint added:', { lat, lng });
-                            notifyGeoMarkChange();
-                            waypointAdded = true;
-                            return false;
+                              globalEditorView.dispatch(tr);
+                              console.log('[Routes] Waypoint added:', { lat, lng });
+                              notifyGeoMarkChange();
+                              waypointAdded = true;
+                              return false;
+                            }
                           }
-                        }
-                      });
-                    }
-                  });
+                        });
+                      }
+                    });
 
-                  // Change cursor on hover
-                  fullscreenMap.on('mouseenter', routeId, () => {
-                    fullscreenMap.getCanvas().style.cursor = 'pointer';
-                  });
-                  fullscreenMap.on('mouseleave', routeId, () => {
-                    fullscreenMap.getCanvas().style.cursor = '';
-                  });
+                    // Change cursor on hover
+                    fullscreenMap.on('mouseenter', routeId, () => {
+                      fullscreenMap.getCanvas().style.cursor = 'pointer';
+                    });
+                    fullscreenMap.on('mouseleave', routeId, () => {
+                      fullscreenMap.getCanvas().style.cursor = '';
+                    });
 
-                  // Render waypoint markers if waypoints exist
+                    console.log('[Fullscreen] Route created:', routeId);
+                  }
+
+                  // Always re-render waypoint markers (whether updating or creating)
                   if (toLocation.waypoints && toLocation.waypoints.length > 0) {
                     renderWaypointMarkers(fullscreenMap, routeId, toLocation.waypoints, toLocation.color || '#3B82F6');
                   }
-
-                  console.log('[Fullscreen] Route updated:', routeId);
                 }
               }
             } catch (error) {
@@ -1433,30 +1426,8 @@ function createMapNodeView(node: any, editorView: EditorView) {
           currentMarkers.push(marker);
         });
 
-        // Remove old route layers and sources
-        if (currentMap) {
-          const style = currentMap.getStyle();
-          if (style && style.layers) {
-            style.layers.forEach((layer: any) => {
-              if (layer.id.startsWith('route-')) {
-                if (currentMap.getLayer(layer.id)) {
-                  currentMap.removeLayer(layer.id);
-                }
-              }
-            });
-          }
-          if (style && style.sources) {
-            Object.keys(style.sources).forEach((sourceId: string) => {
-              if (sourceId.startsWith('route-')) {
-                if (currentMap.getSource(sourceId)) {
-                  currentMap.removeSource(sourceId);
-                }
-              }
-            });
-          }
-        }
-
-        // Render routes for locations with transport configuration
+        // Update or create routes for locations with transport configuration
+        // No need to remove existing sources - we'll update them in place
         console.log('[BlockMap] Updating routes...');
         locations.forEach(async (toLocation: any) => {
           if (toLocation.transportFrom && toLocation.transportProfile) {
@@ -1480,32 +1451,45 @@ function createMapNodeView(node: any, editorView: EditorView) {
                 const route = data.routes[0];
                 const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
 
-                if (currentMap && !currentMap.getSource(routeId)) {
-                  currentMap.addSource(routeId, {
-                    type: 'geojson',
-                    data: {
+                if (currentMap) {
+                  const existingSource = currentMap.getSource(routeId);
+
+                  if (existingSource) {
+                    // Update existing source data
+                    (existingSource as mapboxgl.GeoJSONSource).setData({
                       type: 'Feature',
                       properties: {},
                       geometry: route.geometry
-                    }
-                  });
+                    });
+                    console.log('[BlockMap] Route source updated:', routeId);
+                  } else {
+                    // Add new source and layer
+                    currentMap.addSource(routeId, {
+                      type: 'geojson',
+                      data: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: route.geometry
+                      }
+                    });
 
-                  currentMap.addLayer({
-                    id: routeId,
-                    type: 'line',
-                    source: routeId,
-                    layout: {
-                      'line-join': 'round',
-                      'line-cap': 'round'
-                    },
-                    paint: {
-                      'line-color': toLocation.color || '#3B82F6',
-                      'line-width': 3,
-                      'line-opacity': 0.7
-                    }
-                  });
+                    currentMap.addLayer({
+                      id: routeId,
+                      type: 'line',
+                      source: routeId,
+                      layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                      },
+                      paint: {
+                        'line-color': toLocation.color || '#3B82F6',
+                        'line-width': 3,
+                        'line-opacity': 0.7
+                      }
+                    });
 
-                  console.log('[BlockMap] Route updated:', routeId);
+                    console.log('[BlockMap] Route created:', routeId);
+                  }
                 }
               }
             } catch (error) {
