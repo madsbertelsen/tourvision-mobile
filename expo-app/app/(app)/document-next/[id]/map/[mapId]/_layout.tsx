@@ -77,9 +77,13 @@ export default function MapLayout() {
   const mapId = params.mapId as string;
   const { locations: docLocations, setGeoMarkUpdate } = useDocumentNextWebRTCContext();
 
+  console.log('[MapLayout] mapId:', mapId);
+  console.log('[MapLayout] docLocations from parent context:', docLocations);
+  console.log('[MapLayout] docLocations length:', docLocations.length);
+
   // Process locations to add colors and ensure numeric coordinates
   const locations: MapLocation[] = useMemo(() => {
-    return docLocations.map((loc, index) => ({
+    const processed = docLocations.map((loc, index) => ({
       ...loc,
       geoId: loc.geoId || `loc-${index}`,
       lat: typeof loc.lat === 'string' ? parseFloat(loc.lat) : loc.lat,
@@ -87,6 +91,9 @@ export default function MapLayout() {
       colorIndex: loc.colorIndex ?? index,
       color: COLORS[(loc.colorIndex ?? index) % COLORS.length],
     }));
+    console.log('[MapLayout] Processed locations:', processed);
+    console.log('[MapLayout] Processed locations length:', processed.length);
+    return processed;
   }, [docLocations]);
 
   const [routes, setRoutes] = useState<RouteData[]>([]);

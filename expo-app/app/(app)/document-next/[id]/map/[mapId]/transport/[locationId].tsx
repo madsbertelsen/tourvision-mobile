@@ -32,8 +32,18 @@ export default function TransportConfigRoute() {
   // Get map context for locations and routes
   const { locations } = useMapContext();
 
+  console.log('[Transport] locationId:', locationId);
+  console.log('[Transport] locations from MapContext:', locations);
+  console.log('[Transport] locations length:', locations.length);
+
   // Find the destination location
   const destinationLocation = locations.find(loc => loc.geoId === locationId);
+  console.log('[Transport] destinationLocation:', destinationLocation);
+
+  // Filter locations for "Travel From" selector
+  const filteredLocations = locations.filter(loc => loc.geoId !== locationId);
+  console.log('[Transport] filteredLocations (for Travel From):', filteredLocations);
+  console.log('[Transport] filteredLocations length:', filteredLocations.length);
 
   // State for selected source location
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
