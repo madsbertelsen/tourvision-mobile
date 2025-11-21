@@ -254,6 +254,12 @@ function createMarkerElement(colorIndex: number) {
 // Declare global variable to store current editor view
 let globalEditorView: EditorView | null = null;
 
+// Helper function to build waypoints string for Mapbox Directions API
+function buildWaypointsString(waypoints: Array<{ lat: number; lng: number }> = []): string {
+  if (!waypoints || waypoints.length === 0) return '';
+  return ';' + waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+}
+
 // Extract locations from document (for fullscreen map)
 function extractLocationsForFullscreen() {
   if (!globalEditorView) return [];
@@ -274,6 +280,7 @@ function extractLocationsForFullscreen() {
             color: COLORS[colorIndex % COLORS.length],
             transportFrom: mark.attrs.transportFrom,
             transportProfile: mark.attrs.transportProfile,
+            waypoints: mark.attrs.waypoints || [],
           });
         }
       }
@@ -489,8 +496,11 @@ function extractLocationsForFullscreen() {
                            toLocation.transportProfile === 'cycling' ? 'cycling' :
                            'driving-traffic';
 
-            // Fetch route from Mapbox Directions API
-            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+            // Build waypoints string
+            const waypointsStr = buildWaypointsString(toLocation.waypoints);
+
+            // Fetch route from Mapbox Directions API (with waypoints if present)
+            const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
             console.log('[Routes] Fetching route from Mapbox...');
             const response = await fetch(url);
@@ -608,7 +618,10 @@ function extractLocationsForFullscreen() {
                              toLocation.transportProfile === 'cycling' ? 'cycling' :
                              'driving-traffic';
 
-              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+              // Build waypoints string
+              const waypointsStr = buildWaypointsString(toLocation.waypoints);
+
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
               const response = await fetch(url);
               const data = await response.json();
@@ -991,6 +1004,7 @@ function createMapNodeView(node: any, editorView: EditorView) {
                 color: COLORS[colorIndex % COLORS.length],
                 transportFrom: mark.attrs.transportFrom,
                 transportProfile: mark.attrs.transportProfile,
+                waypoints: mark.attrs.waypoints || [],
               });
             }
           }
@@ -1083,8 +1097,11 @@ function createMapNodeView(node: any, editorView: EditorView) {
                                toLocation.transportProfile === 'cycling' ? 'cycling' :
                                'driving-traffic';
 
-                // Fetch route from Mapbox Directions API
-                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+                // Build waypoints string
+                const waypointsStr = buildWaypointsString(toLocation.waypoints);
+
+                // Fetch route from Mapbox Directions API (with waypoints if present)
+                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
                 const response = await fetch(url);
                 const data = await response.json();
@@ -1240,7 +1257,10 @@ function createMapNodeView(node: any, editorView: EditorView) {
                              toLocation.transportProfile === 'cycling' ? 'cycling' :
                              'driving-traffic';
 
-              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+              // Build waypoints string
+              const waypointsStr = buildWaypointsString(toLocation.waypoints);
+
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
               const response = await fetch(url);
               const data = await response.json();
