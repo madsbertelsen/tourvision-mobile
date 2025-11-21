@@ -541,6 +541,68 @@ function extractLocationsForFullscreen() {
                 }
               });
 
+              // Add click handler to route for adding waypoints
+              fullscreenMap!.on('click', routeId, (e) => {
+                console.log('[Routes] Route clicked:', routeId, e.lngLat);
+
+                // Get the clicked coordinates
+                const { lng, lat } = e.lngLat;
+
+                // Add waypoint to the geo-mark
+                if (globalEditorView) {
+                  // Find the geo-mark for this route's destination
+                  const destGeoId = toLocation.geoId;
+                  let waypointAdded = false;
+
+                  globalEditorView.state.doc.descendants((node, pos) => {
+                    if (waypointAdded) return false;
+
+                    if (node.isText && node.marks.length > 0) {
+                      const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+                      if (geoMark && geoMark.attrs.geoId === destGeoId) {
+                        console.log('[Routes] Found destination geo-mark, adding waypoint');
+
+                        // Get current waypoints or create empty array
+                        const currentWaypoints = geoMark.attrs.waypoints || [];
+                        const newWaypoints = [...currentWaypoints, { lat, lng }];
+
+                        // Create updated mark
+                        const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
+                          ...geoMark.attrs,
+                          waypoints: newWaypoints
+                        });
+
+                        // Update the mark
+                        const tr = globalEditorView.state.tr
+                          .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
+                          .addMark(pos, pos + node.nodeSize, updatedMark);
+
+                        globalEditorView.dispatch(tr);
+                        console.log('[Routes] Waypoint added:', { lat, lng });
+
+                        // Notify listeners to trigger route recalculation
+                        notifyGeoMarkChange();
+
+                        waypointAdded = true;
+                        return false;
+                      }
+                    }
+                  });
+
+                  if (!waypointAdded) {
+                    console.warn('[Routes] Could not find geo-mark to add waypoint');
+                  }
+                }
+              });
+
+              // Change cursor on hover
+              fullscreenMap!.on('mouseenter', routeId, () => {
+                fullscreenMap!.getCanvas().style.cursor = 'pointer';
+              });
+              fullscreenMap!.on('mouseleave', routeId, () => {
+                fullscreenMap!.getCanvas().style.cursor = '';
+              });
+
               console.log('[Routes] Route rendered on map:', routeId);
             } else {
               console.warn('[Routes] No route found in Mapbox response');
@@ -656,6 +718,52 @@ function extractLocationsForFullscreen() {
                       'line-width': 4,
                       'line-opacity': 0.7
                     }
+                  });
+
+                  // Add click handler to route for adding waypoints
+                  fullscreenMap.on('click', routeId, (e) => {
+                    console.log('[Routes] Route clicked:', routeId, e.lngLat);
+                    const { lng, lat } = e.lngLat;
+
+                    if (globalEditorView) {
+                      const destGeoId = toLocation.geoId;
+                      let waypointAdded = false;
+
+                      globalEditorView.state.doc.descendants((node, pos) => {
+                        if (waypointAdded) return false;
+
+                        if (node.isText && node.marks.length > 0) {
+                          const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+                          if (geoMark && geoMark.attrs.geoId === destGeoId) {
+                            const currentWaypoints = geoMark.attrs.waypoints || [];
+                            const newWaypoints = [...currentWaypoints, { lat, lng }];
+
+                            const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
+                              ...geoMark.attrs,
+                              waypoints: newWaypoints
+                            });
+
+                            const tr = globalEditorView.state.tr
+                              .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
+                              .addMark(pos, pos + node.nodeSize, updatedMark);
+
+                            globalEditorView.dispatch(tr);
+                            console.log('[Routes] Waypoint added:', { lat, lng });
+                            notifyGeoMarkChange();
+                            waypointAdded = true;
+                            return false;
+                          }
+                        }
+                      });
+                    }
+                  });
+
+                  // Change cursor on hover
+                  fullscreenMap.on('mouseenter', routeId, () => {
+                    fullscreenMap.getCanvas().style.cursor = 'pointer';
+                  });
+                  fullscreenMap.on('mouseleave', routeId, () => {
+                    fullscreenMap.getCanvas().style.cursor = '';
                   });
 
                   console.log('[Fullscreen] Route updated:', routeId);
