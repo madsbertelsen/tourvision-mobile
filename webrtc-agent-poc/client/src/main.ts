@@ -1104,6 +1104,52 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
           insertMap(view);
           break;
 
+        case 'updateGeoMark':
+          console.log('[Main] Updating geo-mark:', data.geoId, data.updatedAttrs);
+          // Find and update the geo-mark in the document
+          const { geoId, updatedAttrs } = data;
+          let found = false;
+
+          view.state.doc.descendants((node, pos) => {
+            if (found) return false; // Stop searching once found
+
+            if (node.isText && node.marks.length > 0) {
+              const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+              if (geoMark && geoMark.attrs.geoId === geoId) {
+                console.log('[Main] Found geo-mark at position:', pos);
+                console.log('[Main] Current attrs:', geoMark.attrs);
+
+                // Create updated mark with new attributes
+                const updatedMark = view.state.schema.marks.geoMark.create({
+                  ...geoMark.attrs,
+                  ...updatedAttrs
+                });
+
+                // Create transaction to update the mark
+                const tr = view.state.tr.removeMark(
+                  pos,
+                  pos + node.nodeSize,
+                  view.state.schema.marks.geoMark
+                ).addMark(
+                  pos,
+                  pos + node.nodeSize,
+                  updatedMark
+                );
+
+                view.dispatch(tr);
+                console.log('[Main] Geo-mark updated successfully');
+                console.log('[Main] New attrs:', updatedMark.attrs);
+                found = true;
+                return false;
+              }
+            }
+          });
+
+          if (!found) {
+            console.warn('[Main] Geo-mark not found:', geoId);
+          }
+          break;
+
         default:
           console.log('[Main] Unknown command:', data.type);
       }
