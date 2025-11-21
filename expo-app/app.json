@@ -3,7 +3,7 @@
     "name": "TourVision",
     "slug": "tourvision",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "tourvisionmobile",
     "userInterfaceStyle": "automatic",
@@ -22,6 +22,8 @@
       "associatedDomains": ["applinks:tourvision.com", "applinks:www.tourvision.com"]
     },
     "android": {
+      "isTV": true,
+      "uiMode": "television",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -50,6 +52,10 @@
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "MAIN",
+          "category": ["LEANBACK_LAUNCHER"]
         }
       ]
     },
