@@ -267,9 +267,11 @@ function buildWaypointsString(waypoints: Array<{ lat: number; lng: number }> = [
 const waypointMarkers: Map<string, mapboxgl.Marker[]> = new Map();
 
 // Helper function to render waypoint markers on the map
-function renderWaypointMarkers(map: mapboxgl.Map, routeId: string, waypoints: Array<{ lat: number; lng: number }>, color: string) {
-  // Remove existing markers for this route
-  const existingMarkers = waypointMarkers.get(routeId) || [];
+// destGeoId: The geo-mark that owns these waypoints (destination of the route)
+function renderWaypointMarkers(map: mapboxgl.Map, destGeoId: string, waypoints: Array<{ lat: number; lng: number }>, color: string) {
+  // Remove existing markers for this destination
+  const markerKey = `waypoints-${destGeoId}`;
+  const existingMarkers = waypointMarkers.get(markerKey) || [];
   existingMarkers.forEach(marker => marker.remove());
 
   // Create new markers
@@ -305,28 +307,13 @@ function renderWaypointMarkers(map: mapboxgl.Map, routeId: string, waypoints: Ar
     // Handle drag end
     marker.on('dragend', () => {
       const lngLat = marker.getLngLat();
-      console.log('[Waypoint] Dragged to:', lngLat, 'index:', index, 'routeId:', routeId);
+      console.log('[Waypoint] Dragged to:', lngLat, 'index:', index, 'destGeoId:', destGeoId);
 
-      // Update the waypoint in the geo-mark
+      // Update the waypoint in the destination geo-mark
       if (!globalEditorView) {
         console.error('[Waypoint] globalEditorView is null');
         return;
       }
-
-      // Extract route destination geoId from routeId
-      // RouteId format: route-{fromGeoId}-{toGeoId}
-      // GeoIds are like: geo-1763726268324~bohvalqj1
-      // So we match: route-{stuff}-geo-{stuff}
-      // This way we explicitly find the separator between the two geoIds
-      const match = routeId.match(/^route-(.+)-(geo-.+)$/);
-      if (!match) {
-        console.error('[Waypoint] Could not extract geoIds from routeId:', routeId);
-        return;
-      }
-
-      const fromGeoId = match[1];
-      const destGeoId = match[2];
-      console.log('[Waypoint] Extracted destGeoId:', destGeoId, 'fromGeoId:', fromGeoId);
 
       let waypointUpdated = false;
 
@@ -335,41 +322,38 @@ function renderWaypointMarkers(map: mapboxgl.Map, routeId: string, waypoints: Ar
 
         if (node.isText && node.marks.length > 0) {
           const geoMark = node.marks.find(m => m.type.name === 'geoMark');
-          if (geoMark) {
-            console.log('[Waypoint] Found geoMark:', geoMark.attrs.geoId, 'looking for:', destGeoId);
-            if (geoMark.attrs.geoId === destGeoId) {
-              console.log('[Waypoint] Match! Current waypoints:', geoMark.attrs.waypoints);
-              const currentWaypoints = [...(geoMark.attrs.waypoints || [])];
-              currentWaypoints[index] = { lat: lngLat.lat, lng: lngLat.lng };
+          if (geoMark && geoMark.attrs.geoId === destGeoId) {
+            console.log('[Waypoint] Found destination geo-mark, updating waypoint', index);
+            const currentWaypoints = [...(geoMark.attrs.waypoints || [])];
+            currentWaypoints[index] = { lat: lngLat.lat, lng: lngLat.lng };
 
-              const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
-                ...geoMark.attrs,
-                waypoints: currentWaypoints
-              });
+            const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
+              ...geoMark.attrs,
+              waypoints: currentWaypoints
+            });
 
-              const tr = globalEditorView.state.tr
-                .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
-                .addMark(pos, pos + node.nodeSize, updatedMark);
+            const tr = globalEditorView.state.tr
+              .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
+              .addMark(pos, pos + node.nodeSize, updatedMark);
 
-              globalEditorView.dispatch(tr);
-              console.log('[Waypoint] Updated position:', { lat: lngLat.lat, lng: lngLat.lng });
-              notifyGeoMarkChange();
-              waypointUpdated = true;
-              return false;
-            }
+            globalEditorView.dispatch(tr);
+            console.log('[Waypoint] Updated waypoint', index, 'to:', { lat: lngLat.lat, lng: lngLat.lng });
+            notifyGeoMarkChange();
+            waypointUpdated = true;
+            return false;
           }
         }
       });
 
       if (!waypointUpdated) {
-        console.error('[Waypoint] Failed to update geo-mark with geoId:', destGeoId);
+        console.error('[Waypoint] Failed to find destination geo-mark:', destGeoId);
       }
     });
 
     return marker;
   });
 
-  waypointMarkers.set(routeId, markers);
+  waypointMarkers.set(markerKey, markers);
 }
 
 // Extract locations from document (for fullscreen map)
@@ -714,7 +698,7 @@ function extractLocationsForFullscreen() {
 
               // Render waypoint markers if waypoints exist
               if (toLocation.waypoints && toLocation.waypoints.length > 0) {
-                renderWaypointMarkers(fullscreenMap!, routeId, toLocation.waypoints, toLocation.color || '#3B82F6');
+                renderWaypointMarkers(fullscreenMap!, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
               }
 
               console.log('[Routes] Route rendered on map:', routeId);
@@ -878,7 +862,7 @@ function extractLocationsForFullscreen() {
 
                   // Always re-render waypoint markers (whether updating or creating)
                   if (toLocation.waypoints && toLocation.waypoints.length > 0) {
-                    renderWaypointMarkers(fullscreenMap, routeId, toLocation.waypoints, toLocation.color || '#3B82F6');
+                    renderWaypointMarkers(fullscreenMap, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
                   }
                 }
               }
