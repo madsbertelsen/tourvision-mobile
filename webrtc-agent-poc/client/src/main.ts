@@ -214,6 +214,9 @@ const notifyGeoMarkChange = () => {
   geoMarkChangeListeners.forEach(listener => listener());
 };
 
+// Global transport edit mode state
+let transportEditModeGeoId: string | null = null;
+
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
 
@@ -1457,6 +1460,18 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
           if (!found) {
             console.warn('[Main] Geo-mark not found:', geoId);
           }
+          break;
+
+        case 'enterTransportEditMode':
+          console.log('[Main] Entering transport edit mode for:', data.geoId);
+          transportEditModeGeoId = data.geoId;
+          // Show info banner or visual feedback
+          console.log('[Main] Transport edit mode enabled - routes are clickable');
+          break;
+
+        case 'exitTransportEditMode':
+          console.log('[Main] Exiting transport edit mode');
+          transportEditModeGeoId = null;
           break;
 
         default:
