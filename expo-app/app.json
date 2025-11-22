@@ -8,7 +8,9 @@
     "scheme": "tourvisionmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -19,7 +21,10 @@
       "bundleIdentifier": "io.mapstory.tourvision",
       "usesAppleSignIn": true,
       "appleTeamId": "589242RZ8A",
-      "associatedDomains": ["applinks:tourvision.com", "applinks:www.tourvision.com"]
+      "associatedDomains": [
+        "applinks:tourvision.com",
+        "applinks:www.tourvision.com"
+      ]
     },
     "android": {
       "isTV": true,
@@ -31,10 +36,6 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "io.mapstory.tourvision",
-      "permissions": [
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
-      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -51,11 +52,16 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "MAIN",
-          "category": ["LEANBACK_LAUNCHER"]
+          "category": [
+            "LEANBACK_LAUNCHER"
+          ]
         }
       ]
     },
@@ -67,24 +73,24 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
-      [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsVersion": "11.15.2",
-          "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJjbHdqaXZzMWcxMTR1MmxxbXBzYTd1YnJ5In0.T85un9mxkjgguBM2eQ-7SA"
-        }
-      ],
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Show current location on map."
-        }
-      ],
-      "./plugins/withDomWebViewExtension.js"
+      "./plugins/withDomWebViewExtension.js",
+      "./plugins/withAndroidTVSupport.js",
+      "@react-native-tvos/config-tv"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b92ba79b-40b9-4e3f-ba23-69f3b38bb880"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b92ba79b-40b9-4e3f-ba23-69f3b38bb880"
     }
   }
 }

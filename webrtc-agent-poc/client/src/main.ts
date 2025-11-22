@@ -531,41 +531,50 @@ function extractLocationsForFullscreen() {
 
         // Handler function for both click and touch events
         const handleMarkerInteraction = (e: Event) => {
-          e.preventDefault();
-          e.stopPropagation();
           console.log('[Fullscreen] Marker interaction triggered:', e.type, location);
           console.log('[Fullscreen] window.ReactNativeWebView exists:', !!window.ReactNativeWebView);
           console.log('[Fullscreen] window.parent !== window:', window.parent !== window);
 
-          // Extract ALL locations from document
-          const allLocations = extractLocationsForFullscreen();
-          console.log('[Fullscreen] All locations from document:', allLocations);
+          // Check if we're in a WebView/iframe context
+          const isInWebView = !!window.ReactNativeWebView || window.parent !== window;
 
-          const message = {
-            type: 'openLocationDetails',
-            location: {
-              geoId: location.geoId,
-              displayText: location.displayText,
-              placeName: location.placeName,
-              lat: location.lat,
-              lng: location.lng,
-              colorIndex: location.colorIndex
-            },
-            allLocations: allLocations // Send all locations to React Native
-          };
+          if (isInWebView) {
+            // In WebView: prevent default and send postMessage
+            e.preventDefault();
+            e.stopPropagation();
 
-          console.log('[Fullscreen] Sending message:', message);
+            // Extract ALL locations from document
+            const allLocations = extractLocationsForFullscreen();
+            console.log('[Fullscreen] All locations from document:', allLocations);
 
-          if (window.ReactNativeWebView) {
-            console.log('[Fullscreen] Using ReactNativeWebView.postMessage');
-            window.ReactNativeWebView.postMessage(JSON.stringify(message));
-            console.log('[Fullscreen] Message sent via ReactNativeWebView');
-          } else if (window.parent !== window) {
-            console.log('[Fullscreen] Using window.parent.postMessage');
-            window.parent.postMessage(message, '*');
-            console.log('[Fullscreen] Message sent via window.parent');
+            const message = {
+              type: 'openLocationDetails',
+              location: {
+                geoId: location.geoId,
+                displayText: location.displayText,
+                placeName: location.placeName,
+                lat: location.lat,
+                lng: location.lng,
+                colorIndex: location.colorIndex
+              },
+              allLocations: allLocations // Send all locations to React Native
+            };
+
+            console.log('[Fullscreen] Sending message:', message);
+
+            if (window.ReactNativeWebView) {
+              console.log('[Fullscreen] Using ReactNativeWebView.postMessage');
+              window.ReactNativeWebView.postMessage(JSON.stringify(message));
+              console.log('[Fullscreen] Message sent via ReactNativeWebView');
+            } else if (window.parent !== window) {
+              console.log('[Fullscreen] Using window.parent.postMessage');
+              window.parent.postMessage(message, '*');
+              console.log('[Fullscreen] Message sent via window.parent');
+            }
           } else {
-            console.warn('[Fullscreen] No postMessage target available!');
+            // In regular browser: let the default Mapbox popup show
+            console.log('[Fullscreen] In browser, showing Mapbox popup');
+            marker.togglePopup();
           }
         };
 
@@ -1805,9 +1814,13 @@ async function main() {
     return;
   }
 
-  // Open agent tab (user mode only)
-  if (!isAgent) {
+  // Open agent tab (user mode only, and only if enableAgent=true)
+  const enableAgent = params.get('enableAgent') === 'true';
+  if (!isAgent && enableAgent) {
+    console.log('[Main] enableAgent=true, opening agent tab');
     openAgentTab(awareness);
+  } else if (!isAgent) {
+    console.log('[Main] Agent tab disabled (enableAgent not set to true)');
   }
 
   // Set up toolbar button handlers
@@ -1933,6 +1946,7 @@ function insertMap(view: EditorView) {
 
 // Set up toolbar button event listeners
 function setupToolbarButtons(view: EditorView) {
+  const newDocBtn = document.getElementById('new-doc-btn');
   const createGeoMarkBtn = document.getElementById('create-geomark-btn') as HTMLButtonElement;
   const insertMapBtn = document.getElementById('insert-map-btn');
 
@@ -1957,6 +1971,19 @@ function setupToolbarButtons(view: EditorView) {
   view.dom.addEventListener('keyup', updateButtonState);
 
   // Button click handlers
+  if (newDocBtn) {
+    newDocBtn.addEventListener('click', () => {
+      // Generate a new random document ID
+      const newDocId = 'doc-' + Math.random().toString(36).substring(2, 15);
+      console.log('[Main] Creating new document:', newDocId);
+
+      // Redirect to new document
+      const url = new URL(window.location.href);
+      url.searchParams.set('doc', newDocId);
+      window.location.href = url.toString();
+    });
+  }
+
   if (createGeoMarkBtn) {
     createGeoMarkBtn.addEventListener('click', () => createGeoMark(view));
   }

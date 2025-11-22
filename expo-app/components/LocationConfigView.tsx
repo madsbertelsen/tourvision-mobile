@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchRouteWithCache, type RouteDetails } from '../utils/transportation-api';
 import LocationPickerMap from './LocationPickerMap';
-import LocationPickerMapNative from './LocationPickerMapNative';
 
 type TransportMode = 'walking' | 'driving' | 'transit' | 'cycling' | 'flight';
 
@@ -95,9 +94,7 @@ export default function LocationConfigView({
 }: LocationConfigViewProps) {
   const [routeData, setRouteData] = useState<RouteDetails | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
-  const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<typeof originLocation>(originLocation);
-  const [showOriginSelector, setShowOriginSelector] = useState(false);
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const [currentLat, setCurrentLat] = useState(locationLat);
   const [currentLng, setCurrentLng] = useState(locationLng);
@@ -117,7 +114,6 @@ export default function LocationConfigView({
 
     const fetchRouteData = async () => {
       setIsLoadingRoute(true);
-      setRouteError(null);
 
       try {
         // Map TransportMode to API profile
@@ -138,7 +134,6 @@ export default function LocationConfigView({
         setRouteData(route);
       } catch (error) {
         console.error('Error fetching route:', error);
-        setRouteError('Failed to load route');
         setRouteData(null);
       } finally {
         setIsLoadingRoute(false);
@@ -189,23 +184,13 @@ export default function LocationConfigView({
 
       {/* Map preview */}
       <View style={styles.mapContainer}>
-        {Platform.OS === 'web' ? (
-          <LocationPickerMap
-            lat={currentLat}
-            lng={currentLng}
-            placeName={locationName}
-            editable={isEditingLocation}
-            onLocationChange={handleLocationChange}
-          />
-        ) : (
-          <LocationPickerMapNative
-            lat={currentLat}
-            lng={currentLng}
-            placeName={locationName}
-            editable={isEditingLocation}
-            onLocationChange={handleLocationChange}
-          />
-        )}
+        <LocationPickerMap
+          lat={currentLat}
+          lng={currentLng}
+          placeName={locationName}
+          editable={isEditingLocation}
+          onLocationChange={handleLocationChange}
+        />
         <TouchableOpacity
           style={styles.editLocationButton}
           onPress={() => setIsEditingLocation(!isEditingLocation)}

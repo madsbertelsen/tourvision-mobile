@@ -1,9 +1,6 @@
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-// @ts-ignore
-import Map from 'react-map-gl/mapbox';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { Marker } from 'react-map-gl/mapbox';
+import React from 'react';
+import { StyleSheet, View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface LocationPickerMapProps {
   lat: number;
@@ -17,43 +14,17 @@ export default function LocationPickerMap({
   lat,
   lng,
   placeName,
-  editable = false,
-  onLocationChange,
 }: LocationPickerMapProps) {
-  const [markerPosition, setMarkerPosition] = useState({ lat, lng });
-  const [viewState, setViewState] = useState({
-    longitude: lng,
-    latitude: lat,
-    zoom: 12,
-  });
-
-  const handleMarkerDragEnd = (event: any) => {
-    const newLat = event.lngLat.lat;
-    const newLng = event.lngLat.lng;
-    setMarkerPosition({ lat: newLat, lng: newLng });
-    onLocationChange?.(newLat, newLng);
-  };
-
   return (
     <View style={styles.container}>
-      <Map
-        {...viewState}
-        onMove={(evt: any) => setViewState(evt.viewState)}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
-        mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_TOKEN}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <Marker
-          longitude={markerPosition.lng}
-          latitude={markerPosition.lat}
-          draggable={editable}
-          onDragEnd={handleMarkerDragEnd}
-        >
-          <View style={styles.marker}>
-            <View style={styles.markerDot} />
-          </View>
-        </Marker>
-      </Map>
+      <View style={styles.content}>
+        <Ionicons name="map-outline" size={48} color="#9CA3AF" />
+        <Text style={styles.placeName}>{placeName}</Text>
+        <Text style={styles.coordinates}>
+          {lat.toFixed(4)}, {lng.toFixed(4)}
+        </Text>
+        <Text style={styles.subtitle}>Map preview unavailable</Text>
+      </View>
     </View>
   );
 }
@@ -63,21 +34,28 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     backgroundColor: '#F3F4F6',
-  },
-  marker: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markerDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#3B82F6',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+  content: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  placeName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  coordinates: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontFamily: 'monospace',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
   },
 });
