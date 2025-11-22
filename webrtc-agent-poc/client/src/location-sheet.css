@@ -1,0 +1,253 @@
+/**
+ * Location Sheet - Responsive bottom sheet (mobile) / side panel (desktop)
+ * Matches Expo app design from @gorhom/bottom-sheet
+ */
+
+/* Backdrop overlay */
+#location-sheet-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 10004;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 300ms ease-in-out, visibility 300ms ease-in-out;
+}
+
+#location-sheet-backdrop.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Location Sheet Container */
+#location-sheet {
+  position: fixed;
+  background: #ffffff;
+  z-index: 10005;
+  overflow-y: auto;
+  transition: transform 300ms ease-in-out;
+
+  /* Mobile: Bottom sheet */
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 90vh;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(100%);
+}
+
+#location-sheet.visible {
+  transform: translateY(0);
+}
+
+/* Desktop: Side panel */
+@media (min-width: 768px) {
+  #location-sheet {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: 400px;
+    max-width: 90vw;
+    max-height: none;
+    border-radius: 24px 0 0 24px;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+    transform: translateX(100%);
+  }
+
+  #location-sheet.visible {
+    transform: translateX(0);
+  }
+}
+
+/* Sheet Content */
+.location-sheet-content {
+  padding: 20px;
+  padding-bottom: 40px; /* Extra space for scrolling */
+}
+
+/* Header */
+.location-sheet-header {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E5E7EB;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 10;
+}
+
+.location-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.location-sheet-title {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-sheet-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 16px;
+  font-size: 20px;
+  color: #6B7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+
+.location-sheet-close:hover {
+  background-color: #F3F4F6;
+}
+
+.location-sheet-close:active {
+  background-color: #E5E7EB;
+}
+
+/* Section */
+.location-section {
+  margin-bottom: 24px;
+}
+
+.location-section:last-child {
+  margin-bottom: 0;
+}
+
+.location-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6B7280;
+  margin-bottom: 8px;
+}
+
+.location-section-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.location-section-value {
+  font-size: 16px;
+  font-weight: 400;
+  color: #111827;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+/* Coordinates formatting */
+.location-coordinates {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+/* Empty state */
+.location-section-empty {
+  font-size: 14px;
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+/* Swipe handle (mobile only) */
+.location-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background-color: #D1D5DB;
+  border-radius: 2px;
+  margin: 8px auto 12px;
+}
+
+@media (min-width: 768px) {
+  .location-sheet-handle {
+    display: none;
+  }
+}
+
+/* Scrollbar styling */
+#location-sheet::-webkit-scrollbar {
+  width: 8px;
+}
+
+#location-sheet::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#location-sheet::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 4px;
+}
+
+#location-sheet::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Animation classes for JavaScript control */
+.location-sheet-entering {
+  animation: slideIn 300ms ease-in-out forwards;
+}
+
+.location-sheet-exiting {
+  animation: slideOut 300ms ease-in-out forwards;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (min-width: 768px) {
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+}

@@ -22,6 +22,9 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo }
 // Mapbox GL JS
 import mapboxgl from 'mapbox-gl';
 
+// Location Sheet
+import { initializeLocationSheet, showLocationSheet } from './location-sheet';
+
 // Get URL parameters
 const params = new URL(window.location.href).searchParams;
 const documentId = params.get('doc') || 'default-doc';
@@ -520,10 +523,9 @@ function extractLocationsForFullscreen() {
       currentLocations.forEach((location) => {
         const el = createMarkerElement(location.colorIndex);
 
-        // Create marker
+        // Create marker (no popup - using location sheet instead)
         const marker = new mapboxgl.Marker(el)
           .setLngLat([location.lng, location.lat])
-          .setPopup(new mapboxgl.Popup().setText(location.placeName))
           .addTo(fullscreenMap!);
 
         // Add click handler to the actual marker element after it's been added
@@ -572,9 +574,17 @@ function extractLocationsForFullscreen() {
               console.log('[Fullscreen] Message sent via window.parent');
             }
           } else {
-            // In regular browser: let the default Mapbox popup show
-            console.log('[Fullscreen] In browser, showing Mapbox popup');
-            marker.togglePopup();
+            // In regular browser: show location sheet
+            console.log('[Fullscreen] In browser, showing location sheet');
+            showLocationSheet({
+              geoId: location.geoId,
+              displayText: location.displayText,
+              placeName: location.placeName,
+              lat: location.lat,
+              lng: location.lng,
+              colorIndex: location.colorIndex,
+              color: location.color
+            });
           }
         };
 
@@ -1287,13 +1297,12 @@ function createMapNodeView(node: any, editorView: EditorView) {
         (dom as any)._mapInstance = currentMap;
 
         currentMap.once('style.load', () => {
-          // Add markers
+          // Add markers (no popups - block maps open fullscreen on click)
           locations.forEach((location: any) => {
             const el = createMarkerElement(location.colorIndex);
 
             const marker = new mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
-              .setPopup(new mapboxgl.Popup().setText(location.placeName))
               .addTo(currentMap!);
 
             currentMarkers.push(marker);
@@ -1431,13 +1440,12 @@ function createMapNodeView(node: any, editorView: EditorView) {
       if (!currentMap) {
         updateMap();
       } else {
-        // Add new markers
+        // Add new markers (no popups - block maps open fullscreen on click)
         locations.forEach((location: any) => {
           const el = createMarkerElement(location.colorIndex);
 
           const marker = new mapboxgl.Marker(el)
             .setLngLat([location.lng, location.lat])
-            .setPopup(new mapboxgl.Popup().setText(location.placeName))
             .addTo(currentMap!);
 
           currentMarkers.push(marker);
@@ -2005,6 +2013,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Initialize location sheet
+  initializeLocationSheet();
 });
 
 // Start the application
