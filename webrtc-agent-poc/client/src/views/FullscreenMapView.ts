@@ -307,6 +307,36 @@ export class FullscreenMapView {
                 }
               });
 
+              // Add click handler to route for adding waypoints
+              this.fullscreenMap.on('click', routeId, (e: any) => {
+                console.log('[Routes] Route clicked:', routeId, e.lngLat);
+
+                // Get the clicked coordinates
+                const { lng, lat } = e.lngLat;
+
+                // Add waypoint to the geo-mark using controller
+                const destGeoId = toLocation.geoId!;
+                this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+              });
+
+              // Change cursor on hover
+              this.fullscreenMap.on('mouseenter', routeId, () => {
+                this.fullscreenMap!.getCanvas().style.cursor = 'pointer';
+              });
+              this.fullscreenMap.on('mouseleave', routeId, () => {
+                this.fullscreenMap!.getCanvas().style.cursor = '';
+              });
+
+              // Render waypoint markers if waypoints exist
+              if (toLocation.waypoints && toLocation.waypoints.length > 0) {
+                this.deps.waypointController.renderWaypointMarkers(
+                  this.fullscreenMap,
+                  toLocation.geoId!,
+                  toLocation.waypoints,
+                  toLocation.color || '#3B82F6'
+                );
+              }
+
               console.log('[Routes] Route layer added:', routeId);
             }
           }
@@ -402,6 +432,36 @@ export class FullscreenMapView {
                         'line-opacity': 0.7
                       }
                     });
+
+                    // Add click handler to route for adding waypoints
+                    this.fullscreenMap.on('click', routeId, (e: any) => {
+                      console.log('[Routes] Route clicked:', routeId, e.lngLat);
+
+                      // Get the clicked coordinates
+                      const { lng, lat } = e.lngLat;
+
+                      // Add waypoint to the geo-mark using controller
+                      const destGeoId = toLocation.geoId!;
+                      this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+                    });
+
+                    // Change cursor on hover
+                    this.fullscreenMap.on('mouseenter', routeId, () => {
+                      this.fullscreenMap!.getCanvas().style.cursor = 'pointer';
+                    });
+                    this.fullscreenMap.on('mouseleave', routeId, () => {
+                      this.fullscreenMap!.getCanvas().style.cursor = '';
+                    });
+
+                    // Render waypoint markers if waypoints exist
+                    if (toLocation.waypoints && toLocation.waypoints.length > 0) {
+                      this.deps.waypointController.renderWaypointMarkers(
+                        this.fullscreenMap,
+                        toLocation.geoId!,
+                        toLocation.waypoints,
+                        toLocation.color || '#3B82F6'
+                      );
+                    }
 
                     console.log('[Routes] New route added:', routeId);
                   }
