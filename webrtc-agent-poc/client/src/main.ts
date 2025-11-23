@@ -289,27 +289,21 @@ function extractLocationsForFullscreen() {
   return LocationExtractor.extractAll(globalEditorView);
 }
 
-// Initialize FullscreenMapView with dependencies
-fullscreenMapView = new FullscreenMapView({
-  waypointController,
-  awarenessOverlayRenderer,
-  mapboxToken: MAPBOX_TOKEN,
-  geoMarkChangeListeners,
-  createMarkerElement,
-  extractLocationsForFullscreen,
-  showLocationSheet,
-  globalAwareness
-});
+// FullscreenMapView will be initialized in main() after awareness is available
 
 // Show fullscreen map (using existing overlay from HTML)
 // Delegates to FullscreenMapView class
 (window as any).showFullscreenMap = () => {
-  fullscreenMapView.show();
+  if (fullscreenMapView) {
+    fullscreenMapView.show();
+  }
 };
 
 // Hide fullscreen map
 (window as any).hideFullscreenMap = () => {
-  fullscreenMapView.hide();
+  if (fullscreenMapView) {
+    fullscreenMapView.hide();
+  }
 };
 
 
@@ -600,6 +594,19 @@ async function main() {
     updateStatus('Failed to initialize editor', 'disconnected');
     return;
   }
+
+  // Initialize FullscreenMapView now that awareness is available
+  fullscreenMapView = new FullscreenMapView({
+    waypointController,
+    awarenessOverlayRenderer,
+    mapboxToken: MAPBOX_TOKEN,
+    geoMarkChangeListeners,
+    createMarkerElement,
+    extractLocationsForFullscreen,
+    showLocationSheet,
+    globalAwareness
+  });
+  console.log('[Main] FullscreenMapView initialized with awareness');
 
   // Open agent tab (user mode only, and only if enableAgent=true)
   const enableAgent = params.get('enableAgent') === 'true';
