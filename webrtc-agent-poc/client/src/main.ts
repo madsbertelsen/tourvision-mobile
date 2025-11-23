@@ -23,7 +23,7 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo }
 import mapboxgl from 'mapbox-gl';
 
 // Location Sheet
-import { initializeLocationSheet, showLocationSheet } from './location-sheet';
+import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
 
 // Get URL parameters
 const params = new URL(window.location.href).searchParams;
@@ -583,8 +583,11 @@ function extractLocationsForFullscreen() {
               lat: location.lat,
               lng: location.lng,
               colorIndex: location.colorIndex,
-              color: location.color
-            });
+              color: location.color,
+              transportFrom: location.transportFrom,
+              transportProfile: location.transportProfile,
+              waypoints: location.waypoints
+            }, currentLocations);
           }
         };
 
@@ -1601,6 +1604,9 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
   // Store global reference for fullscreen map
   globalEditorView = view;
+
+  // Set location sheet dependencies
+  setLocationSheetDependencies(view, MAPBOX_TOKEN);
 
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
 

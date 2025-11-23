@@ -205,6 +205,214 @@
   background: #9CA3AF;
 }
 
+/* Transport Configuration Button */
+.transport-config-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.transport-config-btn:hover {
+  background: #F3F4F6;
+}
+
+.transport-config-btn:active {
+  background: #E5E7EB;
+}
+
+.transport-config-btn .chevron {
+  margin-left: auto;
+  font-size: 18px;
+  color: #9CA3AF;
+  transition: transform 0.2s;
+}
+
+/* Transport Configuration Content */
+.transport-config-content {
+  margin-top: 16px;
+}
+
+.transport-config {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.transport-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transport-section-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* Source Location Selector */
+.transport-source-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.transport-source-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.transport-source-scroll::-webkit-scrollbar-track {
+  background: #F3F4F6;
+  border-radius: 3px;
+}
+
+.transport-source-scroll::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+
+.source-location-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #FFFFFF;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #374151;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.source-location-chip:hover {
+  border-color: #3B82F6;
+  background: #EFF6FF;
+}
+
+.source-location-chip.selected {
+  background: #EFF6FF;
+  border-color: #3B82F6;
+  color: #1E40AF;
+}
+
+.source-location-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.source-location-name {
+  font-weight: 500;
+}
+
+.transport-empty {
+  font-size: 14px;
+  color: #9CA3AF;
+  font-style: italic;
+  padding: 12px 0;
+}
+
+/* Transport Mode Buttons */
+.transport-mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.transport-mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: #FFFFFF;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.transport-mode-btn:hover {
+  border-color: #3B82F6;
+  background: #EFF6FF;
+}
+
+.transport-mode-btn.selected {
+  background: #EFF6FF;
+  border-color: #3B82F6;
+}
+
+.transport-mode-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.transport-mode-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.transport-mode-btn.selected .transport-mode-label {
+  color: #1E40AF;
+}
+
+/* Route Info */
+.transport-route-info {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+}
+
+.route-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.route-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.route-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.route-loading {
+  font-size: 14px;
+  color: #6B7280;
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+}
+
 /* Animation classes for JavaScript control */
 .location-sheet-entering {
   animation: slideIn 300ms ease-in-out forwards;
