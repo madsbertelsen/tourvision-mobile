@@ -36,6 +36,7 @@ import { WebViewBridge } from './controllers/WebViewBridge';
 // Views
 import { BlockMapView } from './views/BlockMapView';
 import { FullscreenMapView } from './views/FullscreenMapView';
+import { AwarenessOverlayRenderer } from './views/AwarenessOverlayRenderer';
 
 // Location Sheet
 import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
@@ -69,6 +70,7 @@ const COLORS = MarkerFactory.COLORS;
 // Initialize views (will be passed to createEditor)
 // Note: Global variables like geoMarkChangeListeners, createMarkerElement, and showFullscreenMap
 // are defined later in this file
+let awarenessOverlayRenderer: AwarenessOverlayRenderer;
 let blockMapView: BlockMapView;
 let fullscreenMapView: FullscreenMapView;
 
@@ -253,11 +255,9 @@ let transportEditModeGeoId: string | null = null;
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
 
-// Storage for previous bounds (for animation)
-const previousBounds: Map<number, any> = new Map();
 
-// Storage for active animation frames (for cancellation)
-const activeAnimations: Map<number, number> = new Map();
+// Initialize AwarenessOverlayRenderer
+awarenessOverlayRenderer = new AwarenessOverlayRenderer();
 
 // Helper function to create marker elements
 // Legacy function name kept for compatibility - delegates to MarkerFactory
@@ -311,237 +311,29 @@ fullscreenMapView = new FullscreenMapView({
   fullscreenMapView.hide();
 };
 
-// Helper function to get map bounds
-function getVisibleBounds(map: mapboxgl.Map): any {
-  // Simply return the map's viewport bounds
-  // Since we create the fullscreen map WITHOUT padding, getBounds() returns
-  // the correct full viewport bounds for all maps
-  const bounds = map.getBounds();
-
-  console.log('[Bounds] Map bounds:', {
-    north: bounds.getNorth(),
-    south: bounds.getSouth(),
-    east: bounds.getEast(),
-    west: bounds.getWest()
-  });
-
-  return bounds;
-}
 
 // Helper function to update awareness with current map bounds
+// Delegates to AwarenessOverlayRenderer
 function updateMapBoundsAwareness(awareness: any, map: mapboxgl.Map) {
-  const bounds = getVisibleBounds(map);
-  const currentUser = awareness.getLocalState()?.user || {};
-
-  const boundsData = {
-    north: bounds.getNorth(),
-    south: bounds.getSouth(),
-    east: bounds.getEast(),
-    west: bounds.getWest(),
-  };
-
-  awareness.setLocalStateField('user', {
-    ...currentUser,
-    mapBounds: boundsData,
-  });
-
-  console.log('[Awareness] Updated map bounds:', boundsData);
+  awarenessOverlayRenderer.updateMapBoundsAwareness(awareness, map);
 }
 
 // Add bounds overlay to block maps
+// Delegates to AwarenessOverlayRenderer
 function addBoundsOverlay(clientId: number, bounds: any, color: string) {
-  console.log('[Overlay] Adding bounds overlay for client', clientId, bounds);
-
-  const mapContainers = document.querySelectorAll('.prosemirror-map');
-  mapContainers.forEach((container) => {
-    const map = (container as any)._mapInstance;
-    if (!map) return;
-
-    const sourceId = `bounds-overlay-${clientId}`;
-    const layerId = `bounds-overlay-${clientId}`;
-    const outlineId = `bounds-overlay-${clientId}-outline`;
-
-    // Check if overlay already exists
-    if (map.getSource(sourceId)) {
-      updateBoundsOverlay(clientId, bounds, color);
-      return;
-    }
-
-    // Create polygon coordinates (rectangle)
-    const coordinates = [[
-      [bounds.west, bounds.north],  // NW
-      [bounds.east, bounds.north],  // NE
-      [bounds.east, bounds.south],  // SE
-      [bounds.west, bounds.south],  // SW
-      [bounds.west, bounds.north],  // Close polygon
-    ]];
-
-    // Add GeoJSON source
-    map.addSource(sourceId, {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'Polygon',
-          coordinates: coordinates,
-        },
-      },
-    });
-
-    // Add fill layer (semi-transparent rectangle)
-    map.addLayer({
-      id: layerId,
-      type: 'fill',
-      source: sourceId,
-      paint: {
-        'fill-color': color,
-        'fill-opacity': 0.15,
-      },
-    });
-
-    // Add outline layer (solid border)
-    map.addLayer({
-      id: outlineId,
-      type: 'line',
-      source: sourceId,
-      paint: {
-        'line-color': color,
-        'line-width': 2,
-        'line-opacity': 0.8,
-      },
-    });
-  });
-
-  // Store initial bounds for future animations
-  previousBounds.set(clientId, bounds);
-}
-
-// Easing function for smooth animation (easeInOutQuad)
-function easeInOutQuad(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-
-// Update bounds overlay immediately (no animation)
-function updateBoundsOverlayImmediate(clientId: number, bounds: any) {
-  const mapContainers = document.querySelectorAll('.prosemirror-map');
-  mapContainers.forEach((container) => {
-    const map = (container as any)._mapInstance;
-    if (!map) return;
-
-    const sourceId = `bounds-overlay-${clientId}`;
-    const source = map.getSource(sourceId);
-
-    if (source) {
-      const coordinates = [[
-        [bounds.west, bounds.north],
-        [bounds.east, bounds.north],
-        [bounds.east, bounds.south],
-        [bounds.west, bounds.south],
-        [bounds.west, bounds.north],
-      ]];
-
-      (source as any).setData({
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'Polygon',
-          coordinates: coordinates,
-        },
-      });
-    }
-  });
-}
-
-// Animate bounds overlay transition
-function animateBoundsOverlay(clientId: number, oldBounds: any, newBounds: any, color: string, duration: number = 300) {
-  // Cancel any existing animation for this client
-  const existingAnimation = activeAnimations.get(clientId);
-  if (existingAnimation) {
-    cancelAnimationFrame(existingAnimation);
-  }
-
-  const startTime = Date.now();
-
-  function animate() {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased = easeInOutQuad(progress);
-
-    // Interpolate bounds
-    const interpolatedBounds = {
-      north: oldBounds.north + (newBounds.north - oldBounds.north) * eased,
-      south: oldBounds.south + (newBounds.south - oldBounds.south) * eased,
-      east: oldBounds.east + (newBounds.east - oldBounds.east) * eased,
-      west: oldBounds.west + (newBounds.west - oldBounds.west) * eased,
-    };
-
-    // Update the overlay with interpolated coordinates
-    updateBoundsOverlayImmediate(clientId, interpolatedBounds);
-
-    if (progress < 1) {
-      // Continue animation
-      const frameId = requestAnimationFrame(animate);
-      activeAnimations.set(clientId, frameId);
-    } else {
-      // Animation complete
-      activeAnimations.delete(clientId);
-      previousBounds.set(clientId, newBounds);
-    }
-  }
-
-  animate();
+  awarenessOverlayRenderer.addBoundsOverlay(clientId, bounds, color);
 }
 
 // Update existing bounds overlay (with animation)
+// Delegates to AwarenessOverlayRenderer
 function updateBoundsOverlay(clientId: number, bounds: any, color: string) {
-  // Check if we have previous bounds for animation
-  const oldBounds = previousBounds.get(clientId);
-
-  // Check if source exists
-  const mapContainers = document.querySelectorAll('.prosemirror-map');
-  let sourceExists = false;
-  mapContainers.forEach((container) => {
-    const map = (container as any)._mapInstance;
-    if (map && map.getSource(`bounds-overlay-${clientId}`)) {
-      sourceExists = true;
-    }
-  });
-
-  if (!sourceExists) {
-    // Source doesn't exist, create it
-    addBoundsOverlay(clientId, bounds, color);
-    return;
-  }
-
-  if (oldBounds) {
-    // We have previous bounds, animate the transition
-    animateBoundsOverlay(clientId, oldBounds, bounds, color);
-  } else {
-    // No previous bounds, update immediately
-    updateBoundsOverlayImmediate(clientId, bounds);
-    previousBounds.set(clientId, bounds);
-  }
+  awarenessOverlayRenderer.updateBoundsOverlay(clientId, bounds, color);
 }
 
 // Remove bounds overlay from block maps
+// Delegates to AwarenessOverlayRenderer
 function removeBoundsOverlay(clientId: number) {
-  console.log('[Overlay] Removing bounds overlay for client', clientId);
-
-  const mapContainers = document.querySelectorAll('.prosemirror-map');
-  mapContainers.forEach((container) => {
-    const map = (container as any)._mapInstance;
-    if (!map) return;
-
-    const sourceId = `bounds-overlay-${clientId}`;
-    const layerId = `bounds-overlay-${clientId}`;
-    const outlineId = `bounds-overlay-${clientId}-outline`;
-
-    // Remove layers first, then source
-    if (map.getLayer(outlineId)) map.removeLayer(outlineId);
-    if (map.getLayer(layerId)) map.removeLayer(layerId);
-    if (map.getSource(sourceId)) map.removeSource(sourceId);
-  });
+  awarenessOverlayRenderer.removeBoundsOverlay(clientId);
 }
 
 // Map Node View - renders Mapbox maps for map blocks
