@@ -292,6 +292,7 @@ function extractLocationsForFullscreen() {
 // Initialize FullscreenMapView with dependencies
 fullscreenMapView = new FullscreenMapView({
   waypointController,
+  awarenessOverlayRenderer,
   mapboxToken: MAPBOX_TOKEN,
   geoMarkChangeListeners,
   createMarkerElement,

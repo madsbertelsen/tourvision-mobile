@@ -13,10 +13,12 @@
 import type mapboxgl from 'mapbox-gl';
 import type { Location } from '../types';
 import type { WaypointController } from '../controllers/WaypointController';
+import type { AwarenessOverlayRenderer } from './AwarenessOverlayRenderer';
 import { WebViewBridge } from '../controllers/WebViewBridge';
 
 export interface FullscreenMapViewDependencies {
   waypointController: WaypointController;
+  awarenessOverlayRenderer: AwarenessOverlayRenderer;
   mapboxToken: string;
   geoMarkChangeListeners: Set<() => void>;
   createMarkerElement: (colorIndex: number) => HTMLElement;
@@ -169,6 +171,22 @@ export class FullscreenMapView {
     this.fullscreenMap.on('load', () => {
       this.renderMarkersAndRoutes(currentLocations);
       this.setupReactiveUpdates(currentLocations);
+    });
+
+    // Listen for map movement to update awareness
+    this.fullscreenMap.on('moveend', () => {
+      console.log('[Fullscreen] Map moveend - updating awareness');
+      if (this.deps.globalAwareness && this.fullscreenMap) {
+        this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
+      }
+    });
+
+    // Update awareness once after initial load
+    this.fullscreenMap.once('idle', () => {
+      console.log('[Fullscreen] Map idle - initial bounds update');
+      if (this.deps.globalAwareness && this.fullscreenMap) {
+        this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
+      }
     });
   }
 
