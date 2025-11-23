@@ -31,6 +31,7 @@ import { GeocodingService } from './services/GeocodingService';
 // Controllers
 import { EditorController } from './controllers/EditorController';
 import { WaypointController } from './controllers/WaypointController';
+import { WebViewBridge } from './controllers/WebViewBridge';
 
 // Location Sheet
 import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
@@ -272,13 +273,7 @@ function extractLocationsForFullscreen() {
   console.log('[Fullscreen] Showing fullscreen map');
 
   // Notify parent that fullscreen map is opening
-  const openMessage = { type: 'fullscreenMapOpened' };
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(openMessage));
-  } else if (window.parent !== window) {
-    window.parent.postMessage(openMessage, '*');
-  }
-  console.log('[Fullscreen] Sent fullscreenMapOpened message to parent');
+  WebViewBridge.sendFullscreenMapOpened();
 
   // Extract locations from document
   const currentLocations = extractLocationsForFullscreen();
@@ -410,11 +405,9 @@ function extractLocationsForFullscreen() {
         // Handler function for both click and touch events
         const handleMarkerInteraction = (e: Event) => {
           console.log('[Fullscreen] Marker interaction triggered:', e.type, location);
-          console.log('[Fullscreen] window.ReactNativeWebView exists:', !!window.ReactNativeWebView);
-          console.log('[Fullscreen] window.parent !== window:', window.parent !== window);
-
           // Check if we're in a WebView/iframe context
-          const isInWebView = !!window.ReactNativeWebView || window.parent !== window;
+          const isInWebView = WebViewBridge.isInWebView();
+          console.log('[Fullscreen] isInWebView:', isInWebView);
 
           if (isInWebView) {
             // In WebView: prevent default and send postMessage
@@ -438,17 +431,8 @@ function extractLocationsForFullscreen() {
               allLocations: allLocations // Send all locations to React Native
             };
 
-            console.log('[Fullscreen] Sending message:', message);
-
-            if (window.ReactNativeWebView) {
-              console.log('[Fullscreen] Using ReactNativeWebView.postMessage');
-              window.ReactNativeWebView.postMessage(JSON.stringify(message));
-              console.log('[Fullscreen] Message sent via ReactNativeWebView');
-            } else if (window.parent !== window) {
-              console.log('[Fullscreen] Using window.parent.postMessage');
-              window.parent.postMessage(message, '*');
-              console.log('[Fullscreen] Message sent via window.parent');
-            }
+            // Send via WebViewBridge
+            WebViewBridge.postMessage(message as any, '[Fullscreen]');
           } else {
             // In regular browser: show location sheet
             console.log('[Fullscreen] In browser, showing location sheet');
@@ -717,12 +701,7 @@ function extractLocationsForFullscreen() {
   console.log('[Fullscreen] Hiding fullscreen map');
 
   // Notify parent that fullscreen map is closing
-  const closeMessage = { type: 'fullscreenMapClosed' };
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify(closeMessage));
-  } else if (window.parent !== window) {
-    window.parent.postMessage(closeMessage, '*');
-  }
+  WebViewBridge.sendFullscreenMapClosed();
   console.log('[Fullscreen] Sent fullscreenMapClosed message to parent');
 
   // Clear map bounds from awareness
@@ -1421,11 +1400,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
 
   // Send ready message to parent (WebView/iframe)
-  if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
-  } else if (window.parent !== window) {
-    window.parent.postMessage({ type: 'ready' }, '*');
-  }
+  WebViewBridge.sendReady();
   console.log('[Main] Sent ready message to parent');
 
   // Listen for messages from parent (React Native WebView)
