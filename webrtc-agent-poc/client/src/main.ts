@@ -22,6 +22,15 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo }
 // Mapbox GL JS
 import mapboxgl from 'mapbox-gl';
 
+// Services
+import { LocationExtractor } from './services/LocationExtractor';
+import { MarkerFactory } from './services/MarkerFactory';
+import { RouteService } from './services/RouteService';
+import { GeocodingService } from './services/GeocodingService';
+
+// Controllers
+import { EditorController } from './controllers/EditorController';
+
 // Location Sheet
 import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
 
@@ -35,11 +44,17 @@ console.log('[Main] Starting application', { documentId, isAgent });
 // Mapbox token - use environment variable or hardcode for testing
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
 
-// Geo mark colors (matching frontend-prosemirror)
-const COLORS = [
-  '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
-  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
-];
+// Initialize services
+const routeService = new RouteService(MAPBOX_TOKEN);
+const geocodingService = new GeocodingService();
+
+// Initialize controllers
+const editorController = new EditorController(geocodingService, {
+  updateStatus: (message: string, state: string) => updateStatus(message, state)
+});
+
+// Use colors from MarkerFactory (maintains single source of truth)
+const COLORS = MarkerFactory.COLORS;
 
 // Generate random user identity for testing with multiple tabs
 // Each tab gets a different number and color
@@ -233,31 +248,9 @@ const previousBounds: Map<number, any> = new Map();
 const activeAnimations: Map<number, number> = new Map();
 
 // Helper function to create marker elements
+// Legacy function name kept for compatibility - delegates to MarkerFactory
 function createMarkerElement(colorIndex: number) {
-  const bgColor = COLORS[colorIndex % COLORS.length];
-  const el = document.createElement('div');
-  el.style.cssText = `
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background-color: ${bgColor};
-    border: 3px solid white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: manipulation;
-    user-select: none;
-    pointer-events: auto;
-    -webkit-tap-highlight-color: transparent;
-  `;
-
-  const inner = document.createElement('div');
-  inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white; pointer-events: none;';
-  el.appendChild(inner);
-
-  return el;
+  return MarkerFactory.createLocationMarker(colorIndex);
 }
 
 // Declare global variable to store current editor view
@@ -282,25 +275,8 @@ function renderWaypointMarkers(map: mapboxgl.Map, destGeoId: string, waypoints: 
 
   // Create new markers
   const markers = waypoints.map((waypoint, index) => {
-    // Create marker element
-    const el = document.createElement('div');
-    el.className = 'waypoint-marker';
-    el.style.cssText = `
-      width: 28px;
-      height: 28px;
-      border-radius: 14px;
-      background-color: #F59E0B;
-      border: 2px solid #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 700;
-      color: #fff;
-      cursor: grab;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    `;
-    el.textContent = String(index + 1);
+    // Create marker element using MarkerFactory
+    const el = MarkerFactory.createWaypointMarker(index, color);
 
     // Create marker
     const marker = new mapboxgl.Marker({
@@ -363,32 +339,9 @@ function renderWaypointMarkers(map: mapboxgl.Map, destGeoId: string, waypoints: 
 }
 
 // Extract locations from document (for fullscreen map)
+// Delegates to LocationExtractor service
 function extractLocationsForFullscreen() {
-  if (!globalEditorView) return [];
-
-  const locations: any[] = [];
-  globalEditorView.state.doc.descendants((node) => {
-    if (node.isText && node.marks.length > 0) {
-      for (const mark of node.marks) {
-        if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
-          const colorIndex = mark.attrs.colorIndex ?? 0;
-          locations.push({
-            geoId: mark.attrs.geoId,
-            displayText: mark.attrs.displayText || node.text,
-            placeName: mark.attrs.placeName,
-            lat: parseFloat(mark.attrs.lat),
-            lng: parseFloat(mark.attrs.lng),
-            colorIndex: colorIndex,
-            color: COLORS[colorIndex % COLORS.length],
-            transportFrom: mark.attrs.transportFrom,
-            transportProfile: mark.attrs.transportProfile,
-            waypoints: mark.attrs.waypoints || [],
-          });
-        }
-      }
-    }
-  });
-  return locations;
+  return LocationExtractor.extractAll(globalEditorView);
 }
 
 // Show fullscreen map (using existing overlay from HTML)
@@ -1602,11 +1555,14 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     },
   });
 
-  // Store global reference for fullscreen map
+  // Store editor view in controller
+  editorController.setView(view);
+
+  // Keep global reference for backward compatibility
   globalEditorView = view;
 
-  // Set location sheet dependencies
-  setLocationSheetDependencies(view, MAPBOX_TOKEN);
+  // Set location sheet dependencies (with change notification callback)
+  setLocationSheetDependencies(view, MAPBOX_TOKEN, notifyGeoMarkChange);
 
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
 

@@ -39,6 +39,7 @@ let isTransportExpanded = false;
 // Dependencies injected from main.ts
 let editorView: any = null;
 let mapboxToken: string = '';
+let notifyChange: (() => void) | null = null;
 
 /**
  * Initialize location sheet functionality
@@ -83,9 +84,10 @@ export function initializeLocationSheet() {
 /**
  * Set dependencies (call from main.ts on initialization)
  */
-export function setLocationSheetDependencies(view: any, token: string) {
+export function setLocationSheetDependencies(view: any, token: string, changeCallback?: () => void) {
   editorView = view;
   mapboxToken = token;
+  notifyChange = changeCallback || null;
   console.log('[LocationSheet] Dependencies set');
 }
 
@@ -546,6 +548,11 @@ function updateGeoMarkLocally(geoId: string, updatedAttrs: any) {
 
         editorView.dispatch(tr);
         console.log('[LocationSheet] Geo-mark updated locally');
+
+        // Notify change listeners (triggers route re-render)
+        if (notifyChange) {
+          notifyChange();
+        }
 
         found = true;
         return false;
