@@ -30,6 +30,7 @@ import { GeocodingService } from './services/GeocodingService';
 
 // Controllers
 import { EditorController } from './controllers/EditorController';
+import { WaypointController } from './controllers/WaypointController';
 
 // Location Sheet
 import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
@@ -51,6 +52,10 @@ const geocodingService = new GeocodingService();
 // Initialize controllers
 const editorController = new EditorController(geocodingService, {
   updateStatus: (message: string, state: string) => updateStatus(message, state)
+});
+
+const waypointController = new WaypointController({
+  notifyChange: () => notifyGeoMarkChange()
 });
 
 // Use colors from MarkerFactory (maintains single source of truth)
@@ -255,88 +260,6 @@ function createMarkerElement(colorIndex: number) {
 
 // Declare global variable to store current editor view
 let globalEditorView: EditorView | null = null;
-
-// Helper function to build waypoints string for Mapbox Directions API
-function buildWaypointsString(waypoints: Array<{ lat: number; lng: number }> = []): string {
-  if (!waypoints || waypoints.length === 0) return '';
-  return ';' + waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-}
-
-// Global storage for waypoint markers
-const waypointMarkers: Map<string, mapboxgl.Marker[]> = new Map();
-
-// Helper function to render waypoint markers on the map
-// destGeoId: The geo-mark that owns these waypoints (destination of the route)
-function renderWaypointMarkers(map: mapboxgl.Map, destGeoId: string, waypoints: Array<{ lat: number; lng: number }>, color: string) {
-  // Remove existing markers for this destination
-  const markerKey = `waypoints-${destGeoId}`;
-  const existingMarkers = waypointMarkers.get(markerKey) || [];
-  existingMarkers.forEach(marker => marker.remove());
-
-  // Create new markers
-  const markers = waypoints.map((waypoint, index) => {
-    // Create marker element using MarkerFactory
-    const el = MarkerFactory.createWaypointMarker(index, color);
-
-    // Create marker
-    const marker = new mapboxgl.Marker({
-      element: el,
-      draggable: true
-    })
-      .setLngLat([waypoint.lng, waypoint.lat])
-      .addTo(map);
-
-    // Handle drag end
-    marker.on('dragend', () => {
-      const lngLat = marker.getLngLat();
-      console.log('[Waypoint] Dragged to:', lngLat, 'index:', index, 'destGeoId:', destGeoId);
-
-      // Update the waypoint in the destination geo-mark
-      if (!globalEditorView) {
-        console.error('[Waypoint] globalEditorView is null');
-        return;
-      }
-
-      let waypointUpdated = false;
-
-      globalEditorView.state.doc.descendants((node, pos) => {
-        if (waypointUpdated) return false;
-
-        if (node.isText && node.marks.length > 0) {
-          const geoMark = node.marks.find(m => m.type.name === 'geoMark');
-          if (geoMark && geoMark.attrs.geoId === destGeoId) {
-            console.log('[Waypoint] Found destination geo-mark, updating waypoint', index);
-            const currentWaypoints = [...(geoMark.attrs.waypoints || [])];
-            currentWaypoints[index] = { lat: lngLat.lat, lng: lngLat.lng };
-
-            const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
-              ...geoMark.attrs,
-              waypoints: currentWaypoints
-            });
-
-            const tr = globalEditorView.state.tr
-              .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
-              .addMark(pos, pos + node.nodeSize, updatedMark);
-
-            globalEditorView.dispatch(tr);
-            console.log('[Waypoint] Updated waypoint', index, 'to:', { lat: lngLat.lat, lng: lngLat.lng });
-            notifyGeoMarkChange();
-            waypointUpdated = true;
-            return false;
-          }
-        }
-      });
-
-      if (!waypointUpdated) {
-        console.error('[Waypoint] Failed to find destination geo-mark:', destGeoId);
-      }
-    });
-
-    return marker;
-  });
-
-  waypointMarkers.set(markerKey, markers);
-}
 
 // Extract locations from document (for fullscreen map)
 // Delegates to LocationExtractor service
@@ -571,7 +494,7 @@ function extractLocationsForFullscreen() {
                            'driving-traffic';
 
             // Build waypoints string
-            const waypointsStr = buildWaypointsString(toLocation.waypoints);
+            const waypointsStr = waypointController.buildWaypointsString(toLocation.waypoints);
 
             // Fetch route from Mapbox Directions API (with waypoints if present)
             const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
@@ -619,51 +542,9 @@ function extractLocationsForFullscreen() {
                 // Get the clicked coordinates
                 const { lng, lat } = e.lngLat;
 
-                // Add waypoint to the geo-mark
-                if (globalEditorView) {
-                  // Find the geo-mark for this route's destination
-                  const destGeoId = toLocation.geoId;
-                  let waypointAdded = false;
-
-                  globalEditorView.state.doc.descendants((node, pos) => {
-                    if (waypointAdded) return false;
-
-                    if (node.isText && node.marks.length > 0) {
-                      const geoMark = node.marks.find(m => m.type.name === 'geoMark');
-                      if (geoMark && geoMark.attrs.geoId === destGeoId) {
-                        console.log('[Routes] Found destination geo-mark, adding waypoint');
-
-                        // Get current waypoints or create empty array
-                        const currentWaypoints = geoMark.attrs.waypoints || [];
-                        const newWaypoints = [...currentWaypoints, { lat, lng }];
-
-                        // Create updated mark
-                        const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
-                          ...geoMark.attrs,
-                          waypoints: newWaypoints
-                        });
-
-                        // Update the mark
-                        const tr = globalEditorView.state.tr
-                          .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
-                          .addMark(pos, pos + node.nodeSize, updatedMark);
-
-                        globalEditorView.dispatch(tr);
-                        console.log('[Routes] Waypoint added:', { lat, lng });
-
-                        // Notify listeners to trigger route recalculation
-                        notifyGeoMarkChange();
-
-                        waypointAdded = true;
-                        return false;
-                      }
-                    }
-                  });
-
-                  if (!waypointAdded) {
-                    console.warn('[Routes] Could not find geo-mark to add waypoint');
-                  }
-                }
+                // Add waypoint to the geo-mark using controller
+                const destGeoId = toLocation.geoId!;
+                waypointController.addWaypoint(destGeoId, lat, lng);
               });
 
               // Change cursor on hover
@@ -676,7 +557,7 @@ function extractLocationsForFullscreen() {
 
               // Render waypoint markers if waypoints exist
               if (toLocation.waypoints && toLocation.waypoints.length > 0) {
-                renderWaypointMarkers(fullscreenMap!, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
+                waypointController.renderWaypointMarkers(fullscreenMap!, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
               }
 
               console.log('[Routes] Route rendered on map:', routeId);
@@ -741,7 +622,7 @@ function extractLocationsForFullscreen() {
                              'driving-traffic';
 
               // Build waypoints string
-              const waypointsStr = buildWaypointsString(toLocation.waypoints);
+              const waypointsStr = waypointController.buildWaypointsString(toLocation.waypoints);
 
               const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
@@ -794,37 +675,9 @@ function extractLocationsForFullscreen() {
                       console.log('[Routes] Route clicked:', routeId, e.lngLat);
                       const { lng, lat } = e.lngLat;
 
-                      if (globalEditorView) {
-                        const destGeoId = toLocation.geoId;
-                        let waypointAdded = false;
-
-                        globalEditorView.state.doc.descendants((node, pos) => {
-                          if (waypointAdded) return false;
-
-                          if (node.isText && node.marks.length > 0) {
-                            const geoMark = node.marks.find(m => m.type.name === 'geoMark');
-                            if (geoMark && geoMark.attrs.geoId === destGeoId) {
-                              const currentWaypoints = geoMark.attrs.waypoints || [];
-                              const newWaypoints = [...currentWaypoints, { lat, lng }];
-
-                              const updatedMark = globalEditorView.state.schema.marks.geoMark.create({
-                                ...geoMark.attrs,
-                                waypoints: newWaypoints
-                              });
-
-                              const tr = globalEditorView.state.tr
-                                .removeMark(pos, pos + node.nodeSize, globalEditorView.state.schema.marks.geoMark)
-                                .addMark(pos, pos + node.nodeSize, updatedMark);
-
-                              globalEditorView.dispatch(tr);
-                              console.log('[Routes] Waypoint added:', { lat, lng });
-                              notifyGeoMarkChange();
-                              waypointAdded = true;
-                              return false;
-                            }
-                          }
-                        });
-                      }
+                      // Add waypoint using controller
+                      const destGeoId = toLocation.geoId!;
+                      waypointController.addWaypoint(destGeoId, lat, lng);
                     });
 
                     // Change cursor on hover
@@ -840,7 +693,7 @@ function extractLocationsForFullscreen() {
 
                   // Always re-render waypoint markers (whether updating or creating)
                   if (toLocation.waypoints && toLocation.waypoints.length > 0) {
-                    renderWaypointMarkers(fullscreenMap, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
+                    waypointController.renderWaypointMarkers(fullscreenMap, toLocation.geoId!, toLocation.waypoints, toLocation.color || '#3B82F6');
                   }
                 }
               }
@@ -1283,7 +1136,7 @@ function createMapNodeView(node: any, editorView: EditorView) {
                                'driving-traffic';
 
                 // Build waypoints string
-                const waypointsStr = buildWaypointsString(toLocation.waypoints);
+                const waypointsStr = waypointController.buildWaypointsString(toLocation.waypoints);
 
                 // Fetch route from Mapbox Directions API (with waypoints if present)
                 const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
@@ -1421,7 +1274,7 @@ function createMapNodeView(node: any, editorView: EditorView) {
                              'driving-traffic';
 
               // Build waypoints string
-              const waypointsStr = buildWaypointsString(toLocation.waypoints);
+              const waypointsStr = waypointController.buildWaypointsString(toLocation.waypoints);
 
               const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
 
@@ -1555,8 +1408,9 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     },
   });
 
-  // Store editor view in controller
+  // Store editor view in controllers
   editorController.setView(view);
+  waypointController.setView(view);
 
   // Keep global reference for backward compatibility
   globalEditorView = view;
