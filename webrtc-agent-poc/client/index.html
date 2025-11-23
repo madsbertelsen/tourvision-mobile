@@ -48,8 +48,11 @@
     }
 
     header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
       background: white;
-      border-radius: 8px;
+      border-radius: 0;
       padding: 12px 16px;
       margin-bottom: 20px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -66,32 +69,48 @@
     }
 
     .toolbar button {
-      padding: 8px 16px;
-      background: #3b82f6;
-      color: white;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      background: transparent;
       border: none;
       border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 20px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
+      filter: grayscale(100%);
+      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+
+    .toolbar button svg {
+      transition: all 0.2s;
     }
 
     .toolbar button:hover {
-      background: #2563eb;
+      opacity: 0.9;
+      background: rgba(0, 0, 0, 0.05);
+      filter: grayscale(50%);
     }
 
     .toolbar button:active {
-      background: #1d4ed8;
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.1);
+      filter: grayscale(0%);
     }
 
     .toolbar button:disabled {
-      opacity: 0.5;
+      opacity: 0.3;
       cursor: not-allowed;
     }
 
     .toolbar button:disabled:hover {
-      background: #3b82f6;
+      background: transparent;
+      filter: grayscale(100%);
+      opacity: 0.3;
     }
 
     .mode-badge {
@@ -277,9 +296,25 @@
       <div id="doc-info" class="doc-info"></div>
       <div id="status" class="status connecting">Initializing...</div>
       <div class="toolbar">
-        <button id="new-doc-btn">➕ New Document</button>
-        <button id="create-geomark-btn">📍 Create Geo Mark</button>
-        <button id="insert-map-btn">🗺️ Insert Map</button>
+        <button id="new-doc-btn" aria-label="New Document">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="create-geomark-btn" aria-label="Create Geo Mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </button>
+        <button id="insert-map-btn" aria-label="Insert Map">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+            <line x1="8" y1="2" x2="8" y2="18"></line>
+            <line x1="16" y1="6" x2="16" y2="22"></line>
+          </svg>
+        </button>
       </div>
     </header>
     <div id="editor-container"></div>

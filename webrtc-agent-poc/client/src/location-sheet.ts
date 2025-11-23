@@ -175,7 +175,12 @@ function renderLocationContent(location: LocationData, container: HTMLElement) {
   sections.push(`
     <div class="location-section">
       <div class="location-section-label">
-        <span class="location-section-icon">📍</span>
+        <span class="location-section-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </span>
         <span>Place Name</span>
       </div>
       <div class="location-section-value">
@@ -190,7 +195,12 @@ function renderLocationContent(location: LocationData, container: HTMLElement) {
   sections.push(`
     <div class="location-section">
       <div class="location-section-label">
-        <span class="location-section-icon">🧭</span>
+        <span class="location-section-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+          </svg>
+        </span>
         <span>Coordinates</span>
       </div>
       <div class="location-section-value location-coordinates">
@@ -204,7 +214,15 @@ function renderLocationContent(location: LocationData, container: HTMLElement) {
     sections.push(`
       <div class="location-section">
         <div class="location-section-label">
-          <span class="location-section-icon">📄</span>
+          <span class="location-section-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </span>
           <span>Description</span>
         </div>
         <div class="location-section-value">
@@ -218,7 +236,13 @@ function renderLocationContent(location: LocationData, container: HTMLElement) {
   sections.push(`
     <div class="location-section">
       <button id="transport-config-btn" class="transport-config-btn">
-        <span class="location-section-icon">🚗</span>
+        <span class="location-section-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+            <circle cx="7" cy="17" r="2"></circle>
+            <circle cx="17" cy="17" r="2"></circle>
+          </svg>
+        </span>
         <span>Configure Transport</span>
         <span class="chevron">›</span>
       </button>
@@ -232,7 +256,11 @@ function renderLocationContent(location: LocationData, container: HTMLElement) {
   sections.push(`
     <div class="location-section">
       <div class="location-section-label">
-        <span class="location-section-icon">🔑</span>
+        <span class="location-section-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+          </svg>
+        </span>
         <span>Location ID</span>
       </div>
       <div class="location-section-value location-coordinates">
@@ -367,21 +395,40 @@ function renderTransportConfig(container: HTMLElement) {
             class="transport-mode-btn ${selectedTransportMode === 'walking' ? 'selected' : ''}"
             onclick="window.locationSheet_selectMode('walking')"
           >
-            <span class="transport-mode-icon">🚶</span>
+            <span class="transport-mode-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="4" r="2"></circle>
+                <path d="m9 20 3-6 3 6"></path>
+                <path d="m6 12 3 4 3-4 3 4"></path>
+              </svg>
+            </span>
             <span class="transport-mode-label">Walking</span>
           </button>
           <button
             class="transport-mode-btn ${selectedTransportMode === 'driving' ? 'selected' : ''}"
             onclick="window.locationSheet_selectMode('driving')"
           >
-            <span class="transport-mode-icon">🚗</span>
+            <span class="transport-mode-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+                <circle cx="7" cy="17" r="2"></circle>
+                <circle cx="17" cy="17" r="2"></circle>
+              </svg>
+            </span>
             <span class="transport-mode-label">Driving</span>
           </button>
           <button
             class="transport-mode-btn ${selectedTransportMode === 'cycling' ? 'selected' : ''}"
             onclick="window.locationSheet_selectMode('cycling')"
           >
-            <span class="transport-mode-icon">🚴</span>
+            <span class="transport-mode-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18.5" cy="17.5" r="3.5"></circle>
+                <circle cx="5.5" cy="17.5" r="3.5"></circle>
+                <circle cx="15" cy="5" r="1"></circle>
+                <path d="M12 17.5V14l-3-3 4-3 2 3h2"></path>
+              </svg>
+            </span>
             <span class="transport-mode-label">Cycling</span>
           </button>
         </div>
