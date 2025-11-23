@@ -334,7 +334,23 @@ export class FullscreenMapView {
 
                 // Add waypoint to the geo-mark using controller
                 const destGeoId = toLocation.geoId!;
-                this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+                const success = this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+
+                // If waypoint was added successfully, render all waypoint markers for this location
+                if (success && this.fullscreenMap) {
+                  // Extract updated location to get the new waypoints array
+                  const updatedLocations = this.deps.extractLocationsForFullscreen();
+                  const updatedLocation = updatedLocations.find(loc => loc.geoId === destGeoId);
+
+                  if (updatedLocation && updatedLocation.waypoints) {
+                    this.deps.waypointController.renderWaypointMarkers(
+                      this.fullscreenMap,
+                      destGeoId,
+                      updatedLocation.waypoints,
+                      toLocation.color || '#3B82F6'
+                    );
+                  }
+                }
               });
 
               // Change cursor on hover
@@ -460,7 +476,23 @@ export class FullscreenMapView {
 
                       // Add waypoint to the geo-mark using controller
                       const destGeoId = toLocation.geoId!;
-                      this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+                      const success = this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+
+                      // If waypoint was added successfully, render all waypoint markers for this location
+                      if (success && this.fullscreenMap) {
+                        // Extract updated location to get the new waypoints array
+                        const updatedLocations = this.deps.extractLocationsForFullscreen();
+                        const updatedLocation = updatedLocations.find(loc => loc.geoId === destGeoId);
+
+                        if (updatedLocation && updatedLocation.waypoints) {
+                          this.deps.waypointController.renderWaypointMarkers(
+                            this.fullscreenMap,
+                            destGeoId,
+                            updatedLocation.waypoints,
+                            toLocation.color || '#3B82F6'
+                          );
+                        }
+                      }
                     });
 
                     // Change cursor on hover
