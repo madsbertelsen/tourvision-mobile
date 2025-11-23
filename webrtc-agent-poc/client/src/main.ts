@@ -119,16 +119,78 @@ function setupYjs(documentId: string) {
   const yXmlFragment = ydoc.getXmlFragment('prosemirror');
 
   // Create WebRTC provider
-  // Use our Cloudflare DO WebSocket signaling server + BroadcastChannel
+  // Use WebSocket signaling server (configurable via env) + BroadcastChannel
+  // Auto-detect WebSocket URL based on current location
+  const getSignalingBaseUrl = () => {
+    // Auto-detect based on current location
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; // includes port if present
+
+    // If running on localhost, use port 8787
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'ws://localhost:8787/signaling';
+    }
+
+    // Production: use same host with secure WebSocket
+    return `${protocol}//${host}/signaling`;
+  };
+
+  const signalingBaseUrl = getSignalingBaseUrl();
+  const signalingUrl = `${signalingBaseUrl}/${documentId}`;
+
+  console.log('[Y.js] Using signaling server:', signalingUrl);
+  console.log('[Y.js] Protocol:', window.location.protocol, 'Hostname:', window.location.hostname);
+
   const provider = new WebrtcProvider(documentId, ydoc, {
     // WebSocket signaling server for cross-machine sync
     // BroadcastChannel will also handle local tab communication
-    signaling: [
-      // Use production signaling server (wss for secure WebSocket)
-      'wss://webrtc-agent-poc-signaling.mads-9b9.workers.dev/signaling/' + documentId
-    ],
+    signaling: [signalingUrl],
     // Enable password for room isolation (optional)
     password: null,
+    // Configure WebRTC peer connection with STUN and TURN servers
+    // TURN servers are required for cross-browser connectivity when mDNS candidates fail
+    peerOpts: {
+      config: {
+        iceServers: [
+          // STUN servers for NAT traversal
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Free TURN servers from OpenRelay for relaying traffic
+          {
+            urls: [
+              'turn:openrelay.metered.ca:80',
+              'turn:openrelay.metered.ca:443',
+              'turn:openrelay.metered.ca:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+          },
+          // Additional TURN server for redundancy
+          {
+            urls: [
+              'turn:relay.metered.ca:80',
+              'turn:relay.metered.ca:443',
+              'turn:relay.metered.ca:443?transport=tcp',
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+          },
+        ],
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all', // 'all' allows all candidates, 'relay' forces TURN
+      },
+      // Enable trickle ICE for faster connections
+      trickle: true,
+      // Connection timeout
+      connectionTimeout: 30000,
+    },
+    // Maximum number of WebRTC connections (0 = unlimited)
+    maxConns: 20,
+    // Filter connections - connect to all peers
+    filterBcConns: false,
   });
 
   // Get awareness instance from provider (automatically created)
