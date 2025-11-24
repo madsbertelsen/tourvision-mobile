@@ -28,6 +28,27 @@ import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
 import { GeocodingService } from './services/GeocodingService';
 
+// Conditionally import agent module
+// In dev mode: Load based on URL parameter
+// In production: Load only in agent build
+let initializeAgent: ((yXmlFragment: any, ydoc: any, documentId: string) => void) | null = null;
+
+// Check if we should load agent: either in agent build OR in dev mode with ?agent=true
+const params = new URL(window.location.href).searchParams;
+const isAgentMode = params.get('agent') === 'true';
+const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
+                       (import.meta.env.DEV && isAgentMode);
+
+if (shouldLoadAgent) {
+  console.log('[Main] Loading agent module...');
+  import('./agent').then((module) => {
+    initializeAgent = module.initializeAgent;
+    console.log('[Main] Agent module loaded');
+  }).catch((err) => {
+    console.error('[Main] Failed to load agent module:', err);
+  });
+}
+
 // Controllers
 import { EditorController } from './controllers/EditorController';
 import { WaypointController } from './controllers/WaypointController';
@@ -41,10 +62,9 @@ import { AwarenessOverlayRenderer } from './views/AwarenessOverlayRenderer';
 // Location Sheet
 import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
 
-// Get URL parameters
-const params = new URL(window.location.href).searchParams;
+// Get document ID from URL params (params already parsed above for agent loading)
 const documentId = params.get('doc') || 'default-doc';
-const isAgent = params.get('agent') === 'true';
+const isAgent = isAgentMode; // Reuse the isAgentMode variable from above
 
 console.log('[Main] Starting application', { documentId, isAgent });
 
@@ -451,6 +471,11 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     nodeViews: {
       map: createMapNodeView,
     },
+    dispatchTransaction(tr) {
+      // Apply transaction and update state
+      const newState = this.state.apply(tr);
+      this.updateState(newState);
+    },
   });
 
   // Store editor view in controllers
@@ -669,6 +694,12 @@ async function main() {
 
   // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
   const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId);
+
+  // Initialize agent if in agent mode
+  if (isAgent && initializeAgent) {
+    console.log('[Main] Initializing agent with Y.js document observation');
+    initializeAgent(yXmlFragment, ydoc, documentId);
+  }
 
   updateStatus('Initializing editor...', 'connecting');
 
