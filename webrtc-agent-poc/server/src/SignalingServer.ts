@@ -49,6 +49,9 @@ export class SignalingServer {
   private debugClients: Set<WebSocket> = new Set();
   private readonly MAX_MESSAGE_LOG = 100;
 
+  // Track which documents have been seen (for auto-launching agents)
+  private documentsSeen: Map<string, boolean> = new Map();
+
   /**
    * Handle a new WebSocket connection
    */
@@ -74,6 +77,15 @@ export class SignalingServer {
     const subscribedTopics = new Set<string>();
 
     console.log(`[SignalingServer] New WebSocket connection for document: ${documentId}. Total:`, this.sessions.size);
+
+    // Check if this is the first connection for this document
+    const isNewDocument = !this.documentsSeen.has(documentId);
+    if (isNewDocument) {
+      this.documentsSeen.set(documentId, true);
+      console.log(`[SignalingServer] First connection for document: ${documentId}. Broadcasting new-document event.`);
+      this.broadcastNewDocument(documentId);
+    }
+
     this.broadcastDebugUpdate();
 
     // Handle incoming messages
@@ -338,6 +350,7 @@ export class SignalingServer {
       type: 'debug-update',
       data: {
         connections: this.getConnectionDetails(),
+        documents: this.getDocumentGroups(),
         topics: this.getTopicCounts(),
         recentMessages: this.messageLog.slice(-20), // Last 20 messages
       },
@@ -352,6 +365,33 @@ export class SignalingServer {
         }
       } catch (error) {
         console.error('[SignalingServer] Error sending debug update:', error);
+      }
+    });
+  }
+
+  /**
+   * Broadcast new document event to debug clients (for auto-launching agents)
+   */
+  private broadcastNewDocument(documentId: string): void {
+    if (this.debugClients.size === 0) {
+      return;
+    }
+
+    const event = {
+      type: 'new-document',
+      documentId,
+      timestamp: new Date().toISOString()
+    };
+
+    const message = JSON.stringify(event);
+
+    this.debugClients.forEach((debugClient) => {
+      try {
+        if (debugClient.readyState === WebSocket.OPEN) {
+          debugClient.send(message);
+        }
+      } catch (error) {
+        console.error('[SignalingServer] Error sending new-document event:', error);
       }
     });
   }
@@ -398,6 +438,44 @@ export class SignalingServer {
       return this.messageLog.slice(-limit);
     }
     return [...this.messageLog];
+  }
+
+  /**
+   * Get connections grouped by document ID
+   */
+  getDocumentGroups(): Array<{
+    documentId: string;
+    clientCount: number;
+    clients: Array<ConnectionMetadata & { connected: boolean }>;
+    lastActivity: Date;
+    totalMessages: number;
+  }> {
+    // Group connections by documentId
+    const documentMap = new Map<string, Array<ConnectionMetadata & { connected: boolean }>>();
+
+    Array.from(this.connections.entries()).forEach(([ws, metadata]) => {
+      if (!documentMap.has(metadata.documentId)) {
+        documentMap.set(metadata.documentId, []);
+      }
+      documentMap.get(metadata.documentId)!.push({
+        ...metadata,
+        connected: ws.readyState === WebSocket.OPEN,
+      });
+    });
+
+    // Convert to array and calculate aggregate stats
+    return Array.from(documentMap.entries()).map(([documentId, clients]) => {
+      const lastActivity = new Date(Math.max(...clients.map(c => c.lastActivity.getTime())));
+      const totalMessages = clients.reduce((sum, c) => sum + c.messageCount, 0);
+
+      return {
+        documentId,
+        clientCount: clients.length,
+        clients,
+        lastActivity,
+        totalMessages,
+      };
+    }).sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()); // Sort by most recent activity
   }
 
   /**

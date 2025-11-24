@@ -418,6 +418,11 @@
     <div class="status">
       <div class="status-indicator" id="status-indicator"></div>
       <span id="status-text">Connecting...</span>
+      <label style="margin-left: 20px; cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none;">
+        <span style="font-size: 14px;">🤖 Auto-launch agents:</span>
+        <input type="checkbox" id="auto-launch-toggle" style="cursor: pointer; width: 18px; height: 18px;">
+        <span id="auto-launch-status" style="font-size: 14px; font-weight: 600; color: #f44336;">OFF</span>
+      </label>
     </div>
   </div>
 
@@ -450,7 +455,17 @@
     </div>
 
     <div class="panel full-width">
-      <h2>Active Connections</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin-bottom: 0;">Online Documents & Connections</h2>
+        <div style="display: flex; gap: 8px;">
+          <button id="view-documents-btn" class="view-toggle-btn active" style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            📄 By Document
+          </button>
+          <button id="view-connections-btn" class="view-toggle-btn" style="padding: 6px 12px; background: #3a3a3a; color: #999; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            🔌 By Connection
+          </button>
+        </div>
+      </div>
       <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
         <input type="text" id="connection-filter" placeholder="Filter by ID, document, IP..."
                style="flex: 1; padding: 8px; background: #3a3a3a; border: 1px solid #4a4a4a; border-radius: 4px; color: #e0e0e0; font-size: 13px;">
@@ -502,12 +517,17 @@
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/debug-ws`;
 
+    // Client URL configuration (where the editor is hosted)
+    // Default to localhost:5173 for development, or use current origin
+    const CLIENT_URL = window.location.port === '8787' ? 'http://localhost:5173' : window.location.origin;
+
     let ws = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
 
     // State
     let connections = [];
+    let documents = [];
     let topics = [];
     let messages = [];
     let focusedClientId = null;
@@ -515,6 +535,28 @@
     let expandedMessageIds = new Set();
     let messagesUpdatePaused = true; // Default to paused
     let pendingMessageCount = 0;
+    let viewMode = 'documents'; // 'documents' or 'connections'
+    let expandedDocumentIds = new Set(); // Track which documents are expanded
+
+    // Auto-launch agents state
+    let autoLaunchEnabled = localStorage.getItem('autoLaunchAgents') === 'true';
+
+    // Function to update auto-launch UI
+    function updateAutoLaunchUI() {
+      const checkbox = document.getElementById('auto-launch-toggle');
+      const statusLabel = document.getElementById('auto-launch-status');
+
+      if (checkbox) {
+        checkbox.checked = autoLaunchEnabled;
+      }
+
+      if (statusLabel) {
+        statusLabel.textContent = autoLaunchEnabled ? 'ON' : 'OFF';
+        statusLabel.style.color = autoLaunchEnabled ? '#4caf50' : '#f44336';
+      }
+
+      console.log(`[Dashboard] Auto-launch is ${autoLaunchEnabled ? 'enabled' : 'disabled'}`);
+    }
 
     function connect() {
       console.log('[Debug] Connecting to:', wsUrl);
@@ -531,6 +573,17 @@
           const update = JSON.parse(event.data);
           if (update.type === 'debug-update') {
             handleDebugUpdate(update.data);
+          } else if (update.type === 'new-document') {
+            // Handle new document creation event
+            console.log(`[Dashboard] New document detected: ${update.documentId}`);
+
+            // Auto-launch agent if enabled
+            if (autoLaunchEnabled) {
+              console.log(`[Dashboard] Auto-launching agent for document: ${update.documentId}`);
+              launchAgent(update.documentId);
+            } else {
+              console.log(`[Dashboard] Auto-launch is disabled, skipping agent launch`);
+            }
           }
         } catch (error) {
           console.error('[Debug] Error parsing message:', error);
@@ -572,6 +625,7 @@
 
     function handleDebugUpdate(data) {
       connections = data.connections || [];
+      documents = data.documents || [];
       topics = data.topics || [];
 
       const newMessages = data.recentMessages || [];
@@ -590,7 +644,7 @@
       }
 
       renderStats();
-      renderConnections();
+      renderConnectionsOrDocuments();
       renderTopics();
 
       // Only render messages if not paused
@@ -849,6 +903,143 @@
       container.scrollTop = container.scrollHeight;
     }
 
+    // Launch agent tab for a document
+    function launchAgent(documentId, event) {
+      // Prevent triggering document toggle
+      if (event) {
+        event.stopPropagation();
+      }
+
+      // Static agent secret (same as server's AGENT_SECRET)
+      const agentSecret = 'dev-secret-change-in-production';
+
+      // Open new tab with agent mode and secret token
+      const agentUrl = `${CLIENT_URL}/?doc=${encodeURIComponent(documentId)}&agent=true&token=${encodeURIComponent(agentSecret)}`;
+      const windowName = `agent-${documentId}`;
+
+      console.log(`[Dashboard] Launching agent for document: ${documentId}`);
+      console.log(`[Dashboard] Agent URL: ${agentUrl}`);
+
+      // Open or focus existing agent window
+      const agentWindow = window.open(agentUrl, windowName);
+
+      if (agentWindow) {
+        agentWindow.focus();
+        console.log(`[Dashboard] Agent tab opened/focused for document: ${documentId}`);
+      } else {
+        alert('Failed to open agent tab. Please check popup blocker settings.');
+      }
+    }
+
+    // Toggle document expansion
+    function toggleDocument(documentId) {
+      if (expandedDocumentIds.has(documentId)) {
+        expandedDocumentIds.delete(documentId);
+      } else {
+        expandedDocumentIds.add(documentId);
+      }
+      renderConnectionsOrDocuments();
+    }
+
+    // Render documents or connections based on view mode
+    function renderConnectionsOrDocuments() {
+      if (viewMode === 'documents') {
+        renderDocuments();
+      } else {
+        renderConnections();
+      }
+    }
+
+    // Render documents grouped view
+    function renderDocuments() {
+      const container = document.getElementById('connections-list');
+      const filterCount = document.getElementById('filter-count');
+
+      if (documents.length === 0) {
+        container.innerHTML = '<div class="empty-state">No active documents</div>';
+        filterCount.textContent = '';
+        return;
+      }
+
+      filterCount.textContent = filterText ? `${documents.length} documents` : '';
+
+      container.innerHTML = documents.map(doc => {
+        const isExpanded = expandedDocumentIds.has(doc.documentId);
+        const expandIcon = isExpanded ? '▼' : '▶';
+        const lastActivityTime = new Date(doc.lastActivity).toLocaleTimeString();
+
+        return `
+        <div style="background: #1a1a1a; border-radius: 4px; margin-bottom: 8px; overflow: hidden;">
+          <div style="background: #2a2a2a; padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+               onclick="toggleDocument('${doc.documentId}')">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 18px;">${expandIcon}</span>
+              <div>
+                <div style="font-weight: 600; color: #4CAF50; font-size: 14px;">📄 ${doc.documentId}</div>
+                <div style="font-size: 11px; color: #999; margin-top: 4px;">
+                  ${doc.clientCount} client${doc.clientCount !== 1 ? 's' : ''} •
+                  ${doc.totalMessages} messages •
+                  Last activity: ${lastActivityTime}
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button onclick="launchAgent('${doc.documentId}', event)" style="background: #4CAF50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; transition: background 0.2s;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4CAF50'">
+                🤖 Launch Agent
+              </button>
+              <span class="badge">${doc.clientCount}</span>
+            </div>
+          </div>
+          ${isExpanded ? `
+            <div style="padding: 8px;">
+              ${doc.clients.map(client => {
+                const isFocused = focusedClientId === client.id;
+                const isDimmed = focusedClientId && !isFocused;
+                const clientBg = isFocused ? '#2a2a00' : '#252525';
+                const opacity = isDimmed ? '0.4' : '1';
+
+                return `
+                <div style="background: ${clientBg}; padding: 10px; margin: 4px; border-radius: 4px; border-left: 3px solid ${client.connected ? '#4CAF50' : '#f44336'}; opacity: ${opacity};">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: #4CAF50; font-family: monospace;">${client.id}</span>
+                    <div>
+                      <button class="focus-btn" onclick="toggleFocus('${client.id}')" style="background: ${isFocused ? '#FF9800' : '#2196F3'}; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; margin-right: 6px;">
+                        ${isFocused ? 'Unfocus' : 'Focus'}
+                      </button>
+                      <span class="badge" style="font-size: 10px;">${client.connected ? 'Connected' : 'Disconnected'}</span>
+                    </div>
+                  </div>
+                  <div style="font-size: 10px; color: #999; line-height: 1.6;">
+                    <div><strong>IP:</strong> ${client.ip} | <strong>User Agent:</strong> ${client.userAgent}</div>
+                    <div><strong>Connected:</strong> ${new Date(client.connectedAt).toLocaleString()} | <strong>Messages:</strong> ${client.messageCount}</div>
+                    <div><strong>Last Activity:</strong> ${new Date(client.lastActivity).toLocaleTimeString()}</div>
+                    <div><strong>Topics:</strong> ${client.subscribedTopics.join(', ') || 'None'}</div>
+                  </div>
+                </div>
+              `}).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `}).join('');
+    }
+
+    // Toggle view mode
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.getElementById('view-documents-btn').classList.toggle('active', mode === 'documents');
+      document.getElementById('view-connections-btn').classList.toggle('active', mode === 'connections');
+      document.getElementById('view-documents-btn').style.background = mode === 'documents' ? '#4CAF50' : '#3a3a3a';
+      document.getElementById('view-documents-btn').style.color = mode === 'documents' ? 'white' : '#999';
+      document.getElementById('view-connections-btn').style.background = mode === 'connections' ? '#4CAF50' : '#3a3a3a';
+      document.getElementById('view-connections-btn').style.color = mode === 'connections' ? 'white' : '#999';
+      renderConnectionsOrDocuments();
+    }
+
+    // Make functions available globally
+    window.launchAgent = launchAgent;
+    window.toggleDocument = toggleDocument;
+    window.setViewMode = setViewMode;
+
     // Make toggleMessageExpansion available globally
     window.toggleMessageExpansion = toggleMessageExpansion;
 
@@ -904,10 +1095,23 @@
     // Pause messages button
     document.getElementById('pause-messages-btn').addEventListener('click', togglePauseMessages);
 
+    // View toggle buttons
+    document.getElementById('view-documents-btn').addEventListener('click', () => setViewMode('documents'));
+    document.getElementById('view-connections-btn').addEventListener('click', () => setViewMode('connections'));
+
+    // Auto-launch toggle
+    document.getElementById('auto-launch-toggle').addEventListener('change', (e) => {
+      autoLaunchEnabled = e.target.checked;
+      localStorage.setItem('autoLaunchAgents', autoLaunchEnabled.toString());
+      updateAutoLaunchUI();
+      console.log(`[Dashboard] Auto-launch ${autoLaunchEnabled ? 'enabled' : 'disabled'}`);
+    });
+
     // Make functions available globally
     window.toggleFocus = toggleFocus;
 
     // Initialize
+    updateAutoLaunchUI();
     connect();
   </script>
 </body>
