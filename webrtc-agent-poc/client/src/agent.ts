@@ -1,93 +1,71 @@
 /**
- * Agent LLM Functionality
+ * Agent LLM Functionality - Service-based Implementation
  *
- * This module contains the AI agent logic that will be bundled into the agent build.
- * In the public build, this module is not included.
+ * This module contains the AI agent logic that uses modular services
+ * with callback pattern for geo-marking functionality.
  */
 
 import * as Y from 'yjs';
-import { yDocToProsemirrorJSON } from 'y-prosemirror';
+import { EditorView } from 'prosemirror-view';
+import { Schema } from 'prosemirror-model';
 
-// Helper function to recursively extract text from ProseMirror JSON
-function extractTextFromJSON(node: any): string {
-  if (!node) return '';
+// Services
+import { GeocodingService } from './services/GeocodingService';
+import { GeoMarkingService } from './services/GeoMarkingService';
+import { DocumentObserverService } from './services/DocumentObserverService';
 
-  // If it's a text node, return its text
-  if (node.type === 'text') {
-    return node.text || '';
-  }
-
-  // If it has content, recursively process children
-  if (node.content && Array.isArray(node.content)) {
-    return node.content.map(extractTextFromJSON).join('');
-  }
-
-  return '';
-}
-
-export function initializeAgent(yXmlFragment: Y.XmlFragment, ydoc: Y.Doc, documentId: string) {
-  console.log('[Agent] Initializing agent with Y.js document observation');
+export function initializeAgent(
+  yXmlFragment: Y.XmlFragment,
+  ydoc: Y.Doc,
+  documentId: string,
+  editorView: EditorView,
+  schema: Schema
+) {
+  console.log('[Agent] Initializing agent with modular services');
   console.log(`[Agent] Document ID: ${documentId}`);
 
-  let debounceTimer: number | null = null;
-  let lastText = '';
-
-  // Observe Y.js document changes directly
-  yXmlFragment.observeDeep((events, transaction) => {
-    // Skip local changes (agent's own modifications)
-    if (transaction.local) {
-      console.log('[Agent] Skipping local change');
-      return;
+  // Initialize services
+  const geocodingService = new GeocodingService();
+  const geoMarkingService = new GeoMarkingService(
+    editorView,
+    schema,
+    geocodingService,
+    {
+      onLocationExtracted: (locations) => {
+        console.log(`[Agent] 📍 Extracted ${locations.length} locations:`, locations);
+      },
+      onGeoMarkCreated: (geoId, locationName) => {
+        console.log(`[Agent] ✅ Created geo-mark: ${locationName} (${geoId})`);
+      },
+      onError: (error) => {
+        console.error('[Agent] ❌ Error during geo-marking:', error);
+      }
     }
+  );
 
-    console.log('[Agent] Remote document change detected');
+  // Initialize document observer with callbacks
+  const documentObserver = new DocumentObserverService(yXmlFragment, ydoc, {
+    onPauseDetected: async (text) => {
+      console.log(`[Agent] 🤖 Pause detected (2s inactivity), starting LLM processing...`);
+      console.log(`[Agent] Document text length: ${text.length} characters`);
 
-    // Convert Y.js document to ProseMirror JSON
-    try {
-      const json = yDocToProsemirrorJSON(ydoc);
-      const text = extractTextFromJSON(json);
-
-      // Only process if text actually changed
-      if (text === lastText) {
-        return;
+      try {
+        // Process document with geo-marking service
+        await geoMarkingService.processDocument();
+        console.log('[Agent] ✅ LLM processing complete');
+      } catch (error) {
+        console.error('[Agent] ❌ Error during LLM processing:', error);
       }
-
-      lastText = text;
-
-      // Check for punctuation in the text
-      const hasPunctuation = text.includes('.') || text.includes('?');
-
-      if (hasPunctuation) {
-        // Determine which punctuation was added
-        const character = text.includes('?') ? '?' : '.';
-
-        console.log(`[Agent] 🔴 Punctuation "${character}" detected in document`);
-
-        // Clear existing debounce timer
-        if (debounceTimer !== null) {
-          console.log('[Agent] Clearing previous debounce timer');
-          clearTimeout(debounceTimer);
-        }
-
-        // Set new timer (1 second delay, same as frontend-prosemirror)
-        debounceTimer = window.setTimeout(() => {
-          console.log('[Agent] ✅ Debounce complete (1s), triggering LLM processing');
-
-          // Show alert as proof of concept
-          alert(`🤖 LLM Triggered!\n\nCharacter: ${character}\nTime: ${new Date().toLocaleTimeString()}\nDocument: ${documentId}\nText length: ${text.length} chars`);
-
-          // TODO: Replace alert with actual LLM processing
-          // processDocumentWithLLM();
-        }, 1000); // 1 second debounce
-      }
-    } catch (error) {
-      console.error('[Agent] Error processing document change:', error);
+    },
+    onTextChanged: (text) => {
+      // Optional: Log text changes for debugging
+      // console.log(`[Agent] Text changed, length: ${text.length}`);
     }
   });
 
   // Mark that agent is enabled
   (window as any).AGENT_ENABLED = true;
 
-  console.log('[Agent] Agent initialized and observing document changes');
-  console.log('[Agent] Waiting for punctuation (. or ?) to trigger LLM...');
+  console.log('[Agent] ✅ Agent initialized with services');
+  console.log('[Agent] Waiting for 2-second pause after text changes to trigger LLM processing...');
 }
