@@ -108,8 +108,39 @@ function updateStatus(message: string, type: 'connected' | 'connecting' | 'disco
   }
 }
 
+// Fetch TURN credentials from signaling server
+async function fetchTurnCredentials(): Promise<any> {
+  try {
+    // Auto-detect API URL based on current location
+    const getTurnApiUrl = () => {
+      const protocol = window.location.protocol; // http: or https:
+      const hostname = window.location.hostname;
+
+      // Always use port 8787 for TURN credentials API (Express server)
+      // (Vite client is on 5173, Express server is on 8787)
+      return `${protocol}//${hostname}:8787/api/turn-credentials`;
+    };
+
+    const apiUrl = getTurnApiUrl();
+    console.log('[TURN] Fetching credentials from:', apiUrl);
+
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+      console.error('[TURN] Failed to fetch credentials:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('[TURN] ✅ Got Cloudflare TURN credentials:', data.iceServers?.length || 0, 'servers');
+    return data;
+  } catch (error) {
+    console.error('[TURN] Error fetching credentials:', error);
+    return null;
+  }
+}
+
 // Initialize Y.js document and WebRTC provider
-function setupYjs(documentId: string) {
+async function setupYjs(documentId: string) {
   console.log('[Y.js] Setting up Y.js document:', documentId);
 
   // Create Y.js document
@@ -124,15 +155,16 @@ function setupYjs(documentId: string) {
   const getSignalingBaseUrl = () => {
     // Auto-detect based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host; // includes port if present
+    const hostname = window.location.hostname;
 
-    // If running on localhost, use port 8787
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'ws://localhost:8787/signaling';
+    // Development: Use port 8787 for Express signaling server
+    // (Vite client is on 5173, Express signaling is on 8787)
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
+      return `${protocol}//${hostname}:8787/signaling`;
     }
 
-    // Production: use same host with secure WebSocket
-    return `${protocol}//${host}/signaling`;
+    // Production: use same host with secure WebSocket (no explicit port)
+    return `${protocol}//${hostname}/signaling`;
   };
 
   const signalingBaseUrl = getSignalingBaseUrl();
@@ -141,6 +173,24 @@ function setupYjs(documentId: string) {
   console.log('[Y.js] Using signaling server:', signalingUrl);
   console.log('[Y.js] Protocol:', window.location.protocol, 'Hostname:', window.location.hostname);
 
+  // Fetch TURN credentials from signaling server
+  const turnConfig = await fetchTurnCredentials();
+
+  // Prepare ICE servers configuration
+  let iceServers: RTCIceServer[];
+  if (turnConfig && turnConfig.iceServers) {
+    // Use Cloudflare TURN credentials
+    iceServers = turnConfig.iceServers;
+    console.log('[Y.js] Using Cloudflare TURN servers');
+  } else {
+    // Fallback to public STUN servers only
+    console.warn('[Y.js] TURN credentials not available, falling back to public STUN servers');
+    iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+  }
+
   const provider = new WebrtcProvider(documentId, ydoc, {
     // WebSocket signaling server for cross-machine sync
     // BroadcastChannel will also handle local tab communication
@@ -148,37 +198,9 @@ function setupYjs(documentId: string) {
     // Enable password for room isolation (optional)
     password: null,
     // Configure WebRTC peer connection with STUN and TURN servers
-    // TURN servers are required for cross-browser connectivity when mDNS candidates fail
     peerOpts: {
       config: {
-        iceServers: [
-          // STUN servers for NAT traversal
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          // Free TURN servers from OpenRelay for relaying traffic
-          {
-            urls: [
-              'turn:openrelay.metered.ca:80',
-              'turn:openrelay.metered.ca:443',
-              'turn:openrelay.metered.ca:443?transport=tcp'
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-          },
-          // Additional TURN server for redundancy
-          {
-            urls: [
-              'turn:relay.metered.ca:80',
-              'turn:relay.metered.ca:443',
-              'turn:relay.metered.ca:443?transport=tcp',
-            ],
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
-          },
-        ],
+        iceServers,
         iceCandidatePoolSize: 10,
         iceTransportPolicy: 'all', // 'all' allows all candidates, 'relay' forces TURN
       },
@@ -645,8 +667,8 @@ function openAgentTab(awareness: any) {
 async function main() {
   updateStatus('Initializing Y.js...', 'connecting');
 
-  // Set up Y.js and WebRTC provider
-  const { ydoc, yXmlFragment, provider, awareness } = setupYjs(documentId);
+  // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
+  const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId);
 
   updateStatus('Initializing editor...', 'connecting');
 

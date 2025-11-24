@@ -56,16 +56,30 @@ server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url!, `http://${request.headers.host}`);
     const pathname = url.pathname;
 
+    // Match /debug-ws for debug dashboard
+    if (pathname === '/debug-ws') {
+      console.log(`[Server] Debug WebSocket connection established`);
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        signaling.registerDebugClient(ws);
+      });
+      return;
+    }
+
     // Match /signaling/:documentId pattern
     const match = pathname.match(/^\/signaling\/([^/]+)$/);
 
     if (match) {
       const documentId = decodeURIComponent(match[1]);
+      const ip = (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+                 || request.socket.remoteAddress
+                 || 'unknown';
+      const userAgent = request.headers['user-agent'] || 'unknown';
 
-      console.log(`[Server] WebSocket upgrade request for document: ${documentId}`);
+      console.log(`[Server] WebSocket upgrade request for document: ${documentId} from ${ip}`);
 
       wss.handleUpgrade(request, socket, head, (ws) => {
-        signaling.handleConnection(ws, documentId);
+        signaling.handleConnection(ws, documentId, ip, userAgent);
       });
     } else {
       console.warn(`[Server] Invalid WebSocket path: ${pathname}`);
@@ -129,6 +143,135 @@ app.get('/api/connections', (req, res) => {
   res.json({
     connections: signaling.getSessionCount()
   });
+});
+
+// TURN credentials endpoint for WebRTC
+app.get('/api/turn-credentials', async (req, res) => {
+  const TURN_KEY_ID = process.env.TURN_KEY_ID;
+  const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN;
+
+  if (!TURN_KEY_ID || !TURN_KEY_API_TOKEN) {
+    return res.status(503).json({
+      error: 'TURN credentials not configured',
+      message: 'Set TURN_KEY_ID and TURN_KEY_API_TOKEN environment variables'
+    });
+  }
+
+  try {
+    const turnApiUrl = `https://rtc.live.cloudflare.com/v1/turn/keys/${TURN_KEY_ID}/credentials/generate-ice-servers`;
+
+    const turnResponse = await fetch(turnApiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TURN_KEY_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ttl: 86400, // 24 hours
+      }),
+    });
+
+    if (!turnResponse.ok) {
+      const errorText = await turnResponse.text();
+      console.error('[Server] Failed to generate TURN credentials:', errorText);
+      return res.status(502).json({
+        error: 'Failed to generate TURN credentials',
+        details: errorText,
+        status: turnResponse.status
+      });
+    }
+
+    const turnData = await turnResponse.json();
+
+    // Filter out port 53 (blocked by browsers)
+    if (turnData.iceServers && Array.isArray(turnData.iceServers)) {
+      turnData.iceServers = turnData.iceServers.map((server: any) => {
+        if (server.urls && Array.isArray(server.urls)) {
+          server.urls = server.urls.filter((url: string) => !url.includes(':53'));
+        }
+        return server;
+      }).filter((server: any) =>
+        server.urls && (Array.isArray(server.urls) ? server.urls.length > 0 : true)
+      );
+    }
+
+    res.json(turnData);
+  } catch (error) {
+    console.error('[Server] Error fetching TURN credentials:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Debug API Routes
+
+// Get detailed connection information
+app.get('/api/debug/connections', (req, res) => {
+  res.json({
+    connections: signaling.getConnectionDetails()
+  });
+});
+
+// Get message log
+app.get('/api/debug/messages', (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+  res.json({
+    messages: signaling.getMessageLog(limit)
+  });
+});
+
+// Inject test message
+app.post('/api/debug/inject', (req, res) => {
+  const { documentId, topic, data } = req.body;
+
+  if (!documentId || !topic) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'documentId and topic are required'
+    });
+  }
+
+  try {
+    signaling.injectTestMessage(documentId, topic, data || { type: 'test', message: 'Test message from admin' });
+    res.json({
+      success: true,
+      message: `Test message injected to document ${documentId} on topic ${topic}`
+    });
+  } catch (error) {
+    console.error('[Server] Error injecting test message:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Failed to inject test message'
+    });
+  }
+});
+
+// Debug dashboard route (served separately from client app)
+app.get('/debug', (req, res) => {
+  // Will serve debug.html from server/public directory
+  const debugHtmlPath = join(__dirname, '../public/debug.html');
+  if (existsSync(debugHtmlPath)) {
+    res.sendFile(debugHtmlPath);
+  } else {
+    res.status(404).send(`
+      <html>
+        <head><title>Debug Dashboard Not Found</title></head>
+        <body>
+          <h1>Debug Dashboard Not Found</h1>
+          <p>Create <code>server/public/debug.html</code> to enable the debug dashboard.</p>
+          <p>Available debug API endpoints:</p>
+          <ul>
+            <li>GET /api/debug/connections - Connection details</li>
+            <li>GET /api/debug/messages - Message log</li>
+            <li>POST /api/debug/inject - Inject test message</li>
+            <li>WebSocket: ws://localhost:${PORT}/debug-ws</li>
+          </ul>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // Serve static files from client dist directory
