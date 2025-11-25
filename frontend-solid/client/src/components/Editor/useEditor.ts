@@ -108,9 +108,22 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
         // Update selection state
         setHasSelection(!newState.selection.empty);
 
-        // Notify parent of changes
-        if (tr.docChanged && options.onUpdate) {
-          options.onUpdate(this);
+        // Trigger map updates if document changed
+        if (tr.docChanged) {
+          if (window.mapRenderCallbacks) {
+            window.mapRenderCallbacks.forEach(callback => {
+              try {
+                callback();
+              } catch (error) {
+                console.error('[Editor] Error in map render callback:', error);
+              }
+            });
+          }
+
+          // Notify parent of changes
+          if (options.onUpdate) {
+            options.onUpdate(this);
+          }
         }
       }
     });

@@ -4,6 +4,13 @@ import { EditorView } from 'prosemirror-view';
 import { Node as PMNode } from 'prosemirror-model';
 import { COLORS } from './prosemirror-schema';
 
+// TypeScript declaration for global map callbacks
+declare global {
+  interface Window {
+    mapRenderCallbacks?: Array<() => void>;
+  }
+}
+
 export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => number | undefined) {
   const dom = document.createElement('div');
   dom.className = 'prosemirror-map';
@@ -16,6 +23,15 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
   let currentMap: mapboxgl.Map | null = null;
   let currentMarkers: mapboxgl.Marker[] = [];
   let isFirstLoad = true;
+  let lastGeoMarksHash = '';
+
+  // Compute hash of all geo-mark attributes
+  const computeGeoMarksHash = (locations: ReturnType<typeof extractLocations>): string => {
+    return locations
+      .map(l => `${l.geoId}:${l.lat}:${l.lng}:${l.placeName}:${l.colorIndex}`)
+      .sort()
+      .join('|');
+  };
 
   // Extract locations from document
   const extractLocations = () => {
@@ -207,6 +223,26 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
     }
   });
 
+  // Register callback for document changes
+  const checkAndUpdate = () => {
+    const locations = extractLocations();
+    const newHash = computeGeoMarksHash(locations);
+
+    if (newHash !== lastGeoMarksHash) {
+      console.log('[MapNodeView] Geo-marks changed, updating map');
+      lastGeoMarksHash = newHash;
+      renderMap();
+    }
+  };
+
+  // Initialize global callback array if needed
+  if (!window.mapRenderCallbacks) {
+    window.mapRenderCallbacks = [];
+  }
+
+  const callbackIndex = window.mapRenderCallbacks.length;
+  window.mapRenderCallbacks.push(checkAndUpdate);
+
   return {
     dom,
     update(updatedNode: PMNode) {
@@ -219,6 +255,12 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       return true;
     },
     destroy() {
+      // Remove callback from global array
+      if (window.mapRenderCallbacks && window.mapRenderCallbacks[callbackIndex]) {
+        window.mapRenderCallbacks.splice(callbackIndex, 1);
+      }
+
+      // Clean up map
       if (currentMap) {
         currentMarkers.forEach(marker => marker.remove());
         currentMap.remove();
