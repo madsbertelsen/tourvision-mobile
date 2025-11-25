@@ -1,12 +1,16 @@
 import { type Component, createEffect, createSignal, onCleanup, Show, For } from 'solid-js';
+import { useParams } from '@solidjs/router';
 import mapboxgl from 'mapbox-gl';
 import { getFullscreenMapStore, type CameraState } from '../../stores/fullscreenMap';
 import { getCollaborationStore } from '../../stores/collaboration';
 import { getFollowModeStore } from '../../stores/followMode';
 import { getEditorStore } from '../../stores/editor';
 import { getLocationsStore, type Location } from '../../stores/locations';
+import { getDocumentStore } from '../../stores/document';
 import { reverseGeocode } from '../../lib/geocoding';
 import { COLORS } from '../../lib/prosemirror-schema';
+import { addRouteToMap, removeRouteFromMap, fetchRoute } from '../../lib/mapbox';
+import { LocationDetailSheet } from './LocationDetailSheet';
 import {
   addAwarenessLayer,
   updateAwarenessLayer,
@@ -50,11 +54,16 @@ interface ExtendedMap extends mapboxgl.Map {
 }
 
 export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
+  const params = useParams<{ docId: string; mapId?: string; locId?: string }>();
   const fullscreenMapStore = getFullscreenMapStore();
   const collaboration = getCollaborationStore();
   const followModeStore = getFollowModeStore();
+  const documentStore = getDocumentStore();
   let mapContainer: HTMLDivElement | undefined;
   let map: ExtendedMap | undefined;
+
+  // Track current route layer ID for cleanup
+  const ROUTE_LAYER_ID = 'transport-route';
 
   // Track active awareness layers for cleanup
   const activeUserIds = new Set<string>();
@@ -83,7 +92,9 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       marker.remove();
       setPendingMarker(null);
     }
+    // Hide fullscreen map state and navigate back
     fullscreenMapStore.hideFullscreenMap();
+    documentStore.closeFullscreenMap();
   };
 
   // Handle map style change
@@ -177,12 +188,31 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     }
   };
 
+  // Handle invite button click
+  const handleInviteClick = () => {
+    if (followModeStore.isInviting()) {
+      followModeStore.cancelInvitation();
+    } else {
+      const state = fullscreenMapStore.state();
+      const mapDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
+      followModeStore.sendInvitation(mapDocPos);
+    }
+  };
+
   // Initialize map when visible
   createEffect(() => {
     const state = fullscreenMapStore.state();
 
-    if (state.isVisible && mapContainer && state.initialCenter && state.initialZoom !== null && state.blockMapOffset) {
-      console.log('[FullscreenMap] Initializing Mapbox map with computed center');
+    if (state.isVisible && mapContainer && state.blockMapOffset) {
+      console.log('[FullscreenMap] Initializing Mapbox map');
+
+      // Refresh locations from document to ensure we have latest transport settings
+      const editorStore = getEditorStore();
+      const view = editorStore.editorView();
+      if (view) {
+        console.log('[FullscreenMap] Refreshing locations from document on map open');
+        locationsStoreForRoutes.updateLocations(view);
+      }
 
       // Small delay to ensure overlay is rendered and we can measure it
       requestAnimationFrame(() => {
@@ -191,40 +221,40 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         const blockMapEl = state.blockMapElement as HTMLElement & { _mapInstance?: mapboxgl.Map };
         const blockMap = blockMapEl?._mapInstance;
 
-        if (!blockMap) {
-          console.error('[FullscreenMap] Block map instance not found');
-          return;
+        // Calculate center: use block map if available, otherwise default
+        let computedCenter: mapboxgl.LngLat | [number, number] = [0, 20]; // Default world view
+        let computedZoom = 2; // Default zoom
+
+        if (blockMap && blockMap.loaded()) {
+          const blockMapWidth = blockMapEl?.clientWidth || 0;
+          const blockMapHeight = blockMapEl?.clientHeight || 0;
+
+          // Calculate where the fullscreen center would be in block map's local pixel coords
+          const fullscreenCenterInBlockMapX = fullscreenRect.width / 2 - offset.x;
+          const fullscreenCenterInBlockMapY = fullscreenRect.height / 2 - offset.y;
+
+          // Use block map's unproject to convert this pixel position to lng/lat
+          computedCenter = blockMap.unproject([fullscreenCenterInBlockMapX, fullscreenCenterInBlockMapY]);
+          computedZoom = state.initialZoom ?? blockMap.getZoom();
+
+          console.log('[FullscreenMap] Center calculation:', {
+            blockMapSize: { width: blockMapWidth, height: blockMapHeight },
+            blockMapOffset: offset,
+            fullscreenSize: { width: fullscreenRect.width, height: fullscreenRect.height },
+            fullscreenCenterInBlockMap: { x: fullscreenCenterInBlockMapX, y: fullscreenCenterInBlockMapY },
+            originalCenter: state.initialCenter,
+            computedCenter: computedCenter
+          });
+        } else {
+          console.log('[FullscreenMap] No block map, using default center/zoom');
         }
-
-        const blockMapWidth = blockMapEl?.clientWidth || 0;
-        const blockMapHeight = blockMapEl?.clientHeight || 0;
-
-        // Calculate where the fullscreen center would be in block map's local pixel coords
-        // Fullscreen center in screen coords: (fullscreenRect.width/2, fullscreenRect.height/2)
-        // Block map origin in screen coords: (offset.x, offset.y)
-        // So fullscreen center in block map local coords:
-        const fullscreenCenterInBlockMapX = fullscreenRect.width / 2 - offset.x;
-        const fullscreenCenterInBlockMapY = fullscreenRect.height / 2 - offset.y;
-
-        // Use block map's unproject to convert this pixel position to lng/lat
-        // This gives us the geographic center that should be used for fullscreen map
-        const computedCenter = blockMap.unproject([fullscreenCenterInBlockMapX, fullscreenCenterInBlockMapY]);
-
-        console.log('[FullscreenMap] Center calculation:', {
-          blockMapSize: { width: blockMapWidth, height: blockMapHeight },
-          blockMapOffset: offset,
-          fullscreenSize: { width: fullscreenRect.width, height: fullscreenRect.height },
-          fullscreenCenterInBlockMap: { x: fullscreenCenterInBlockMapX, y: fullscreenCenterInBlockMapY },
-          originalCenter: state.initialCenter,
-          computedCenter: computedCenter
-        });
 
         // Create map with the computed center - no panning needed
         map = new mapboxgl.Map({
           container: mapContainer!,
           style: 'mapbox://styles/mapbox/light-v11',
           center: computedCenter,
-          zoom: state.initialZoom!,
+          zoom: computedZoom,
           fadeDuration: 0,    // No fade effect
           interactive: true,  // Enable interactions
           trackResize: true   // Track container resizes
@@ -247,15 +277,33 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             locations.forEach((location) => {
               const bgColor = COLORS[location.colorIndex % COLORS.length];
               const el = document.createElement('div');
+              // Note: Don't use transition on transform - it conflicts with Mapbox marker positioning
               el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
 
               const inner = document.createElement('div');
-              inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+              inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white; transition: transform 0.15s;';
               el.appendChild(inner);
+
+              // Add hover effect on inner element only (doesn't affect Mapbox positioning)
+              el.addEventListener('mouseenter', () => {
+                inner.style.transform = 'scale(1.3)';
+              });
+              el.addEventListener('mouseleave', () => {
+                inner.style.transform = 'scale(1)';
+              });
+
+              // Add click handler to navigate to location detail
+              el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mapId = params.mapId;
+                if (mapId) {
+                  console.log('[FullscreenMap] Marker clicked:', location.geoId);
+                  documentStore.openLocationDetail(mapId, location.geoId);
+                }
+              });
 
               const marker = new mapboxgl.Marker(el)
                 .setLngLat([location.lng, location.lat])
-                .setPopup(new mapboxgl.Popup().setText(location.placeName))
                 .addTo(map!);
 
               currentMarkers.push(marker);
@@ -267,6 +315,30 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
 
           // Initial marker load from props
           updateMarkers(props.locations);
+
+          // Initial route render - check if any location has transport configured
+          const initialLocations = locationsStoreForRoutes.state.locations;
+          const locWithTransport = initialLocations.find(l => l.transportFrom && l.transportProfile);
+          if (locWithTransport) {
+            const sourceLocation = locationsStoreForRoutes.getLocationById(locWithTransport.transportFrom!);
+            if (sourceLocation) {
+              console.log('[FullscreenMap] Initial route fetch for:', locWithTransport.geoId);
+              fetchRoute(
+                sourceLocation.lng,
+                sourceLocation.lat,
+                locWithTransport.lng,
+                locWithTransport.lat,
+                locWithTransport.transportProfile as 'walking' | 'driving' | 'cycling'
+              ).then((route) => {
+                if (route && map && map.isStyleLoaded()) {
+                  const color = COLORS[sourceLocation.colorIndex % COLORS.length];
+                  addRouteToMap(map, ROUTE_LAYER_ID, route.geometry, color);
+                  lastRenderedRouteKey = `${sourceLocation.geoId}-${locWithTransport.geoId}-${locWithTransport.transportProfile}`;
+                  console.log('[FullscreenMap] Initial route rendered');
+                }
+              });
+            }
+          }
 
           // Register callback to update markers when document changes
           const locationsStore = getLocationsStore();
@@ -429,6 +501,7 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 }
               });
               setFollowers(myFollowers);
+
             };
 
             provider.awareness.on('change', updateAwarenessLayers);
@@ -505,6 +578,96 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     }
   });
 
+  // Derive and render routes from document state (locations with transportFrom)
+  // This works for both local changes and remote collaborative changes via Y.js
+  let lastRenderedRouteKey = '';
+  let routeFetchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Get locations store outside effect to ensure proper reactive tracking
+  const locationsStoreForRoutes = getLocationsStore();
+
+  createEffect(() => {
+    // Access the reactive state directly
+    const locations = locationsStoreForRoutes.state.locations;
+
+    // Log locations with transport config for debugging
+    const locationsWithTransport = locations.filter(l => l.transportFrom);
+    console.log('[FullscreenMap] Route effect - locations:', {
+      total: locations.length,
+      withTransport: locationsWithTransport.length,
+      transportDetails: locationsWithTransport.map(l => ({
+        geoId: l.geoId,
+        transportFrom: l.transportFrom,
+        transportProfile: l.transportProfile
+      }))
+    });
+
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    // Find the currently viewed location (from URL params)
+    const currentLocId = params.locId;
+
+    // Find location with transport configured
+    // Priority: current location if it has transport, otherwise first location with transport
+    let targetLoc = currentLocId
+      ? locations.find(loc => loc.geoId === currentLocId && loc.transportFrom && loc.transportProfile)
+      : null;
+
+    if (!targetLoc) {
+      // Check if any location has transport (for collaborative scenarios)
+      targetLoc = locations.find(loc => loc.transportFrom && loc.transportProfile);
+    }
+
+    if (!targetLoc || !targetLoc.transportFrom || !targetLoc.transportProfile) {
+      // No transport configured - remove route if exists
+      if (lastRenderedRouteKey) {
+        console.log('[FullscreenMap] Removing route - no transport configured');
+        removeRouteFromMap(map, ROUTE_LAYER_ID);
+        lastRenderedRouteKey = '';
+      }
+      return;
+    }
+
+    // Get source location
+    const sourceLoc = locationsStoreForRoutes.getLocationById(targetLoc.transportFrom);
+    if (!sourceLoc) {
+      console.warn('[FullscreenMap] Source location not found:', targetLoc.transportFrom);
+      return;
+    }
+
+    // Create a key to prevent duplicate fetches
+    const routeKey = `${sourceLoc.geoId}-${targetLoc.geoId}-${targetLoc.transportProfile}`;
+    if (routeKey === lastRenderedRouteKey) {
+      return; // Already rendered this route
+    }
+
+    // Debounce route fetching
+    if (routeFetchTimeout) {
+      clearTimeout(routeFetchTimeout);
+    }
+
+    routeFetchTimeout = setTimeout(async () => {
+      console.log('[FullscreenMap] Fetching route from document state:', routeKey);
+
+      const route = await fetchRoute(
+        sourceLoc.lng,
+        sourceLoc.lat,
+        targetLoc!.lng,
+        targetLoc!.lat,
+        targetLoc!.transportProfile as 'walking' | 'driving' | 'cycling'
+      );
+
+      if (route && map && map.isStyleLoaded()) {
+        const color = COLORS[sourceLoc.colorIndex % COLORS.length];
+        addRouteToMap(map, ROUTE_LAYER_ID, route.geometry, color);
+        lastRenderedRouteKey = routeKey;
+        console.log('[FullscreenMap] Route rendered:', routeKey);
+      }
+    }, 200);
+  });
+
   // Cleanup map on close
   createEffect(() => {
     const state = fullscreenMapStore.state();
@@ -528,6 +691,9 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       // Clear update ref
       updateMarkersRef = null;
 
+      // Reset route tracking so it re-fetches on reopen
+      lastRenderedRouteKey = '';
+
       // Clean up awareness listener
       if (map._awarenessCleanup) {
         map._awarenessCleanup();
@@ -538,8 +704,8 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   });
 
   onCleanup(() => {
-    // Clear fullscreen map awareness state
-    fullscreenMapStore.hideFullscreenMap();
+    // NOTE: Don't call hideFullscreenMap() here - it causes issues when route changes
+    // trigger component remount. The store state should be managed by route effects.
 
     // Remove callback from global array by reference
     if (window.mapRenderCallbacks && mapRenderCallback) {
@@ -616,9 +782,22 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             )}
           </For>
         </div>
+        {/* Invite button */}
+        <Show when={!followModeStore.state().isFollowing}>
+          <button
+            class={`${styles.inviteBtn} ${followModeStore.isInviting() ? styles.inviting : ''}`}
+            onClick={handleInviteClick}
+            title={followModeStore.isInviting() ? "Cancel invitation" : "Invite others to follow"}
+          >
+            {followModeStore.isInviting() ? 'Cancel Invite' : 'Invite to Follow'}
+          </button>
+        </Show>
         <div class={styles.hint}>
           Double-click to add a marker
         </div>
+
+        {/* Location detail sheet - shows when locId is in route */}
+        <LocationDetailSheet />
       </div>
     </Show>
   );

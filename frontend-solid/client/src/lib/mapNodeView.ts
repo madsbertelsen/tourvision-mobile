@@ -4,7 +4,7 @@ import { EditorView } from 'prosemirror-view';
 import { Node as PMNode } from 'prosemirror-model';
 import { NodeSelection } from 'prosemirror-state';
 import { COLORS } from './prosemirror-schema';
-import { getFullscreenMapStore } from '../stores/fullscreenMap';
+import { getDocumentStore } from '../stores/document';
 
 // TypeScript declaration for global map callbacks and map instance
 declare global {
@@ -19,7 +19,7 @@ interface MapElement extends HTMLElement {
 }
 
 export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => number | undefined) {
-  const fullscreenMapStore = getFullscreenMapStore();
+  const documentStore = getDocumentStore();
   const dom = document.createElement('div') as MapElement;
   dom.className = 'prosemirror-map';
   dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; cursor: pointer;`;
@@ -60,11 +60,14 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
         console.log('[MapNodeView] Long press - node selected');
       }
     } else {
-      // Short click - open fullscreen map
+      // Short click - open fullscreen map via navigation
       e.preventDefault();
       e.stopPropagation();
-      fullscreenMapStore.showFullscreenMap(dom);
-      console.log('[MapNodeView] Short click - opening fullscreen map');
+      const mapId = dom.dataset.docPos;
+      if (mapId) {
+        documentStore.openFullscreenMap(mapId);
+        console.log('[MapNodeView] Short click - navigating to fullscreen map:', mapId);
+      }
     }
   });
 

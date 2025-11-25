@@ -33,22 +33,8 @@ function createFullscreenMapStore() {
   function showFullscreenMap(mapElement: HTMLElement & { _mapInstance?: mapboxgl.Map }) {
     console.log('[FullscreenMap] Opening fullscreen map');
 
-    // Get the Mapbox instance from the DOM element
+    // Get the Mapbox instance from the DOM element (may be null if no locations)
     const blockMap = mapElement._mapInstance;
-    if (!blockMap) {
-      console.error('[FullscreenMap] No map instance found on element');
-      return;
-    }
-
-    // Ensure map is loaded before getting bounds
-    if (!blockMap.loaded()) {
-      console.warn('[FullscreenMap] Map not fully loaded yet');
-      return;
-    }
-
-    // Get center and zoom from block map
-    const center = blockMap.getCenter();
-    const zoom = blockMap.getZoom();
 
     // Get block map position in viewport
     const blockMapRect = mapElement.getBoundingClientRect();
@@ -57,33 +43,43 @@ function createFullscreenMapStore() {
       y: blockMapRect.top
     };
 
-    console.log('[FullscreenMap] Center:', center, 'Zoom:', zoom, 'Offset:', blockMapOffset);
+    // Get center and zoom from block map if available, otherwise use defaults
+    let center: mapboxgl.LngLat | null = null;
+    let zoom: number | null = null;
 
-    // Update awareness state for other users
-    const collaboration = getCollaborationStore();
-    const provider = collaboration.state().provider;
-    if (provider) {
-      const docPos = parseInt(mapElement.dataset.docPos || '0');
-      // Get viewport corners (accounts for pitch/bearing)
-      const corners = getViewportCorners(blockMap);
-      // Get camera state for following feature
-      const camera: CameraState = {
-        center: [blockMap.getCenter().lng, blockMap.getCenter().lat],
-        zoom: blockMap.getZoom(),
-        pitch: blockMap.getPitch(),
-        bearing: blockMap.getBearing()
-      };
-      provider.awareness.setLocalStateField('fullscreenMap', {
-        isViewing: true,
-        corners,
-        camera,
-        mapNodePosition: docPos,
-        timestamp: Date.now()
-      });
-      console.log('[FullscreenMap] Awareness updated:', { docPos, corners, camera });
+    if (blockMap && blockMap.loaded()) {
+      center = blockMap.getCenter();
+      zoom = blockMap.getZoom();
+      console.log('[FullscreenMap] Using block map center:', center, 'Zoom:', zoom);
+
+      // Update awareness state for other users
+      const collaboration = getCollaborationStore();
+      const provider = collaboration.state().provider;
+      if (provider) {
+        const docPos = parseInt(mapElement.dataset.docPos || '0');
+        // Get viewport corners (accounts for pitch/bearing)
+        const corners = getViewportCorners(blockMap);
+        // Get camera state for following feature
+        const camera: CameraState = {
+          center: [blockMap.getCenter().lng, blockMap.getCenter().lat],
+          zoom: blockMap.getZoom(),
+          pitch: blockMap.getPitch(),
+          bearing: blockMap.getBearing()
+        };
+        provider.awareness.setLocalStateField('fullscreenMap', {
+          isViewing: true,
+          corners,
+          camera,
+          mapNodePosition: docPos,
+          timestamp: Date.now()
+        });
+        console.log('[FullscreenMap] Awareness updated:', { docPos, corners, camera });
+      }
+    } else {
+      console.log('[FullscreenMap] No block map instance, using default view');
     }
 
-    // Update state with center, zoom and offset
+    // Update state with center, zoom and offset (may be null for default view)
     setState({
       isVisible: true,
       blockMapElement: mapElement,

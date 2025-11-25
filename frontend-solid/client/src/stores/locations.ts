@@ -2,6 +2,9 @@ import { createStore } from 'solid-js/store';
 import type { EditorView } from 'prosemirror-view';
 import type { Location } from '../lib/prosemirror-schema';
 
+// Re-export Location type for convenience
+export type { Location } from '../lib/prosemirror-schema';
+
 export interface LocationsState {
   locations: Location[];
 }
@@ -38,7 +41,11 @@ export function createLocationsStore() {
       }
     });
 
-    console.log('[Locations] Extracted', locations.length, 'locations');
+    // Log with transport details for debugging
+    const withTransport = locations.filter(l => l.transportFrom);
+    console.log('[Locations] Extracted', locations.length, 'locations,', withTransport.length, 'with transport:',
+      withTransport.map(l => ({ geoId: l.geoId, from: l.transportFrom, profile: l.transportProfile }))
+    );
     return locations;
   }
 

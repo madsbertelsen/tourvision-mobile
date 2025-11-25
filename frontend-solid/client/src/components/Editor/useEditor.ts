@@ -109,8 +109,15 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
         // Update selection state
         setHasSelection(!newState.selection.empty);
 
-        // Trigger map updates if document changed
-        if (tr.docChanged) {
+        // Check if transaction has mark-related steps (AddMarkStep, RemoveMarkStep)
+        const hasMarkSteps = tr.steps.some(step =>
+          step.constructor.name === 'AddMarkStep' || step.constructor.name === 'RemoveMarkStep'
+        );
+
+        // Trigger map updates if document changed OR marks changed
+        if (tr.docChanged || hasMarkSteps) {
+          console.log('[Editor] dispatchTransaction - docChanged:', tr.docChanged, 'hasMarkSteps:', hasMarkSteps);
+
           if (window.mapRenderCallbacks) {
             window.mapRenderCallbacks.forEach(callback => {
               try {
@@ -135,7 +142,32 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     const editorStore = getEditorStore();
     editorStore.setEditorView(view);
 
-    console.log('[Editor] ProseMirror initialized');
+    // Observe Y.js changes to catch remote updates (mark changes don't trigger docChanged)
+    let updateTimeout: ReturnType<typeof setTimeout> | null = null;
+    yXmlFragment.observeDeep((events, transaction) => {
+      // Check if this is a remote change (not from local dispatch)
+      const isRemote = transaction.origin !== null && transaction.origin !== view;
+      console.log('[Editor] Y.js observeDeep fired:', {
+        eventsCount: events.length,
+        isRemote,
+        origin: transaction.origin ? 'has-origin' : 'null'
+      });
+
+      // Debounce to avoid excessive updates
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
+      updateTimeout = setTimeout(() => {
+        // Get the current view from editor store to ensure we have latest state
+        const currentView = editorStore.editorView();
+        console.log('[Editor] Y.js debounced update - refreshing locations, view exists:', !!currentView);
+        if (options.onUpdate && currentView) {
+          options.onUpdate(currentView);
+        }
+      }, 300); // Increased delay to allow y-prosemirror to apply remote changes
+    });
+
+    console.log('[Editor] ProseMirror initialized with Y.js observation');
   });
 
   onCleanup(() => {

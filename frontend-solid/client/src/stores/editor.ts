@@ -77,10 +77,70 @@ function createEditorStore() {
     return true;
   }
 
+  // Update a geo-mark's transport settings by geoId
+  function updateGeoMarkTransport(
+    geoId: string,
+    transportFrom: string,
+    transportProfile: 'walking' | 'driving' | 'cycling'
+  ): boolean {
+    const view = editorView();
+    if (!view) {
+      console.error('[EditorStore] No editor view available');
+      return false;
+    }
+
+    const { state } = view;
+    const { doc, schema, tr } = state;
+    let found = false;
+
+    // Find the geo-mark with matching geoId
+    doc.descendants((node, pos) => {
+      if (found) return false; // Stop if already found
+
+      node.marks.forEach((mark) => {
+        if (mark.type.name === 'geoMark' && mark.attrs.geoId === geoId) {
+          // Found the geo-mark - update it
+          const nodeEnd = pos + node.nodeSize;
+
+          // Create new mark with updated transport attrs
+          const newMark = schema.marks.geoMark.create({
+            ...mark.attrs,
+            transportFrom,
+            transportProfile
+          });
+
+          // Remove old mark and add new one
+          tr.removeMark(pos, nodeEnd, mark.type);
+          tr.addMark(pos, nodeEnd, newMark);
+
+          found = true;
+          console.log('[EditorStore] Updated geo-mark transport:', {
+            geoId,
+            transportFrom,
+            transportProfile
+          });
+        }
+      });
+
+      return !found;
+    });
+
+    if (found) {
+      console.log('[EditorStore] Dispatching transport update transaction');
+      view.dispatch(tr);
+      console.log('[EditorStore] Transport update dispatched successfully');
+    } else {
+      console.warn('[EditorStore] Geo-mark not found:', geoId);
+    }
+
+    return found;
+  }
+
   return {
     editorView,
     setEditorView,
-    addGeoMarkAtMapPosition
+    addGeoMarkAtMapPosition,
+    updateGeoMarkTransport
   };
 }
 

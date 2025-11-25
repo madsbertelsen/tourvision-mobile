@@ -35,11 +35,44 @@ export function createDocumentStore() {
       const updated = [...documents(), docId];
       saveDocuments(updated);
     }
+  }
 
-    // Update URL
-    const url = new URL(window.location.href);
-    url.searchParams.set('doc', docId);
-    window.history.pushState({}, '', url.toString());
+  // Navigate to fullscreen map (can be called from non-component code)
+  function openFullscreenMap(mapId: string) {
+    const docId = currentDocId();
+    if (docId) {
+      // Use window.history to trigger navigation
+      window.history.pushState({}, '', `/${docId}/map/${mapId}`);
+      // Dispatch popstate to notify Solid Router
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }
+
+  // Close fullscreen map (navigate back to document)
+  function closeFullscreenMap() {
+    const docId = currentDocId();
+    if (docId) {
+      window.history.pushState({}, '', `/${docId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }
+
+  // Navigate to location detail within fullscreen map
+  function openLocationDetail(mapId: string, locId: string) {
+    const docId = currentDocId();
+    if (docId) {
+      window.history.pushState({}, '', `/${docId}/map/${mapId}/location/${locId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }
+
+  // Close location detail (navigate back to map)
+  function closeLocationDetail(mapId: string) {
+    const docId = currentDocId();
+    if (docId) {
+      window.history.pushState({}, '', `/${docId}/map/${mapId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   }
 
   // Initialize from URL or session storage
@@ -75,7 +108,11 @@ export function createDocumentStore() {
     createDocument,
     setDocument,
     deleteDocument,
-    initFromUrl
+    initFromUrl,
+    openFullscreenMap,
+    closeFullscreenMap,
+    openLocationDetail,
+    closeLocationDetail
   };
 }
 
