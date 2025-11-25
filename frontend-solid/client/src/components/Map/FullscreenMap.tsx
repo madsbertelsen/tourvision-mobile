@@ -1,18 +1,34 @@
 import { type Component, createEffect, onCleanup, Show } from 'solid-js';
 import mapboxgl from 'mapbox-gl';
 import { getFullscreenMapStore } from '../../stores/fullscreenMap';
+import { getCollaborationStore } from '../../stores/collaboration';
 import type { Location } from '../../stores/locations';
 import { addMarkersToMap } from '../../lib/mapbox';
+import {
+  addAwarenessLayer,
+  updateAwarenessLayer,
+  removeAwarenessLayer,
+  hasAwarenessLayer
+} from '../../lib/mapAwarenessLayers';
 import styles from './FullscreenMap.module.scss';
 
 interface FullscreenMapProps {
   locations: Location[];
 }
 
+// Extend mapboxgl.Map type to include our cleanup function
+interface ExtendedMap extends mapboxgl.Map {
+  _awarenessCleanup?: () => void;
+}
+
 export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   const fullscreenMapStore = getFullscreenMapStore();
+  const collaboration = getCollaborationStore();
   let mapContainer: HTMLDivElement | undefined;
-  let map: mapboxgl.Map | undefined;
+  let map: ExtendedMap | undefined;
+
+  // Track active awareness layers for cleanup
+  const activeUserIds = new Set<string>();
 
   const handleClose = () => {
     fullscreenMapStore.hideFullscreenMap();
@@ -89,6 +105,67 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
               west: initialBounds.getWest()
             });
           }
+
+          // Listen for awareness changes from other users viewing fullscreen
+          const provider = collaboration.state().provider;
+          if (provider) {
+            const currentDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
+
+            const updateAwarenessLayers = () => {
+              if (!map || !map.isStyleLoaded()) return;
+
+              const states = Array.from(provider.awareness.getStates().entries());
+              const localClientId = provider.awareness.clientID;
+              const currentViewers = new Set<string>();
+
+              states.forEach(([clientId, awareState]: [number, any]) => {
+                // Skip local user
+                if (clientId === localClientId) return;
+
+                // Only show users viewing the same map node in fullscreen
+                if (!awareState.fullscreenMap?.isViewing) return;
+                if (awareState.fullscreenMap.mapNodePosition !== currentDocPos) return;
+
+                const userId = String(clientId);
+                const userName = awareState.user?.name || 'Anonymous';
+                const userColor = awareState.user?.color || '#3B82F6';
+                const bounds = awareState.fullscreenMap.bounds;
+
+                currentViewers.add(userId);
+
+                if (hasAwarenessLayer(map!, userId)) {
+                  updateAwarenessLayer(map!, userId, bounds, userColor, userName);
+                } else {
+                  addAwarenessLayer(map!, userId, bounds, userColor, userName);
+                  activeUserIds.add(userId);
+                }
+              });
+
+              // Remove layers for users who stopped viewing
+              activeUserIds.forEach(userId => {
+                if (!currentViewers.has(userId)) {
+                  removeAwarenessLayer(map!, userId);
+                  activeUserIds.delete(userId);
+                }
+              });
+            };
+
+            provider.awareness.on('change', updateAwarenessLayers);
+            updateAwarenessLayers(); // Initial check
+
+            // Store cleanup function on map
+            map!._awarenessCleanup = () => {
+              provider.awareness.off('change', updateAwarenessLayers);
+              activeUserIds.forEach(userId => {
+                if (map) {
+                  removeAwarenessLayer(map, userId);
+                }
+              });
+              activeUserIds.clear();
+            };
+
+            console.log('[FullscreenMap] Awareness listener attached for docPos:', currentDocPos);
+          }
         });
 
         // Update awareness when map view changes (pan/zoom)
@@ -113,6 +190,10 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
 
     if (!state.isVisible && map) {
       console.log('[FullscreenMap] Cleaning up map');
+      // Clean up awareness listener first
+      if (map._awarenessCleanup) {
+        map._awarenessCleanup();
+      }
       map.remove();
       map = undefined;
     }
@@ -120,6 +201,10 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
 
   onCleanup(() => {
     if (map) {
+      // Clean up awareness listener first
+      if (map._awarenessCleanup) {
+        map._awarenessCleanup();
+      }
       map.remove();
     }
   });
