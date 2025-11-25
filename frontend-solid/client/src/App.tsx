@@ -5,10 +5,12 @@ import { Header } from './components/UI/Header';
 import { FullscreenMap } from './components/Map/FullscreenMap';
 import { MapViewerOverlay } from './components/Map/MapViewerOverlay';
 import { InvitationModal } from './components/UI/InvitationModal';
+import { AgentOverlay } from './components/Agent/AgentOverlay';
 import { getDocumentStore } from './stores/document';
 import { getCollaborationStore } from './stores/collaboration';
 import { getLocationsStore } from './stores/locations';
 import { getFullscreenMapStore } from './stores/fullscreenMap';
+import { useAgentMode } from './hooks/useAgentMode';
 import styles from './styles/app.module.scss';
 
 // Layout component for document view - keeps editor mounted
@@ -18,6 +20,7 @@ export const DocumentLayout: Component = () => {
   const collaboration = getCollaborationStore();
   const locationsStore = getLocationsStore();
   const fullscreenMapStore = getFullscreenMapStore();
+  const agentMode = useAgentMode();
   let lastDocId: string | null = null;
   let lastMapId: string | null | undefined = undefined;
 
@@ -109,6 +112,11 @@ export const DocumentLayout: Component = () => {
 
       {/* Global invitation modal */}
       <InvitationModal />
+
+      {/* Agent mode overlay - shows when ?agent=true */}
+      <Show when={agentMode.isAgent()}>
+        <AgentOverlay agentId={agentMode.agentId()} state={agentMode.state()} />
+      </Show>
     </>
   );
 };

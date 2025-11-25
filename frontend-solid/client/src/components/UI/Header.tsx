@@ -31,6 +31,17 @@ export const Header: Component<HeaderProps> = (props) => {
     return collaboration.state().providerType === 'websocket' ? 'WebSocket' : 'WebRTC';
   };
 
+  const handleAddAgent = () => {
+    const docId = documentStore.currentDocId();
+    if (!docId) return;
+
+    const agentId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const agentUrl = `/${docId}?agent=true&agentId=${agentId}`;
+
+    console.log('[Header] Spawning agent:', agentId, 'for document:', docId);
+    window.open(agentUrl, agentId, 'width=800,height=600');
+  };
+
   return (
     <header class={styles.header}>
       <div class={styles.headerLeft}>
@@ -55,6 +66,15 @@ export const Header: Component<HeaderProps> = (props) => {
             title={`Switch to ${collaboration.state().providerType === 'websocket' ? 'WebRTC' : 'WebSocket'}`}
           >
             {getProviderIcon()} {getProviderLabel()}
+          </button>
+        </Show>
+        <Show when={documentStore.currentDocId()}>
+          <button
+            class={styles.addAgentBtn}
+            onClick={handleAddAgent}
+            title="Add an AI agent to this document"
+          >
+            🤖 Add Agent
           </button>
         </Show>
       </div>
