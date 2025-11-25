@@ -51,7 +51,9 @@ export const customSchema = new Schema({
   nodes: addListNodes(schema.spec.nodes, 'paragraph block*', 'block')
     .addToEnd('map', {
       attrs: {
-        height: { default: 400 }
+        height: { default: 400 },
+        scopeMode: { default: 'section' },  // 'section' | 'all'
+        scopeHeadingLevels: { default: [1, 2] }  // Which heading levels create boundaries
       },
       group: 'block',
       atom: true,  // Atomic (non-editable unit)
@@ -59,8 +61,19 @@ export const customSchema = new Schema({
         tag: 'div.prosemirror-map',
         getAttrs(dom) {
           if (!(dom instanceof HTMLElement)) return false;
+          const scopeHeadingLevelsStr = dom.getAttribute('data-scope-heading-levels');
+          let scopeHeadingLevels = [1, 2];
+          if (scopeHeadingLevelsStr) {
+            try {
+              scopeHeadingLevels = JSON.parse(scopeHeadingLevelsStr);
+            } catch (e) {
+              console.error('Failed to parse scopeHeadingLevels:', e);
+            }
+          }
           return {
-            height: parseInt(dom.getAttribute('data-height') || '400', 10)
+            height: parseInt(dom.getAttribute('data-height') || '400', 10),
+            scopeMode: dom.getAttribute('data-scope-mode') || 'section',
+            scopeHeadingLevels
           };
         }
       }],
@@ -68,6 +81,8 @@ export const customSchema = new Schema({
         return ['div', {
           class: 'prosemirror-map',
           'data-height': node.attrs.height,
+          'data-scope-mode': node.attrs.scopeMode,
+          'data-scope-heading-levels': JSON.stringify(node.attrs.scopeHeadingLevels),
           style: `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative;`
         }, ['div', {
           style: 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;'

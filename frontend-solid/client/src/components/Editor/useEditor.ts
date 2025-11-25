@@ -3,7 +3,7 @@ import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { history, undo, redo, undoDepth, redoDepth } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
-import { baseKeymap } from 'prosemirror-commands';
+import { baseKeymap, setBlockType } from 'prosemirror-commands';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import type * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
@@ -149,11 +149,14 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     const { schema, tr } = state;
 
     const mapNode = schema.nodes.map.create({ height: 400 });
+    const paragraphNode = schema.nodes.paragraph.create();
     const insertPos = state.doc.content.size;
-    const transaction = tr.insert(insertPos, mapNode);
+
+    // Insert both map and a new paragraph after it
+    const transaction = tr.insert(insertPos, [mapNode, paragraphNode]);
 
     view.dispatch(transaction);
-    console.log('[Editor] Inserted map at position', insertPos);
+    console.log('[Editor] Inserted map and paragraph at position', insertPos);
   }
 
   // Execute undo
@@ -244,6 +247,21 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     }
   }
 
+  // Set heading level for current selection/block
+  function applyHeading(level: number) {
+    const view = editorView();
+    if (!view) return;
+
+    const { state } = view;
+    const { schema } = state;
+
+    // Use setBlockType command to convert current block to heading
+    const command = setBlockType(schema.nodes.heading, { level });
+    command(state, view.dispatch);
+
+    console.log('[Editor] Applied heading level', level);
+  }
+
   return {
     editorView,
     canUndo,
@@ -253,6 +271,7 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     insertMap,
     executeUndo,
     executeRedo,
-    addGeoMarkToSelection
+    addGeoMarkToSelection,
+    applyHeading
   };
 }

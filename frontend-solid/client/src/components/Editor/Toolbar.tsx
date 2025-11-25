@@ -6,11 +6,39 @@ export interface ToolbarProps {
   isAddingGeoMark: Accessor<boolean>;
   onAddGeoMark: () => Promise<void>;
   onInsertMap: () => void;
+  onApplyHeading: (level: number) => void;
 }
 
 export const Toolbar: Component<ToolbarProps> = (props) => {
   return (
     <div class={styles.toolbar}>
+      {/* Heading buttons */}
+      <div class={styles.headingGroup}>
+        <button
+          class={styles.headingButton}
+          onClick={() => props.onApplyHeading(1)}
+          title="Convert to Heading 1"
+        >
+          H1
+        </button>
+        <button
+          class={styles.headingButton}
+          onClick={() => props.onApplyHeading(2)}
+          title="Convert to Heading 2"
+        >
+          H2
+        </button>
+        <button
+          class={styles.headingButton}
+          onClick={() => props.onApplyHeading(3)}
+          title="Convert to Heading 3"
+        >
+          H3
+        </button>
+      </div>
+
+      <div class={styles.divider} />
+
       <button
         class={styles.button}
         classList={{

@@ -33,6 +33,59 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       .join('|');
   };
 
+  /**
+   * Find section boundaries for a map node.
+   * A section is content between:
+   * - Document start or a heading (of specified levels) or a map
+   * - A heading (of specified levels), map, or document end
+   */
+  const findSectionBoundaries = (mapPos: number): { sectionStart: number; sectionEnd: number } => {
+    const doc = view.state.doc;
+    const scopeMode = node.attrs.scopeMode;
+    const scopeHeadingLevels: number[] = node.attrs.scopeHeadingLevels || [1, 2];
+
+    // If scopeMode is 'all', return full document range
+    if (scopeMode === 'all') {
+      return { sectionStart: 0, sectionEnd: doc.content.size };
+    }
+
+    let sectionStart = 0;  // Default to document start
+    let sectionEnd = mapPos;  // Default to map position
+    let foundTarget = false;
+
+    doc.descendants((childNode, pos) => {
+      // Skip if we've already found the section end
+      if (foundTarget && sectionEnd !== mapPos) {
+        return false;  // Stop traversal
+      }
+
+      const nodeEnd = pos + childNode.nodeSize;
+
+      // Check if this is a section boundary
+      const isBoundary =
+        (childNode.type.name === 'heading' && scopeHeadingLevels.includes(childNode.attrs.level)) ||
+        childNode.type.name === 'map';
+
+      if (pos < mapPos && isBoundary) {
+        // This boundary is before our target map - update section start
+        sectionStart = nodeEnd;
+      } else if (pos === mapPos) {
+        // Found our target map
+        foundTarget = true;
+        sectionEnd = pos;  // Section ends at this map
+      } else if (pos > mapPos && isBoundary && foundTarget) {
+        // Found boundary after target - this would be our end (but we already set it to mapPos)
+        // This case is for future enhancement where maps might not be boundaries
+        return false;  // Stop traversal
+      }
+
+      return true;  // Continue traversal
+    });
+
+    console.log('[MapNodeView] Section boundaries:', { sectionStart, sectionEnd, mapPos, scopeMode, scopeHeadingLevels });
+    return { sectionStart, sectionEnd };
+  };
+
   // Extract locations from document
   const extractLocations = () => {
     const locations: Array<{
@@ -44,13 +97,24 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       colorIndex: number;
     }> = [];
 
-    view.state.doc.descendants((node) => {
-      if (node.isText && node.marks.length > 0) {
-        for (const mark of node.marks) {
+    // Get the position of this map node
+    const mapPos = getPos();
+    if (mapPos === undefined) {
+      console.warn('[MapNodeView] Could not determine map position');
+      return locations;
+    }
+
+    // Find section boundaries
+    const { sectionStart, sectionEnd } = findSectionBoundaries(mapPos);
+
+    // Extract locations only within the section boundaries
+    view.state.doc.nodesBetween(sectionStart, sectionEnd, (childNode) => {
+      if (childNode.isText && childNode.marks.length > 0) {
+        for (const mark of childNode.marks) {
           if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
             locations.push({
               geoId: mark.attrs.geoId,
-              displayText: mark.attrs.displayText || node.text || '',
+              displayText: mark.attrs.displayText || childNode.text || '',
               placeName: mark.attrs.placeName,
               lat: parseFloat(mark.attrs.lat),
               lng: parseFloat(mark.attrs.lng),

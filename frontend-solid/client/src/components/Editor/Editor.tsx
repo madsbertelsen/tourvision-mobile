@@ -43,6 +43,7 @@ export const Editor: Component = () => {
         isAddingGeoMark={editor.isAddingGeoMark}
         onAddGeoMark={editor.addGeoMarkToSelection}
         onInsertMap={editor.insertMap}
+        onApplyHeading={editor.applyHeading}
       />
       <div ref={editorContainer} class={styles.editor} />
     </div>
