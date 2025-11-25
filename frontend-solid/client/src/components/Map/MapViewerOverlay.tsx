@@ -11,12 +11,7 @@ import {
 interface AwarenessState {
   fullscreenMap?: {
     isViewing: boolean;
-    bounds: {
-      north: number;
-      south: number;
-      east: number;
-      west: number;
-    };
+    corners: Array<[number, number]>;  // 4 corner coordinates [lng, lat]
     mapNodePosition: number;
     timestamp: number;
   };
@@ -76,6 +71,12 @@ export const MapViewerOverlay: Component = () => {
         const userName = user.name || 'Anonymous';
         const userColor = user.color || '#3B82F6';
 
+        // Skip if no valid corners data
+        if (!fullscreenMap.corners || fullscreenMap.corners.length !== 4) {
+          console.warn('[MapViewerOverlay] Invalid corners data for user:', userId);
+          return;
+        }
+
         // Track this viewer for this map
         if (!currentViewersPerMap.has(blockMap)) {
           currentViewersPerMap.set(blockMap, new Set());
@@ -84,15 +85,15 @@ export const MapViewerOverlay: Component = () => {
 
         // Add or update awareness layer
         if (hasAwarenessLayer(blockMap, userId)) {
-          updateAwarenessLayer(blockMap, userId, fullscreenMap.bounds, userColor, userName);
+          updateAwarenessLayer(blockMap, userId, fullscreenMap.corners, userColor, userName);
         } else {
-          addAwarenessLayer(blockMap, userId, fullscreenMap.bounds, userColor, userName);
+          addAwarenessLayer(blockMap, userId, fullscreenMap.corners, userColor, userName);
           getActiveLayersForMap(blockMap).add(userId);
         }
 
         console.log('[MapViewerOverlay] Updated GeoJSON awareness layer:', {
           user: userName,
-          bounds: fullscreenMap.bounds
+          corners: fullscreenMap.corners
         });
       });
 

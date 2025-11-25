@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js';
 import type mapboxgl from 'mapbox-gl';
 import { getCollaborationStore } from './collaboration';
+import { getViewportCorners, type ViewportCorners } from '../lib/mapAwarenessLayers';
 
 interface FullscreenMapState {
   isVisible: boolean;
@@ -40,7 +41,6 @@ function createFullscreenMapStore() {
     // Get center and zoom from block map
     const center = blockMap.getCenter();
     const zoom = blockMap.getZoom();
-    const bounds = blockMap.getBounds();
 
     // Get block map position in viewport
     const blockMapRect = mapElement.getBoundingClientRect();
@@ -54,20 +54,17 @@ function createFullscreenMapStore() {
     // Update awareness state for other users
     const collaboration = getCollaborationStore();
     const provider = collaboration.state().provider;
-    if (provider && bounds) {
+    if (provider) {
       const docPos = parseInt(mapElement.dataset.docPos || '0');
+      // Get viewport corners (accounts for pitch/bearing)
+      const corners = getViewportCorners(blockMap);
       provider.awareness.setLocalStateField('fullscreenMap', {
         isViewing: true,
-        bounds: {
-          north: bounds.getNorth(),
-          south: bounds.getSouth(),
-          east: bounds.getEast(),
-          west: bounds.getWest()
-        },
+        corners,
         mapNodePosition: docPos,
         timestamp: Date.now()
       });
-      console.log('[FullscreenMap] Awareness updated:', { docPos, bounds: bounds.toArray() });
+      console.log('[FullscreenMap] Awareness updated:', { docPos, corners });
     }
 
     // Update state with center, zoom and offset
@@ -100,7 +97,7 @@ function createFullscreenMapStore() {
     });
   }
 
-  function updateAwareness(bounds: { north: number; south: number; east: number; west: number }) {
+  function updateAwareness(corners: ViewportCorners) {
     const currentState = state();
     if (!currentState.isVisible || !currentState.blockMapElement) return;
 
@@ -110,11 +107,11 @@ function createFullscreenMapStore() {
       const docPos = parseInt(currentState.blockMapElement.dataset?.docPos || '0');
       provider.awareness.setLocalStateField('fullscreenMap', {
         isViewing: true,
-        bounds,
+        corners,
         mapNodePosition: docPos,
         timestamp: Date.now()
       });
-      console.log('[FullscreenMap] Awareness bounds updated:', bounds);
+      console.log('[FullscreenMap] Awareness corners updated:', corners);
     }
   }
 

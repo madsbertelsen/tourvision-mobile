@@ -1,28 +1,23 @@
 import mapboxgl from 'mapbox-gl';
 
-interface AwarenessBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-}
+// Viewport corners: array of 4 [lng, lat] coordinates
+// Order: top-left, top-right, bottom-right, bottom-left
+export type ViewportCorners = Array<[number, number]>;
 
-// Store current bounds and animation state per user
-const currentBoundsPerUser = new Map<string, AwarenessBounds>();
+// Store current corners and animation state per user
+const currentCornersPerUser = new Map<string, ViewportCorners>();
 const animationFramesPerUser = new Map<string, number>();
 
-// Lerp function for smooth interpolation
-function lerpBounds(
-  from: AwarenessBounds,
-  to: AwarenessBounds,
+// Lerp function for smooth interpolation of corners
+function lerpCorners(
+  from: ViewportCorners,
+  to: ViewportCorners,
   t: number
-): AwarenessBounds {
-  return {
-    north: from.north + (to.north - from.north) * t,
-    south: from.south + (to.south - from.south) * t,
-    east: from.east + (to.east - from.east) * t,
-    west: from.west + (to.west - from.west) * t
-  };
+): ViewportCorners {
+  return from.map((fromCorner, i) => [
+    fromCorner[0] + (to[i][0] - fromCorner[0]) * t,
+    fromCorner[1] + (to[i][1] - fromCorner[1]) * t
+  ]) as ViewportCorners;
 }
 
 // Easing function for smooth animation
@@ -30,24 +25,22 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-// Convert bounds to GeoJSON Polygon feature
-function boundsToGeoJSON(
-  bounds: AwarenessBounds,
+// Convert viewport corners to GeoJSON Polygon feature
+function cornersToGeoJSON(
+  corners: ViewportCorners,
   userName: string,
   userColor: string
 ): GeoJSON.Feature<GeoJSON.Polygon> {
-  const { north, south, east, west } = bounds;
-
   return {
     type: 'Feature',
     geometry: {
       type: 'Polygon',
       coordinates: [[
-        [west, north],
-        [east, north],
-        [east, south],
-        [west, south],
-        [west, north]  // close the ring
+        corners[0],  // top-left
+        corners[1],  // top-right
+        corners[2],  // bottom-right
+        corners[3],  // bottom-left
+        corners[0]   // close the ring
       ]]
     },
     properties: {
@@ -71,7 +64,7 @@ function getLayerIds(userId: string) {
 export function addAwarenessLayer(
   map: mapboxgl.Map,
   userId: string,
-  bounds: AwarenessBounds,
+  corners: ViewportCorners,
   color: string,
   userName: string
 ): void {
@@ -86,7 +79,7 @@ export function addAwarenessLayer(
   removeAwarenessLayer(map, userId);
 
   // Create GeoJSON feature
-  const feature = boundsToGeoJSON(bounds, userName, color);
+  const feature = cornersToGeoJSON(corners, userName, color);
 
   // Add source
   map.addSource(ids.source, {
@@ -136,17 +129,17 @@ export function addAwarenessLayer(
     }
   });
 
-  // Track initial bounds for animation
-  currentBoundsPerUser.set(userId, bounds);
+  // Track initial corners for animation
+  currentCornersPerUser.set(userId, corners);
 
   console.log('[MapAwarenessLayers] Added awareness layer for user:', userId, userName);
 }
 
-// Animate bounds update
-function animateBoundsUpdate(
+// Animate corners update
+function animateCornersUpdate(
   map: mapboxgl.Map,
   userId: string,
-  targetBounds: AwarenessBounds,
+  targetCorners: ViewportCorners,
   color: string,
   userName: string,
   duration: number = 300
@@ -161,7 +154,7 @@ function animateBoundsUpdate(
     cancelAnimationFrame(existingFrame);
   }
 
-  const startBounds = currentBoundsPerUser.get(userId) || targetBounds;
+  const startCorners = currentCornersPerUser.get(userId) || targetCorners;
   const startTime = performance.now();
 
   function animate() {
@@ -169,15 +162,15 @@ function animateBoundsUpdate(
     const progress = Math.min(elapsed / duration, 1);
     const easedProgress = easeOutCubic(progress);
 
-    const interpolatedBounds = lerpBounds(startBounds, targetBounds, easedProgress);
-    const feature = boundsToGeoJSON(interpolatedBounds, userName, color);
+    const interpolatedCorners = lerpCorners(startCorners, targetCorners, easedProgress);
+    const feature = cornersToGeoJSON(interpolatedCorners, userName, color);
     source.setData(feature);
 
     if (progress < 1) {
       const frameId = requestAnimationFrame(animate);
       animationFramesPerUser.set(userId, frameId);
     } else {
-      currentBoundsPerUser.set(userId, targetBounds);
+      currentCornersPerUser.set(userId, targetCorners);
       animationFramesPerUser.delete(userId);
     }
   }
@@ -185,11 +178,11 @@ function animateBoundsUpdate(
   animate();
 }
 
-// Update existing awareness layer bounds
+// Update existing awareness layer with new corners
 export function updateAwarenessLayer(
   map: mapboxgl.Map,
   userId: string,
-  bounds: AwarenessBounds,
+  corners: ViewportCorners,
   color: string,
   userName: string
 ): void {
@@ -202,13 +195,13 @@ export function updateAwarenessLayer(
   const source = map.getSource(ids.source) as mapboxgl.GeoJSONSource | undefined;
 
   if (source) {
-    // Animate to new bounds
-    animateBoundsUpdate(map, userId, bounds, color, userName);
+    // Animate to new corners
+    animateCornersUpdate(map, userId, corners, color, userName);
     console.log('[MapAwarenessLayers] Animating awareness layer for user:', userId);
   } else {
     // Source doesn't exist, create it (no animation for initial appearance)
-    currentBoundsPerUser.set(userId, bounds);
-    addAwarenessLayer(map, userId, bounds, color, userName);
+    currentCornersPerUser.set(userId, corners);
+    addAwarenessLayer(map, userId, corners, color, userName);
   }
 }
 
@@ -220,7 +213,7 @@ export function removeAwarenessLayer(map: mapboxgl.Map, userId: string): void {
     cancelAnimationFrame(frameId);
     animationFramesPerUser.delete(userId);
   }
-  currentBoundsPerUser.delete(userId);
+  currentCornersPerUser.delete(userId);
 
   // Check if map style is loaded before manipulating layers
   if (!map.isStyleLoaded()) {
@@ -285,4 +278,24 @@ export function hasAwarenessLayer(map: mapboxgl.Map, userId: string): boolean {
   }
   const ids = getLayerIds(userId);
   return !!map.getSource(ids.source);
+}
+
+// Get viewport corners from a map instance
+// Accounts for pitch and bearing by unprojecting screen corners
+export function getViewportCorners(map: mapboxgl.Map): ViewportCorners {
+  const canvas = map.getCanvas();
+  const width = canvas.width / window.devicePixelRatio;
+  const height = canvas.height / window.devicePixelRatio;
+
+  const topLeft = map.unproject([0, 0]);
+  const topRight = map.unproject([width, 0]);
+  const bottomRight = map.unproject([width, height]);
+  const bottomLeft = map.unproject([0, height]);
+
+  return [
+    [topLeft.lng, topLeft.lat],
+    [topRight.lng, topRight.lat],
+    [bottomRight.lng, bottomRight.lat],
+    [bottomLeft.lng, bottomLeft.lat]
+  ];
 }

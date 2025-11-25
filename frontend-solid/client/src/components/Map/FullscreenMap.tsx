@@ -8,7 +8,8 @@ import {
   addAwarenessLayer,
   updateAwarenessLayer,
   removeAwarenessLayer,
-  hasAwarenessLayer
+  hasAwarenessLayer,
+  getViewportCorners
 } from '../../lib/mapAwarenessLayers';
 import styles from './FullscreenMap.module.scss';
 
@@ -95,16 +96,9 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             addMarkersToMap(map!, props.locations);
           }
 
-          // Update awareness on initial load
-          const initialBounds = map!.getBounds();
-          if (initialBounds) {
-            fullscreenMapStore.updateAwareness({
-              north: initialBounds.getNorth(),
-              south: initialBounds.getSouth(),
-              east: initialBounds.getEast(),
-              west: initialBounds.getWest()
-            });
-          }
+          // Update awareness on initial load (using viewport corners for pitch/bearing support)
+          const initialCorners = getViewportCorners(map!);
+          fullscreenMapStore.updateAwareness(initialCorners);
 
           // Listen for awareness changes from other users viewing fullscreen
           const provider = collaboration.state().provider;
@@ -129,14 +123,17 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 const userId = String(clientId);
                 const userName = awareState.user?.name || 'Anonymous';
                 const userColor = awareState.user?.color || '#3B82F6';
-                const bounds = awareState.fullscreenMap.bounds;
+                const corners = awareState.fullscreenMap.corners;
+
+                // Skip if no corners data
+                if (!corners || corners.length !== 4) return;
 
                 currentViewers.add(userId);
 
                 if (hasAwarenessLayer(map!, userId)) {
-                  updateAwarenessLayer(map!, userId, bounds, userColor, userName);
+                  updateAwarenessLayer(map!, userId, corners, userColor, userName);
                 } else {
-                  addAwarenessLayer(map!, userId, bounds, userColor, userName);
+                  addAwarenessLayer(map!, userId, corners, userColor, userName);
                   activeUserIds.add(userId);
                 }
               });
@@ -168,17 +165,10 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
           }
         });
 
-        // Update awareness when map view changes (pan/zoom)
+        // Update awareness when map view changes (pan/zoom/tilt)
         map.on('moveend', () => {
-          const bounds = map!.getBounds();
-          if (bounds) {
-            fullscreenMapStore.updateAwareness({
-              north: bounds.getNorth(),
-              south: bounds.getSouth(),
-              east: bounds.getEast(),
-              west: bounds.getWest()
-            });
-          }
+          const corners = getViewportCorners(map!);
+          fullscreenMapStore.updateAwareness(corners);
         });
       });
     }
