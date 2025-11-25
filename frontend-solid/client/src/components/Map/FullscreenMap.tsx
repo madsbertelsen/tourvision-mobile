@@ -17,6 +17,17 @@ import {
 } from '../../lib/mapAwarenessLayers';
 import styles from './FullscreenMap.module.scss';
 
+// Available map styles
+const MAP_STYLES = [
+  { id: 'light', label: 'Light', url: 'mapbox://styles/mapbox/light-v11' },
+  { id: 'dark', label: 'Dark', url: 'mapbox://styles/mapbox/dark-v11' },
+  { id: 'streets', label: 'Streets', url: 'mapbox://styles/mapbox/streets-v12' },
+  { id: 'satellite', label: 'Satellite', url: 'mapbox://styles/mapbox/satellite-streets-v12' },
+  { id: 'outdoors', label: 'Outdoors', url: 'mapbox://styles/mapbox/outdoors-v12' },
+] as const;
+
+type MapStyleId = typeof MAP_STYLES[number]['id'];
+
 // TypeScript declaration for global map callbacks
 declare global {
   interface Window {
@@ -55,6 +66,9 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   const [isAddingMarker, setIsAddingMarker] = createSignal(false);
   const [pendingMarker, setPendingMarker] = createSignal<mapboxgl.Marker | null>(null);
 
+  // Track current map style
+  const [currentStyle, setCurrentStyle] = createSignal<MapStyleId>('light');
+
   // Track current markers for updates
   let currentMarkers: mapboxgl.Marker[] = [];
 
@@ -70,6 +84,25 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       setPendingMarker(null);
     }
     fullscreenMapStore.hideFullscreenMap();
+  };
+
+  // Handle map style change
+  const handleStyleChange = (styleId: MapStyleId) => {
+    if (!map || styleId === currentStyle()) return;
+
+    const style = MAP_STYLES.find(s => s.id === styleId);
+    if (!style) return;
+
+    setCurrentStyle(styleId);
+    map.setStyle(style.url);
+
+    // Re-add markers after style loads (setStyle removes all layers)
+    map.once('style.load', () => {
+      if (updateMarkersRef) {
+        const locationsStore = getLocationsStore();
+        updateMarkersRef(locationsStore.state.locations);
+      }
+    });
   };
 
   // Handle double-click to add marker
@@ -542,6 +575,20 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             <span>Adding marker...</span>
           </div>
         </Show>
+        {/* Map style selector */}
+        <div class={styles.styleSelector}>
+          <For each={MAP_STYLES}>
+            {(style) => (
+              <button
+                class={`${styles.styleBtn} ${currentStyle() === style.id ? styles.active : ''}`}
+                onClick={() => handleStyleChange(style.id)}
+                title={style.label}
+              >
+                {style.label}
+              </button>
+            )}
+          </For>
+        </div>
         <div class={styles.hint}>
           Double-click to add a marker
         </div>

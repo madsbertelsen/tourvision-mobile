@@ -150,6 +150,41 @@
   }
 }
 
+.styleSelector {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 10003;
+  display: flex;
+  gap: 4px;
+  background: white;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.styleBtn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  &.active {
+    background: #3B82F6;
+    color: white;
+  }
+}
+
 .hint {
   position: fixed;
   bottom: 20px;
