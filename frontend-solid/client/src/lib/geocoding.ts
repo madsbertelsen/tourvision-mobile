@@ -40,3 +40,47 @@ export async function geocodeLocation(locationName: string): Promise<GeocodingRe
     return null;
   }
 }
+
+// Reverse geocode coordinates to get place name
+export async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult | null> {
+  try {
+    console.log(`[Geocoding] Reverse geocoding ${lat}, ${lng}...`);
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`,
+      {
+        headers: {
+          'User-Agent': 'TourVision-Solid/1.0'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.error('[Geocoding] Nominatim API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data && data.display_name) {
+      // Extract a shorter name from the address
+      const shortName = data.name ||
+        data.address?.road ||
+        data.address?.neighbourhood ||
+        data.address?.suburb ||
+        data.address?.city ||
+        data.display_name.split(',')[0];
+
+      return {
+        lat,
+        lng,
+        displayName: shortName
+      };
+    }
+
+    console.log(`[Geocoding] No results found for ${lat}, ${lng}`);
+    return null;
+  } catch (error) {
+    console.error('[Geocoding] Error:', error);
+    return null;
+  }
+}

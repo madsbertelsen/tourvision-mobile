@@ -3,8 +3,10 @@ import mapboxgl from 'mapbox-gl';
 import { getFullscreenMapStore, type CameraState } from '../../stores/fullscreenMap';
 import { getCollaborationStore } from '../../stores/collaboration';
 import { getFollowModeStore } from '../../stores/followMode';
-import type { Location } from '../../stores/locations';
-import { addMarkersToMap } from '../../lib/mapbox';
+import { getEditorStore } from '../../stores/editor';
+import { getLocationsStore, type Location } from '../../stores/locations';
+import { reverseGeocode } from '../../lib/geocoding';
+import { COLORS } from '../../lib/prosemirror-schema';
 import {
   addAwarenessLayer,
   updateAwarenessLayer,
@@ -14,6 +16,13 @@ import {
   getLayerIds
 } from '../../lib/mapAwarenessLayers';
 import styles from './FullscreenMap.module.scss';
+
+// TypeScript declaration for global map callbacks
+declare global {
+  interface Window {
+    mapRenderCallbacks?: Array<() => void>;
+  }
+}
 
 interface FullscreenMapProps {
   locations: Location[];
@@ -42,8 +51,87 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   // Track users who are following me
   const [followers, setFollowers] = createSignal<Follower[]>([]);
 
+  // Track marker creation state
+  const [isAddingMarker, setIsAddingMarker] = createSignal(false);
+  const [pendingMarker, setPendingMarker] = createSignal<mapboxgl.Marker | null>(null);
+
+  // Track current markers for updates
+  let currentMarkers: mapboxgl.Marker[] = [];
+
+  // Store the updateMarkers function so we can call it from effects
+  let updateMarkersRef: ((locations: Location[]) => void) | null = null;
+  let mapRenderCallback: (() => void) | null = null;
+
   const handleClose = () => {
+    // Remove pending marker if exists
+    const marker = pendingMarker();
+    if (marker) {
+      marker.remove();
+      setPendingMarker(null);
+    }
     fullscreenMapStore.hideFullscreenMap();
+  };
+
+  // Handle double-click to add marker
+  const handleMapDoubleClick = async (e: mapboxgl.MapMouseEvent) => {
+    if (isAddingMarker()) return;
+
+    const state = fullscreenMapStore.state();
+    const mapDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
+
+    if (!mapDocPos) {
+      console.error('[FullscreenMap] No document position for map');
+      return;
+    }
+
+    const { lng, lat } = e.lngLat;
+    console.log('[FullscreenMap] Double-click at:', lng, lat);
+
+    setIsAddingMarker(true);
+
+    // Add a temporary marker while processing
+    const tempEl = document.createElement('div');
+    tempEl.style.cssText = `
+      width: 32px; height: 32px; border-radius: 50%;
+      background-color: #9CA3AF; border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      animation: pulse 1s infinite;
+    `;
+    const inner = document.createElement('div');
+    inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+    tempEl.appendChild(inner);
+
+    const tempMarker = new mapboxgl.Marker(tempEl)
+      .setLngLat([lng, lat])
+      .addTo(map!);
+    setPendingMarker(tempMarker);
+
+    try {
+      // Reverse geocode to get place name
+      const result = await reverseGeocode(lat, lng);
+      const placeName = result?.displayName || `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
+      console.log('[FullscreenMap] Reverse geocode result:', placeName);
+
+      // Add geo-mark to document
+      const editorStore = getEditorStore();
+      const success = editorStore.addGeoMarkAtMapPosition(mapDocPos, lat, lng, placeName);
+
+      if (success) {
+        console.log('[FullscreenMap] Marker added successfully');
+        // The map will auto-update via the callback system
+      } else {
+        console.error('[FullscreenMap] Failed to add marker to document');
+      }
+    } catch (error) {
+      console.error('[FullscreenMap] Error adding marker:', error);
+    } finally {
+      // Remove temp marker (the real one will appear from document update)
+      tempMarker.remove();
+      setPendingMarker(null);
+      setIsAddingMarker(false);
+    }
   };
 
   // Initialize map when visible
@@ -102,10 +190,64 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         map.on('load', () => {
           console.log('[FullscreenMap] Map loaded');
 
-          // Add markers
-          if (props.locations.length > 0) {
-            addMarkersToMap(map!, props.locations);
+          // Function to update markers on the map
+          const updateMarkers = (locations: Location[]) => {
+            if (!map) return;
+
+            console.log('[FullscreenMap] Updating markers:', locations.length);
+
+            // Remove old markers
+            currentMarkers.forEach(marker => marker.remove());
+            currentMarkers = [];
+
+            // Add new markers
+            locations.forEach((location) => {
+              const bgColor = COLORS[location.colorIndex % COLORS.length];
+              const el = document.createElement('div');
+              el.style.cssText = `width: 32px; height: 32px; border-radius: 50%; background-color: ${bgColor}; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;`;
+
+              const inner = document.createElement('div');
+              inner.style.cssText = 'width: 12px; height: 12px; border-radius: 50%; background-color: white;';
+              el.appendChild(inner);
+
+              const marker = new mapboxgl.Marker(el)
+                .setLngLat([location.lng, location.lat])
+                .setPopup(new mapboxgl.Popup().setText(location.placeName))
+                .addTo(map!);
+
+              currentMarkers.push(marker);
+            });
+          };
+
+          // Store reference for external updates
+          updateMarkersRef = updateMarkers;
+
+          // Initial marker load from props
+          updateMarkers(props.locations);
+
+          // Register callback to update markers when document changes
+          const locationsStore = getLocationsStore();
+          mapRenderCallback = () => {
+            if (map && updateMarkersRef) {
+              const editorStore = getEditorStore();
+              const view = editorStore.editorView();
+              if (view) {
+                // Update the locations store first
+                locationsStore.updateLocations(view);
+                // Then update markers with the latest locations
+                console.log('[FullscreenMap] Document changed, updating markers');
+                updateMarkersRef(locationsStore.state.locations);
+              }
+            }
+          };
+
+          if (!window.mapRenderCallbacks) {
+            window.mapRenderCallbacks = [];
           }
+          window.mapRenderCallbacks.push(mapRenderCallback);
+
+          // Double-click to add marker
+          map!.on('dblclick', handleMapDoubleClick);
 
           // Update awareness on initial load (using viewport corners for pitch/bearing support)
           const initialCorners = getViewportCorners(map!);
@@ -120,10 +262,11 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
           // Listen for awareness changes from other users viewing fullscreen
           const provider = collaboration.state().provider;
           if (provider) {
-            const currentDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
-
             const updateAwarenessLayers = () => {
               if (!map || !map.isStyleLoaded()) return;
+
+              // Re-read docPos each time as it may have changed after document edits
+              const currentDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
 
               const states = Array.from(provider.awareness.getStates().entries());
               const localClientId = provider.awareness.clientID;
@@ -138,6 +281,24 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 if (awareState.fullscreenMap.mapNodePosition !== currentDocPos) return;
 
                 const userId = String(clientId);
+
+                // Skip rendering awareness layer in follow relationships:
+                // 1. If I'm following this user (their view is synced with mine)
+                // 2. If this user is following me (their view is just mirroring mine)
+                const currentFollowState = followModeStore.state();
+                const myClientId = String(localClientId);
+                const theyAreFollowingMe = awareState.following?.userId === myClientId;
+                const iAmFollowingThem = currentFollowState.isFollowing && currentFollowState.followingUserId === userId;
+
+                if (iAmFollowingThem || theyAreFollowingMe) {
+                  // If layer exists, remove it
+                  if (hasAwarenessLayer(map!, userId)) {
+                    removeAwarenessLayer(map!, userId);
+                    activeUserIds.delete(userId);
+                  }
+                  return;
+                }
+
                 const userName = awareState.user?.name || 'Anonymous';
                 const userColor = awareState.user?.color || '#3B82F6';
                 const corners = awareState.fullscreenMap.corners;
@@ -247,7 +408,7 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
               activeUserIds.clear();
             };
 
-            console.log('[FullscreenMap] Awareness listener attached for docPos:', currentDocPos);
+            console.log('[FullscreenMap] Awareness listener attached for docPos:', state.blockMapElement?.dataset?.docPos);
           }
         });
 
@@ -266,13 +427,39 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     }
   });
 
+  // Update markers when props.locations changes
+  createEffect(() => {
+    const locations = props.locations;
+    if (updateMarkersRef && map) {
+      console.log('[FullscreenMap] Props locations changed, updating markers:', locations.length);
+      updateMarkersRef(locations);
+    }
+  });
+
   // Cleanup map on close
   createEffect(() => {
     const state = fullscreenMapStore.state();
 
     if (!state.isVisible && map) {
       console.log('[FullscreenMap] Cleaning up map');
-      // Clean up awareness listener first
+
+      // Remove callback from global array by reference
+      if (window.mapRenderCallbacks && mapRenderCallback) {
+        const idx = window.mapRenderCallbacks.indexOf(mapRenderCallback);
+        if (idx !== -1) {
+          window.mapRenderCallbacks.splice(idx, 1);
+        }
+        mapRenderCallback = null;
+      }
+
+      // Remove markers
+      currentMarkers.forEach(marker => marker.remove());
+      currentMarkers = [];
+
+      // Clear update ref
+      updateMarkersRef = null;
+
+      // Clean up awareness listener
       if (map._awarenessCleanup) {
         map._awarenessCleanup();
       }
@@ -282,6 +469,19 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   });
 
   onCleanup(() => {
+    // Remove callback from global array by reference
+    if (window.mapRenderCallbacks && mapRenderCallback) {
+      const idx = window.mapRenderCallbacks.indexOf(mapRenderCallback);
+      if (idx !== -1) {
+        window.mapRenderCallbacks.splice(idx, 1);
+      }
+      mapRenderCallback = null;
+    }
+
+    // Remove markers
+    currentMarkers.forEach(marker => marker.remove());
+    updateMarkersRef = null;
+
     if (map) {
       // Clean up awareness listener first
       if (map._awarenessCleanup) {
@@ -324,6 +524,15 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             </For>
           </div>
         </Show>
+        <Show when={isAddingMarker()}>
+          <div class={styles.addingMarkerIndicator}>
+            <span class={styles.spinner}></span>
+            <span>Adding marker...</span>
+          </div>
+        </Show>
+        <div class={styles.hint}>
+          Double-click to add a marker
+        </div>
       </div>
     </Show>
   );

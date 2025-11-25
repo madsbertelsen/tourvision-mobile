@@ -355,7 +355,7 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
     window.mapRenderCallbacks = [];
   }
 
-  const callbackIndex = window.mapRenderCallbacks.length;
+  // Store reference to our callback for removal
   window.mapRenderCallbacks.push(checkAndUpdate);
 
   return {
@@ -365,14 +365,23 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
         return false;
       }
 
+      // Update document position (may have changed if content was inserted before this node)
+      const newPos = getPos();
+      if (newPos !== undefined) {
+        dom.dataset.docPos = String(newPos);
+      }
+
       // Re-render map when document updates
       renderMap();
       return true;
     },
     destroy() {
-      // Remove callback from global array
-      if (window.mapRenderCallbacks && window.mapRenderCallbacks[callbackIndex]) {
-        window.mapRenderCallbacks.splice(callbackIndex, 1);
+      // Remove callback from global array by reference
+      if (window.mapRenderCallbacks) {
+        const idx = window.mapRenderCallbacks.indexOf(checkAndUpdate);
+        if (idx !== -1) {
+          window.mapRenderCallbacks.splice(idx, 1);
+        }
       }
 
       // Clean up map

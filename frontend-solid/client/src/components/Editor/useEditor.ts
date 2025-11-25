@@ -10,6 +10,7 @@ import type { WebsocketProvider } from 'y-websocket';
 import { customSchema } from '../../lib/prosemirror-schema';
 import { geocodeLocation } from '../../lib/geocoding';
 import { createMapNodeView } from '../../lib/mapNodeView';
+import { getEditorStore } from '../../stores/editor';
 
 // Global counter for color cycling
 let geoMarkColorIndex = 0;
@@ -129,6 +130,11 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     });
 
     setEditorView(view);
+
+    // Register with editor store for external access (e.g., fullscreen map)
+    const editorStore = getEditorStore();
+    editorStore.setEditorView(view);
+
     console.log('[Editor] ProseMirror initialized');
   });
 
@@ -137,6 +143,10 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     if (view) {
       console.log('[Editor] Destroying ProseMirror');
       view.destroy();
+
+      // Clear editor store reference
+      const editorStore = getEditorStore();
+      editorStore.setEditorView(null);
     }
   });
 
