@@ -2,6 +2,7 @@ import { createSignal, createEffect, onCleanup } from 'solid-js';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { WebrtcProvider } from 'y-webrtc';
+import * as encoding from 'lib0/encoding';
 
 // User colors
 const USER_COLORS = ['#FFC0CB', '#FFD700', '#98FB98', '#87CEFA', '#FFA07A'];
@@ -145,11 +146,62 @@ export function createCollaborationStore(wsUrl: string, webrtcSignalingUrl: stri
     });
   }
 
+  // Send custom message to server (for agent spawn requests)
+  // Uses a separate WebSocket connection since WebRTC is P2P
+  function sendCustomMessage(message: any) {
+    const current = state();
+    const provider = current.provider;
+
+    // For WebSocket provider, we can send directly
+    if (provider && current.providerType === 'websocket') {
+      const ws = (provider as WebsocketProvider).ws;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, 100); // messageCustom = 100 (high number to avoid y-protocols conflicts)
+        encoding.writeVarString(encoder, JSON.stringify(message));
+        ws.send(encoding.toUint8Array(encoder));
+        console.log('[Collaboration] Sent custom message:', message.type);
+        return true;
+      }
+    }
+
+    // For WebRTC, we need to send via a separate WebSocket to the server
+    // Normalize the WebSocket URL - remove trailing /yjs if present to avoid duplication
+    const baseWsUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:8788').replace(/\/yjs\/?$/, '');
+    const docId = message.docId;
+    if (!docId) {
+      console.error('[Collaboration] Cannot send custom message without docId');
+      return false;
+    }
+
+    // Create temporary WebSocket connection to send the message
+    const tempWs = new WebSocket(`${baseWsUrl}/yjs/${docId}`);
+    tempWs.binaryType = 'arraybuffer';
+
+    tempWs.onopen = () => {
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, 100); // messageCustom = 100 (high number to avoid y-protocols conflicts)
+      encoding.writeVarString(encoder, JSON.stringify(message));
+      tempWs.send(encoding.toUint8Array(encoder));
+      console.log('[Collaboration] Sent custom message via temp WebSocket:', message.type);
+
+      // Close after a short delay
+      setTimeout(() => tempWs.close(), 500);
+    };
+
+    tempWs.onerror = (err) => {
+      console.error('[Collaboration] Error sending custom message:', err);
+    };
+
+    return true;
+  }
+
   return {
     state,
     initDocument,
     switchProvider,
-    destroy
+    destroy,
+    sendCustomMessage
   };
 }
 

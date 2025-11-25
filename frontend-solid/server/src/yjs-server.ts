@@ -78,9 +78,35 @@ function send(conn: WSConnection, message: Uint8Array) {
   }
 }
 
-// Message types
+// Message types (y-protocols uses 0=sync, 1=awareness, 2=auth, 3=queryAwareness)
 const messageSync = 0;
 const messageAwareness = 1;
+const messageCustom = 100; // Use high number to avoid y-protocols conflicts
+
+// Orchestrator connections (for receiving spawn_agent messages)
+const orchestratorConns = new Set<WebSocket>();
+
+// Register orchestrator connection
+export function registerOrchestrator(ws: WebSocket) {
+  orchestratorConns.add(ws);
+  console.log('[YJS Server] Orchestrator registered, total:', orchestratorConns.size);
+
+  ws.on('close', () => {
+    orchestratorConns.delete(ws);
+    console.log('[YJS Server] Orchestrator disconnected, total:', orchestratorConns.size);
+  });
+}
+
+// Broadcast custom message to orchestrators
+function broadcastToOrchestrators(message: any) {
+  const messageStr = JSON.stringify(message);
+  orchestratorConns.forEach((ws) => {
+    if (ws.readyState === wsReadyStateOpen) {
+      ws.send(messageStr);
+    }
+  });
+  console.log('[YJS Server] Broadcast to', orchestratorConns.size, 'orchestrators:', message.type);
+}
 
 // Handle incoming WebSocket message
 function messageListener(conn: WSConnection, message: Uint8Array) {
@@ -88,6 +114,8 @@ function messageListener(conn: WSConnection, message: Uint8Array) {
     const encoder = encoding.createEncoder();
     const decoder = decoding.createDecoder(message);
     const messageType = decoding.readVarUint(decoder);
+
+    console.log('[YJS Server] Received message type:', messageType);
 
     switch (messageType) {
       case messageSync:
@@ -106,6 +134,22 @@ function messageListener(conn: WSConnection, message: Uint8Array) {
           decoding.readVarUint8Array(decoder),
           conn
         );
+        break;
+
+      case messageCustom:
+        // Read custom message as JSON string
+        const customData = decoding.readVarString(decoder);
+        try {
+          const customMessage = JSON.parse(customData);
+          console.log('[YJS Server] Custom message received:', customMessage.type);
+
+          // Forward spawn_agent messages to orchestrators
+          if (customMessage.type === 'spawn_agent') {
+            broadcastToOrchestrators(customMessage);
+          }
+        } catch (e) {
+          console.error('[YJS Server] Failed to parse custom message:', e);
+        }
         break;
 
       default:
@@ -143,8 +187,21 @@ function closeConn(docId: string, conn: WSConnection) {
 export async function setupWSConnection(ws: WebSocket, docId: string) {
   console.log(`[YJS Server] New connection for document: ${docId}`);
 
+  // Buffer messages received before setup completes
+  const messageBuffer: Buffer[] = [];
+  let conn: WSConnection | null = null;
+
+  // Register message handler IMMEDIATELY to capture early messages
+  ws.on('message', (message: Buffer) => {
+    if (conn) {
+      messageListener(conn, new Uint8Array(message));
+    } else {
+      messageBuffer.push(message);
+    }
+  });
+
   const { doc, awareness, conns } = await getYDoc(docId);
-  const conn: WSConnection = { ws, doc, awareness };
+  conn = { ws, doc, awareness };
 
   conns.add(conn);
 
@@ -159,10 +216,10 @@ export async function setupWSConnection(ws: WebSocket, docId: string) {
     console.error(`[YJS Server] WebSocket error for ${docId}:`, error);
   });
 
-  // Handle messages
-  ws.on('message', (message: Buffer) => {
-    messageListener(conn, new Uint8Array(message));
-  });
+  // Process buffered messages now that conn is ready
+  for (const msg of messageBuffer) {
+    messageListener(conn, new Uint8Array(msg));
+  }
 
   // Send sync step 1
   const encoder = encoding.createEncoder();

@@ -1,4 +1,4 @@
-import { type Component, createSignal, For, onCleanup } from 'solid-js';
+import { type Component, createSignal, For, onCleanup, createEffect } from 'solid-js';
 import styles from './Orchestrator.module.scss';
 
 interface AgentTab {
@@ -11,8 +11,70 @@ interface AgentTab {
 
 export const Orchestrator: Component = () => {
   const [agentTabs, setAgentTabs] = createSignal<AgentTab[]>([]);
+  const [wsConnected, setWsConnected] = createSignal(false);
+  let ws: WebSocket | null = null;
 
-  // Listen for messages from agent tabs
+  // Connect to server WebSocket to receive spawn_agent messages
+  const connectToServer = () => {
+    // Use base WebSocket URL without /yjs path
+    const baseWsUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:8788').replace(/\/yjs\/?$/, '');
+    ws = new WebSocket(`${baseWsUrl}/orchestrator`);
+
+    ws.onopen = () => {
+      console.log('[Orchestrator] Connected to server');
+      setWsConnected(true);
+    };
+
+    ws.onmessage = async (event) => {
+      let data: string = '';
+      try {
+        // Handle both text and binary messages
+        data = event.data;
+        if (event.data instanceof Blob) {
+          data = await event.data.text();
+        }
+
+        // Skip empty or whitespace-only messages
+        if (!data || !data.trim()) {
+          return;
+        }
+
+        const message = JSON.parse(data);
+        console.log('[Orchestrator] Received message:', message.type);
+
+        if (message.type === 'spawn_agent') {
+          spawnAgent(message.docId, message.agentId);
+        }
+      } catch (e) {
+        console.error('[Orchestrator] Failed to parse message:', e, 'Data:', data);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('[Orchestrator] Disconnected from server');
+      setWsConnected(false);
+
+      // Reconnect after 3 seconds
+      setTimeout(connectToServer, 3000);
+    };
+
+    ws.onerror = (err) => {
+      console.error('[Orchestrator] WebSocket error:', err);
+    };
+  };
+
+  // Connect on mount
+  createEffect(() => {
+    connectToServer();
+  });
+
+  onCleanup(() => {
+    if (ws) {
+      ws.close();
+    }
+  });
+
+  // Listen for messages from agent tabs (status updates)
   const handleMessage = (event: MessageEvent) => {
     if (event.data?.type === 'agent-status') {
       const { agentId, status } = event.data;
@@ -28,8 +90,8 @@ export const Orchestrator: Component = () => {
   onCleanup(() => window.removeEventListener('message', handleMessage));
 
   // Spawn a new agent tab for a document
-  const spawnAgent = (docId: string) => {
-    const agentId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const spawnAgent = (docId: string, providedAgentId?: string) => {
+    const agentId = providedAgentId || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const agentUrl = `/${docId}?agent=true&agentId=${agentId}`;
 
     console.log('[Orchestrator] Spawning agent:', agentId, 'for document:', docId);
@@ -85,6 +147,11 @@ export const Orchestrator: Component = () => {
         Manage AI agents that connect to documents via WebRTC.
         Each agent listens to document changes and can run LLM analysis.
       </p>
+      <div class={styles.connectionStatus}>
+        <span class={wsConnected() ? styles.connected : styles.disconnected}>
+          {wsConnected() ? '● Connected to server' : '○ Connecting to server...'}
+        </span>
+      </div>
 
       <form class={styles.spawnForm} onSubmit={handleSpawn}>
         <input

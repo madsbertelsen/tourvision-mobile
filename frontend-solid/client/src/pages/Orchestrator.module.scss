@@ -9,6 +9,22 @@
   margin-bottom: 24px;
 }
 
+.connectionStatus {
+  margin-bottom: 20px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 13px;
+
+  .connected {
+    color: #065f46;
+  }
+
+  .disconnected {
+    color: #92400e;
+  }
+}
+
 .spawnForm {
   display: flex;
   gap: 12px;

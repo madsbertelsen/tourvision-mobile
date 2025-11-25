@@ -36,10 +36,16 @@ export const Header: Component<HeaderProps> = (props) => {
     if (!docId) return;
 
     const agentId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const agentUrl = `/${docId}?agent=true&agentId=${agentId}`;
 
-    console.log('[Header] Spawning agent:', agentId, 'for document:', docId);
-    window.open(agentUrl, agentId, 'width=800,height=600');
+    console.log('[Header] Requesting agent spawn:', agentId, 'for document:', docId);
+
+    // Send spawn_agent message to server (will be forwarded to orchestrator)
+    collaboration.sendCustomMessage({
+      type: 'spawn_agent',
+      docId,
+      agentId,
+      timestamp: Date.now()
+    });
   };
 
   return (

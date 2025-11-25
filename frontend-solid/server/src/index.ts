@@ -3,7 +3,7 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { setupWSConnection, initPersistence } from './yjs-server.js';
+import { setupWSConnection, initPersistence, registerOrchestrator } from './yjs-server.js';
 import { createSignalingServer } from './signaling-server.js';
 
 dotenv.config();
@@ -37,6 +37,15 @@ initPersistence(STORAGE_PATH);
 // Handle WebSocket upgrade manually
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url!, `http://${req.headers.host}`);
+
+  // Handle orchestrator WebSocket connection
+  if (url.pathname === '/orchestrator') {
+    console.log('[Server] Orchestrator connecting');
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      registerOrchestrator(ws);
+    });
+    return;
+  }
 
   // Check if path starts with /yjs/
   if (!url.pathname.startsWith('/yjs/')) {

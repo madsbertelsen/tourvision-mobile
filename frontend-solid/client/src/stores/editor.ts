@@ -192,12 +192,145 @@ function createEditorStore() {
     return found;
   }
 
+  // Apply a geo-mark to text found in the document
+  // Returns the geoId if successful, null otherwise
+  function applyGeoMarkToText(
+    searchText: string,
+    lat: number,
+    lng: number,
+    placeName: string
+  ): string | null {
+    const view = editorView();
+    if (!view) {
+      console.error('[EditorStore] No editor view available');
+      return null;
+    }
+
+    const { state } = view;
+    const { doc, schema, tr } = state;
+    const docText = doc.textContent;
+
+    // Find all occurrences of the search text (case-insensitive)
+    const searchLower = searchText.toLowerCase();
+    let foundPos: { from: number; to: number } | null = null;
+
+    // Walk through document to find text position
+    let currentPos = 0;
+    doc.descendants((node, pos) => {
+      if (foundPos) return false; // Already found
+
+      if (node.isText && node.text) {
+        const nodeText = node.text.toLowerCase();
+        const index = nodeText.indexOf(searchLower);
+        if (index !== -1) {
+          // Check if this text already has a geoMark
+          const hasGeoMark = node.marks.some(m => m.type.name === 'geoMark');
+          if (!hasGeoMark) {
+            foundPos = {
+              from: pos + index,
+              to: pos + index + searchText.length
+            };
+          }
+        }
+      }
+      return true;
+    });
+
+    if (!foundPos) {
+      console.log('[EditorStore] Text not found or already marked:', searchText);
+      return null;
+    }
+
+    // Create unique ID for this geo mark
+    const geoId = `geo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const colorIndex = geoMarkColorIndex++;
+
+    // Create the geo mark
+    const markType = schema.marks.geoMark;
+    const mark = markType.create({
+      geoId,
+      displayText: searchText,
+      placeName,
+      lat: lat.toString(),
+      lng: lng.toString(),
+      colorIndex: colorIndex % COLORS.length,
+      coordSource: 'ai-agent'
+    });
+
+    // Apply the mark to the found text range
+    tr.addMark(foundPos.from, foundPos.to, mark);
+    view.dispatch(tr);
+
+    console.log('[EditorStore] Applied geo-mark to text:', {
+      searchText,
+      geoId,
+      placeName,
+      lat,
+      lng,
+      colorIndex: colorIndex % COLORS.length,
+      position: foundPos
+    });
+
+    return geoId;
+  }
+
+  // Check if document contains a map block
+  function hasMapBlock(): boolean {
+    const view = editorView();
+    if (!view) return false;
+
+    const { doc } = view.state;
+    let found = false;
+
+    doc.descendants((node) => {
+      if (node.type.name === 'map') {
+        found = true;
+        return false; // Stop traversal
+      }
+      return true;
+    });
+
+    return found;
+  }
+
+  // Insert a map block at the end of the document if one doesn't exist
+  function ensureMapBlock(): boolean {
+    const view = editorView();
+    if (!view) {
+      console.error('[EditorStore] No editor view available');
+      return false;
+    }
+
+    // Check if map already exists
+    if (hasMapBlock()) {
+      console.log('[EditorStore] Map block already exists');
+      return false;
+    }
+
+    const { state } = view;
+    const { schema, tr } = state;
+
+    const mapNode = schema.nodes.map.create({ height: 400 });
+    const paragraphNode = schema.nodes.paragraph.create();
+    const insertPos = state.doc.content.size;
+
+    // Insert both map and a new paragraph after it
+    const transaction = tr.insert(insertPos, [mapNode, paragraphNode]);
+    view.dispatch(transaction);
+
+    console.log('[EditorStore] Inserted map block at end of document, position:', insertPos);
+    return true;
+  }
+
   return {
     editorView,
     setEditorView,
     addGeoMarkAtMapPosition,
     updateGeoMarkTransport,
-    updateGeoMarkWaypoints
+    updateGeoMarkWaypoints,
+    applyGeoMarkToText,
+    hasMapBlock,
+    ensureMapBlock
   };
 }
 
