@@ -1,11 +1,14 @@
 import { createSignal } from 'solid-js';
 import type mapboxgl from 'mapbox-gl';
+import { getCollaborationStore } from './collaboration';
 
 interface FullscreenMapState {
   isVisible: boolean;
   blockMapElement: HTMLElement | null;
-  initialBounds: mapboxgl.LngLatBounds | null;
-  padding: { top: number; left: number; right: number; bottom: number } | null;
+  initialCenter: mapboxgl.LngLat | null;
+  initialZoom: number | null;
+  // Offset in pixels from fullscreen container origin to block map origin
+  blockMapOffset: { x: number; y: number } | null;
 }
 
 // Create fullscreen map store
@@ -13,8 +16,9 @@ function createFullscreenMapStore() {
   const [state, setState] = createSignal<FullscreenMapState>({
     isVisible: false,
     blockMapElement: null,
-    initialBounds: null,
-    padding: null
+    initialCenter: null,
+    initialZoom: null,
+    blockMapOffset: null
   });
 
   function showFullscreenMap(mapElement: HTMLElement & { _mapInstance?: mapboxgl.Map }) {
@@ -33,38 +37,66 @@ function createFullscreenMapStore() {
       return;
     }
 
-    // Get the current bounds from the block map
+    // Get center and zoom from block map
+    const center = blockMap.getCenter();
+    const zoom = blockMap.getZoom();
     const bounds = blockMap.getBounds();
 
-    // Calculate padding based on block map position
-    const rect = mapElement.getBoundingClientRect();
-    const padding = {
-      top: rect.top,
-      left: rect.left,
-      right: window.innerWidth - rect.right,
-      bottom: window.innerHeight - rect.bottom
+    // Get block map position in viewport
+    const blockMapRect = mapElement.getBoundingClientRect();
+    const blockMapOffset = {
+      x: blockMapRect.left,
+      y: blockMapRect.top
     };
 
-    console.log('[FullscreenMap] Bounds:', bounds.toArray());
-    console.log('[FullscreenMap] Padding:', padding);
+    console.log('[FullscreenMap] Center:', center, 'Zoom:', zoom, 'Offset:', blockMapOffset);
 
-    // Update state
+    // Update awareness state for other users
+    const collaboration = getCollaborationStore();
+    const provider = collaboration.state().provider;
+    if (provider && bounds) {
+      const docPos = parseInt(mapElement.dataset.docPos || '0');
+      provider.awareness.setLocalStateField('fullscreenMap', {
+        isViewing: true,
+        bounds: {
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest()
+        },
+        mapNodePosition: docPos,
+        timestamp: Date.now()
+      });
+      console.log('[FullscreenMap] Awareness updated:', { docPos, bounds: bounds.toArray() });
+    }
+
+    // Update state with center, zoom and offset
     setState({
       isVisible: true,
       blockMapElement: mapElement,
-      initialBounds: bounds,
-      padding
+      initialCenter: center,
+      initialZoom: zoom,
+      blockMapOffset
     });
   }
 
   function hideFullscreenMap() {
     console.log('[FullscreenMap] Closing fullscreen map');
 
+    // Clear awareness state
+    const collaboration = getCollaborationStore();
+    const provider = collaboration.state().provider;
+    if (provider) {
+      provider.awareness.setLocalStateField('fullscreenMap', null);
+      console.log('[FullscreenMap] Awareness cleared');
+    }
+
     setState({
       isVisible: false,
       blockMapElement: null,
-      initialBounds: null,
-      padding: null
+      initialCenter: null,
+      initialZoom: null,
+      blockMapOffset: null
     });
   }
 

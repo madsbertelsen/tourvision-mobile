@@ -24,6 +24,12 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
   dom.className = 'prosemirror-map';
   dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; cursor: pointer;`;
 
+  // Store document position for awareness tracking
+  const pos = getPos();
+  if (pos !== undefined) {
+    dom.dataset.docPos = String(pos);
+  }
+
   const mapContainer = document.createElement('div');
   mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden; min-height: inherit;';
   dom.appendChild(mapContainer);

@@ -22,21 +22,50 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   createEffect(() => {
     const state = fullscreenMapStore.state();
 
-    if (state.isVisible && mapContainer && state.initialBounds && state.padding) {
-      console.log('[FullscreenMap] Initializing Mapbox map');
+    if (state.isVisible && mapContainer && state.initialCenter && state.initialZoom !== null && state.blockMapOffset) {
+      console.log('[FullscreenMap] Initializing Mapbox map with computed center');
 
-      // Small delay to ensure overlay is rendered
+      // Small delay to ensure overlay is rendered and we can measure it
       requestAnimationFrame(() => {
-        // Create map with initial bounds matching block map
+        const fullscreenRect = mapContainer!.getBoundingClientRect();
+        const offset = state.blockMapOffset!;
+        const blockMapEl = state.blockMapElement as HTMLElement & { _mapInstance?: mapboxgl.Map };
+        const blockMap = blockMapEl?._mapInstance;
+
+        if (!blockMap) {
+          console.error('[FullscreenMap] Block map instance not found');
+          return;
+        }
+
+        const blockMapWidth = blockMapEl?.clientWidth || 0;
+        const blockMapHeight = blockMapEl?.clientHeight || 0;
+
+        // Calculate where the fullscreen center would be in block map's local pixel coords
+        // Fullscreen center in screen coords: (fullscreenRect.width/2, fullscreenRect.height/2)
+        // Block map origin in screen coords: (offset.x, offset.y)
+        // So fullscreen center in block map local coords:
+        const fullscreenCenterInBlockMapX = fullscreenRect.width / 2 - offset.x;
+        const fullscreenCenterInBlockMapY = fullscreenRect.height / 2 - offset.y;
+
+        // Use block map's unproject to convert this pixel position to lng/lat
+        // This gives us the geographic center that should be used for fullscreen map
+        const computedCenter = blockMap.unproject([fullscreenCenterInBlockMapX, fullscreenCenterInBlockMapY]);
+
+        console.log('[FullscreenMap] Center calculation:', {
+          blockMapSize: { width: blockMapWidth, height: blockMapHeight },
+          blockMapOffset: offset,
+          fullscreenSize: { width: fullscreenRect.width, height: fullscreenRect.height },
+          fullscreenCenterInBlockMap: { x: fullscreenCenterInBlockMapX, y: fullscreenCenterInBlockMapY },
+          originalCenter: state.initialCenter,
+          computedCenter: computedCenter
+        });
+
+        // Create map with the computed center - no panning needed
         map = new mapboxgl.Map({
           container: mapContainer!,
           style: 'mapbox://styles/mapbox/light-v11',
-          bounds: state.initialBounds!,
-          fitBoundsOptions: {
-            padding: state.padding!,
-            duration: 0,      // No animation
-            animate: false    // Explicitly disable animation
-          },
+          center: computedCenter,
+          zoom: state.initialZoom!,
           fadeDuration: 0,    // No fade effect
           interactive: true,  // Enable interactions
           trackResize: true   // Track container resizes

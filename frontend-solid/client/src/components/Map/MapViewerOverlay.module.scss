@@ -1,0 +1,35 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 100; // Below fullscreen map (10000) but above editor content
+}
+
+.viewerRectangle {
+  position: absolute;
+  border: 3px solid; // User's color
+  background-color: currentColor;
+  opacity: 0.15;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.viewerLabel {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  user-select: none;
+}

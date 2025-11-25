@@ -2,6 +2,7 @@ import { type Component, Show, createEffect, onMount, onCleanup } from 'solid-js
 import { Editor } from './components/Editor/Editor';
 import { Header } from './components/UI/Header';
 import { FullscreenMap } from './components/Map/FullscreenMap';
+import { MapViewerOverlay } from './components/Map/MapViewerOverlay';
 import { getDocumentStore } from './stores/document';
 import { getCollaborationStore } from './stores/collaboration';
 import { getLocationsStore } from './stores/locations';
@@ -64,6 +65,9 @@ const App: Component = () => {
           <Editor />
         </Show>
       </Show>
+
+      {/* Map viewer overlay - shows rectangles for users viewing fullscreen maps */}
+      <MapViewerOverlay />
 
       {/* Fullscreen map overlay */}
       <FullscreenMap locations={locationsStore.state.locations} />
