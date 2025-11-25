@@ -1,7 +1,6 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { IndexeddbPersistence } from 'y-indexeddb';
 
 // User colors
 const USER_COLORS = ['#FFC0CB', '#FFD700', '#98FB98', '#87CEFA', '#FFA07A'];
@@ -19,7 +18,6 @@ function getRandomColor(): string {
 export interface CollaborationState {
   yDoc: Y.Doc | null;
   provider: WebsocketProvider | null;
-  indexeddb: IndexeddbPersistence | null;
   connected: boolean;
   synced: boolean;
   username: string;
@@ -31,7 +29,6 @@ export function createCollaborationStore(wsUrl: string) {
   const [state, setState] = createSignal<CollaborationState>({
     yDoc: null,
     provider: null,
-    indexeddb: null,
     connected: false,
     synced: false,
     username: generateUsername(),
@@ -44,9 +41,6 @@ export function createCollaborationStore(wsUrl: string) {
 
     // Create Y.Doc
     const yDoc = new Y.Doc();
-
-    // Setup IndexedDB persistence for offline support
-    const indexeddb = new IndexeddbPersistence(docId, yDoc);
 
     // Create WebSocket provider
     // The WebsocketProvider automatically appends the docId to the URL path
@@ -87,8 +81,7 @@ export function createCollaborationStore(wsUrl: string) {
     setState((prev) => ({
       ...prev,
       yDoc,
-      provider,
-      indexeddb
+      provider
     }));
 
     console.log('[Collaboration] Document initialized');
@@ -104,10 +97,6 @@ export function createCollaborationStore(wsUrl: string) {
       current.provider.destroy();
     }
 
-    if (current.indexeddb) {
-      current.indexeddb.destroy();
-    }
-
     if (current.yDoc) {
       current.yDoc.destroy();
     }
@@ -115,7 +104,6 @@ export function createCollaborationStore(wsUrl: string) {
     setState({
       yDoc: null,
       provider: null,
-      indexeddb: null,
       connected: false,
       synced: false,
       username: current.username,
