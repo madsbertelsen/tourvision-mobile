@@ -78,6 +78,30 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
           if (props.locations.length > 0) {
             addMarkersToMap(map!, props.locations);
           }
+
+          // Update awareness on initial load
+          const initialBounds = map!.getBounds();
+          if (initialBounds) {
+            fullscreenMapStore.updateAwareness({
+              north: initialBounds.getNorth(),
+              south: initialBounds.getSouth(),
+              east: initialBounds.getEast(),
+              west: initialBounds.getWest()
+            });
+          }
+        });
+
+        // Update awareness when map view changes (pan/zoom)
+        map.on('moveend', () => {
+          const bounds = map!.getBounds();
+          if (bounds) {
+            fullscreenMapStore.updateAwareness({
+              north: bounds.getNorth(),
+              south: bounds.getSouth(),
+              east: bounds.getEast(),
+              west: bounds.getWest()
+            });
+          }
         });
       });
     }

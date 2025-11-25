@@ -1,20 +1,43 @@
-import { type Component, createEffect, createSignal, onCleanup, For } from 'solid-js';
+import { type Component, createEffect, onCleanup } from 'solid-js';
+import mapboxgl from 'mapbox-gl';
 import { getCollaborationStore } from '../../stores/collaboration';
-import styles from './MapViewerOverlay.module.scss';
+import {
+  addAwarenessLayer,
+  updateAwarenessLayer,
+  removeAwarenessLayer,
+  hasAwarenessLayer
+} from '../../lib/mapAwarenessLayers';
 
-interface ViewerRect {
-  userId: string;
-  userName: string;
-  userColor: string;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
+interface AwarenessState {
+  fullscreenMap?: {
+    isViewing: boolean;
+    bounds: {
+      north: number;
+      south: number;
+      east: number;
+      west: number;
+    };
+    mapNodePosition: number;
+    timestamp: number;
+  };
+  user?: {
+    name: string;
+    color: string;
+  };
+}
+
+// Track active awareness layers per map
+const activeLayersPerMap = new Map<mapboxgl.Map, Set<string>>();
+
+function getActiveLayersForMap(map: mapboxgl.Map): Set<string> {
+  if (!activeLayersPerMap.has(map)) {
+    activeLayersPerMap.set(map, new Set());
+  }
+  return activeLayersPerMap.get(map)!;
 }
 
 export const MapViewerOverlay: Component = () => {
   const collaboration = getCollaborationStore();
-  const [viewerRects, setViewerRects] = createSignal<ViewerRect[]>([]);
 
   createEffect(() => {
     const provider = collaboration.state().provider;
@@ -23,9 +46,11 @@ export const MapViewerOverlay: Component = () => {
     const updateOverlays = () => {
       const states = Array.from(provider.awareness.getStates().entries());
       const localClientId = provider.awareness.clientID;
-      const rects: ViewerRect[] = [];
 
-      states.forEach(([clientId, state]: [number, any]) => {
+      // Track which users are currently viewing, per map
+      const currentViewersPerMap = new Map<mapboxgl.Map, Set<string>>();
+
+      states.forEach(([clientId, state]: [number, AwarenessState]) => {
         // Skip local user and users not viewing fullscreen
         if (clientId === localClientId || !state.fullscreenMap?.isViewing) {
           return;
@@ -47,80 +72,64 @@ export const MapViewerOverlay: Component = () => {
         const blockMap = mapNode._mapInstance;
         if (!blockMap.loaded()) return;
 
-        // Convert geographic bounds to pixel coordinates
-        const { north, south, east, west } = fullscreenMap.bounds;
+        const userId = String(clientId);
+        const userName = user.name || 'Anonymous';
+        const userColor = user.color || '#3B82F6';
 
-        try {
-          const ne = blockMap.project([east, north]);
-          const sw = blockMap.project([west, south]);
-
-          // Get map container position
-          const mapRect = mapNode.getBoundingClientRect();
-
-          // Calculate rectangle position and size
-          const rectLeft = mapRect.left + sw.x;
-          const rectTop = mapRect.top + ne.y;
-          const rectWidth = ne.x - sw.x;
-          const rectHeight = sw.y - ne.y;
-
-          rects.push({
-            userId: String(clientId),
-            userName: user.name || 'Anonymous',
-            userColor: user.color || '#3B82F6',
-            top: rectTop,
-            left: rectLeft,
-            width: rectWidth,
-            height: rectHeight
-          });
-
-          console.log('[MapViewerOverlay] Viewer rectangle:', {
-            user: user.name,
-            bounds: fullscreenMap.bounds,
-            rect: { top: rectTop, left: rectLeft, width: rectWidth, height: rectHeight }
-          });
-        } catch (error) {
-          console.error('[MapViewerOverlay] Error calculating bounds:', error);
+        // Track this viewer for this map
+        if (!currentViewersPerMap.has(blockMap)) {
+          currentViewersPerMap.set(blockMap, new Set());
         }
+        currentViewersPerMap.get(blockMap)!.add(userId);
+
+        // Add or update awareness layer
+        if (hasAwarenessLayer(blockMap, userId)) {
+          updateAwarenessLayer(blockMap, userId, fullscreenMap.bounds, userColor, userName);
+        } else {
+          addAwarenessLayer(blockMap, userId, fullscreenMap.bounds, userColor, userName);
+          getActiveLayersForMap(blockMap).add(userId);
+        }
+
+        console.log('[MapViewerOverlay] Updated GeoJSON awareness layer:', {
+          user: userName,
+          bounds: fullscreenMap.bounds
+        });
       });
 
-      setViewerRects(rects);
+      // Clean up layers for users who stopped viewing
+      activeLayersPerMap.forEach((activeUserIds, map) => {
+        const currentViewers = currentViewersPerMap.get(map) || new Set();
+
+        activeUserIds.forEach(userId => {
+          if (!currentViewers.has(userId)) {
+            removeAwarenessLayer(map, userId);
+            activeUserIds.delete(userId);
+            console.log('[MapViewerOverlay] Removed awareness layer for disconnected user:', userId);
+          }
+        });
+      });
     };
 
     provider.awareness.on('change', updateOverlays);
     updateOverlays();
 
-    // Also update on scroll/resize
-    window.addEventListener('scroll', updateOverlays, true);
-    window.addEventListener('resize', updateOverlays);
-
     onCleanup(() => {
       provider.awareness.off('change', updateOverlays);
-      window.removeEventListener('scroll', updateOverlays, true);
-      window.removeEventListener('resize', updateOverlays);
+
+      // Clean up all awareness layers
+      activeLayersPerMap.forEach((activeUserIds, map) => {
+        activeUserIds.forEach(userId => {
+          try {
+            removeAwarenessLayer(map, userId);
+          } catch (e) {
+            // Map might be removed already
+          }
+        });
+      });
+      activeLayersPerMap.clear();
     });
   });
 
-  return (
-    <div class={styles.overlay}>
-      <For each={viewerRects()}>
-        {(rect) => (
-          <div
-            class={styles.viewerRectangle}
-            style={{
-              top: `${rect.top}px`,
-              left: `${rect.left}px`,
-              width: `${rect.width}px`,
-              height: `${rect.height}px`,
-              'border-color': rect.userColor,
-              color: rect.userColor
-            }}
-          >
-            <div class={styles.viewerLabel} style={{ 'background-color': rect.userColor }}>
-              {rect.userName} (viewing)
-            </div>
-          </div>
-        )}
-      </For>
-    </div>
-  );
+  // No DOM rendering needed - layers are rendered on maps directly
+  return null;
 };

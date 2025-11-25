@@ -100,10 +100,29 @@ function createFullscreenMapStore() {
     });
   }
 
+  function updateAwareness(bounds: { north: number; south: number; east: number; west: number }) {
+    const currentState = state();
+    if (!currentState.isVisible || !currentState.blockMapElement) return;
+
+    const collaboration = getCollaborationStore();
+    const provider = collaboration.state().provider;
+    if (provider) {
+      const docPos = parseInt(currentState.blockMapElement.dataset?.docPos || '0');
+      provider.awareness.setLocalStateField('fullscreenMap', {
+        isViewing: true,
+        bounds,
+        mapNodePosition: docPos,
+        timestamp: Date.now()
+      });
+      console.log('[FullscreenMap] Awareness bounds updated:', bounds);
+    }
+  }
+
   return {
     state,
     showFullscreenMap,
-    hideFullscreenMap
+    hideFullscreenMap,
+    updateAwareness
   };
 }
 
