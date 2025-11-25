@@ -1,20 +1,26 @@
 .editorWrapper {
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &:focus-within {
+    border-color: #3B82F6;
+  }
 }
 
 .editor {
-  border: 1px solid #ccc;
+  flex: 1;
   padding: 16px;
   min-height: 300px;
   outline: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.6;
-
-  &:focus-within {
-    border-color: #3B82F6;
-  }
+  overflow-y: auto;
 }
 
 // ProseMirror base styles
@@ -104,10 +110,18 @@
     outline-offset: 2px;
   }
 
-  // Map node placeholder
+  // Map node
   .prosemirror-map {
     user-select: none;
     cursor: pointer;
+    display: block;
+
+    // Ensure map container fills properly
+    > div {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
 
     &:hover {
       border-color: #3B82F6;

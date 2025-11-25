@@ -1,5 +1,6 @@
 import { type Component, createEffect, on } from 'solid-js';
 import { useEditor } from './useEditor';
+import { Toolbar } from './Toolbar';
 import { getCollaborationStore } from '../../stores/collaboration';
 import { getLocationsStore } from '../../stores/locations';
 import styles from './editor.module.scss';
@@ -37,6 +38,12 @@ export const Editor: Component = () => {
 
   return (
     <div class={styles.editorWrapper}>
+      <Toolbar
+        hasSelection={editor.hasSelection}
+        isAddingGeoMark={editor.isAddingGeoMark}
+        onAddGeoMark={editor.addGeoMarkToSelection}
+        onInsertMap={editor.insertMap}
+      />
       <div ref={editorContainer} class={styles.editor} />
     </div>
   );

@@ -8,6 +8,11 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import type * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
 import { customSchema } from '../../lib/prosemirror-schema';
+import { geocodeLocation } from '../../lib/geocoding';
+import { createMapNodeView } from '../../lib/mapNodeView';
+
+// Global counter for color cycling
+let geoMarkColorIndex = 0;
 
 export interface UseEditorOptions {
   yDoc: Accessor<Y.Doc | null>;
@@ -19,6 +24,8 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
   const [editorView, setEditorView] = createSignal<EditorView | null>(null);
   const [canUndo, setCanUndo] = createSignal(false);
   const [canRedo, setCanRedo] = createSignal(false);
+  const [hasSelection, setHasSelection] = createSignal(false);
+  const [isAddingGeoMark, setIsAddingGeoMark] = createSignal(false);
 
   onMount(() => {
     const container = containerAccessor();
@@ -87,6 +94,9 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     // Create editor view
     const view = new EditorView(container, {
       state,
+      nodeViews: {
+        map: (node, view, getPos) => createMapNodeView(node, view, getPos as () => number | undefined)
+      },
       dispatchTransaction(tr) {
         const newState = this.state.apply(tr);
         this.updateState(newState);
@@ -94,6 +104,9 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
         // Update undo/redo state
         setCanUndo(undoDepth(newState) > 0);
         setCanRedo(redoDepth(newState) > 0);
+
+        // Update selection state
+        setHasSelection(!newState.selection.empty);
 
         // Notify parent of changes
         if (tr.docChanged && options.onUpdate) {
@@ -146,12 +159,87 @@ export function useEditor(containerAccessor: Accessor<HTMLElement | undefined>, 
     }
   }
 
+  // Add geo mark to selected text
+  async function addGeoMarkToSelection() {
+    const view = editorView();
+    if (!view) {
+      console.error('[Editor] No editor view available');
+      return;
+    }
+
+    const { state } = view;
+    const { from, to, empty } = state.selection;
+
+    if (empty) {
+      console.warn('[Editor] No text selected');
+      return;
+    }
+
+    // Get selected text
+    const selectedText = state.doc.textBetween(from, to);
+    console.log('[Editor] Creating geo mark for:', selectedText);
+
+    setIsAddingGeoMark(true);
+
+    try {
+      // Geocode the selected text
+      const result = await geocodeLocation(selectedText);
+
+      if (!result) {
+        console.error('[Editor] Geocoding failed for:', selectedText);
+        alert(`Could not find location: ${selectedText}`);
+        return;
+      }
+
+      console.log('[Editor] Geocoding result:', result);
+
+      // Create unique ID for this geo mark
+      const geoId = `geo-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Create the geo mark with attributes
+      const markType = state.schema.marks.geoMark;
+      const mark = markType.create({
+        geoId,
+        displayText: selectedText,
+        placeName: result.displayName,
+        lat: result.lat.toString(),
+        lng: result.lng.toString(),
+        colorIndex: geoMarkColorIndex++,
+        coordSource: 'nominatim'
+      });
+
+      // Apply the mark to the selection
+      const tr = state.tr.addMark(from, to, mark);
+      view.dispatch(tr);
+
+      console.log('[Editor] Geo mark created:', {
+        geoId,
+        text: selectedText,
+        place: result.displayName,
+        colorIndex: (geoMarkColorIndex - 1) % 10
+      });
+
+      // Notify parent of update
+      if (options.onUpdate) {
+        options.onUpdate(view);
+      }
+    } catch (error) {
+      console.error('[Editor] Error creating geo mark:', error);
+      alert('An error occurred while creating the location mark');
+    } finally {
+      setIsAddingGeoMark(false);
+    }
+  }
+
   return {
     editorView,
     canUndo,
     canRedo,
+    hasSelection,
+    isAddingGeoMark,
     insertMap,
     executeUndo,
-    executeRedo
+    executeRedo,
+    addGeoMarkToSelection
   };
 }
