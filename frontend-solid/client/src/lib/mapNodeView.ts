@@ -5,6 +5,7 @@ import { Node as PMNode } from 'prosemirror-model';
 import { NodeSelection } from 'prosemirror-state';
 import { COLORS } from './prosemirror-schema';
 import { getDocumentStore } from '../stores/document';
+import { fetchRoute, addRouteToMap, removeRouteFromMap } from './mapbox';
 
 // TypeScript declaration for global map callbacks and map instance
 declare global {
@@ -76,13 +77,17 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
   let isFirstLoad = true;
   let lastGeoMarksHash = '';
 
-  // Compute hash of all geo-mark attributes
+  // Compute hash of all geo-mark attributes (including transport)
   const computeGeoMarksHash = (locations: ReturnType<typeof extractLocations>): string => {
     return locations
-      .map(l => `${l.geoId}:${l.lat}:${l.lng}:${l.placeName}:${l.colorIndex}`)
+      .map(l => `${l.geoId}:${l.lat}:${l.lng}:${l.placeName}:${l.colorIndex}:${l.transportFrom || ''}:${l.transportProfile || ''}`)
       .sort()
       .join('|');
   };
+
+  // Route rendering constants and state
+  const ROUTE_LAYER_ID = 'block-map-route';
+  let lastRenderedRouteKey = '';
 
   /**
    * Find section boundaries for a map node.
@@ -146,6 +151,8 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       lat: number;
       lng: number;
       colorIndex: number;
+      transportFrom?: string;
+      transportProfile?: 'walking' | 'driving' | 'cycling';
     }> = [];
 
     // Get the position of this map node
@@ -170,6 +177,8 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
               lat: parseFloat(mark.attrs.lat),
               lng: parseFloat(mark.attrs.lng),
               colorIndex: mark.attrs.colorIndex,
+              transportFrom: mark.attrs.transportFrom,
+              transportProfile: mark.attrs.transportProfile,
             });
           }
         }
@@ -250,6 +259,58 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
     }
   };
 
+  // Update routes on map based on transport configuration
+  const updateRoutes = async (locations: ReturnType<typeof extractLocations>) => {
+    if (!currentMap || !currentMap.isStyleLoaded()) return;
+
+    // Find location with transport configured
+    const locWithTransport = locations.find(l => l.transportFrom && l.transportProfile);
+
+    if (!locWithTransport || !locWithTransport.transportFrom || !locWithTransport.transportProfile) {
+      // No transport configured - remove route if exists
+      if (lastRenderedRouteKey) {
+        console.log('[MapNodeView] Removing route - no transport configured');
+        removeRouteFromMap(currentMap, ROUTE_LAYER_ID);
+        lastRenderedRouteKey = '';
+      }
+      return;
+    }
+
+    // Find source location
+    const sourceLoc = locations.find(l => l.geoId === locWithTransport.transportFrom);
+    if (!sourceLoc) {
+      console.warn('[MapNodeView] Source location not found:', locWithTransport.transportFrom);
+      return;
+    }
+
+    // Create key to prevent duplicate fetches
+    const routeKey = `${sourceLoc.geoId}-${locWithTransport.geoId}-${locWithTransport.transportProfile}`;
+    if (routeKey === lastRenderedRouteKey) {
+      return; // Already rendered this route
+    }
+
+    console.log('[MapNodeView] Fetching route:', routeKey);
+
+    try {
+      const route = await fetchRoute(
+        sourceLoc.lng,
+        sourceLoc.lat,
+        locWithTransport.lng,
+        locWithTransport.lat,
+        locWithTransport.transportProfile
+      );
+
+      if (route && currentMap && currentMap.isStyleLoaded()) {
+        const color = COLORS[sourceLoc.colorIndex % COLORS.length];
+        addRouteToMap(currentMap, ROUTE_LAYER_ID, route.geometry, color);
+        lastRenderedRouteKey = routeKey;
+        console.log('[MapNodeView] Route rendered:', routeKey);
+      }
+    } catch (error) {
+      console.error('[MapNodeView] Error fetching route:', error);
+    }
+  };
+
   // Render map
   const renderMap = () => {
     const locations = extractLocations();
@@ -316,6 +377,7 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
 
       currentMap.once('style.load', () => {
         updateMarkers(locations);
+        updateRoutes(locations); // Render routes after markers
 
         // Fade in the map after it's positioned
         mapContainer.style.transition = 'opacity 0.5s ease-in';
@@ -324,8 +386,9 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
         console.log('[MapNodeView] Map initialized with', locations.length, 'locations');
       });
     } else {
-      // Map already exists, just update markers
+      // Map already exists, just update markers and routes
       updateMarkers(locations);
+      updateRoutes(locations);
     }
   };
 
