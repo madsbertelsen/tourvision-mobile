@@ -117,7 +117,7 @@ function createFullscreenMapStore() {
     });
   }
 
-  function updateAwareness(corners: ViewportCorners, camera: CameraState) {
+  function updateAwareness(corners: ViewportCorners, camera: CameraState, mapStyle?: string) {
     const currentState = state();
     if (!currentState.isVisible || !currentState.blockMapElement) return;
 
@@ -129,10 +129,11 @@ function createFullscreenMapStore() {
         isViewing: true,
         corners,
         camera,
+        mapStyle,
         mapNodePosition: docPos,
         timestamp: Date.now()
       });
-      console.log('[FullscreenMap] Awareness updated:', { corners, camera });
+      console.log('[FullscreenMap] Awareness updated:', { corners, camera, mapStyle });
     }
   }
 

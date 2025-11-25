@@ -103,6 +103,16 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         updateMarkersRef(locationsStore.state.locations);
       }
     });
+
+    // Broadcast style change via awareness
+    const corners = getViewportCorners(map);
+    const camera: CameraState = {
+      center: [map.getCenter().lng, map.getCenter().lat],
+      zoom: map.getZoom(),
+      pitch: map.getPitch(),
+      bearing: map.getBearing()
+    };
+    fullscreenMapStore.updateAwareness(corners, camera, styleId);
   };
 
   // Handle double-click to add marker
@@ -290,7 +300,7 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             pitch: map!.getPitch(),
             bearing: map!.getBearing()
           };
-          fullscreenMapStore.updateAwareness(initialCorners, initialCamera);
+          fullscreenMapStore.updateAwareness(initialCorners, initialCamera, currentStyle());
 
           // Listen for awareness changes from other users viewing fullscreen
           const provider = collaboration.state().provider;
@@ -370,12 +380,13 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 }
               });
 
-              // If following someone, animate to their camera view
+              // If following someone, sync to their camera view and map style
               const followState = followModeStore.state();
               if (followState.isFollowing && followState.followingUserId) {
                 const targetState = states.find(([id]) => String(id) === followState.followingUserId);
                 if (targetState) {
-                  const camera = targetState[1].fullscreenMap?.camera;
+                  const targetFullscreen = targetState[1].fullscreenMap;
+                  const camera = targetFullscreen?.camera;
                   if (camera) {
                     map!.easeTo({
                       center: camera.center,
@@ -384,6 +395,22 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                       bearing: camera.bearing,
                       duration: 500
                     });
+                  }
+                  // Sync map style if different
+                  const targetStyle = targetFullscreen?.mapStyle;
+                  if (targetStyle && targetStyle !== currentStyle()) {
+                    const styleConfig = MAP_STYLES.find(s => s.id === targetStyle);
+                    if (styleConfig) {
+                      setCurrentStyle(targetStyle as MapStyleId);
+                      map!.setStyle(styleConfig.url);
+                      // Re-add markers after style loads
+                      map!.once('style.load', () => {
+                        if (updateMarkersRef) {
+                          const locationsStore = getLocationsStore();
+                          updateMarkersRef(locationsStore.state.locations);
+                        }
+                      });
+                    }
                   }
                 }
               }
@@ -463,7 +490,7 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
             pitch: map!.getPitch(),
             bearing: map!.getBearing()
           };
-          fullscreenMapStore.updateAwareness(corners, camera);
+          fullscreenMapStore.updateAwareness(corners, camera, currentStyle());
         });
       });
     }
