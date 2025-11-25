@@ -4,10 +4,12 @@ import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { setupWSConnection, initPersistence } from './yjs-server.js';
+import { createSignalingServer } from './signaling-server.js';
 
 dotenv.config();
 
 const PORT = process.env.PORT || 8788;
+const SIGNALING_PORT = process.env.SIGNALING_PORT || 4444;
 const STORAGE_PATH = process.env.STORAGE_PATH || './yjs-storage';
 
 const app = express();
@@ -66,12 +68,15 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 
-// Start server
+// Start WebSocket server
 server.listen(PORT, () => {
   console.log(`[Server] HTTP server listening on http://localhost:${PORT}`);
   console.log(`[Server] WebSocket server listening on ws://localhost:${PORT}/yjs`);
   console.log(`[Server] Storage path: ${STORAGE_PATH}`);
 });
+
+// Start WebRTC signaling server
+createSignalingServer(Number(SIGNALING_PORT));
 
 // Graceful shutdown
 process.on('SIGINT', () => {

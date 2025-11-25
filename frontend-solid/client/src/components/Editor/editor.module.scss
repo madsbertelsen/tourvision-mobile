@@ -113,6 +113,7 @@
     user-select: none;
     cursor: pointer;
     display: block;
+    transition: all 0.2s ease;
 
     // Ensure map container fills properly
     > div {
@@ -123,6 +124,12 @@
 
     &:hover {
       border-color: #3B82F6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 }

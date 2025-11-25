@@ -2,23 +2,65 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { EditorView } from 'prosemirror-view';
 import { Node as PMNode } from 'prosemirror-model';
+import { NodeSelection } from 'prosemirror-state';
 import { COLORS } from './prosemirror-schema';
+import { getFullscreenMapStore } from '../stores/fullscreenMap';
 
-// TypeScript declaration for global map callbacks
+// TypeScript declaration for global map callbacks and map instance
 declare global {
   interface Window {
     mapRenderCallbacks?: Array<() => void>;
   }
 }
 
+// Extend HTMLElement to include custom property
+interface MapElement extends HTMLElement {
+  _mapInstance?: mapboxgl.Map;
+}
+
 export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => number | undefined) {
-  const dom = document.createElement('div');
+  const fullscreenMapStore = getFullscreenMapStore();
+  const dom = document.createElement('div') as MapElement;
   dom.className = 'prosemirror-map';
-  dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative;`;
+  dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; cursor: pointer;`;
 
   const mapContainer = document.createElement('div');
   mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden; min-height: inherit;';
   dom.appendChild(mapContainer);
+
+  // Create transparent click overlay
+  const clickOverlay = document.createElement('div');
+  clickOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000; background: transparent; cursor: pointer;';
+  dom.appendChild(clickOverlay);
+
+  // Click detection for fullscreen toggle
+  let touchStartTime = 0;
+
+  clickOverlay.addEventListener('mousedown', () => {
+    touchStartTime = Date.now();
+  });
+
+  clickOverlay.addEventListener('click', (e) => {
+    const duration = Date.now() - touchStartTime;
+
+    if (duration > 500) {
+      // Long press - select node for editing
+      const pos = getPos();
+      if (pos !== undefined) {
+        const tr = view.state.tr.setSelection(
+          NodeSelection.create(view.state.doc, pos)
+        );
+        view.dispatch(tr);
+        console.log('[MapNodeView] Long press - node selected');
+      }
+    } else {
+      // Short click - open fullscreen map
+      e.preventDefault();
+      e.stopPropagation();
+      fullscreenMapStore.showFullscreenMap(dom);
+      console.log('[MapNodeView] Short click - opening fullscreen map');
+    }
+  });
 
   let currentMap: mapboxgl.Map | null = null;
   let currentMarkers: mapboxgl.Marker[] = [];
@@ -259,6 +301,9 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
         fadeDuration: 0,
         renderWorldCopies: false
       });
+
+      // Store map instance on DOM element for fullscreen access
+      dom._mapInstance = currentMap;
 
       currentMap.once('style.load', () => {
         updateMarkers(locations);

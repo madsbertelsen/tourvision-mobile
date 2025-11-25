@@ -14,6 +14,23 @@ export const Header: Component<HeaderProps> = (props) => {
   const locationsStore = getLocationsStore();
   const collaboration = getCollaborationStore();
 
+  const handleToggleProvider = () => {
+    const currentDocId = documentStore.currentDocId();
+    if (!currentDocId) return;
+
+    const currentType = collaboration.state().providerType;
+    const newType = currentType === 'websocket' ? 'webrtc' : 'websocket';
+    collaboration.switchProvider(currentDocId, newType);
+  };
+
+  const getProviderIcon = () => {
+    return collaboration.state().providerType === 'websocket' ? '🔌' : '📡';
+  };
+
+  const getProviderLabel = () => {
+    return collaboration.state().providerType === 'websocket' ? 'WebSocket' : 'WebRTC';
+  };
+
   return (
     <header class={styles.header}>
       <div class={styles.headerLeft}>
@@ -30,6 +47,15 @@ export const Header: Component<HeaderProps> = (props) => {
           <span class={styles.connectionStatus} classList={{ [styles.connected]: collaboration.state().synced }}>
             {collaboration.state().synced ? '● Synced' : '○ Connecting...'}
           </span>
+        </Show>
+        <Show when={documentStore.currentDocId()}>
+          <button
+            class={styles.providerToggle}
+            onClick={handleToggleProvider}
+            title={`Switch to ${collaboration.state().providerType === 'websocket' ? 'WebRTC' : 'WebSocket'}`}
+          >
+            {getProviderIcon()} {getProviderLabel()}
+          </button>
         </Show>
       </div>
       <div class={styles.headerRight}>

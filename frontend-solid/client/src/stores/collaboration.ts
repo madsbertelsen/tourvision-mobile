@@ -1,9 +1,13 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import { WebrtcProvider } from 'y-webrtc';
 
 // User colors
 const USER_COLORS = ['#FFC0CB', '#FFD700', '#98FB98', '#87CEFA', '#FFA07A'];
+
+// Provider types
+export type ProviderType = 'websocket' | 'webrtc';
 
 // Generate random username
 function generateUsername(): string {
@@ -17,7 +21,8 @@ function getRandomColor(): string {
 
 export interface CollaborationState {
   yDoc: Y.Doc | null;
-  provider: WebsocketProvider | null;
+  provider: WebsocketProvider | WebrtcProvider | null;
+  providerType: ProviderType;
   connected: boolean;
   synced: boolean;
   username: string;
@@ -25,10 +30,11 @@ export interface CollaborationState {
 }
 
 // Create collaboration store
-export function createCollaborationStore(wsUrl: string) {
+export function createCollaborationStore(wsUrl: string, webrtcSignalingUrl: string) {
   const [state, setState] = createSignal<CollaborationState>({
     yDoc: null,
     provider: null,
+    providerType: 'webrtc', // Default to WebRTC
     connected: false,
     synced: false,
     username: generateUsername(),
@@ -36,22 +42,34 @@ export function createCollaborationStore(wsUrl: string) {
   });
 
   // Initialize Y.js document and provider
-  function initDocument(docId: string) {
-    console.log('[Collaboration] Initializing document:', docId);
+  function initDocument(docId: string, type?: ProviderType) {
+    const providerType = type || state().providerType;
+    console.log('[Collaboration] Initializing document:', docId, 'with provider:', providerType);
 
-    // Create Y.Doc
-    const yDoc = new Y.Doc();
+    // Reuse existing Y.Doc if switching providers, otherwise create new
+    const current = state();
+    const yDoc = current.yDoc || new Y.Doc();
 
-    // Create WebSocket provider
-    // The WebsocketProvider automatically appends the docId to the URL path
-    // Result: ws://localhost:8788/yjs/docId
-    const provider = new WebsocketProvider(wsUrl, docId, yDoc, {
-      connect: true
-    });
+    // Create provider based on type
+    let provider: WebsocketProvider | WebrtcProvider;
+
+    if (providerType === 'websocket') {
+      // WebSocket provider connects to central server
+      provider = new WebsocketProvider(wsUrl, docId, yDoc, {
+        connect: true
+      });
+    } else {
+      // WebRTC provider uses peer-to-peer connections with signaling server
+      provider = new WebrtcProvider(docId, yDoc, {
+        signaling: [webrtcSignalingUrl],
+        maxConns: 50,
+        filterBcConns: true
+      });
+    }
 
     // Set user awareness
-    const username = state().username;
-    const userColor = state().userColor;
+    const username = current.username;
+    const userColor = current.userColor;
 
     provider.awareness.setLocalState({
       user: {
@@ -60,7 +78,7 @@ export function createCollaborationStore(wsUrl: string) {
       }
     });
 
-    // Connection status listeners
+    // Connection status listeners (both providers support these events)
     provider.on('status', ({ status }: { status: string }) => {
       console.log('[Collaboration] Status:', status);
       setState((prev) => ({
@@ -81,10 +99,26 @@ export function createCollaborationStore(wsUrl: string) {
     setState((prev) => ({
       ...prev,
       yDoc,
-      provider
+      provider,
+      providerType
     }));
 
-    console.log('[Collaboration] Document initialized');
+    console.log('[Collaboration] Document initialized with', providerType, 'provider');
+  }
+
+  // Switch between WebSocket and WebRTC providers
+  function switchProvider(docId: string, newType: ProviderType) {
+    console.log('[Collaboration] Switching provider to:', newType);
+
+    const current = state();
+
+    // Destroy current provider but keep the document
+    if (current.provider) {
+      current.provider.destroy();
+    }
+
+    // Initialize new provider with the same document
+    initDocument(docId, newType);
   }
 
   // Clean up connections
@@ -114,6 +148,7 @@ export function createCollaborationStore(wsUrl: string) {
   return {
     state,
     initDocument,
+    switchProvider,
     destroy
   };
 }
@@ -124,7 +159,8 @@ let collaborationStore: ReturnType<typeof createCollaborationStore> | null = nul
 export function getCollaborationStore() {
   if (!collaborationStore) {
     const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8788/yjs';
-    collaborationStore = createCollaborationStore(wsUrl);
+    const webrtcSignalingUrl = import.meta.env.VITE_WEBRTC_SIGNALING || 'ws://localhost:4444';
+    collaborationStore = createCollaborationStore(wsUrl, webrtcSignalingUrl);
   }
   return collaborationStore;
 }

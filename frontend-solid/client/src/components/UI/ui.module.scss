@@ -69,6 +69,31 @@
   }
 }
 
+.providerToggle {
+  padding: 6px 12px;
+  background-color: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
 .locationCount {
   padding: 6px 12px;
   background-color: #f3f4f6;
