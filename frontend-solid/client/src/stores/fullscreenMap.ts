@@ -96,12 +96,16 @@ function createFullscreenMapStore() {
   function hideFullscreenMap() {
     console.log('[FullscreenMap] Closing fullscreen map');
 
-    // Clear awareness state
+    // Clear awareness state - set isViewing to false explicitly
+    // (setting to null may not trigger awareness change properly)
     const collaboration = getCollaborationStore();
     const provider = collaboration.state().provider;
     if (provider) {
-      provider.awareness.setLocalStateField('fullscreenMap', null);
-      console.log('[FullscreenMap] Awareness cleared');
+      provider.awareness.setLocalStateField('fullscreenMap', {
+        isViewing: false,
+        timestamp: Date.now()
+      });
+      console.log('[FullscreenMap] Awareness cleared (isViewing: false)');
     }
 
     setState({

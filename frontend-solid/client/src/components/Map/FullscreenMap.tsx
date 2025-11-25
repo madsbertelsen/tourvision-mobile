@@ -276,11 +276,20 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 // Skip local user
                 if (clientId === localClientId) return;
 
-                // Only show users viewing the same map node in fullscreen
-                if (!awareState.fullscreenMap?.isViewing) return;
-                if (awareState.fullscreenMap.mapNodePosition !== currentDocPos) return;
-
                 const userId = String(clientId);
+
+                // Check if user is no longer viewing this fullscreen map
+                const isViewingThisMap = awareState.fullscreenMap?.isViewing &&
+                  awareState.fullscreenMap.mapNodePosition === currentDocPos;
+
+                if (!isViewingThisMap) {
+                  // User stopped viewing - remove their layer if it exists
+                  if (hasAwarenessLayer(map!, userId)) {
+                    removeAwarenessLayer(map!, userId);
+                    activeUserIds.delete(userId);
+                  }
+                  return;
+                }
 
                 // Skip rendering awareness layer in follow relationships:
                 // 1. If I'm following this user (their view is synced with mine)
@@ -469,6 +478,9 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   });
 
   onCleanup(() => {
+    // Clear fullscreen map awareness state
+    fullscreenMapStore.hideFullscreenMap();
+
     // Remove callback from global array by reference
     if (window.mapRenderCallbacks && mapRenderCallback) {
       const idx = window.mapRenderCallbacks.indexOf(mapRenderCallback);
