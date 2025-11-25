@@ -1,14 +1,20 @@
-import { type Component, createSignal, createEffect, onCleanup, For } from 'solid-js';
+import { type Component, createSignal, createEffect, onCleanup, For, Show } from 'solid-js';
 import { getCollaborationStore } from '../../stores/collaboration';
+import { getFollowModeStore } from '../../stores/followMode';
+import { getFullscreenMapStore } from '../../stores/fullscreenMap';
 import styles from './presence.module.scss';
 
 interface User {
+  id: string;
   name: string;
   color: string;
+  isViewingFullscreen: boolean;
 }
 
 export const PresenceAvatars: Component = () => {
   const collaboration = getCollaborationStore();
+  const followModeStore = getFollowModeStore();
+  const fullscreenMapStore = getFullscreenMapStore();
   const [users, setUsers] = createSignal<User[]>([]);
 
   createEffect(() => {
@@ -16,10 +22,18 @@ export const PresenceAvatars: Component = () => {
     if (!provider) return;
 
     const updatePresence = () => {
-      const states = Array.from(provider.awareness.getStates().values());
+      const localClientId = provider.awareness.clientID;
+      const states = Array.from(provider.awareness.getStates().entries());
       const connectedUsers = states
-        .filter((state: any) => state.user)
-        .map((state: any) => state.user as User);
+        .filter(([clientId, state]: [number, any]) =>
+          state.user && clientId !== localClientId
+        )
+        .map(([clientId, state]: [number, any]) => ({
+          id: String(clientId),
+          name: state.user.name,
+          color: state.user.color,
+          isViewingFullscreen: !!state.fullscreenMap?.isViewing
+        } as User));
 
       setUsers(connectedUsers);
     };
@@ -35,6 +49,13 @@ export const PresenceAvatars: Component = () => {
     });
   });
 
+  const handleAvatarClick = (user: User) => {
+    // Only allow following if we're in fullscreen mode and they're viewing fullscreen too
+    if (fullscreenMapStore.state().isVisible && user.isViewingFullscreen) {
+      followModeStore.toggleFollowing(user.id, user.name);
+    }
+  };
+
   return (
     <div class={styles.presenceContainer}>
       <span class={styles.label}>Editing:</span>
@@ -43,12 +64,27 @@ export const PresenceAvatars: Component = () => {
           <span class={styles.noUsers}>No one else here</span>
         ) : (
           <For each={users()}>
-            {(user) => (
-              <div class={styles.avatar} style={{ 'border-color': user.color }}>
-                <div class={styles.dot} style={{ 'background-color': user.color }} />
-                <span class={styles.name}>{user.name}</span>
-              </div>
-            )}
+            {(user) => {
+              const isClickable = () =>
+                fullscreenMapStore.state().isVisible && user.isViewingFullscreen;
+              const isBeingFollowed = () =>
+                followModeStore.state().followingUserId === user.id;
+
+              return (
+                <div
+                  class={`${styles.avatar} ${isClickable() ? styles.clickable : ''} ${isBeingFollowed() ? styles.following : ''}`}
+                  style={{ 'border-color': user.color }}
+                  onClick={() => handleAvatarClick(user)}
+                  title={isClickable() ? `Click to ${isBeingFollowed() ? 'stop following' : 'follow'} ${user.name}` : user.name}
+                >
+                  <div class={styles.dot} style={{ 'background-color': user.color }} />
+                  <span class={styles.name}>{user.name}</span>
+                  <Show when={isBeingFollowed()}>
+                    <span class={styles.followingBadge}>Following</span>
+                  </Show>
+                </div>
+              );
+            }}
           </For>
         )}
       </div>

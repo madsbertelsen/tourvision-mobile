@@ -1,7 +1,8 @@
-import { type Component, createEffect, onCleanup, Show } from 'solid-js';
+import { type Component, createEffect, createSignal, onCleanup, Show, For } from 'solid-js';
 import mapboxgl from 'mapbox-gl';
-import { getFullscreenMapStore } from '../../stores/fullscreenMap';
+import { getFullscreenMapStore, type CameraState } from '../../stores/fullscreenMap';
 import { getCollaborationStore } from '../../stores/collaboration';
+import { getFollowModeStore } from '../../stores/followMode';
 import type { Location } from '../../stores/locations';
 import { addMarkersToMap } from '../../lib/mapbox';
 import {
@@ -9,12 +10,18 @@ import {
   updateAwarenessLayer,
   removeAwarenessLayer,
   hasAwarenessLayer,
-  getViewportCorners
+  getViewportCorners,
+  getLayerIds
 } from '../../lib/mapAwarenessLayers';
 import styles from './FullscreenMap.module.scss';
 
 interface FullscreenMapProps {
   locations: Location[];
+}
+
+interface Follower {
+  name: string;
+  color: string;
 }
 
 // Extend mapboxgl.Map type to include our cleanup function
@@ -25,11 +32,15 @@ interface ExtendedMap extends mapboxgl.Map {
 export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   const fullscreenMapStore = getFullscreenMapStore();
   const collaboration = getCollaborationStore();
+  const followModeStore = getFollowModeStore();
   let mapContainer: HTMLDivElement | undefined;
   let map: ExtendedMap | undefined;
 
   // Track active awareness layers for cleanup
   const activeUserIds = new Set<string>();
+
+  // Track users who are following me
+  const [followers, setFollowers] = createSignal<Follower[]>([]);
 
   const handleClose = () => {
     fullscreenMapStore.hideFullscreenMap();
@@ -98,7 +109,13 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
 
           // Update awareness on initial load (using viewport corners for pitch/bearing support)
           const initialCorners = getViewportCorners(map!);
-          fullscreenMapStore.updateAwareness(initialCorners);
+          const initialCamera: CameraState = {
+            center: [map!.getCenter().lng, map!.getCenter().lat],
+            zoom: map!.getZoom(),
+            pitch: map!.getPitch(),
+            bearing: map!.getBearing()
+          };
+          fullscreenMapStore.updateAwareness(initialCorners, initialCamera);
 
           // Listen for awareness changes from other users viewing fullscreen
           const provider = collaboration.state().provider;
@@ -143,12 +160,81 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
                 if (!currentViewers.has(userId)) {
                   removeAwarenessLayer(map!, userId);
                   activeUserIds.delete(userId);
+                  // Stop following if the user we're following disconnected
+                  if (followModeStore.state().followingUserId === userId) {
+                    followModeStore.stopFollowing();
+                  }
                 }
               });
+
+              // If following someone, animate to their camera view
+              const followState = followModeStore.state();
+              if (followState.isFollowing && followState.followingUserId) {
+                const targetState = states.find(([id]) => String(id) === followState.followingUserId);
+                if (targetState) {
+                  const camera = targetState[1].fullscreenMap?.camera;
+                  if (camera) {
+                    map!.easeTo({
+                      center: camera.center,
+                      zoom: camera.zoom,
+                      pitch: camera.pitch,
+                      bearing: camera.bearing,
+                      duration: 500
+                    });
+                  }
+                }
+              }
+
+              // Check who is following me
+              const myFollowers: Follower[] = [];
+              const myClientId = String(localClientId);
+              states.forEach(([clientId, awareState]: [number, any]) => {
+                if (clientId === localClientId) return;
+                // Check if this user is following me
+                if (awareState.following?.userId === myClientId) {
+                  myFollowers.push({
+                    name: awareState.user?.name || 'Anonymous',
+                    color: awareState.user?.color || '#3B82F6'
+                  });
+                }
+              });
+              setFollowers(myFollowers);
             };
 
             provider.awareness.on('change', updateAwarenessLayers);
             updateAwarenessLayers(); // Initial check
+
+            // Click handler for awareness labels to toggle following
+            map!.on('click', (e: mapboxgl.MapMouseEvent) => {
+              // Get layer IDs for all active users
+              const labelLayers = Array.from(activeUserIds).map(id => getLayerIds(id).labelLayer);
+              if (labelLayers.length === 0) return;
+
+              const features = map!.queryRenderedFeatures(e.point, {
+                layers: labelLayers
+              });
+
+              if (features.length > 0) {
+                const { userId, userName } = features[0].properties as { userId: string; userName: string };
+                followModeStore.toggleFollowing(userId, userName);
+                console.log('[FullscreenMap] Clicked awareness label:', userId, userName);
+              }
+            });
+
+            // Change cursor on hover over awareness labels
+            map!.on('mousemove', (e: mapboxgl.MapMouseEvent) => {
+              const labelLayers = Array.from(activeUserIds).map(id => getLayerIds(id).labelLayer);
+              if (labelLayers.length === 0) {
+                map!.getCanvas().style.cursor = '';
+                return;
+              }
+
+              const features = map!.queryRenderedFeatures(e.point, {
+                layers: labelLayers
+              });
+
+              map!.getCanvas().style.cursor = features.length > 0 ? 'pointer' : '';
+            });
 
             // Store cleanup function on map
             map!._awarenessCleanup = () => {
@@ -168,7 +254,13 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         // Update awareness when map view changes (pan/zoom/tilt)
         map.on('moveend', () => {
           const corners = getViewportCorners(map!);
-          fullscreenMapStore.updateAwareness(corners);
+          const camera: CameraState = {
+            center: [map!.getCenter().lng, map!.getCenter().lat],
+            zoom: map!.getZoom(),
+            pitch: map!.getPitch(),
+            bearing: map!.getBearing()
+          };
+          fullscreenMapStore.updateAwareness(corners, camera);
         });
       });
     }
@@ -209,6 +301,29 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         <button class={styles.closeBtn} onClick={handleClose} title="Close fullscreen map">
           ✕
         </button>
+        <Show when={followModeStore.state().isFollowing}>
+          <div class={styles.followingIndicator}>
+            <span>Following: {followModeStore.state().followingUserName}</span>
+            <button
+              onClick={() => followModeStore.stopFollowing()}
+              title="Stop following"
+            >
+              ✕
+            </button>
+          </div>
+        </Show>
+        <Show when={followers().length > 0}>
+          <div class={styles.beingFollowedIndicator}>
+            <For each={followers()}>
+              {(follower) => (
+                <div class={styles.followerChip} style={{ 'border-color': follower.color }}>
+                  <div class={styles.followerDot} style={{ 'background-color': follower.color }} />
+                  <span>{follower.name} is following you</span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </div>
     </Show>
   );

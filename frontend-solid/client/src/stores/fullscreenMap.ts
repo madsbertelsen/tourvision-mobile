@@ -3,6 +3,14 @@ import type mapboxgl from 'mapbox-gl';
 import { getCollaborationStore } from './collaboration';
 import { getViewportCorners, type ViewportCorners } from '../lib/mapAwarenessLayers';
 
+// Camera state for following feature
+export interface CameraState {
+  center: [number, number];
+  zoom: number;
+  pitch: number;
+  bearing: number;
+}
+
 interface FullscreenMapState {
   isVisible: boolean;
   blockMapElement: HTMLElement | null;
@@ -58,13 +66,21 @@ function createFullscreenMapStore() {
       const docPos = parseInt(mapElement.dataset.docPos || '0');
       // Get viewport corners (accounts for pitch/bearing)
       const corners = getViewportCorners(blockMap);
+      // Get camera state for following feature
+      const camera: CameraState = {
+        center: [blockMap.getCenter().lng, blockMap.getCenter().lat],
+        zoom: blockMap.getZoom(),
+        pitch: blockMap.getPitch(),
+        bearing: blockMap.getBearing()
+      };
       provider.awareness.setLocalStateField('fullscreenMap', {
         isViewing: true,
         corners,
+        camera,
         mapNodePosition: docPos,
         timestamp: Date.now()
       });
-      console.log('[FullscreenMap] Awareness updated:', { docPos, corners });
+      console.log('[FullscreenMap] Awareness updated:', { docPos, corners, camera });
     }
 
     // Update state with center, zoom and offset
@@ -97,7 +113,7 @@ function createFullscreenMapStore() {
     });
   }
 
-  function updateAwareness(corners: ViewportCorners) {
+  function updateAwareness(corners: ViewportCorners, camera: CameraState) {
     const currentState = state();
     if (!currentState.isVisible || !currentState.blockMapElement) return;
 
@@ -108,10 +124,11 @@ function createFullscreenMapStore() {
       provider.awareness.setLocalStateField('fullscreenMap', {
         isViewing: true,
         corners,
+        camera,
         mapNodePosition: docPos,
         timestamp: Date.now()
       });
-      console.log('[FullscreenMap] Awareness corners updated:', corners);
+      console.log('[FullscreenMap] Awareness updated:', { corners, camera });
     }
   }
 

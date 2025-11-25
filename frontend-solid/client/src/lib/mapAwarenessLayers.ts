@@ -29,7 +29,8 @@ function easeOutCubic(t: number): number {
 function cornersToGeoJSON(
   corners: ViewportCorners,
   userName: string,
-  userColor: string
+  userColor: string,
+  userId: string
 ): GeoJSON.Feature<GeoJSON.Polygon> {
   return {
     type: 'Feature',
@@ -45,13 +46,14 @@ function cornersToGeoJSON(
     },
     properties: {
       userName,
-      userColor
+      userColor,
+      userId
     }
   };
 }
 
 // Get source and layer IDs for a user
-function getLayerIds(userId: string) {
+export function getLayerIds(userId: string) {
   return {
     source: `awareness-${userId}`,
     fillLayer: `awareness-fill-${userId}`,
@@ -79,7 +81,7 @@ export function addAwarenessLayer(
   removeAwarenessLayer(map, userId);
 
   // Create GeoJSON feature
-  const feature = cornersToGeoJSON(corners, userName, color);
+  const feature = cornersToGeoJSON(corners, userName, color, userId);
 
   // Add source
   map.addSource(ids.source, {
@@ -163,7 +165,7 @@ function animateCornersUpdate(
     const easedProgress = easeOutCubic(progress);
 
     const interpolatedCorners = lerpCorners(startCorners, targetCorners, easedProgress);
-    const feature = cornersToGeoJSON(interpolatedCorners, userName, color);
+    const feature = cornersToGeoJSON(interpolatedCorners, userName, color, userId);
     source.setData(feature);
 
     if (progress < 1) {
