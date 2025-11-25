@@ -77,10 +77,13 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
   let isFirstLoad = true;
   let lastGeoMarksHash = '';
 
-  // Compute hash of all geo-mark attributes (including transport)
+  // Compute hash of all geo-mark attributes (including transport and waypoints)
   const computeGeoMarksHash = (locations: ReturnType<typeof extractLocations>): string => {
     return locations
-      .map(l => `${l.geoId}:${l.lat}:${l.lng}:${l.placeName}:${l.colorIndex}:${l.transportFrom || ''}:${l.transportProfile || ''}`)
+      .map(l => {
+        const waypointsHash = l.waypoints?.map(wp => `${wp.lng.toFixed(6)},${wp.lat.toFixed(6)}`).join(';') || '';
+        return `${l.geoId}:${l.lat}:${l.lng}:${l.placeName}:${l.colorIndex}:${l.transportFrom || ''}:${l.transportProfile || ''}:${waypointsHash}`;
+      })
       .sort()
       .join('|');
   };
@@ -153,6 +156,7 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       colorIndex: number;
       transportFrom?: string;
       transportProfile?: 'walking' | 'driving' | 'cycling';
+      waypoints?: Array<{ lng: number; lat: number }>;
     }> = [];
 
     // Get the position of this map node
@@ -179,6 +183,7 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
               colorIndex: mark.attrs.colorIndex,
               transportFrom: mark.attrs.transportFrom,
               transportProfile: mark.attrs.transportProfile,
+              waypoints: mark.attrs.waypoints,
             });
           }
         }
@@ -283,13 +288,17 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
       return;
     }
 
-    // Create key to prevent duplicate fetches
-    const routeKey = `${sourceLoc.geoId}-${locWithTransport.geoId}-${locWithTransport.transportProfile}`;
+    // Get waypoints
+    const waypoints = locWithTransport.waypoints || [];
+
+    // Create key to prevent duplicate fetches (include waypoints hash)
+    const waypointsHash = waypoints.map(wp => `${wp.lng.toFixed(6)},${wp.lat.toFixed(6)}`).join(';');
+    const routeKey = `${sourceLoc.geoId}-${locWithTransport.geoId}-${locWithTransport.transportProfile}-${waypointsHash}`;
     if (routeKey === lastRenderedRouteKey) {
       return; // Already rendered this route
     }
 
-    console.log('[MapNodeView] Fetching route:', routeKey);
+    console.log('[MapNodeView] Fetching route:', routeKey, 'waypoints:', waypoints.length);
 
     try {
       const route = await fetchRoute(
@@ -297,7 +306,8 @@ export function createMapNodeView(node: PMNode, view: EditorView, getPos: () => 
         sourceLoc.lat,
         locWithTransport.lng,
         locWithTransport.lat,
-        locWithTransport.transportProfile
+        locWithTransport.transportProfile,
+        waypoints.length > 0 ? waypoints : undefined
       );
 
       if (route && currentMap && currentMap.isStyleLoaded()) {

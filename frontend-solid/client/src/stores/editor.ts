@@ -136,11 +136,68 @@ function createEditorStore() {
     return found;
   }
 
+  // Update a geo-mark's waypoints by geoId
+  function updateGeoMarkWaypoints(
+    geoId: string,
+    waypoints: Array<{ lng: number; lat: number }>
+  ): boolean {
+    const view = editorView();
+    if (!view) {
+      console.error('[EditorStore] No editor view available');
+      return false;
+    }
+
+    const { state } = view;
+    const { doc, schema, tr } = state;
+    let found = false;
+
+    // Find the geo-mark with matching geoId
+    doc.descendants((node, pos) => {
+      if (found) return false; // Stop if already found
+
+      node.marks.forEach((mark) => {
+        if (mark.type.name === 'geoMark' && mark.attrs.geoId === geoId) {
+          // Found the geo-mark - update it
+          const nodeEnd = pos + node.nodeSize;
+
+          // Create new mark with updated waypoints
+          const newMark = schema.marks.geoMark.create({
+            ...mark.attrs,
+            waypoints
+          });
+
+          // Remove old mark and add new one
+          tr.removeMark(pos, nodeEnd, mark.type);
+          tr.addMark(pos, nodeEnd, newMark);
+
+          found = true;
+          console.log('[EditorStore] Updated geo-mark waypoints:', {
+            geoId,
+            waypointCount: waypoints.length
+          });
+        }
+      });
+
+      return !found;
+    });
+
+    if (found) {
+      console.log('[EditorStore] Dispatching waypoints update transaction');
+      view.dispatch(tr);
+      console.log('[EditorStore] Waypoints update dispatched successfully');
+    } else {
+      console.warn('[EditorStore] Geo-mark not found for waypoints update:', geoId);
+    }
+
+    return found;
+  }
+
   return {
     editorView,
     setEditorView,
     addGeoMarkAtMapPosition,
-    updateGeoMarkTransport
+    updateGeoMarkTransport,
+    updateGeoMarkWaypoints
   };
 }
 

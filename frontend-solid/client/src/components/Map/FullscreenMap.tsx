@@ -81,6 +81,12 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
   // Track current markers for updates
   let currentMarkers: mapboxgl.Marker[] = [];
 
+  // Track waypoint markers for route editing
+  let waypointMarkers: mapboxgl.Marker[] = [];
+
+  // Track current waypoint popup for deletion
+  let currentWaypointPopup: mapboxgl.Popup | null = null;
+
   // Store the updateMarkers function so we can call it from effects
   let updateMarkersRef: ((locations: Location[]) => void) | null = null;
   let mapRenderCallback: (() => void) | null = null;
@@ -197,6 +203,205 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       const mapDocPos = parseInt(state.blockMapElement?.dataset?.docPos || '0');
       followModeStore.sendInvitation(mapDocPos);
     }
+  };
+
+  // Create waypoint marker element
+  const createWaypointMarkerElement = (index: number, color: string): HTMLDivElement => {
+    const el = document.createElement('div');
+    el.style.cssText = `
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background-color: white;
+      border: 3px solid ${color};
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: ${color};
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    el.textContent = String(index + 1);
+    el.title = 'Drag to move, click to delete';
+    return el;
+  };
+
+  // Get current location with transport configured
+  const getCurrentLocationWithTransport = (): Location | null => {
+    const locations = locationsStoreForRoutes.state.locations;
+    const currentLocId = params.locId;
+
+    // Priority: current location if it has transport, otherwise first location with transport
+    let targetLoc = currentLocId
+      ? locations.find(loc => loc.geoId === currentLocId && loc.transportFrom && loc.transportProfile)
+      : null;
+
+    if (!targetLoc) {
+      targetLoc = locations.find(loc => loc.transportFrom && loc.transportProfile);
+    }
+
+    return targetLoc || null;
+  };
+
+  // Render waypoint markers with drag support
+  const renderWaypointMarkers = (
+    waypoints: Array<{ lng: number; lat: number }>,
+    routeColor: string,
+    geoId: string
+  ) => {
+    if (!map) return;
+
+    // Clear existing waypoint markers
+    waypointMarkers.forEach(m => m.remove());
+    waypointMarkers = [];
+
+    // Close any open popup
+    if (currentWaypointPopup) {
+      currentWaypointPopup.remove();
+      currentWaypointPopup = null;
+    }
+
+    waypoints.forEach((wp, index) => {
+      const el = createWaypointMarkerElement(index, routeColor);
+
+      const marker = new mapboxgl.Marker({
+        element: el,
+        draggable: true
+      })
+        .setLngLat([wp.lng, wp.lat])
+        .addTo(map!);
+
+      // Handle drag end - auto-save
+      marker.on('dragend', () => {
+        const newPos = marker.getLngLat();
+        console.log('[FullscreenMap] Waypoint dragged:', index, newPos);
+        updateWaypointPosition(geoId, index, newPos.lng, newPos.lat);
+      });
+
+      // Handle click - show delete option
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWaypointDeleteOption(geoId, index, marker);
+      });
+
+      waypointMarkers.push(marker);
+    });
+
+    console.log('[FullscreenMap] Rendered', waypoints.length, 'waypoint markers');
+  };
+
+  // Add waypoint at position (called when clicking on route)
+  const addWaypointAtPosition = async (lng: number, lat: number) => {
+    const currentLoc = getCurrentLocationWithTransport();
+    if (!currentLoc) {
+      console.warn('[FullscreenMap] No location with transport for adding waypoint');
+      return;
+    }
+
+    // Get existing waypoints or initialize empty array
+    const waypoints = [...(currentLoc.waypoints || [])];
+
+    // Add new waypoint (append for now)
+    waypoints.push({ lng, lat });
+
+    console.log('[FullscreenMap] Adding waypoint:', { lng, lat, totalWaypoints: waypoints.length });
+
+    // Update document via editor store
+    const editorStore = getEditorStore();
+    const success = editorStore.updateGeoMarkWaypoints(currentLoc.geoId, waypoints);
+
+    if (success) {
+      console.log('[FullscreenMap] Waypoint added successfully');
+    } else {
+      console.error('[FullscreenMap] Failed to add waypoint');
+    }
+  };
+
+  // Update waypoint position after drag
+  const updateWaypointPosition = (geoId: string, index: number, lng: number, lat: number) => {
+    const currentLoc = locationsStoreForRoutes.getLocationById(geoId);
+    if (!currentLoc || !currentLoc.waypoints) {
+      console.warn('[FullscreenMap] No waypoints to update');
+      return;
+    }
+
+    const waypoints = [...currentLoc.waypoints];
+    waypoints[index] = { lng, lat };
+
+    console.log('[FullscreenMap] Updating waypoint position:', { index, lng, lat });
+
+    const editorStore = getEditorStore();
+    editorStore.updateGeoMarkWaypoints(geoId, waypoints);
+  };
+
+  // Delete waypoint
+  const deleteWaypoint = (geoId: string, index: number) => {
+    const currentLoc = locationsStoreForRoutes.getLocationById(geoId);
+    if (!currentLoc || !currentLoc.waypoints) {
+      console.warn('[FullscreenMap] No waypoints to delete');
+      return;
+    }
+
+    const waypoints = [...currentLoc.waypoints];
+    waypoints.splice(index, 1);
+
+    console.log('[FullscreenMap] Deleting waypoint:', { index, remainingWaypoints: waypoints.length });
+
+    const editorStore = getEditorStore();
+    editorStore.updateGeoMarkWaypoints(geoId, waypoints);
+
+    // Close popup
+    if (currentWaypointPopup) {
+      currentWaypointPopup.remove();
+      currentWaypointPopup = null;
+    }
+  };
+
+  // Show delete option popup for waypoint
+  const showWaypointDeleteOption = (geoId: string, index: number, marker: mapboxgl.Marker) => {
+    if (!map) return;
+
+    // Close existing popup
+    if (currentWaypointPopup) {
+      currentWaypointPopup.remove();
+    }
+
+    const popupContent = document.createElement('div');
+    popupContent.style.cssText = 'padding: 8px;';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete Waypoint';
+    deleteBtn.style.cssText = `
+      background: #ef4444; color: white;
+      border: none; padding: 6px 12px;
+      border-radius: 4px; cursor: pointer;
+      font-size: 12px;
+    `;
+    deleteBtn.addEventListener('click', () => {
+      deleteWaypoint(geoId, index);
+    });
+    deleteBtn.addEventListener('mouseenter', () => {
+      deleteBtn.style.background = '#dc2626';
+    });
+    deleteBtn.addEventListener('mouseleave', () => {
+      deleteBtn.style.background = '#ef4444';
+    });
+
+    popupContent.appendChild(deleteBtn);
+
+    currentWaypointPopup = new mapboxgl.Popup({
+      closeOnClick: true,
+      closeButton: true,
+      offset: [0, -10]
+    })
+      .setLngLat(marker.getLngLat())
+      .setDOMContent(popupContent)
+      .addTo(map);
+
+    currentWaypointPopup.on('close', () => {
+      currentWaypointPopup = null;
+    });
   };
 
   // Initialize map when visible
@@ -363,6 +568,23 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
 
           // Double-click to add marker
           map!.on('dblclick', handleMapDoubleClick);
+
+          // Route click handler to add waypoints
+          map!.on('click', ROUTE_LAYER_ID, (e: mapboxgl.MapMouseEvent) => {
+            // Prevent the click from propagating to the map
+            e.originalEvent.stopPropagation();
+            const { lng, lat } = e.lngLat;
+            console.log('[FullscreenMap] Route clicked at:', lng, lat);
+            addWaypointAtPosition(lng, lat);
+          });
+
+          // Change cursor on route hover
+          map!.on('mouseenter', ROUTE_LAYER_ID, () => {
+            map!.getCanvas().style.cursor = 'crosshair';
+          });
+          map!.on('mouseleave', ROUTE_LAYER_ID, () => {
+            map!.getCanvas().style.cursor = '';
+          });
 
           // Update awareness on initial load (using viewport corners for pitch/bearing support)
           const initialCorners = getViewportCorners(map!);
@@ -621,11 +843,18 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     }
 
     if (!targetLoc || !targetLoc.transportFrom || !targetLoc.transportProfile) {
-      // No transport configured - remove route if exists
+      // No transport configured - remove route and waypoint markers if exist
       if (lastRenderedRouteKey) {
         console.log('[FullscreenMap] Removing route - no transport configured');
         removeRouteFromMap(map, ROUTE_LAYER_ID);
         lastRenderedRouteKey = '';
+        // Clear waypoint markers
+        waypointMarkers.forEach(m => m.remove());
+        waypointMarkers = [];
+        if (currentWaypointPopup) {
+          currentWaypointPopup.remove();
+          currentWaypointPopup = null;
+        }
       }
       return;
     }
@@ -637,8 +866,12 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       return;
     }
 
-    // Create a key to prevent duplicate fetches
-    const routeKey = `${sourceLoc.geoId}-${targetLoc.geoId}-${targetLoc.transportProfile}`;
+    // Get waypoints (may be undefined or empty array)
+    const waypoints = targetLoc.waypoints || [];
+
+    // Create a key to prevent duplicate fetches (include waypoints hash)
+    const waypointsHash = waypoints.map(wp => `${wp.lng.toFixed(6)},${wp.lat.toFixed(6)}`).join(';');
+    const routeKey = `${sourceLoc.geoId}-${targetLoc.geoId}-${targetLoc.transportProfile}-${waypointsHash}`;
     if (routeKey === lastRenderedRouteKey) {
       return; // Already rendered this route
     }
@@ -649,14 +882,15 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     }
 
     routeFetchTimeout = setTimeout(async () => {
-      console.log('[FullscreenMap] Fetching route from document state:', routeKey);
+      console.log('[FullscreenMap] Fetching route from document state:', routeKey, 'waypoints:', waypoints.length);
 
       const route = await fetchRoute(
         sourceLoc.lng,
         sourceLoc.lat,
         targetLoc!.lng,
         targetLoc!.lat,
-        targetLoc!.transportProfile as 'walking' | 'driving' | 'cycling'
+        targetLoc!.transportProfile as 'walking' | 'driving' | 'cycling',
+        waypoints.length > 0 ? waypoints : undefined
       );
 
       if (route && map && map.isStyleLoaded()) {
@@ -664,6 +898,15 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
         addRouteToMap(map, ROUTE_LAYER_ID, route.geometry, color);
         lastRenderedRouteKey = routeKey;
         console.log('[FullscreenMap] Route rendered:', routeKey);
+
+        // Render waypoint markers if there are waypoints
+        if (waypoints.length > 0) {
+          renderWaypointMarkers(waypoints, color, targetLoc!.geoId);
+        } else {
+          // Clear existing waypoint markers if no waypoints
+          waypointMarkers.forEach(m => m.remove());
+          waypointMarkers = [];
+        }
       }
     }, 200);
   });
@@ -687,6 +930,14 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
       // Remove markers
       currentMarkers.forEach(marker => marker.remove());
       currentMarkers = [];
+
+      // Remove waypoint markers
+      waypointMarkers.forEach(marker => marker.remove());
+      waypointMarkers = [];
+      if (currentWaypointPopup) {
+        currentWaypointPopup.remove();
+        currentWaypointPopup = null;
+      }
 
       // Clear update ref
       updateMarkersRef = null;
@@ -719,6 +970,14 @@ export const FullscreenMap: Component<FullscreenMapProps> = (props) => {
     // Remove markers
     currentMarkers.forEach(marker => marker.remove());
     updateMarkersRef = null;
+
+    // Remove waypoint markers
+    waypointMarkers.forEach(marker => marker.remove());
+    waypointMarkers = [];
+    if (currentWaypointPopup) {
+      currentWaypointPopup.remove();
+      currentWaypointPopup = null;
+    }
 
     if (map) {
       // Clean up awareness listener first
