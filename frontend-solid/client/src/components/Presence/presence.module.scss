@@ -1,0 +1,53 @@
+.presenceContainer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.avatars {
+  display: flex;
+  gap: 6px;
+}
+
+.noUsers {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: white;
+  border: 1px solid;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
