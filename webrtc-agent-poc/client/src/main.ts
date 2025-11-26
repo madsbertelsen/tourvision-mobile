@@ -22,16 +22,20 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo }
 // Mapbox GL JS
 import mapboxgl from 'mapbox-gl';
 
+// QR Code generation
+import QRCode from 'qrcode';
+
 // Services
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
 import { GeocodingService } from './services/GeocodingService';
+import { ViewSyncService } from './services/ViewSyncService';
 
 // Conditionally import agent module
 // In dev mode: Load based on URL parameter
 // In production: Load only in agent build
-let initializeAgent: ((yXmlFragment: any, ydoc: any, documentId: string) => void) | null = null;
+let initializeAgent: ((yXmlFragment: any, ydoc: any, documentId: string, editorView: any, schema: any) => void) | null = null;
 
 // Check if we should load agent: either in agent build OR in dev mode with ?agent=true
 const params = new URL(window.location.href).searchParams;
@@ -94,11 +98,12 @@ let awarenessOverlayRenderer: AwarenessOverlayRenderer;
 let blockMapView: BlockMapView;
 let fullscreenMapView: FullscreenMapView;
 
-// Generate random user identity for testing with multiple tabs
-// Each tab gets a different number and color
+// Generate user identity
+// Check for username in querystring first, otherwise use random for testing with multiple tabs
+const usernameParam = params.get('username');
 const userNumber = Math.floor(Math.random() * 10) + 1; // 1-10
 const userColor = COLORS[userNumber - 1]; // Use same index as user number
-const userName = isAgent ? 'Agent' : `User ${userNumber}`;
+const userName = usernameParam || (isAgent ? 'Agent' : `User ${userNumber}`);
 const userDisplayColor = isAgent ? '#10b981' : userColor;
 
 console.log('[Main] User identity:', { userName, userDisplayColor });
@@ -244,6 +249,13 @@ async function setupYjs(documentId: string) {
     name: userName,
     color: userDisplayColor,
     mapBounds: null, // Will be set when user opens fullscreen map
+    viewState: {
+      scrollTop: 0,
+      scrollLeft: 0,
+      fullscreenMapOpen: false,
+      isPresenting: false,
+      followingUserId: null,
+    },
   });
 
   console.log('[Awareness] Local user set:', { name: userName, color: userDisplayColor });
@@ -293,12 +305,25 @@ async function setupYjs(documentId: string) {
       if (clientId === awareness.clientID) return; // Skip own client
 
       const state = awareness.getStates().get(clientId);
+
+      // Handle map bounds updates
       if (state?.user?.mapBounds) {
         console.log('[Awareness] User updated map bounds:', clientId);
         updateBoundsOverlay(clientId, state.user.mapBounds, state.user.color);
       } else {
         console.log('[Awareness] User closed fullscreen map:', clientId);
         removeBoundsOverlay(clientId);
+      }
+
+      // Handle view state updates (for follow mode)
+      if (viewSyncService && state?.user?.viewState) {
+        const followingUserId = viewSyncService.getFollowingUserId();
+
+        // Only apply if we're following this specific user
+        if (followingUserId === clientId) {
+          console.log('[ViewSync] Applying view state from user:', clientId, state.user.viewState);
+          viewSyncService.applyRemoteViewState(state.user.viewState);
+        }
       }
     });
 
@@ -359,6 +384,8 @@ let transportEditModeGeoId: string | null = null;
 // Global awareness variable (for map bounds tracking)
 let globalAwareness: any = null;
 
+// Global ViewSyncService for collaborative view synchronization
+let viewSyncService: ViewSyncService | null = null;
 
 // Initialize AwarenessOverlayRenderer
 awarenessOverlayRenderer = new AwarenessOverlayRenderer();
@@ -400,6 +427,11 @@ function extractLocationsForFullscreen() {
 (window as any).showFullscreenMap = () => {
   if (fullscreenMapView) {
     fullscreenMapView.show();
+
+    // Notify ViewSyncService if presenting
+    if (viewSyncService) {
+      viewSyncService.setFullscreenMapOpen(true);
+    }
   }
 };
 
@@ -407,6 +439,11 @@ function extractLocationsForFullscreen() {
 (window as any).hideFullscreenMap = () => {
   if (fullscreenMapView) {
     fullscreenMapView.hide();
+
+    // Notify ViewSyncService if presenting
+    if (viewSyncService) {
+      viewSyncService.setFullscreenMapOpen(false);
+    }
   }
 };
 
@@ -487,6 +524,11 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
   // Set location sheet dependencies (with change notification callback)
   setLocationSheetDependencies(view, MAPBOX_TOKEN, notifyGeoMarkChange);
+
+  // Initialize ViewSyncService for collaborative view synchronization
+  viewSyncService = new ViewSyncService(awareness);
+  viewSyncService.setEditorContainer(container);
+  console.log('[Main] ViewSyncService initialized');
 
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
 
@@ -695,12 +737,6 @@ async function main() {
   // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
   const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId);
 
-  // Initialize agent if in agent mode
-  if (isAgent && initializeAgent) {
-    console.log('[Main] Initializing agent with Y.js document observation');
-    initializeAgent(yXmlFragment, ydoc, documentId);
-  }
-
   updateStatus('Initializing editor...', 'connecting');
 
   // Create editor with Y.js sync
@@ -708,6 +744,12 @@ async function main() {
   if (!editor) {
     updateStatus('Failed to initialize editor', 'disconnected');
     return;
+  }
+
+  // Initialize agent AFTER editor is created (agent needs editorView and schema)
+  if (isAgent && initializeAgent) {
+    console.log('[Main] Initializing agent with Y.js document observation');
+    initializeAgent(yXmlFragment, ydoc, documentId, editor, customSchema);
   }
 
   // Initialize FullscreenMapView now that awareness is available
@@ -747,6 +789,114 @@ async function main() {
 
   updateStatus('Connecting to peers...', 'connecting');
   console.log('[Main] Application initialized successfully');
+
+  // Android TV WebView input handlers
+  // Only enable when running inside Android TV WebView (detected via user agent)
+  // Also allow ?showQR=true parameter for testing
+  const isAndroidTVWebView = navigator.userAgent.includes('Android TV') || params.get('showQR') === 'true';
+  console.log('[Main] User agent:', navigator.userAgent);
+  console.log('[Main] Is Android TV WebView:', isAndroidTVWebView);
+  if (isAndroidTVWebView) {
+    console.log('[Main] Android TV WebView detected, enabling input handlers');
+
+    // Expose editorView on window for Android input proxy
+    (window as any).editorView = view;
+
+    // Insert text at current cursor position using ProseMirror transaction
+    (window as any).insertText = (text: string) => {
+      // Focus the editor first to ensure it's active
+      view.focus();
+
+      // Get current state and selection
+      const { state } = view;
+      const { from, to } = state.selection;
+
+      // Create transaction that replaces selection (or inserts at cursor)
+      const tr = state.tr.replaceWith(from, to, state.schema.text(text));
+
+      // Move cursor to end of inserted text
+      tr.setSelection(state.selection.constructor.near(tr.doc.resolve(from + text.length)));
+
+      view.dispatch(tr);
+      console.log('[Main] Android TV: Inserted text at pos', from, ':', text);
+    };
+
+    // Handle backspace key using ProseMirror commands
+    (window as any).handleBackspace = () => {
+      view.focus();
+      const { state } = view;
+      const { from, to } = state.selection;
+
+      if (from === to && from > 0) {
+        // No selection, delete character before cursor
+        const tr = state.tr.delete(from - 1, from);
+        view.dispatch(tr);
+      } else if (from !== to) {
+        // Has selection, delete selected text
+        const tr = state.tr.deleteSelection();
+        view.dispatch(tr);
+      }
+      console.log('[Main] Android TV: Backspace at pos', from);
+    };
+
+    // Handle enter key - create new paragraph
+    (window as any).handleEnter = () => {
+      view.focus();
+      const { state } = view;
+      const { $from } = state.selection;
+
+      // Use splitBlock command behavior
+      const tr = state.tr.split($from.pos);
+      view.dispatch(tr);
+      console.log('[Main] Android TV: Enter at pos', $from.pos);
+    };
+
+    // Set cursor position at specific document index
+    (window as any).setCursorPosition = (pos: number) => {
+      view.focus();
+      const { state } = view;
+      // Clamp position to valid range
+      const maxPos = state.doc.content.size;
+      const safePos = Math.max(0, Math.min(pos, maxPos));
+
+      try {
+        const selection = state.selection.constructor.near(state.doc.resolve(safePos));
+        view.dispatch(state.tr.setSelection(selection));
+        console.log('[Main] Android TV: Set cursor to pos', safePos);
+      } catch (e) {
+        console.error('[Main] Android TV: Failed to set cursor position', e);
+      }
+    };
+
+    // Generate QR code for mobile users to join this document session
+    const qrContainer = document.getElementById('tv-qr-container');
+    const qrCanvas = document.getElementById('tv-qr-canvas') as HTMLCanvasElement;
+
+    if (qrContainer && qrCanvas) {
+      // Build the URL for mobile users to join
+      // Use current host so it works in both local dev and production
+      const joinUrl = `${window.location.origin}/?doc=${documentId}`;
+
+      console.log('[Main] Android TV: Generating QR code for URL:', joinUrl);
+
+      QRCode.toCanvas(qrCanvas, joinUrl, {
+        width: 120,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      }, (error) => {
+        if (error) {
+          console.error('[Main] Android TV: Failed to generate QR code:', error);
+        } else {
+          // Show the QR container
+          qrContainer.classList.add('visible');
+          console.log('[Main] Android TV: QR code generated successfully');
+        }
+      });
+    }
+  }
 }
 
 // Function to geocode a place name using Nominatim
@@ -899,6 +1049,119 @@ function setupToolbarButtons(view: EditorView) {
 
   if (insertMapBtn) {
     insertMapBtn.addEventListener('click', () => insertMap(view));
+  }
+
+  // Present button handler
+  const presentBtn = document.getElementById('present-btn');
+  if (presentBtn && viewSyncService) {
+    presentBtn.addEventListener('click', () => {
+      const isPresenting = viewSyncService!.togglePresenting();
+      presentBtn.classList.toggle('active', isPresenting);
+      console.log('[Main] Presentation mode:', isPresenting ? 'ON' : 'OFF');
+    });
+  }
+
+  // Follow button handler
+  const followBtn = document.getElementById('follow-btn');
+  const followDropdown = document.getElementById('follow-dropdown');
+  if (followBtn && followDropdown && viewSyncService && globalAwareness) {
+    // Toggle dropdown visibility
+    followBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      followDropdown.classList.toggle('visible');
+
+      // Populate dropdown with active users
+      if (followDropdown.classList.contains('visible')) {
+        updateFollowDropdown();
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!followBtn.contains(e.target as Node) && !followDropdown.contains(e.target as Node)) {
+        followDropdown.classList.remove('visible');
+      }
+    });
+
+    // Update dropdown content
+    function updateFollowDropdown() {
+      const listEl = document.getElementById('follow-dropdown-list');
+      if (!listEl) return;
+
+      const states = globalAwareness.getStates();
+      const currentClientId = globalAwareness.clientID;
+      const followingUserId = viewSyncService!.getFollowingUserId();
+
+      // Clear existing items
+      listEl.innerHTML = '';
+
+      // Add "Stop following" option if currently following
+      if (followingUserId !== null) {
+        const stopItem = document.createElement('div');
+        stopItem.className = 'follow-dropdown-item';
+        stopItem.innerHTML = `<span class="user-name">Stop following</span>`;
+        stopItem.addEventListener('click', () => {
+          viewSyncService!.followUser(null);
+          followBtn.classList.remove('active');
+          followDropdown.classList.remove('visible');
+          console.log('[Main] Stopped following');
+        });
+        listEl.appendChild(stopItem);
+      }
+
+      // Add items for each active user (except self)
+      states.forEach((state: any, clientId: number) => {
+        if (clientId === currentClientId) return; // Skip self
+        if (!state.user) return;
+
+        const item = document.createElement('div');
+        item.className = 'follow-dropdown-item';
+        if (followingUserId === clientId) {
+          item.classList.add('active');
+        }
+
+        // User color dot
+        const colorDot = document.createElement('div');
+        colorDot.className = 'user-color';
+        colorDot.style.backgroundColor = state.user.color || '#666';
+
+        // User name
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'user-name';
+        nameSpan.textContent = state.user.name || `User ${clientId}`;
+
+        // Presenting badge
+        if (state.user.viewState?.isPresenting) {
+          const badge = document.createElement('span');
+          badge.className = 'presenting-badge';
+          badge.textContent = 'PRESENTING';
+          item.appendChild(badge);
+        }
+
+        item.appendChild(colorDot);
+        item.appendChild(nameSpan);
+
+        // Click to follow this user
+        item.addEventListener('click', () => {
+          viewSyncService!.followUser(clientId);
+          followBtn.classList.add('active');
+          followDropdown.classList.remove('visible');
+          console.log('[Main] Now following:', state.user.name);
+        });
+
+        listEl.appendChild(item);
+      });
+
+      // If no other users, show message
+      if (listEl.children.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.padding = '12px';
+        emptyMsg.style.color = '#999';
+        emptyMsg.style.fontSize = '13px';
+        emptyMsg.textContent = 'No other users online';
+        listEl.appendChild(emptyMsg);
+      }
+    }
   }
 
   console.log('[Main] Toolbar buttons set up');
