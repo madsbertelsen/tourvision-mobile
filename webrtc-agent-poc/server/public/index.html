@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Agent POC</title>
+
+  <!-- Mapbox GL CSS and JS -->
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    #app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0; /* No padding on any side */
+    }
+
+    #editor-container {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 400px;
+      margin-top: 20px;
+    }
+
+    .ProseMirror {
+      outline: none;
+      min-height: 350px;
+      padding: 10px;
+    }
+
+    .ProseMirror p {
+      margin-bottom: 1em;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: white;
+      border-radius: 0;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      display: none;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .toolbar-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .user-avatars {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-left: auto;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .avatar:hover {
+      transform: scale(1.1);
+      z-index: 10;
+    }
+
+    .avatar-tooltip {
+      position: absolute;
+      bottom: -28px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .avatar:hover .avatar-tooltip {
+      opacity: 1;
+    }
+
+    .avatar-initials {
+      user-select: none;
+    }
+
+    .self-avatar {
+      border-color: #333;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+
+    .toolbar button {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      filter: grayscale(100%);
+      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+
+    .toolbar button svg {
+      transition: all 0.2s;
+    }
+
+    .toolbar button:hover {
+      opacity: 0.9;
+      background: rgba(0, 0, 0, 0.05);
+      filter: grayscale(50%);
+    }
+
+    .toolbar button:active {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.1);
+      filter: grayscale(0%);
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .toolbar button:disabled:hover {
+      background: transparent;
+      filter: grayscale(100%);
+      opacity: 0.3;
+    }
+
+    .mode-badge {
+      display: none;
+    }
+
+    .doc-info {
+      display: none;
+    }
+
+    .status {
+      display: none;
+    }
+
+    /* Ensure ProseMirror has proper white-space handling */
+    .ProseMirror {
+      white-space: pre-wrap;
+    }
+
+    /* Hide header when hideHeader param is present */
+    body.hide-header header {
+      display: none;
+    }
+
+    /* Make app fullscreen when header is hidden */
+    body.hide-header #app {
+      max-width: none;
+      padding: 0;
+      height: 100vh;
+      margin: 0;
+    }
+
+    /* Make editor container fill screen when header is hidden */
+    body.hide-header #editor-container {
+      height: 100vh;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+
+    /* Fullscreen Map Overlay */
+    #fullscreen-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10000;
+      display: none;
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    }
+
+    #fullscreen-overlay.visible {
+      display: block;
+    }
+
+    #fullscreen-overlay.fade-in {
+      opacity: 1;
+    }
+
+    .backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.3);
+      z-index: 10001;
+    }
+
+    #fullscreen-map-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10002;
+    }
+
+    #fullscreen-map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      background-color: rgba(255, 255, 255, 0.95);
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10003;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: 300;
+      transition: transform 0.2s;
+    }
+
+    .close-btn:hover {
+      transform: scale(1.1);
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-C7yfxU4c.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Cvej7Dwr.css">
+</head>
+<body>
+  <script>
+    // Check for hideHeader parameter immediately (before body renders)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('hideHeader') === 'true') {
+      document.body.classList.add('hide-header');
+    }
+
+    // Intercept console logs and send them via postMessage for React Native WebView debugging
+    (function() {
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      const originalInfo = console.info;
+
+      function sendLog(level, args) {
+        const message = Array.from(args).map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg);
+            } catch (e) {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ');
+
+        // Send to parent/WebView
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }));
+        } else if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }, '*');
+        }
+      }
+
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        sendLog('log', args);
+      };
+
+      console.error = function(...args) {
+        originalError.apply(console, args);
+        sendLog('error', args);
+      };
+
+      console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        sendLog('warn', args);
+      };
+
+      console.info = function(...args) {
+        originalInfo.apply(console, args);
+        sendLog('info', args);
+      };
+
+      // Log that console interception is active
+      console.log('[Console] Log interception initialized for WebView debugging');
+    })();
+
+    // Agent script loader - loads LLM functionality if agent mode is enabled
+    (async function() {
+      const params = new URLSearchParams(window.location.search);
+      const isAgent = params.get('agent') === 'true';
+      const token = params.get('token');
+
+      if (isAgent && token) {
+        console.log('[Agent Loader] Agent mode detected, loading LLM script...');
+
+        try {
+          // Fetch agent script from agent server (port 8788) with token
+          const response = await fetch('http://localhost:8788/api/agent-script', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+
+          if (!response.ok) {
+            console.error('[Agent Loader] Failed to fetch agent script:', response.status, response.statusText);
+            return;
+          }
+
+          const scriptCode = await response.text();
+          console.log('[Agent Loader] Agent script fetched successfully');
+
+          // Execute agent script
+          const scriptEl = document.createElement('script');
+          scriptEl.textContent = scriptCode;
+          document.head.appendChild(scriptEl);
+
+          console.log('[Agent Loader] Agent script loaded and executed');
+        } catch (error) {
+          console.error('[Agent Loader] Error loading agent script:', error);
+        }
+      } else if (isAgent && !token) {
+        console.warn('[Agent Loader] Agent mode enabled but no token provided');
+      }
+    })();
+  </script>
+  <div id="app">
+    <header>
+      <h1>WebRTC Agent POC</h1>
+      <div id="mode-indicator"></div>
+      <div id="doc-info" class="doc-info"></div>
+      <div id="status" class="status connecting">Initializing...</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button id="new-doc-btn" aria-label="New Document">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button id="create-geomark-btn" aria-label="Create Geo Mark">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+          </button>
+          <button id="insert-map-btn" aria-label="Insert Map">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+              <line x1="8" y1="2" x2="8" y2="18"></line>
+              <line x1="16" y1="6" x2="16" y2="22"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="user-avatars" class="user-avatars">
+          <!-- Avatars will be inserted here by JavaScript -->
+        </div>
+      </div>
+    </header>
+    <div id="editor-container"></div>
+  </div>
+
+  <!-- Fullscreen Map Overlay (hidden by default) -->
+  <div id="fullscreen-overlay">
+    <div class="backdrop"></div>
+    <div id="fullscreen-map-container">
+      <div id="fullscreen-map"></div>
+    </div>
+    <button class="close-btn">✕</button>
+  </div>
+
+  <!-- Location Sheet (hidden by default) -->
+  <div id="location-sheet-backdrop"></div>
+  <div id="location-sheet">
+    <div class="location-sheet-handle"></div>
+    <div class="location-sheet-header">
+      <div id="location-color-dot" class="location-color-dot"></div>
+      <div id="location-sheet-title" class="location-sheet-title"></div>
+      <button id="location-sheet-close-btn" class="location-sheet-close">✕</button>
+    </div>
+    <div class="location-sheet-content">
+      <div id="location-sheet-body"></div>
+    </div>
+  </div>
+
+</body>
+</html>
