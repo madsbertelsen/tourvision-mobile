@@ -46,3 +46,4 @@ client_secret_*.json
 **/client_secret_*.json
 **/.env
 local-ai-agent/.env
+expo-app/mapstory-318118-a027e600efc9.json
