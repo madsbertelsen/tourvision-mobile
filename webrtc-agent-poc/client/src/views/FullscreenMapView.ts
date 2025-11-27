@@ -40,10 +40,16 @@ export class FullscreenMapView {
   /**
    * Show fullscreen map overlay
    * Extracted from main.ts:295-720
-   * @param targetBounds Optional bounds to use (for follow mode - skips local calculation)
+   * @param targetCamera Optional camera state to use (for follow mode - skips local calculation)
    */
-  show(targetBounds?: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
-    console.log('[Fullscreen] Showing fullscreen map', targetBounds ? '(with target bounds)' : '');
+  show(targetCamera?: {
+    north: number; south: number; east: number; west: number;
+    center?: { lng: number; lat: number };
+    zoom?: number;
+    pitch?: number;
+    bearing?: number
+  }): void {
+    console.log('[Fullscreen] Showing fullscreen map', targetCamera ? '(with target camera)' : '');
 
     // Notify parent that fullscreen map is opening
     WebViewBridge.sendFullscreenMapOpened();
@@ -77,16 +83,26 @@ export class FullscreenMapView {
     console.log('[Fullscreen] Container rect:', rect);
     console.log('[Fullscreen] Alignment padding:', padding);
 
-    // Use target bounds (follow mode) or calculate from block map
-    let adjustedBounds: any;
+    // Use target camera (follow mode) or calculate from block map
+    let adjustedBounds: any = null;
+    let initialCenter: { lng: number; lat: number } | undefined;
+    let initialZoom: number | undefined;
 
-    if (targetBounds) {
-      // Follow mode: use the followed user's bounds directly
-      adjustedBounds = new (window as any).mapboxgl.LngLatBounds(
-        [targetBounds.west, targetBounds.south],
-        [targetBounds.east, targetBounds.north]
-      );
-      console.log('[Fullscreen] Using target bounds from followed user:', targetBounds);
+    if (targetCamera) {
+      // Follow mode: use the followed user's camera state directly
+      if (targetCamera.center && targetCamera.zoom !== undefined) {
+        // Use center/zoom for accurate follow (works with pitch)
+        initialCenter = targetCamera.center;
+        initialZoom = targetCamera.zoom;
+        console.log('[Fullscreen] Using target camera from followed user:', targetCamera);
+      } else {
+        // Fallback to bounds if center/zoom not available
+        adjustedBounds = new (window as any).mapboxgl.LngLatBounds(
+          [targetCamera.west, targetCamera.south],
+          [targetCamera.east, targetCamera.north]
+        );
+        console.log('[Fullscreen] Using target bounds from followed user (fallback):', targetCamera);
+      }
     } else {
       // Normal mode: calculate bounds from block map
       const blockMap = blockMapElement._mapInstance;
@@ -146,52 +162,77 @@ export class FullscreenMapView {
       overlay.classList.add('fade-in');
     }, 10);
 
-    // Initialize fullscreen map (pass pitch/bearing from target bounds for follow mode)
-    const initialPitch = targetBounds?.pitch;
-    const initialBearing = targetBounds?.bearing;
+    // Initialize fullscreen map (pass camera state for follow mode)
+    const initialPitch = targetCamera?.pitch;
+    const initialBearing = targetCamera?.bearing;
     setTimeout(() => {
-      this.initializeFullscreenMap(adjustedBounds, currentLocations, initialPitch, initialBearing);
+      this.initializeFullscreenMap(adjustedBounds, currentLocations, initialPitch, initialBearing, initialCenter, initialZoom);
     }, 100);
   }
 
   /**
    * Initialize and render fullscreen map
+   * @param adjustedBounds Bounds to fit (null if using center/zoom)
+   * @param currentLocations Locations to display
    * @param initialPitch Optional initial pitch/tilt (for follow mode)
    * @param initialBearing Optional initial bearing/heading (for follow mode)
+   * @param initialCenter Optional initial center (for follow mode - more accurate than bounds with pitch)
+   * @param initialZoom Optional initial zoom (for follow mode)
    */
-  private initializeFullscreenMap(adjustedBounds: any, currentLocations: Location[], initialPitch?: number, initialBearing?: number): void {
+  private initializeFullscreenMap(
+    adjustedBounds: any,
+    currentLocations: Location[],
+    initialPitch?: number,
+    initialBearing?: number,
+    initialCenter?: { lng: number; lat: number },
+    initialZoom?: number
+  ): void {
     // Remove existing map if any
     if (this.fullscreenMap) {
       this.fullscreenMap.remove();
     }
 
-    console.log('[Fullscreen] Creating map with adjusted bounds', { pitch: initialPitch, bearing: initialBearing });
+    console.log('[Fullscreen] Creating map', {
+      useCenter: !!initialCenter,
+      center: initialCenter,
+      zoom: initialZoom,
+      pitch: initialPitch,
+      bearing: initialBearing
+    });
 
     // Set Mapbox token
     (window as any).mapboxgl.accessToken = this.deps.mapboxToken;
 
-    // Create fullscreen map with adjusted bounds (NO padding)
-    // The bounds are pre-calculated to achieve the same visual alignment
-    // Include pitch and bearing if provided (for follow mode)
+    // Create fullscreen map
+    // Use center/zoom for follow mode (more accurate with pitch), otherwise use bounds
     const mapOptions: any = {
       container: 'fullscreen-map',
       style: 'mapbox://styles/mapbox/light-v11',
-      bounds: adjustedBounds,
-      fitBoundsOptions: {
-        padding: 0,  // No padding needed - bounds are already adjusted
-        duration: 0
-      },
       interactive: true,
       trackResize: true,
       fadeDuration: 0
     };
 
-    // Add pitch/bearing if provided (follow mode)
-    if (initialPitch !== undefined) {
-      mapOptions.pitch = initialPitch;
-    }
-    if (initialBearing !== undefined) {
-      mapOptions.bearing = initialBearing;
+    if (initialCenter && initialZoom !== undefined) {
+      // Follow mode: use exact camera state (center, zoom, pitch, bearing)
+      // This is more accurate than bounds when pitch is applied
+      mapOptions.center = [initialCenter.lng, initialCenter.lat];
+      mapOptions.zoom = initialZoom;
+      mapOptions.pitch = initialPitch ?? 0;
+      mapOptions.bearing = initialBearing ?? 0;
+    } else if (adjustedBounds) {
+      // Normal mode: use bounds with optional pitch/bearing
+      mapOptions.bounds = adjustedBounds;
+      mapOptions.fitBoundsOptions = {
+        padding: 0,  // No padding needed - bounds are already adjusted
+        duration: 0
+      };
+      if (initialPitch !== undefined) {
+        mapOptions.pitch = initialPitch;
+      }
+      if (initialBearing !== undefined) {
+        mapOptions.bearing = initialBearing;
+      }
     }
 
     this.fullscreenMap = new (window as any).mapboxgl.Map(mapOptions);
@@ -620,59 +661,52 @@ export class FullscreenMapView {
   }
 
   /**
-   * Fit the fullscreen map to given bounds with pitch/bearing (for follow mode)
+   * Sync the fullscreen map to the followed user's camera state
+   * Uses center/zoom/pitch/bearing for accurate sync (bounds alone don't work with pitch)
    */
-  fitBounds(boundsData: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
-    if (!this.fullscreenMap || !boundsData) {
-      console.log('[Fullscreen] Cannot fitBounds - map not available or no bounds data');
+  fitBounds(cameraData: {
+    north: number; south: number; east: number; west: number;
+    center?: { lng: number; lat: number };
+    zoom?: number;
+    pitch?: number;
+    bearing?: number
+  }): void {
+    if (!this.fullscreenMap || !cameraData) {
+      console.log('[Fullscreen] Cannot sync camera - map not available or no camera data');
       return;
     }
 
-    // Create LngLatBounds from the serialized data
-    const bounds = new (window as any).mapboxgl.LngLatBounds(
-      [boundsData.west, boundsData.south], // Southwest corner
-      [boundsData.east, boundsData.north]  // Northeast corner
-    );
+    // If we have full camera state (center, zoom, pitch, bearing), use it directly
+    // This is more accurate than trying to reconstruct from bounds with pitch
+    if (cameraData.center && cameraData.zoom !== undefined) {
+      console.log('[Fullscreen] Syncing camera state:', {
+        center: cameraData.center,
+        zoom: cameraData.zoom,
+        pitch: cameraData.pitch,
+        bearing: cameraData.bearing
+      });
 
-    console.log('[Fullscreen] Fitting bounds from follow mode:', boundsData);
-
-    // Use flyTo instead of fitBounds to include pitch and bearing
-    // Calculate center and appropriate zoom from bounds
-    const center = bounds.getCenter();
-
-    // Get current camera to determine zoom that fits bounds
-    // We need to calculate zoom that fits the bounds
-    const currentZoom = this.fullscreenMap.getZoom();
-
-    // Use cameraForBounds to get the appropriate zoom level
-    const cameraOptions = this.fullscreenMap.cameraForBounds(bounds, {
-      padding: 0
-    });
-
-    if (cameraOptions) {
       this.fullscreenMap.flyTo({
-        center: cameraOptions.center,
-        zoom: cameraOptions.zoom,
-        pitch: boundsData.pitch ?? 0,
-        bearing: boundsData.bearing ?? 0,
+        center: [cameraData.center.lng, cameraData.center.lat],
+        zoom: cameraData.zoom,
+        pitch: cameraData.pitch ?? 0,
+        bearing: cameraData.bearing ?? 0,
         duration: 300,
         essential: true
       });
     } else {
-      // Fallback to fitBounds if cameraForBounds fails
+      // Fallback to bounds-based approach (for backwards compatibility)
+      console.log('[Fullscreen] Falling back to bounds-based sync');
+      const bounds = new (window as any).mapboxgl.LngLatBounds(
+        [cameraData.west, cameraData.south],
+        [cameraData.east, cameraData.north]
+      );
+
       this.fullscreenMap.fitBounds(bounds, {
         padding: 0,
         animate: true,
         duration: 300
       });
-      // Apply pitch/bearing separately
-      if (boundsData.pitch !== undefined || boundsData.bearing !== undefined) {
-        this.fullscreenMap.easeTo({
-          pitch: boundsData.pitch ?? 0,
-          bearing: boundsData.bearing ?? 0,
-          duration: 300
-        });
-      }
     }
   }
 }

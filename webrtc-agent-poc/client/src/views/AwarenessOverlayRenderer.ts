@@ -45,22 +45,28 @@ export class AwarenessOverlayRenderer {
   }
 
   /**
-   * Update awareness with current map bounds, pitch, and bearing
+   * Update awareness with current map camera state (bounds, center, zoom, pitch, bearing)
    * Extracted from main.ts:332-349
    */
   updateMapBoundsAwareness(awareness: any, map: mapboxgl.Map): void {
     const bounds = this.getVisibleBounds(map);
     const currentUser = awareness.getLocalState()?.user || {};
 
-    // Get camera orientation (pitch = tilt, bearing = heading/rotation)
+    // Get full camera state for accurate sync
+    const center = map.getCenter();
+    const zoom = map.getZoom();
     const pitch = map.getPitch();
     const bearing = map.getBearing();
 
     const boundsData = {
+      // Bounds (for overlay rectangles on block maps)
       north: bounds.getNorth(),
       south: bounds.getSouth(),
       east: bounds.getEast(),
       west: bounds.getWest(),
+      // Camera state (for accurate follow mode sync)
+      center: { lng: center.lng, lat: center.lat },
+      zoom,
       pitch,
       bearing,
     };
@@ -70,7 +76,7 @@ export class AwarenessOverlayRenderer {
       mapBounds: boundsData,
     });
 
-    console.log('[Awareness] Updated map bounds:', boundsData);
+    console.log('[Awareness] Updated map camera:', { center: boundsData.center, zoom, pitch, bearing });
   }
 
   /**

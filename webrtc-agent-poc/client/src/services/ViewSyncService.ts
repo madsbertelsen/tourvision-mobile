@@ -160,9 +160,15 @@ export class ViewSyncService {
   /**
    * Apply remote user's view state (called from awareness listener)
    * @param remoteViewState The view state to apply
-   * @param mapBounds Optional map bounds to use when opening fullscreen (for follow mode)
+   * @param mapBounds Optional map camera state to use when opening fullscreen (for follow mode)
    */
-  applyRemoteViewState(remoteViewState: ViewState, mapBounds?: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
+  applyRemoteViewState(remoteViewState: ViewState, mapBounds?: {
+    north: number; south: number; east: number; west: number;
+    center?: { lng: number; lat: number };
+    zoom?: number;
+    pitch?: number;
+    bearing?: number
+  }): void {
     this.isUpdatingFromRemote = true;
 
     // Apply scroll position
@@ -192,15 +198,21 @@ export class ViewSyncService {
   }
 
   /**
-   * Apply remote user's map bounds, pitch, and bearing
+   * Apply remote user's map camera state (center, zoom, pitch, bearing)
    */
-  applyRemoteMapBounds(boundsData: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
-    if (!boundsData || !this.fullscreenMapView) return;
+  applyRemoteMapBounds(cameraData: {
+    north: number; south: number; east: number; west: number;
+    center?: { lng: number; lat: number };
+    zoom?: number;
+    pitch?: number;
+    bearing?: number
+  }): void {
+    if (!cameraData || !this.fullscreenMapView) return;
 
     this.isUpdatingFromRemote = true;
 
-    // Use fitBounds on the fullscreen map (includes pitch/bearing)
-    this.fullscreenMapView.fitBounds(boundsData);
+    // Sync the fullscreen map to the followed user's camera state
+    this.fullscreenMapView.fitBounds(cameraData);
 
     setTimeout(() => {
       this.isUpdatingFromRemote = false;
