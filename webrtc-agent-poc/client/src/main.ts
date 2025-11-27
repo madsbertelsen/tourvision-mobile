@@ -22,7 +22,7 @@ import * as Y from 'yjs';
 // Mapbox GL JS
 
 // Services
-import { AnimatePlayback } from './services/AnimatePlayback';
+import { AnimateAgent, AnimatePlayback } from './services/AnimatePlayback';
 import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
@@ -506,8 +506,9 @@ let globalAwareness: any = null;
 // Global ViewSyncService for collaborative view synchronization
 let viewSyncService: ViewSyncService | null = null;
 
-// Global AnimatePlayback for landing page demo mode
+// Global AnimatePlayback/AnimateAgent for landing page demo mode
 let animatePlayback: AnimatePlayback | null = null;
+let animateAgent: AnimateAgent | null = null;
 
 // Initialize AwarenessOverlayRenderer
 awarenessOverlayRenderer = new AwarenessOverlayRenderer();
@@ -955,11 +956,21 @@ async function main() {
     console.log('[Main] Agent tab disabled (enableAgent not set to true)');
   }
 
-  // Initialize AnimatePlayback for landing page demo mode
+  // Initialize Animate mode for landing page demo
+  // User tab: Creates scroll overlay and broadcasts position via awareness
+  // Agent tab: Observes scroll position and types content via Y.js sync
   if (isAnimateMode) {
-    console.log('[Main] Initializing AnimatePlayback for demo mode');
-    animatePlayback = new AnimatePlayback(editor);
-    animatePlayback.initialize();
+    if (isAgent) {
+      // Agent tab - types content based on scroll position from user tab
+      console.log('[Main] Initializing AnimateAgent for demo mode (agent tab)');
+      animateAgent = new AnimateAgent(editor, awareness);
+      animateAgent.initialize();
+    } else {
+      // User tab - scroll overlay that broadcasts position
+      console.log('[Main] Initializing AnimatePlayback for demo mode (user tab)');
+      animatePlayback = new AnimatePlayback(awareness, documentId);
+      animatePlayback.initialize();
+    }
   }
 
   // Set up toolbar button handlers

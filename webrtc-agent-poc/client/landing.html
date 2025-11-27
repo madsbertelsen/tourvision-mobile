@@ -13,9 +13,9 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(180deg, #f0f9ff 0%, #fef3f2 50%, #fefce8 100%);
+      background: #fafafa;
       color: #111;
-      min-height: 100vh;
+      line-height: 1.6;
     }
 
     /* Header */
@@ -24,7 +24,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
     }
 
@@ -58,24 +58,40 @@
       color: #111;
     }
 
-    .btn-signup {
-      background: #111;
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: 6px;
+    .btn {
+      padding: 10px 20px;
       font-size: 14px;
-      text-decoration: none;
       font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
     }
 
-    .btn-signup:hover {
+    .btn-primary {
+      background: #111;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
       background: #333;
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: #111;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      border-color: #111;
     }
 
     /* Hero */
     .hero {
       text-align: center;
-      padding: 60px 24px 40px;
+      padding: 80px 24px;
       max-width: 900px;
       margin: 0 auto;
     }
@@ -107,45 +123,58 @@
       color: #666;
       max-width: 600px;
       margin: 0 auto 32px;
-      line-height: 1.6;
     }
 
-    /* Demo Tabs */
-    .demo-tabs {
+    .hero-buttons {
       display: flex;
+      gap: 12px;
       justify-content: center;
-      gap: 8px;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
     }
 
-    .demo-tab {
-      padding: 10px 20px;
-      border: none;
-      background: transparent;
-      font-size: 14px;
-      cursor: pointer;
-      border-radius: 20px;
+    /* Feature Sections */
+    .feature-section {
+      padding: 80px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature-section:nth-child(even) {
+      background: #fff;
+    }
+
+    .feature-section.alt {
+      background: #fff;
+    }
+
+    .feature-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .feature-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       color: #666;
-      transition: all 0.2s;
+      margin-bottom: 12px;
     }
 
-    .demo-tab:hover {
-      color: #111;
+    .feature-header h2 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
     }
 
-    .demo-tab.active {
-      background: #111;
-      color: #fff;
+    .feature-header p {
+      font-size: 18px;
+      color: #666;
+      max-width: 600px;
+      margin: 0 auto;
     }
 
     /* Demo Container */
-    .demo-section {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 24px 60px;
-    }
-
     .demo-container {
       background: #fff;
       border-radius: 16px;
@@ -154,6 +183,8 @@
         0 4px 16px rgba(0,0,0,0.08),
         0 12px 48px rgba(0,0,0,0.06);
       overflow: hidden;
+      max-width: 1000px;
+      margin: 0 auto;
     }
 
     .demo-toolbar {
@@ -165,51 +196,34 @@
       background: #fafafa;
     }
 
-    .demo-dropdown {
+    .demo-dots {
       display: flex;
-      align-items: center;
       gap: 6px;
-      padding: 6px 12px;
-      background: #f0f0f0;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #333;
-      cursor: pointer;
     }
 
-    .demo-dropdown svg {
-      width: 12px;
-      height: 12px;
+    .demo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ddd;
     }
+
+    .demo-dot.red { background: #ff5f56; }
+    .demo-dot.yellow { background: #ffbd2e; }
+    .demo-dot.green { background: #27c93f; }
 
     .toolbar-divider {
       width: 1px;
-      height: 24px;
+      height: 20px;
       background: #e0e0e0;
       margin: 0 8px;
     }
 
-    .toolbar-btn {
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: transparent;
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .demo-title {
+      font-size: 13px;
       color: #666;
-      font-size: 14px;
-    }
-
-    .toolbar-btn:hover {
-      background: #f0f0f0;
-      color: #111;
-    }
-
-    .toolbar-spacer {
       flex: 1;
+      text-align: center;
     }
 
     .demo-iframe-container {
@@ -223,86 +237,62 @@
       border: none;
     }
 
-    .demo-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s;
+    /* Feature Grid (for smaller feature cards) */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
     }
 
-    .demo-overlay:hover {
-      background: rgba(0,0,0,0.02);
+    .feature-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.05);
     }
 
-    .demo-overlay.hidden {
-      display: none;
+    .feature-card-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
     }
 
-    .demo-cta {
-      background: #111;
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all 0.2s;
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
     }
 
-    .demo-overlay:hover .demo-cta {
-      opacity: 1;
-      transform: translateY(0);
+    .feature-card p {
+      font-size: 14px;
+      color: #666;
     }
 
     /* CTA Section */
     .cta-section {
       text-align: center;
-      padding: 40px 24px 80px;
+      padding: 80px 24px;
+      background: linear-gradient(180deg, #f0f9ff 0%, #fef3f2 50%, #fefce8 100%);
+    }
+
+    .cta-section h2 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 32px;
     }
 
     .cta-buttons {
       display: flex;
       gap: 12px;
       justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      padding: 14px 28px;
-      font-size: 15px;
-      font-weight: 500;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
-    }
-
-    .btn-primary {
-      background: #111;
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: #333;
-    }
-
-    .btn-secondary {
-      background: #fff;
-      color: #111;
-      border: 1px solid #ddd;
-    }
-
-    .btn-secondary:hover {
-      border-color: #111;
     }
 
     /* Footer */
@@ -389,6 +379,10 @@
         letter-spacing: -1px;
       }
 
+      .feature-header h2 {
+        font-size: 28px;
+      }
+
       .demo-iframe-container {
         height: 400px;
       }
@@ -406,67 +400,152 @@
       <span>TourVision</span>
     </a>
     <div class="header-right">
-      <a href="/health" class="header-link">Status</a>
-      <a href="/api" class="header-link">API</a>
-      <a href="#" class="btn-signup" onclick="quickStart(); return false;">Get Started</a>
+      <a href="#features" class="header-link">Features</a>
+      <a href="#demo" class="header-link">Demo</a>
+      <a href="#" class="btn btn-primary" onclick="quickStart(); return false;">Get Started</a>
     </div>
   </header>
 
   <main>
+    <!-- Hero Section -->
     <section class="hero">
       <h1>
         Plan <span class="highlight">collaborative</span><br>
-        trips <span class="italic">together</span><br>
-        in real-time
+        trips <span class="italic">together</span>
       </h1>
       <p>
         Create documents with interactive maps. Tag locations, share itineraries, and see each other's cursors live.
       </p>
+      <div class="hero-buttons">
+        <button class="btn btn-primary" onclick="quickStart()">Start Planning</button>
+        <button class="btn btn-secondary" onclick="showCreateModal()">Create Named Trip</button>
+      </div>
     </section>
 
-    <section class="demo-section">
-      <div class="demo-tabs">
-        <button class="demo-tab active">Trip Planner</button>
-        <button class="demo-tab">Geo Marks</button>
-        <button class="demo-tab">Follow Mode</button>
-        <button class="demo-tab">Map Styles</button>
+    <!-- Feature 1: Real-time Collaboration -->
+    <section class="feature-section" id="demo">
+      <div class="feature-header">
+        <div class="feature-label">Real-time Collaboration</div>
+        <h2>Write together, plan together</h2>
+        <p>See your travel companions' cursors in real-time. Every edit syncs instantly across all devices.</p>
       </div>
-
       <div class="demo-container">
         <div class="demo-toolbar">
-          <div class="demo-dropdown">
-            <span>AI Toolkit examples</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
+          <div class="demo-dots">
+            <span class="demo-dot red"></span>
+            <span class="demo-dot yellow"></span>
+            <span class="demo-dot green"></span>
           </div>
           <div class="toolbar-divider"></div>
-          <button class="toolbar-btn" title="Bold"><b>B</b></button>
-          <button class="toolbar-btn" title="Italic"><i>I</i></button>
-          <button class="toolbar-btn" title="Underline"><u>U</u></button>
+          <span class="demo-title">Collaborative Editor</span>
           <div class="toolbar-divider"></div>
-          <button class="toolbar-btn" title="Create Geo Mark">📍</button>
-          <button class="toolbar-btn" title="Insert Map">🗺️</button>
-          <div class="toolbar-spacer"></div>
-          <button class="toolbar-btn" title="+ Custom">+</button>
+          <div style="width: 50px;"></div>
         </div>
         <div class="demo-iframe-container">
           <iframe
-            id="demo-iframe"
             class="demo-iframe"
+            src="/doc/demo-collab?hideHeader=true"
             loading="lazy"
           ></iframe>
-          <div class="demo-overlay" id="demo-overlay" onclick="enterDemo()">
-            <span class="demo-cta">Click to interact</span>
-          </div>
         </div>
       </div>
     </section>
 
+    <!-- Feature 2: Geo Marks -->
+    <section class="feature-section alt" id="features">
+      <div class="feature-header">
+        <div class="feature-label">Location Tagging</div>
+        <h2>Tag places, see them on the map</h2>
+        <p>Select any text and turn it into a geo-mark. Locations automatically appear on your embedded map.</p>
+      </div>
+      <div class="demo-container">
+        <div class="demo-toolbar">
+          <div class="demo-dots">
+            <span class="demo-dot red"></span>
+            <span class="demo-dot yellow"></span>
+            <span class="demo-dot green"></span>
+          </div>
+          <div class="toolbar-divider"></div>
+          <span class="demo-title">Geo Marks Demo</span>
+          <div class="toolbar-divider"></div>
+          <div style="width: 50px;"></div>
+        </div>
+        <div class="demo-iframe-container">
+          <iframe
+            class="demo-iframe"
+            src="/doc/demo-geomarks?hideHeader=true"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature 3: Interactive Maps -->
+    <section class="feature-section">
+      <div class="feature-header">
+        <div class="feature-label">Interactive Maps</div>
+        <h2>Maps that come alive</h2>
+        <p>Insert beautiful Mapbox maps that automatically show all your tagged locations. Click any marker to navigate.</p>
+      </div>
+      <div class="demo-container">
+        <div class="demo-toolbar">
+          <div class="demo-dots">
+            <span class="demo-dot red"></span>
+            <span class="demo-dot yellow"></span>
+            <span class="demo-dot green"></span>
+          </div>
+          <div class="toolbar-divider"></div>
+          <span class="demo-title">Interactive Map Demo</span>
+          <div class="toolbar-divider"></div>
+          <div style="width: 50px;"></div>
+        </div>
+        <div class="demo-iframe-container">
+          <iframe
+            class="demo-iframe"
+            src="/doc/demo-maps?hideHeader=true"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- Additional Features Grid -->
+    <section class="feature-section alt">
+      <div class="feature-header">
+        <div class="feature-label">More Features</div>
+        <h2>Everything you need to plan</h2>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-card-icon">👥</div>
+          <h3>Follow Mode</h3>
+          <p>Follow a friend's view and see exactly what they're looking at on the map.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-icon">🎨</div>
+          <h3>Map Styles</h3>
+          <p>Choose from multiple map styles including satellite, streets, and terrain views.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-icon">📱</div>
+          <h3>Mobile Ready</h3>
+          <p>Plan on any device. Full touch support for tablets and phones.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-icon">🔗</div>
+          <h3>Easy Sharing</h3>
+          <p>Share your trip with a simple link. No account required to collaborate.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
     <section class="cta-section">
+      <h2>Ready to plan your adventure?</h2>
+      <p>Start collaborating with your travel companions in seconds.</p>
       <div class="cta-buttons">
-        <button class="btn btn-primary" onclick="showCreateModal()">Create a Trip</button>
-        <button class="btn btn-secondary" onclick="quickStart()">Quick Start</button>
+        <button class="btn btn-primary" onclick="quickStart()">Start Planning Free</button>
+        <button class="btn btn-secondary" onclick="showCreateModal()">Create Named Trip</button>
       </div>
     </section>
   </main>
@@ -480,7 +559,7 @@
   <div class="modal-backdrop" id="modal-backdrop" onclick="hideCreateModal(event)">
     <div class="modal" onclick="event.stopPropagation()">
       <h2>Create a new trip</h2>
-      <p>Give your trip a name. This will be part of the URL.</p>
+      <p>Give your trip a name. This will be part of the shareable URL.</p>
       <input
         type="text"
         id="trip-name"
@@ -495,85 +574,7 @@
   </div>
 
   <script>
-    // Generate unique document ID for this demo session
-    const demoDocId = 'demo-' + Math.random().toString(36).substring(2, 10);
-
-    // Set iframe src with unique doc ID
-    const iframe = document.getElementById('demo-iframe');
-    iframe.src = `/doc/${demoDocId}?animate=true&hideHeader=true`;
-
-    // Typewriter effect
-    const demoText = `Day 1: Arriving in Tokyo
-
-We land at Narita Airport around 2pm. Taking the Narita Express to Shinjuku Station.
-
-First stop: Shibuya Crossing - the famous scramble intersection.
-
-Day 2: Kyoto
-
-Taking the Shinkansen from Tokyo Station. About 2 hours.
-
-Must visit:
-- Fushimi Inari Shrine
-- Kinkaku-ji (Golden Pavilion)
-- Arashiyama Bamboo Grove`;
-
-    let typewriterIndex = 0;
-    let typewriterStarted = false;
-
-    function startTypewriter() {
-      if (typewriterStarted) return;
-      typewriterStarted = true;
-
-      const iframe = document.getElementById('demo-iframe');
-
-      // Handle both cases: iframe already loaded or not yet loaded
-      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
-        // Already loaded, start after a delay for editor to initialize
-        setTimeout(typeNextChar, 1500);
-      } else {
-        // Not yet loaded, wait for load event
-        iframe.addEventListener('load', () => {
-          setTimeout(typeNextChar, 1500);
-        });
-      }
-    }
-
-    function typeNextChar() {
-      if (typewriterIndex >= demoText.length) return;
-
-      const iframe = document.getElementById('demo-iframe');
-      const char = demoText[typewriterIndex];
-
-      try {
-        iframe.contentWindow.postMessage({
-          type: 'typewriter',
-          char: char
-        }, '*');
-      } catch (e) {
-        console.error('Typewriter postMessage error:', e);
-      }
-
-      typewriterIndex++;
-
-      let delay = 25 + Math.random() * 35;
-      if (char === '\n') delay = 150;
-      if (char === '.') delay = 250;
-      if (char === ':') delay = 200;
-
-      setTimeout(typeNextChar, delay);
-    }
-
-    // Start typewriter when page is visible
-    if (document.visibilityState === 'visible') {
-      setTimeout(startTypewriter, 500);
-    } else {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') startTypewriter();
-      });
-    }
-
-    // Modal
+    // Modal functions
     function showCreateModal() {
       document.getElementById('modal-backdrop').classList.add('visible');
       setTimeout(() => document.getElementById('trip-name').focus(), 100);
@@ -606,11 +607,6 @@ Must visit:
     function quickStart() {
       const randomId = 'trip-' + Math.random().toString(36).substring(2, 10);
       window.location.href = '/doc/' + randomId;
-    }
-
-    function enterDemo() {
-      document.getElementById('demo-overlay').classList.add('hidden');
-      document.getElementById('demo-iframe').focus();
     }
   </script>
 </body>

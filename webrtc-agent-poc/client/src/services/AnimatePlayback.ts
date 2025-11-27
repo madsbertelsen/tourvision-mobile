@@ -1,307 +1,181 @@
 /**
  * AnimatePlayback - Scroll-based content reveal for landing page demo
  *
- * Progressively types pre-defined content as user scrolls down the page.
+ * User tab (in iframe): Receives scroll position from parent landing page via postMessage,
+ *                       broadcasts to agent tab via awareness
+ * Agent tab: Observes scroll position and types content via Y.js sync
  */
 
 import type { EditorView } from 'prosemirror-view';
 
-interface ContentSection {
-  scrollPercent: number;
-  text: string;
-}
-
-// Demo content for landing page playback
-const DEMO_CONTENT: ContentSection[] = [
-  {
-    scrollPercent: 0,
-    text: `Welcome to TourVision
-
-`
-  },
-  {
-    scrollPercent: 5,
-    text: `The collaborative trip planning tool that lets you create beautiful itineraries with your travel companions.
-
-`
-  },
-  {
-    scrollPercent: 15,
-    text: `---
-
-Day 1: Tokyo
-
-`
-  },
-  {
-    scrollPercent: 20,
-    text: `Arrive at Narita Airport. `
-  },
-  {
-    scrollPercent: 25,
-    text: `Take the Narita Express to Shinjuku Station.
-
-`
-  },
-  {
-    scrollPercent: 30,
-    text: `First stop: Shibuya Crossing - the world's busiest pedestrian intersection.
-
-`
-  },
-  {
-    scrollPercent: 40,
-    text: `Evening: Explore the neon-lit streets of Shinjuku.
-
-`
-  },
-  {
-    scrollPercent: 50,
-    text: `---
-
-Day 2: Kyoto
-
-`
-  },
-  {
-    scrollPercent: 55,
-    text: `Take the Shinkansen bullet train from Tokyo Station. `
-  },
-  {
-    scrollPercent: 60,
-    text: `Journey time: about 2 hours.
-
-`
-  },
-  {
-    scrollPercent: 65,
-    text: `Must visit:
-`
-  },
-  {
-    scrollPercent: 70,
-    text: `- Fushimi Inari Shrine (thousands of orange torii gates)
-`
-  },
-  {
-    scrollPercent: 75,
-    text: `- Kinkaku-ji (the Golden Pavilion)
-`
-  },
-  {
-    scrollPercent: 80,
-    text: `- Arashiyama Bamboo Grove
-
-`
-  },
-  {
-    scrollPercent: 90,
-    text: `---
-
-Ready to plan your adventure?`
-  }
+// Demo content for landing page playback (used by agent)
+export const DEMO_CONTENT = [
+  { scrollPercent: 0, text: `Welcome to TourVision\n\n` },
+  { scrollPercent: 5, text: `The collaborative trip planning tool that lets you create beautiful itineraries with your travel companions.\n\n` },
+  { scrollPercent: 15, text: `---\n\nDay 1: Tokyo\n\n` },
+  { scrollPercent: 20, text: `Arrive at Narita Airport. ` },
+  { scrollPercent: 25, text: `Take the Narita Express to Shinjuku Station.\n\n` },
+  { scrollPercent: 30, text: `First stop: Shibuya Crossing - the world's busiest pedestrian intersection.\n\n` },
+  { scrollPercent: 40, text: `Evening: Explore the neon-lit streets of Shinjuku.\n\n` },
+  { scrollPercent: 50, text: `---\n\nDay 2: Kyoto\n\n` },
+  { scrollPercent: 55, text: `Take the Shinkansen bullet train from Tokyo Station. ` },
+  { scrollPercent: 60, text: `Journey time: about 2 hours.\n\n` },
+  { scrollPercent: 65, text: `Must visit:\n` },
+  { scrollPercent: 70, text: `- Fushimi Inari Shrine (thousands of orange torii gates)\n` },
+  { scrollPercent: 75, text: `- Kinkaku-ji (the Golden Pavilion)\n` },
+  { scrollPercent: 80, text: `- Arashiyama Bamboo Grove\n\n` },
+  { scrollPercent: 90, text: `---\n\nReady to plan your adventure?` }
 ];
 
+/**
+ * AnimatePlayback for USER tab (runs inside iframe on landing page)
+ * Receives scroll position from parent landing page and broadcasts via awareness
+ */
 export class AnimatePlayback {
-  private view: EditorView;
-  private currentSectionIndex = 0;
-  private isTyping = false;
-  private typewriterQueue: { text: string; callback?: () => void }[] = [];
-  private scrollContainer: HTMLElement | null = null;
-  private progressBar: HTMLElement | null = null;
-  private ctaOverlay: HTMLElement | null = null;
+  private awareness: any;
+  private documentId: string;
+  private agentWindow: Window | null = null;
+  private messageHandler: ((event: MessageEvent) => void) | null = null;
 
-  constructor(view: EditorView) {
-    this.view = view;
+  constructor(awareness: any, documentId: string) {
+    this.awareness = awareness;
+    this.documentId = documentId;
   }
 
   /**
-   * Initialize animate playback mode
+   * Initialize animate playback mode (user tab in iframe)
    */
   initialize() {
-    console.log('[AnimatePlayback] Initializing scroll-based playback');
+    console.log('[AnimatePlayback] Initializing user tab - listening for scroll from parent');
 
-    // Create scroll container overlay
-    this.createScrollOverlay();
+    // Open agent tab to generate content
+    this.openAgentTab();
 
-    // Start initial content
+    // Listen for scroll position from parent landing page
+    this.messageHandler = (event: MessageEvent) => {
+      if (event.data?.type === 'scrollPosition') {
+        const scrollPercent = event.data.scrollPercent;
+        console.log('[AnimatePlayback] Received scroll position from parent:', scrollPercent);
+        this.broadcastScrollPosition(scrollPercent);
+      }
+    };
+    window.addEventListener('message', this.messageHandler);
+
+    // Signal to parent that we're ready to receive scroll updates
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'animateReady' }, '*');
+      console.log('[AnimatePlayback] Sent animateReady to parent');
+    }
+
+    // Broadcast initial scroll position
+    this.broadcastScrollPosition(0);
+  }
+
+  /**
+   * Open agent tab that will generate content
+   */
+  private openAgentTab() {
+    const agentUrl = `${window.location.origin}/doc/${this.documentId}?animate=true&agent=true`;
+    console.log('[AnimatePlayback] Opening agent tab:', agentUrl);
+
+    this.agentWindow = window.open(agentUrl, `animate-agent-${this.documentId}`, 'width=600,height=400');
+
+    if (!this.agentWindow) {
+      console.error('[AnimatePlayback] Failed to open agent tab - popup blocked?');
+    }
+
+    // Close agent tab when user tab closes
+    window.addEventListener('beforeunload', () => {
+      if (this.agentWindow && !this.agentWindow.closed) {
+        this.agentWindow.close();
+      }
+    });
+  }
+
+  /**
+   * Broadcast scroll position via awareness to agent tab
+   */
+  private broadcastScrollPosition(scrollPercent: number) {
+    const currentState = this.awareness.getLocalState();
+    this.awareness.setLocalStateField('user', {
+      ...currentState?.user,
+      animateScrollPercent: scrollPercent
+    });
+  }
+
+  /**
+   * Cleanup when leaving animate mode
+   */
+  destroy() {
+    if (this.messageHandler) {
+      window.removeEventListener('message', this.messageHandler);
+    }
+    if (this.agentWindow && !this.agentWindow.closed) {
+      this.agentWindow.close();
+    }
+  }
+}
+
+/**
+ * AnimateAgent for AGENT tab
+ * Observes scroll position from awareness and types content via Y.js
+ */
+export class AnimateAgent {
+  private view: EditorView;
+  private awareness: any;
+  private currentSectionIndex = 0;
+  private isTyping = false;
+  private typewriterQueue: { text: string; callback?: () => void }[] = [];
+  private lastScrollPercent = 0;
+
+  constructor(view: EditorView, awareness: any) {
+    this.view = view;
+    this.awareness = awareness;
+  }
+
+  /**
+   * Initialize animate agent (agent tab)
+   */
+  initialize() {
+    console.log('[AnimateAgent] Initializing agent tab for content generation');
+
+    // Listen for awareness changes to get scroll position
+    this.awareness.on('change', () => this.handleAwarenessChange());
+
+    // Start with first content section
     this.typeText(DEMO_CONTENT[0].text);
     this.currentSectionIndex = 1;
   }
 
   /**
-   * Create the scroll container and progress UI
+   * Handle awareness changes - check for scroll position updates
    */
-  private createScrollOverlay() {
-    // Create progress bar
-    this.progressBar = document.createElement('div');
-    this.progressBar.id = 'animate-progress-bar';
-    this.progressBar.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #3B82F6, #8B5CF6, #EC4899);
-      width: 0%;
-      transition: width 0.1s;
-      z-index: 1000;
-    `;
-    document.body.appendChild(this.progressBar);
+  private handleAwarenessChange() {
+    const states = this.awareness.getStates();
 
-    // Create invisible scroll container
-    this.scrollContainer = document.createElement('div');
-    this.scrollContainer.id = 'animate-scroll-container';
-    this.scrollContainer.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      overflow-y: scroll;
-      z-index: 50;
-    `;
+    // Find the user tab's scroll position (non-agent client)
+    states.forEach((state: any, clientId: number) => {
+      if (clientId === this.awareness.clientID) return; // Skip self
 
-    const scrollContent = document.createElement('div');
-    scrollContent.style.cssText = `
-      height: 500vh;
-      pointer-events: none;
-    `;
-    this.scrollContainer.appendChild(scrollContent);
-    document.body.appendChild(this.scrollContainer);
-
-    // Create scroll indicator
-    const scrollIndicator = document.createElement('div');
-    scrollIndicator.id = 'animate-scroll-indicator';
-    scrollIndicator.innerHTML = `
-      <span style="color: rgba(0,0,0,0.4); font-size: 13px;">Scroll to explore</span>
-      <div style="
-        width: 24px;
-        height: 24px;
-        border: 2px solid rgba(0,0,0,0.4);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        animation: bounce 2s infinite;
-        margin-top: 8px;
-      ">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: rgba(0,0,0,0.4)">
-          <path d="M12 5v14M5 12l7 7 7-7"/>
-        </svg>
-      </div>
-    `;
-    scrollIndicator.style.cssText = `
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      pointer-events: none;
-      transition: opacity 0.3s;
-      z-index: 100;
-    `;
-    document.body.appendChild(scrollIndicator);
-
-    // Add bounce animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes bounce {
-        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-        40% { transform: translateY(6px); }
-        60% { transform: translateY(3px); }
+      const scrollPercent = state?.user?.animateScrollPercent;
+      if (typeof scrollPercent === 'number' && scrollPercent !== this.lastScrollPercent) {
+        this.lastScrollPercent = scrollPercent;
+        this.handleScrollUpdate(scrollPercent);
       }
-    `;
-    document.head.appendChild(style);
-
-    // Create CTA overlay
-    this.ctaOverlay = document.createElement('div');
-    this.ctaOverlay.id = 'animate-cta-overlay';
-    this.ctaOverlay.innerHTML = `
-      <a href="#" class="btn btn-primary" onclick="window.location.href='/doc/trip-' + Math.random().toString(36).substring(2,10); return false;" style="
-        padding: 14px 28px;
-        font-size: 15px;
-        font-weight: 500;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        text-decoration: none;
-        background: #111;
-        color: #fff;
-      ">Start Planning Your Trip</a>
-      <a href="/landing.html" style="
-        padding: 14px 28px;
-        font-size: 15px;
-        font-weight: 500;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        text-decoration: none;
-        background: #fff;
-        color: #111;
-        border: 1px solid #ddd;
-      ">Learn More</a>
-    `;
-    this.ctaOverlay.style.cssText = `
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 32px 24px;
-      background: linear-gradient(to top, #f5f5f4 60%, transparent);
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.5s, transform 0.5s;
-      pointer-events: none;
-      z-index: 100;
-    `;
-    document.body.appendChild(this.ctaOverlay);
-
-    // Add scroll listener
-    this.scrollContainer.addEventListener('scroll', () => this.handleScroll());
+    });
   }
 
   /**
-   * Handle scroll events
+   * Handle scroll position update - type content as needed
    */
-  private handleScroll() {
-    if (!this.scrollContainer || !this.progressBar) return;
-
-    const scrollHeight = this.scrollContainer.scrollHeight - this.scrollContainer.clientHeight;
-    const scrollPercent = (this.scrollContainer.scrollTop / scrollHeight) * 100;
-
-    // Update progress bar
-    this.progressBar.style.width = scrollPercent + '%';
-
-    // Hide scroll indicator after scrolling starts
-    const scrollIndicator = document.getElementById('animate-scroll-indicator');
-    if (scrollIndicator) {
-      scrollIndicator.style.opacity = scrollPercent > 2 ? '0' : '1';
-    }
-
-    // Show CTA at end
-    if (this.ctaOverlay) {
-      if (scrollPercent > 95) {
-        this.ctaOverlay.style.opacity = '1';
-        this.ctaOverlay.style.transform = 'translateY(0)';
-        this.ctaOverlay.style.pointerEvents = 'auto';
-      } else {
-        this.ctaOverlay.style.opacity = '0';
-        this.ctaOverlay.style.transform = 'translateY(20px)';
-        this.ctaOverlay.style.pointerEvents = 'none';
-      }
-    }
-
+  private handleScrollUpdate(scrollPercent: number) {
     // Trigger content sections based on scroll position
     while (
       this.currentSectionIndex < DEMO_CONTENT.length &&
       scrollPercent >= DEMO_CONTENT[this.currentSectionIndex].scrollPercent
     ) {
       const section = DEMO_CONTENT[this.currentSectionIndex];
+      console.log(`[AnimateAgent] Typing section ${this.currentSectionIndex} at ${scrollPercent}%`);
       this.typeText(section.text);
       this.currentSectionIndex++;
     }
@@ -324,7 +198,6 @@ export class AnimatePlayback {
       if (index >= text.length) {
         this.isTyping = false;
         if (callback) callback();
-        // Process next item in queue
         setTimeout(() => this.processQueue(), 50);
         return;
       }
@@ -347,7 +220,7 @@ export class AnimatePlayback {
   }
 
   /**
-   * Insert a character at the end of the document
+   * Insert a character at the end of the document (via ProseMirror/Y.js)
    */
   private insertChar(char: string) {
     const { state, dispatch } = this.view;
@@ -366,15 +239,5 @@ export class AnimatePlayback {
     const { text, callback } = this.typewriterQueue.shift()!;
     this.isTyping = false;
     this.typeText(text, callback);
-  }
-
-  /**
-   * Cleanup when leaving animate mode
-   */
-  destroy() {
-    this.scrollContainer?.remove();
-    this.progressBar?.remove();
-    this.ctaOverlay?.remove();
-    document.getElementById('animate-scroll-indicator')?.remove();
   }
 }
