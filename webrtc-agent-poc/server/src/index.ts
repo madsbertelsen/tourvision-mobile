@@ -274,17 +274,6 @@ app.get('/debug', (req, res) => {
   }
 });
 
-// Landing page for root route
-const landingPagePath = join(__dirname, '../public/landing.html');
-app.get('/', (req, res) => {
-  if (existsSync(landingPagePath)) {
-    res.sendFile(landingPagePath);
-  } else {
-    // Fallback if landing page doesn't exist
-    res.redirect('/doc/demo');
-  }
-});
-
 // Serve static files from client dist directory
 // This serves the built Vite frontend application
 if (existsSync(clientDistPath)) {
@@ -301,6 +290,17 @@ if (existsSync(clientDistPath)) {
   // Serve static assets (JS, CSS, images, etc.)
   app.use(express.static(clientDistPath));
 
+  // Landing page at root
+  app.get('/', (req, res) => {
+    const landingPath = join(clientDistPath, 'landing.html');
+    if (existsSync(landingPath)) {
+      res.sendFile(landingPath);
+    } else {
+      // Fallback to index.html if landing page not built
+      res.sendFile(join(clientDistPath, 'index.html'));
+    }
+  });
+
   // Document routes - serve the editor app
   // Matches /doc/:documentId and /?doc=:documentId for backwards compatibility
   app.get('/doc/*', (req, res) => {
@@ -313,13 +313,26 @@ if (existsSync(clientDistPath)) {
     if (req.query.doc) {
       res.sendFile(join(clientDistPath, 'index.html'));
     } else {
-      // Otherwise 404 (landing page is handled above)
+      // Otherwise 404
       next();
     }
   });
 } else {
   console.warn(`[Server] Client dist directory not found: ${clientDistPath}`);
   console.warn(`[Server] Run 'npm run build' in the client directory to build the frontend`);
+
+  // Landing page placeholder
+  app.get('/', (req, res) => {
+    res.status(503).send(`
+      <html>
+        <head><title>TourVision - Not Built</title></head>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h1>TourVision</h1>
+          <p>Frontend not built. Run <code>npm run build</code> in the client directory.</p>
+        </body>
+      </html>
+    `);
+  });
 
   // Document route placeholder when client not built
   app.get('/doc/*', (req, res) => {

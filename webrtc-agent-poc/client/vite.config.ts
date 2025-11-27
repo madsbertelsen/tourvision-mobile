@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory
@@ -9,11 +10,17 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       host: 'localhost',
     },
-    // SPA fallback: serve index.html for all paths (allows /doc-id URLs)
-    appType: 'spa',
+    // Multi-page app configuration
+    appType: 'mpa',
     build: {
       outDir: 'dist',
       sourcemap: true,
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html'),
+          landing: resolve(__dirname, 'landing.html'),
+        },
+      },
     },
     // Expose environment variables to client code
     // Variables prefixed with VITE_ are automatically available
