@@ -755,6 +755,16 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
           transportEditModeGeoId = null;
           break;
 
+        case 'typewriter':
+          // Insert character at end of document (for landing page demo)
+          if (data.char) {
+            const { state, dispatch } = view;
+            const endPos = state.doc.content.size - 1; // Before closing tag
+            const tr = state.tr.insertText(data.char, endPos);
+            dispatch(tr);
+          }
+          break;
+
         default:
           console.log('[Main] Unknown command:', data.type);
       }

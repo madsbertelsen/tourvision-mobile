@@ -13,289 +13,588 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(180deg, #f0f9ff 0%, #fef3f2 50%, #fefce8 100%);
+      color: #111;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: white;
     }
 
-    .container {
-      max-width: 600px;
-      text-align: center;
+    /* Header */
+    header {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1400px;
+      margin: 0 auto;
     }
 
     .logo {
-      font-size: 64px;
-      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: inherit;
+      font-weight: 600;
+      font-size: 18px;
     }
 
-    h1 {
-      font-size: 48px;
-      font-weight: 700;
-      margin-bottom: 16px;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .tagline {
-      font-size: 20px;
-      opacity: 0.9;
-      margin-bottom: 48px;
-      line-height: 1.5;
-    }
-
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-      color: #333;
-    }
-
-    .card h2 {
+    .logo-icon {
       font-size: 24px;
-      margin-bottom: 24px;
-      color: #333;
     }
 
-    .input-group {
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .header-link:hover {
+      color: #111;
+    }
+
+    .btn-signup {
+      background: #111;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .btn-signup:hover {
+      background: #333;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 60px 24px 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .highlight {
+      background: #111;
+      color: #fff;
+      padding: 0 12px;
+      font-style: italic;
+      display: inline-block;
+      transform: rotate(-1deg);
+    }
+
+    .hero h1 .italic {
+      font-style: italic;
+      color: #666;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #666;
+      max-width: 600px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
+
+    /* Demo Tabs */
+    .demo-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .demo-tab {
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 20px;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .demo-tab:hover {
+      color: #111;
+    }
+
+    .demo-tab.active {
+      background: #111;
+      color: #fff;
+    }
+
+    /* Demo Container */
+    .demo-section {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 60px;
+    }
+
+    .demo-container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.05),
+        0 4px 16px rgba(0,0,0,0.08),
+        0 12px 48px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+
+    .demo-toolbar {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      gap: 8px;
+      background: #fafafa;
+    }
+
+    .demo-dropdown {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #f0f0f0;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+    }
+
+    .demo-dropdown svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 24px;
+      background: #e0e0e0;
+      margin: 0 8px;
+    }
+
+    .toolbar-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .toolbar-btn:hover {
+      background: #f0f0f0;
+      color: #111;
+    }
+
+    .toolbar-spacer {
+      flex: 1;
+    }
+
+    .demo-iframe-container {
+      height: 500px;
+      position: relative;
+    }
+
+    .demo-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .demo-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .demo-overlay:hover {
+      background: rgba(0,0,0,0.02);
+    }
+
+    .demo-overlay.hidden {
+      display: none;
+    }
+
+    .demo-cta {
+      background: #111;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.2s;
+    }
+
+    .demo-overlay:hover .demo-cta {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* CTA Section */
+    .cta-section {
+      text-align: center;
+      padding: 40px 24px 80px;
+    }
+
+    .cta-buttons {
       display: flex;
       gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 14px 18px;
-      font-size: 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    input[type="text"]:focus {
-      border-color: #667eea;
-    }
-
-    input[type="text"]::placeholder {
-      color: #999;
+      justify-content: center;
+      flex-wrap: wrap;
     }
 
     .btn {
       padding: 14px 28px;
-      font-size: 16px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 500;
       border: none;
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s;
       text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: #111;
+      color: #fff;
     }
 
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      background: #333;
     }
 
     .btn-secondary {
-      background: #f5f5f5;
-      color: #333;
+      background: #fff;
+      color: #111;
+      border: 1px solid #ddd;
     }
 
     .btn-secondary:hover {
-      background: #e8e8e8;
+      border-color: #111;
     }
 
-    .divider {
-      display: flex;
-      align-items: center;
-      margin: 24px 0;
-      color: #999;
-      font-size: 14px;
-    }
-
-    .divider::before,
-    .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e0e0e0;
-    }
-
-    .divider::before {
-      margin-right: 16px;
-    }
-
-    .divider::after {
-      margin-left: 16px;
-    }
-
-    .features {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-top: 48px;
-    }
-
-    .feature {
-      background: rgba(255,255,255,0.1);
-      border-radius: 12px;
-      padding: 20px 16px;
-      backdrop-filter: blur(10px);
-    }
-
-    .feature-icon {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-
-    .feature h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .feature p {
-      font-size: 13px;
-      opacity: 0.8;
-      line-height: 1.4;
-    }
-
+    /* Footer */
     footer {
-      margin-top: 48px;
-      opacity: 0.7;
-      font-size: 14px;
+      padding: 24px;
+      text-align: center;
+      border-top: 1px solid rgba(0,0,0,0.05);
     }
 
     footer a {
-      color: white;
+      color: #999;
       text-decoration: none;
+      font-size: 13px;
+      margin: 0 12px;
     }
 
     footer a:hover {
-      text-decoration: underline;
+      color: #666;
     }
 
-    @media (max-width: 600px) {
-      h1 {
-        font-size: 32px;
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      width: 400px;
+      max-width: 90vw;
+    }
+
+    .modal h2 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+
+    .modal input:focus {
+      border-color: #111;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-buttons .btn {
+      flex: 1;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 36px;
+        letter-spacing: -1px;
       }
 
-      .tagline {
-        font-size: 16px;
+      .demo-iframe-container {
+        height: 400px;
       }
 
-      .input-group {
-        flex-direction: column;
-      }
-
-      .features {
-        grid-template-columns: 1fr;
+      .header-right .header-link {
+        display: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">🗺️</div>
-    <h1>TourVision</h1>
-    <p class="tagline">Plan trips together in real-time. Create geo-marked documents, share interactive maps, and collaborate with your travel companions.</p>
-
-    <div class="card">
-      <h2>Start Planning</h2>
-
-      <div class="input-group">
-        <input type="text" id="doc-name" placeholder="Enter trip name (e.g., japan-2025)">
-        <button class="btn btn-primary" onclick="createDoc()">
-          Create
-        </button>
-      </div>
-
-      <div class="divider">or</div>
-
-      <button class="btn btn-secondary" onclick="createRandomDoc()" style="width: 100%;">
-        Quick Start with Random ID
-      </button>
+  <header>
+    <a href="/" class="logo">
+      <span class="logo-icon">🗺️</span>
+      <span>TourVision</span>
+    </a>
+    <div class="header-right">
+      <a href="/health" class="header-link">Status</a>
+      <a href="/api" class="header-link">API</a>
+      <a href="#" class="btn-signup" onclick="quickStart(); return false;">Get Started</a>
     </div>
+  </header>
 
-    <div class="features">
-      <div class="feature">
-        <div class="feature-icon">📍</div>
-        <h3>Geo Marks</h3>
-        <p>Tag locations in your text and see them on an interactive map</p>
+  <main>
+    <section class="hero">
+      <h1>
+        Plan <span class="highlight">collaborative</span><br>
+        trips <span class="italic">together</span><br>
+        in real-time
+      </h1>
+      <p>
+        Create documents with interactive maps. Tag locations, share itineraries, and see each other's cursors live.
+      </p>
+    </section>
+
+    <section class="demo-section">
+      <div class="demo-tabs">
+        <button class="demo-tab active">Trip Planner</button>
+        <button class="demo-tab">Geo Marks</button>
+        <button class="demo-tab">Follow Mode</button>
+        <button class="demo-tab">Map Styles</button>
       </div>
-      <div class="feature">
-        <div class="feature-icon">👥</div>
-        <h3>Real-time Collab</h3>
-        <p>Edit together with live cursors and instant sync</p>
+
+      <div class="demo-container">
+        <div class="demo-toolbar">
+          <div class="demo-dropdown">
+            <span>AI Toolkit examples</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
+          <div class="toolbar-divider"></div>
+          <button class="toolbar-btn" title="Bold"><b>B</b></button>
+          <button class="toolbar-btn" title="Italic"><i>I</i></button>
+          <button class="toolbar-btn" title="Underline"><u>U</u></button>
+          <div class="toolbar-divider"></div>
+          <button class="toolbar-btn" title="Create Geo Mark">📍</button>
+          <button class="toolbar-btn" title="Insert Map">🗺️</button>
+          <div class="toolbar-spacer"></div>
+          <button class="toolbar-btn" title="+ Custom">+</button>
+        </div>
+        <div class="demo-iframe-container">
+          <iframe
+            id="demo-iframe"
+            class="demo-iframe"
+            src="/doc/landing-demo?hideHeader=true"
+            loading="lazy"
+          ></iframe>
+          <div class="demo-overlay" id="demo-overlay" onclick="enterDemo()">
+            <span class="demo-cta">Click to interact</span>
+          </div>
+        </div>
       </div>
-      <div class="feature">
-        <div class="feature-icon">🗺️</div>
-        <h3>Interactive Maps</h3>
-        <p>Explore locations with fullscreen maps and multiple styles</p>
+    </section>
+
+    <section class="cta-section">
+      <div class="cta-buttons">
+        <button class="btn btn-primary" onclick="showCreateModal()">Create a Trip</button>
+        <button class="btn btn-secondary" onclick="quickStart()">Quick Start</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="/health">Server Status</a>
+    <a href="/api">API</a>
+  </footer>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" onclick="hideCreateModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <h2>Create a new trip</h2>
+      <p>Give your trip a name. This will be part of the URL.</p>
+      <input
+        type="text"
+        id="trip-name"
+        placeholder="e.g., japan-summer-2025"
+        onkeypress="handleEnter(event)"
+      >
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="hideCreateModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createTrip()">Create</button>
       </div>
     </div>
-
-    <footer>
-      <a href="/health">Server Status</a> · <a href="/api">API Info</a>
-    </footer>
   </div>
 
   <script>
-    function createDoc() {
-      const input = document.getElementById('doc-name');
-      let docId = input.value.trim();
+    // Typewriter effect
+    const demoText = `Day 1: Arriving in Tokyo
 
-      if (!docId) {
-        input.focus();
-        input.style.borderColor = '#e74c3c';
-        setTimeout(() => {
-          input.style.borderColor = '#e0e0e0';
-        }, 1000);
-        return;
-      }
+We land at Narita Airport around 2pm. Taking the Narita Express to Shinjuku Station.
 
-      // Sanitize: lowercase, replace spaces with hyphens, remove special chars
-      docId = docId.toLowerCase()
+First stop: Shibuya Crossing - the famous scramble intersection.
+
+Day 2: Kyoto
+
+Taking the Shinkansen from Tokyo Station. About 2 hours.
+
+Must visit:
+- Fushimi Inari Shrine
+- Kinkaku-ji (Golden Pavilion)
+- Arashiyama Bamboo Grove`;
+
+    let typewriterIndex = 0;
+    let typewriterStarted = false;
+
+    function startTypewriter() {
+      if (typewriterStarted) return;
+      typewriterStarted = true;
+
+      const iframe = document.getElementById('demo-iframe');
+      iframe.onload = () => {
+        setTimeout(typeNextChar, 1500);
+      };
+    }
+
+    function typeNextChar() {
+      if (typewriterIndex >= demoText.length) return;
+
+      const iframe = document.getElementById('demo-iframe');
+      const char = demoText[typewriterIndex];
+
+      try {
+        iframe.contentWindow.postMessage({
+          type: 'typewriter',
+          char: char
+        }, '*');
+      } catch (e) {}
+
+      typewriterIndex++;
+
+      let delay = 25 + Math.random() * 35;
+      if (char === '\n') delay = 150;
+      if (char === '.') delay = 250;
+      if (char === ':') delay = 200;
+
+      setTimeout(typeNextChar, delay);
+    }
+
+    if (document.visibilityState === 'visible') {
+      setTimeout(startTypewriter, 300);
+    } else {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') startTypewriter();
+      });
+    }
+
+    // Modal
+    function showCreateModal() {
+      document.getElementById('modal-backdrop').classList.add('visible');
+      setTimeout(() => document.getElementById('trip-name').focus(), 100);
+    }
+
+    function hideCreateModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('modal-backdrop').classList.remove('visible');
+    }
+
+    function handleEnter(event) {
+      if (event.key === 'Enter') createTrip();
+    }
+
+    function createTrip() {
+      const input = document.getElementById('trip-name');
+      let tripId = input.value.trim();
+      if (!tripId) { input.focus(); return; }
+
+      tripId = tripId.toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
 
-      if (!docId) {
-        alert('Please enter a valid document name');
-        return;
-      }
-
-      window.location.href = '/doc/' + docId;
+      if (!tripId) { alert('Please enter a valid trip name'); return; }
+      window.location.href = '/doc/' + tripId;
     }
 
-    function createRandomDoc() {
+    function quickStart() {
       const randomId = 'trip-' + Math.random().toString(36).substring(2, 10);
       window.location.href = '/doc/' + randomId;
     }
 
-    // Allow Enter key to create doc
-    document.getElementById('doc-name').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        createDoc();
-      }
-    });
-
-    // Auto-focus input
-    document.getElementById('doc-name').focus();
+    function enterDemo() {
+      document.getElementById('demo-overlay').classList.add('hidden');
+      document.getElementById('demo-iframe').focus();
+    }
   </script>
 </body>
 </html>
