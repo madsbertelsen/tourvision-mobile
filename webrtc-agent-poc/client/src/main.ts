@@ -36,6 +36,7 @@ let initializeAgent: ((yXmlFragment: any, ydoc: any, documentId: string, editorV
 // Check if we should load agent: either in agent build OR in dev mode with ?agent=true
 const params = new URL(window.location.href).searchParams;
 const isAgentMode = params.get('agent') === 'true';
+const isAnimateMode = params.get('animate') === 'true'; // Landing page demo mode
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
                        (import.meta.env.DEV && isAgentMode);
 
@@ -934,11 +935,13 @@ async function main() {
     console.log('[Main] ViewSyncService connected to FullscreenMapView');
   }
 
-  // Open agent tab (user mode only, and only if enableAgent=true)
+  // Open agent tab (user mode only, and only if enableAgent=true, not in animate mode)
   const enableAgent = params.get('enableAgent') === 'true';
-  if (!isAgent && enableAgent) {
+  if (!isAgent && enableAgent && !isAnimateMode) {
     console.log('[Main] enableAgent=true, opening agent tab');
     openAgentTab(awareness);
+  } else if (isAnimateMode) {
+    console.log('[Main] Animate mode - skipping agent tab');
   } else if (!isAgent) {
     console.log('[Main] Agent tab disabled (enableAgent not set to true)');
   }

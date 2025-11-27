@@ -1,16 +1,33 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import { resolve } from 'path';
+
+// Custom plugin to handle SPA routing for /doc/* paths
+function spaFallback(): Plugin {
+  return {
+    name: 'spa-fallback',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        // Rewrite /doc/* requests to index.html for SPA routing
+        if (req.url?.startsWith('/doc/')) {
+          req.url = '/index.html';
+        }
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
+    plugins: [spaFallback()],
     server: {
       port: 5173,
       host: 'localhost',
     },
-    // Multi-page app configuration
+    // Multi-page app configuration for build
     appType: 'mpa',
     build: {
       outDir: 'dist',

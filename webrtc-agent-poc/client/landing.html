@@ -454,7 +454,6 @@
           <iframe
             id="demo-iframe"
             class="demo-iframe"
-            src="/doc/landing-demo?hideHeader=true"
             loading="lazy"
           ></iframe>
           <div class="demo-overlay" id="demo-overlay" onclick="enterDemo()">
@@ -496,6 +495,13 @@
   </div>
 
   <script>
+    // Generate unique document ID for this demo session
+    const demoDocId = 'demo-' + Math.random().toString(36).substring(2, 10);
+
+    // Set iframe src with unique doc ID
+    const iframe = document.getElementById('demo-iframe');
+    iframe.src = `/doc/${demoDocId}?animate=true&hideHeader=true`;
+
     // Typewriter effect
     const demoText = `Day 1: Arriving in Tokyo
 
@@ -520,9 +526,17 @@ Must visit:
       typewriterStarted = true;
 
       const iframe = document.getElementById('demo-iframe');
-      iframe.onload = () => {
+
+      // Handle both cases: iframe already loaded or not yet loaded
+      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+        // Already loaded, start after a delay for editor to initialize
         setTimeout(typeNextChar, 1500);
-      };
+      } else {
+        // Not yet loaded, wait for load event
+        iframe.addEventListener('load', () => {
+          setTimeout(typeNextChar, 1500);
+        });
+      }
     }
 
     function typeNextChar() {
@@ -536,7 +550,9 @@ Must visit:
           type: 'typewriter',
           char: char
         }, '*');
-      } catch (e) {}
+      } catch (e) {
+        console.error('Typewriter postMessage error:', e);
+      }
 
       typewriterIndex++;
 
@@ -548,8 +564,9 @@ Must visit:
       setTimeout(typeNextChar, delay);
     }
 
+    // Start typewriter when page is visible
     if (document.visibilityState === 'visible') {
-      setTimeout(startTypewriter, 300);
+      setTimeout(startTypewriter, 500);
     } else {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') startTypewriter();
