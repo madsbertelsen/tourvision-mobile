@@ -7,6 +7,7 @@
 
 import { WebSocket } from 'ws';
 import type { SignalingMessage, HealthResponse } from './types/signaling.js';
+import { fetchTurnCredentials } from './utils/turnCredentials.js';
 
 /**
  * Connection metadata for debugging and monitoring
@@ -87,6 +88,9 @@ export class SignalingServer {
     }
 
     this.broadcastDebugUpdate();
+
+    // Send TURN credentials to client immediately on connection
+    this.sendTurnCredentialsToClient(ws);
 
     // Handle incoming messages
     ws.on('message', (data: Buffer) => {
@@ -520,5 +524,31 @@ export class SignalingServer {
       direction: 'outbound',
       data: data,
     });
+  }
+
+  /**
+   * Send TURN credentials to client via WebSocket
+   */
+  private async sendTurnCredentialsToClient(ws: WebSocket): Promise<void> {
+    try {
+      const turnCredentials = await fetchTurnCredentials();
+
+      if (turnCredentials) {
+        // Send TURN credentials as a special message type
+        const turnMessage = JSON.stringify({
+          type: 'turn-credentials',
+          data: turnCredentials
+        });
+
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(turnMessage);
+          console.log('[SignalingServer] ✅ Sent TURN credentials to client');
+        }
+      } else {
+        console.warn('[SignalingServer] ⚠️  TURN credentials not available (not configured)');
+      }
+    } catch (error) {
+      console.error('[SignalingServer] Error sending TURN credentials:', error);
+    }
   }
 }
