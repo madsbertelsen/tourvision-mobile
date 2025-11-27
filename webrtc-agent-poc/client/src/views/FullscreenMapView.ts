@@ -25,6 +25,7 @@ export interface FullscreenMapViewDependencies {
   extractLocationsForFullscreen: () => Location[];
   showLocationSheet: (location: any, allLocations: Location[]) => void;
   globalAwareness: any;
+  shouldBroadcastBounds?: () => boolean; // Optional check for follow mode
 }
 
 export class FullscreenMapView {
@@ -39,9 +40,10 @@ export class FullscreenMapView {
   /**
    * Show fullscreen map overlay
    * Extracted from main.ts:295-720
+   * @param targetBounds Optional bounds to use (for follow mode - skips local calculation)
    */
-  show(): void {
-    console.log('[Fullscreen] Showing fullscreen map');
+  show(targetBounds?: { north: number; south: number; east: number; west: number }): void {
+    console.log('[Fullscreen] Showing fullscreen map', targetBounds ? '(with target bounds)' : '');
 
     // Notify parent that fullscreen map is opening
     WebViewBridge.sendFullscreenMapOpened();
@@ -75,49 +77,61 @@ export class FullscreenMapView {
     console.log('[Fullscreen] Container rect:', rect);
     console.log('[Fullscreen] Alignment padding:', padding);
 
-    // Get block map instance
-    const blockMap = blockMapElement._mapInstance;
-    if (!blockMap) {
-      console.error('[Fullscreen] Block map instance not found');
-      return;
+    // Use target bounds (follow mode) or calculate from block map
+    let adjustedBounds: any;
+
+    if (targetBounds) {
+      // Follow mode: use the followed user's bounds directly
+      adjustedBounds = new (window as any).mapboxgl.LngLatBounds(
+        [targetBounds.west, targetBounds.south],
+        [targetBounds.east, targetBounds.north]
+      );
+      console.log('[Fullscreen] Using target bounds from followed user:', targetBounds);
+    } else {
+      // Normal mode: calculate bounds from block map
+      const blockMap = blockMapElement._mapInstance;
+      if (!blockMap) {
+        console.error('[Fullscreen] Block map instance not found');
+        return;
+      }
+
+      // Calculate adjusted bounds that account for the fullscreen viewport
+      // We use the block map's unproject to find geographic coordinates
+      // at the fullscreen viewport edges, accounting for the block map's position
+
+      // The block map's pixel coordinates relative to viewport
+      const blockMapPixels = {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom
+      };
+
+      // Fullscreen viewport edges in the block map's coordinate system
+      // Negative values mean "outside" the block map
+      const fsTopLeftInBlockMap = {
+        x: -blockMapPixels.left,
+        y: -blockMapPixels.top
+      };
+      const fsBottomRightInBlockMap = {
+        x: window.innerWidth - blockMapPixels.left,
+        y: window.innerHeight - blockMapPixels.top
+      };
+
+      // Unproject these to get geographic coordinates
+      const topLeft = blockMap.unproject([fsTopLeftInBlockMap.x, fsTopLeftInBlockMap.y]);
+      const bottomRight = blockMap.unproject([fsBottomRightInBlockMap.x, fsBottomRightInBlockMap.y]);
+
+      // Create bounds from these coordinates
+      adjustedBounds = new (window as any).mapboxgl.LngLatBounds(topLeft, bottomRight);
+
+      console.log('[Fullscreen] Adjusted bounds for fullscreen:', {
+        north: adjustedBounds.getNorth(),
+        south: adjustedBounds.getSouth(),
+        east: adjustedBounds.getEast(),
+        west: adjustedBounds.getWest()
+      });
     }
-
-    // Calculate adjusted bounds that account for the fullscreen viewport
-    // We use the block map's unproject to find geographic coordinates
-    // at the fullscreen viewport edges, accounting for the block map's position
-
-    // The block map's pixel coordinates relative to viewport
-    const blockMapPixels = {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom
-    };
-
-    // Fullscreen viewport edges in the block map's coordinate system
-    // Negative values mean "outside" the block map
-    const fsTopLeftInBlockMap = {
-      x: -blockMapPixels.left,
-      y: -blockMapPixels.top
-    };
-    const fsBottomRightInBlockMap = {
-      x: window.innerWidth - blockMapPixels.left,
-      y: window.innerHeight - blockMapPixels.top
-    };
-
-    // Unproject these to get geographic coordinates
-    const topLeft = blockMap.unproject([fsTopLeftInBlockMap.x, fsTopLeftInBlockMap.y]);
-    const bottomRight = blockMap.unproject([fsBottomRightInBlockMap.x, fsBottomRightInBlockMap.y]);
-
-    // Create bounds from these coordinates
-    const adjustedBounds = new (window as any).mapboxgl.LngLatBounds(topLeft, bottomRight);
-
-    console.log('[Fullscreen] Adjusted bounds for fullscreen:', {
-      north: adjustedBounds.getNorth(),
-      south: adjustedBounds.getSouth(),
-      east: adjustedBounds.getEast(),
-      west: adjustedBounds.getWest()
-    });
 
     // Show overlay
     const overlay = document.getElementById('fullscreen-overlay');
@@ -175,6 +189,11 @@ export class FullscreenMapView {
 
     // Listen for map movement to update awareness
     this.fullscreenMap.on('moveend', () => {
+      // Skip broadcasting if we're following someone (to avoid conflicts)
+      if (this.deps.shouldBroadcastBounds && !this.deps.shouldBroadcastBounds()) {
+        console.log('[Fullscreen] Map moveend - skipping broadcast (following mode)');
+        return;
+      }
       console.log('[Fullscreen] Map moveend - updating awareness');
       if (this.deps.globalAwareness && this.fullscreenMap) {
         this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
@@ -183,6 +202,11 @@ export class FullscreenMapView {
 
     // Update awareness once after initial load
     this.fullscreenMap.once('idle', () => {
+      // Skip broadcasting if we're following someone (to avoid conflicts)
+      if (this.deps.shouldBroadcastBounds && !this.deps.shouldBroadcastBounds()) {
+        console.log('[Fullscreen] Map idle - skipping broadcast (following mode)');
+        return;
+      }
       console.log('[Fullscreen] Map idle - initial bounds update');
       if (this.deps.globalAwareness && this.fullscreenMap) {
         this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
@@ -578,5 +602,29 @@ export class FullscreenMapView {
    */
   getMap(): mapboxgl.Map | null {
     return this.fullscreenMap;
+  }
+
+  /**
+   * Fit the fullscreen map to given bounds (for follow mode)
+   */
+  fitBounds(boundsData: { north: number; south: number; east: number; west: number }): void {
+    if (!this.fullscreenMap || !boundsData) {
+      console.log('[Fullscreen] Cannot fitBounds - map not available or no bounds data');
+      return;
+    }
+
+    // Create LngLatBounds from the serialized data
+    const bounds = new (window as any).mapboxgl.LngLatBounds(
+      [boundsData.west, boundsData.south], // Southwest corner
+      [boundsData.east, boundsData.north]  // Northeast corner
+    );
+
+    console.log('[Fullscreen] Fitting bounds from follow mode:', boundsData);
+
+    this.fullscreenMap.fitBounds(bounds, {
+      padding: 0,
+      animate: true,
+      duration: 300
+    });
   }
 }

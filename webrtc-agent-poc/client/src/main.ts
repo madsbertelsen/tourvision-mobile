@@ -247,6 +247,9 @@ async function setupYjs(documentId: string) {
     }
   });
 
+  // Track which avatar context menu is targeting
+  let contextMenuTargetClientId: number | null = null;
+
   // Function to update avatar display in toolbar
   const updateAvatars = () => {
     const avatarsContainer = document.getElementById('avatars');
@@ -258,6 +261,7 @@ async function setupYjs(documentId: string) {
     // Get all awareness states
     const states = awareness.getStates();
     const myClientId = awareness.clientID;
+    const followingUserId = viewSyncService?.getFollowingUserId() ?? null;
 
     // Sort: self first, then others
     const sortedEntries = Array.from(states.entries()).sort(([idA], [idB]) => {
@@ -270,12 +274,16 @@ async function setupYjs(documentId: string) {
       if (!state?.user?.name) return;
 
       const avatar = document.createElement('div');
-      avatar.className = 'avatar' + (clientId === myClientId ? ' self' : '');
+      let className = 'avatar';
+      if (clientId === myClientId) className += ' self';
+      if (followingUserId === clientId) className += ' following';
+      avatar.className = className;
       avatar.style.backgroundColor = state.user.color || '#666';
       avatar.title = state.user.name;
       avatar.tabIndex = 0; // Make focusable for D-pad navigation
       avatar.setAttribute('role', 'button');
       avatar.setAttribute('aria-label', state.user.name);
+      avatar.setAttribute('data-client-id', String(clientId));
 
       // Get initials (first letter of each word, max 2)
       const initials = state.user.name
@@ -285,9 +293,82 @@ async function setupYjs(documentId: string) {
         .join('');
       avatar.textContent = initials;
 
+      // Add click handler for non-self avatars to show context menu
+      if (clientId !== myClientId) {
+        avatar.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showAvatarContextMenu(clientId, state.user.name, avatar, e);
+        });
+      }
+
       avatarsContainer.appendChild(avatar);
     });
   };
+
+  // Show context menu for avatar
+  const showAvatarContextMenu = (clientId: number, userName: string, avatarEl: HTMLElement, event: MouseEvent) => {
+    const contextMenu = document.getElementById('avatar-context-menu');
+    const followBtn = document.getElementById('follow-user-btn');
+    if (!contextMenu || !followBtn) return;
+
+    contextMenuTargetClientId = clientId;
+    const followingUserId = viewSyncService?.getFollowingUserId() ?? null;
+
+    // Update button text
+    if (followingUserId === clientId) {
+      followBtn.textContent = 'Stop Following';
+    } else {
+      followBtn.textContent = `Follow ${userName}`;
+    }
+
+    // Position menu below avatar
+    const rect = avatarEl.getBoundingClientRect();
+    contextMenu.style.top = `${rect.bottom + 8}px`;
+    contextMenu.style.left = `${rect.left}px`;
+    contextMenu.style.display = 'block';
+  };
+
+  // Hide context menu
+  const hideAvatarContextMenu = () => {
+    const contextMenu = document.getElementById('avatar-context-menu');
+    if (contextMenu) {
+      contextMenu.style.display = 'none';
+    }
+    contextMenuTargetClientId = null;
+  };
+
+  // Set up context menu follow button
+  const followUserBtn = document.getElementById('follow-user-btn');
+  if (followUserBtn) {
+    followUserBtn.addEventListener('click', () => {
+      if (contextMenuTargetClientId !== null && viewSyncService) {
+        const followingUserId = viewSyncService.getFollowingUserId();
+
+        if (followingUserId === contextMenuTargetClientId) {
+          // Stop following
+          viewSyncService.followUser(null);
+          console.log('[Main] Stopped following');
+        } else {
+          // Start following
+          viewSyncService.followUser(contextMenuTargetClientId);
+          const state = awareness.getStates().get(contextMenuTargetClientId);
+          console.log('[Main] Now following:', state?.user?.name);
+        }
+
+        // Update avatars to reflect following state
+        updateAvatars();
+      }
+      hideAvatarContextMenu();
+    });
+  }
+
+  // Close context menu when clicking outside
+  document.addEventListener('click', (e) => {
+    const contextMenu = document.getElementById('avatar-context-menu');
+    if (contextMenu && !contextMenu.contains(e.target as Node)) {
+      hideAvatarContextMenu();
+    }
+  });
 
   // Listen for awareness changes to show other users' map bounds
   awareness.on('change', ({ added, updated, removed }: any) => {
@@ -322,14 +403,28 @@ async function setupYjs(documentId: string) {
         removeBoundsOverlay(clientId);
       }
 
-      // Handle view state updates (for follow mode)
-      if (viewSyncService && state?.user?.viewState) {
+      // Handle view state and map bounds updates (for follow mode)
+      if (viewSyncService) {
         const followingUserId = viewSyncService.getFollowingUserId();
 
         // Only apply if we're following this specific user
         if (followingUserId === clientId) {
-          console.log('[ViewSync] Applying view state from user:', clientId, state.user.viewState);
-          viewSyncService.applyRemoteViewState(state.user.viewState);
+          // Check if fullscreen map is already open (for distinguishing open vs pan/zoom)
+          const wasFullscreenOpen = document.getElementById('fullscreen-overlay')?.classList.contains('visible');
+
+          // Apply view state (scroll position, fullscreen map state)
+          // Pass map bounds so fullscreen map opens with correct bounds
+          if (state?.user?.viewState) {
+            console.log('[ViewSync] Applying view state from user:', clientId, state.user.viewState);
+            viewSyncService.applyRemoteViewState(state.user.viewState, state.user.mapBounds);
+          }
+
+          // Apply map bounds ONLY if fullscreen was already open (pan/zoom sync)
+          // Don't apply if we just opened fullscreen - bounds were already passed to show()
+          if (wasFullscreenOpen && state?.user?.mapBounds && state?.user?.viewState?.fullscreenMapOpen) {
+            console.log('[ViewSync] Applying map bounds from user:', clientId, state.user.mapBounds);
+            viewSyncService.applyRemoteMapBounds(state.user.mapBounds);
+          }
         }
       }
     });
@@ -338,6 +433,12 @@ async function setupYjs(documentId: string) {
     removed.forEach((clientId: number) => {
       console.log('[Awareness] User removed:', clientId);
       removeBoundsOverlay(clientId);
+
+      // If we were following this user, stop following
+      if (viewSyncService) {
+        viewSyncService.handleUserDisconnect(clientId);
+        updateAvatars(); // Update UI to remove following indicator
+      }
     });
   });
 
@@ -434,12 +535,13 @@ function extractLocationsForFullscreen() {
 
 // Show fullscreen map (using existing overlay from HTML)
 // Delegates to FullscreenMapView class
-(window as any).showFullscreenMap = () => {
+// Optional targetBounds for follow mode (uses followed user's bounds instead of calculating)
+(window as any).showFullscreenMap = (targetBounds?: { north: number; south: number; east: number; west: number }) => {
   if (fullscreenMapView) {
-    fullscreenMapView.show();
+    fullscreenMapView.show(targetBounds);
 
-    // Notify ViewSyncService if presenting
-    if (viewSyncService) {
+    // Notify ViewSyncService if presenting (not when following)
+    if (viewSyncService && !viewSyncService.isFollowing()) {
       viewSyncService.setFullscreenMapOpen(true);
     }
   }
@@ -799,9 +901,22 @@ async function main() {
     createMarkerElement,
     extractLocationsForFullscreen,
     showLocationSheet,
-    globalAwareness
+    globalAwareness,
+    // Don't broadcast bounds when following someone (to avoid conflicts)
+    shouldBroadcastBounds: () => {
+      if (!viewSyncService) return true;
+      const isFollowing = viewSyncService.isFollowing();
+      const isUpdating = viewSyncService.isUpdating();
+      return !isFollowing && !isUpdating;
+    }
   });
   console.log('[Main] FullscreenMapView initialized with awareness');
+
+  // Wire up ViewSyncService with FullscreenMapView for follow mode map sync
+  if (viewSyncService) {
+    viewSyncService.setFullscreenMapView(fullscreenMapView);
+    console.log('[Main] ViewSyncService connected to FullscreenMapView');
+  }
 
   // Open agent tab (user mode only, and only if enableAgent=true)
   const enableAgent = params.get('enableAgent') === 'true';
@@ -978,119 +1093,6 @@ function setupToolbarButtons(view: EditorView) {
 
   if (insertMapBtn) {
     insertMapBtn.addEventListener('click', () => insertMap(view));
-  }
-
-  // Present button handler
-  const presentBtn = document.getElementById('present-btn');
-  if (presentBtn && viewSyncService) {
-    presentBtn.addEventListener('click', () => {
-      const isPresenting = viewSyncService!.togglePresenting();
-      presentBtn.classList.toggle('active', isPresenting);
-      console.log('[Main] Presentation mode:', isPresenting ? 'ON' : 'OFF');
-    });
-  }
-
-  // Follow button handler
-  const followBtn = document.getElementById('follow-btn');
-  const followDropdown = document.getElementById('follow-dropdown');
-  if (followBtn && followDropdown && viewSyncService && globalAwareness) {
-    // Toggle dropdown visibility
-    followBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      followDropdown.classList.toggle('visible');
-
-      // Populate dropdown with active users
-      if (followDropdown.classList.contains('visible')) {
-        updateFollowDropdown();
-      }
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!followBtn.contains(e.target as Node) && !followDropdown.contains(e.target as Node)) {
-        followDropdown.classList.remove('visible');
-      }
-    });
-
-    // Update dropdown content
-    function updateFollowDropdown() {
-      const listEl = document.getElementById('follow-dropdown-list');
-      if (!listEl) return;
-
-      const states = globalAwareness.getStates();
-      const currentClientId = globalAwareness.clientID;
-      const followingUserId = viewSyncService!.getFollowingUserId();
-
-      // Clear existing items
-      listEl.innerHTML = '';
-
-      // Add "Stop following" option if currently following
-      if (followingUserId !== null) {
-        const stopItem = document.createElement('div');
-        stopItem.className = 'follow-dropdown-item';
-        stopItem.innerHTML = `<span class="user-name">Stop following</span>`;
-        stopItem.addEventListener('click', () => {
-          viewSyncService!.followUser(null);
-          followBtn.classList.remove('active');
-          followDropdown.classList.remove('visible');
-          console.log('[Main] Stopped following');
-        });
-        listEl.appendChild(stopItem);
-      }
-
-      // Add items for each active user (except self)
-      states.forEach((state: any, clientId: number) => {
-        if (clientId === currentClientId) return; // Skip self
-        if (!state.user) return;
-
-        const item = document.createElement('div');
-        item.className = 'follow-dropdown-item';
-        if (followingUserId === clientId) {
-          item.classList.add('active');
-        }
-
-        // User color dot
-        const colorDot = document.createElement('div');
-        colorDot.className = 'user-color';
-        colorDot.style.backgroundColor = state.user.color || '#666';
-
-        // User name
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'user-name';
-        nameSpan.textContent = state.user.name || `User ${clientId}`;
-
-        // Presenting badge
-        if (state.user.viewState?.isPresenting) {
-          const badge = document.createElement('span');
-          badge.className = 'presenting-badge';
-          badge.textContent = 'PRESENTING';
-          item.appendChild(badge);
-        }
-
-        item.appendChild(colorDot);
-        item.appendChild(nameSpan);
-
-        // Click to follow this user
-        item.addEventListener('click', () => {
-          viewSyncService!.followUser(clientId);
-          followBtn.classList.add('active');
-          followDropdown.classList.remove('visible');
-          console.log('[Main] Now following:', state.user.name);
-        });
-
-        listEl.appendChild(item);
-      });
-
-      // If no other users, show message
-      if (listEl.children.length === 0) {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.style.padding = '12px';
-        emptyMsg.style.color = '#999';
-        emptyMsg.style.fontSize = '13px';
-        emptyMsg.textContent = 'No other users online';
-        listEl.appendChild(emptyMsg);
-      }
-    }
   }
 
   console.log('[Main] Toolbar buttons set up');
