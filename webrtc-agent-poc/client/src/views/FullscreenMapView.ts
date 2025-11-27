@@ -28,13 +28,88 @@ export interface FullscreenMapViewDependencies {
   shouldBroadcastBounds?: () => boolean; // Optional check for follow mode
 }
 
+// Map style definitions
+const MAP_STYLES: Record<string, string> = {
+  light: 'mapbox://styles/mapbox/light-v11',
+  dark: 'mapbox://styles/mapbox/dark-v11',
+  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+  streets: 'mapbox://styles/mapbox/streets-v12',
+};
+
+const MAP_STYLE_STORAGE_KEY = 'tourvision-map-style';
+
 export class FullscreenMapView {
   private deps: FullscreenMapViewDependencies;
   private fullscreenMap: mapboxgl.Map | null = null;
   private fullscreenMapUpdateListener: (() => void) | null = null;
+  private currentStyle: string = 'light';
+  private currentLocations: Location[] = []; // Store for style change re-render
 
   constructor(deps: FullscreenMapViewDependencies) {
     this.deps = deps;
+    // Load saved style preference
+    const savedStyle = localStorage.getItem(MAP_STYLE_STORAGE_KEY);
+    if (savedStyle && MAP_STYLES[savedStyle]) {
+      this.currentStyle = savedStyle;
+    }
+    // Setup style switcher event listeners
+    this.setupStyleSwitcher();
+  }
+
+  /**
+   * Setup event listeners for the map style switcher buttons
+   */
+  private setupStyleSwitcher(): void {
+    const styleButtons = document.querySelectorAll('.map-style-btn');
+    styleButtons.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const style = target.dataset.style;
+        if (style && MAP_STYLES[style]) {
+          this.setMapStyle(style);
+        }
+      });
+    });
+
+    // Update active button state on page load
+    this.updateStyleButtonState();
+  }
+
+  /**
+   * Update the active state of style switcher buttons
+   */
+  private updateStyleButtonState(): void {
+    const styleButtons = document.querySelectorAll('.map-style-btn');
+    styleButtons.forEach((btn) => {
+      const buttonStyle = (btn as HTMLElement).dataset.style;
+      btn.classList.toggle('active', buttonStyle === this.currentStyle);
+    });
+  }
+
+  /**
+   * Change the map style
+   */
+  setMapStyle(styleName: string): void {
+    if (!MAP_STYLES[styleName]) {
+      console.warn('[Fullscreen] Unknown map style:', styleName);
+      return;
+    }
+
+    this.currentStyle = styleName;
+    localStorage.setItem(MAP_STYLE_STORAGE_KEY, styleName);
+    this.updateStyleButtonState();
+
+    if (this.fullscreenMap) {
+      console.log('[Fullscreen] Changing map style to:', styleName);
+      this.fullscreenMap.setStyle(MAP_STYLES[styleName]);
+    }
+  }
+
+  /**
+   * Get current map style URL
+   */
+  private getMapStyleUrl(): string {
+    return MAP_STYLES[this.currentStyle] || MAP_STYLES.light;
   }
 
   /**
@@ -207,7 +282,7 @@ export class FullscreenMapView {
     // Use center/zoom for follow mode (more accurate with pitch), otherwise use bounds
     const mapOptions: any = {
       container: 'fullscreen-map',
-      style: 'mapbox://styles/mapbox/light-v11',
+      style: this.getMapStyleUrl(),
       interactive: true,
       trackResize: true,
       fadeDuration: 0
@@ -237,10 +312,20 @@ export class FullscreenMapView {
 
     this.fullscreenMap = new (window as any).mapboxgl.Map(mapOptions);
 
-    // Add markers
+    // Store locations for style change re-renders
+    this.currentLocations = currentLocations;
+
+    // Add markers on initial load
     this.fullscreenMap.on('load', () => {
       this.renderMarkersAndRoutes(currentLocations);
       this.setupReactiveUpdates(currentLocations);
+    });
+
+    // Re-render markers when style changes (e.g., user switches map style)
+    this.fullscreenMap.on('style.load', () => {
+      console.log('[Fullscreen] Style loaded, re-rendering markers');
+      // Re-render markers with current locations
+      this.renderMarkersAndRoutes(this.currentLocations);
     });
 
     // Listen for map movement to update awareness
