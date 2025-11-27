@@ -913,8 +913,8 @@
       // Static agent secret (same as server's AGENT_SECRET)
       const agentSecret = 'dev-secret-change-in-production';
 
-      // Open new tab with agent mode and secret token
-      const agentUrl = `${CLIENT_URL}/?doc=${encodeURIComponent(documentId)}&agent=true&token=${encodeURIComponent(agentSecret)}`;
+      // Open new tab with agent mode and secret token (using /doc/{id} path format)
+      const agentUrl = `${CLIENT_URL}/doc/${encodeURIComponent(documentId)}?agent=true&token=${encodeURIComponent(agentSecret)}`;
       const windowName = `agent-${documentId}`;
 
       console.log(`[Dashboard] Launching agent for document: ${documentId}`);

@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       host: 'localhost',
     },
+    // SPA fallback: serve index.html for all paths (allows /doc-id URLs)
+    appType: 'spa',
     build: {
       outDir: 'dist',
       sourcemap: true,

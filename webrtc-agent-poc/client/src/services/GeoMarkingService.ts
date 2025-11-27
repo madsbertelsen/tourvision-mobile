@@ -190,6 +190,44 @@ export class GeoMarkingService {
     if (this.callbacks.onGeoMarkCreated) {
       this.callbacks.onGeoMarkCreated(geoId, locationName);
     }
+
+    // 7. Auto-insert block map if document doesn't have one
+    this.insertBlockMapIfNeeded();
+  }
+
+  /**
+   * Insert a map node at the end of the document if one doesn't exist
+   */
+  private insertBlockMapIfNeeded(): void {
+    const { state } = this.editorView;
+    const { doc } = state;
+
+    // Check if map already exists in document
+    let hasMap = false;
+    doc.descendants((node) => {
+      if (node.type.name === 'map') {
+        hasMap = true;
+        return false; // Stop iteration
+      }
+      return true;
+    });
+
+    if (hasMap) {
+      console.log('[GeoMarkingService] Map already exists, skipping insertion');
+      return;
+    }
+
+    // Insert map at end of document
+    const mapType = this.schema.nodes.map;
+    if (!mapType) {
+      console.warn('[GeoMarkingService] map node type not found in schema');
+      return;
+    }
+
+    const mapNode = mapType.create({ height: 400 });
+    const tr = state.tr.insert(doc.content.size, mapNode);
+    this.editorView.dispatch(tr);
+    console.log('[GeoMarkingService] Auto-inserted map at end of document');
   }
 
   /**

@@ -65,8 +65,12 @@ import { FullscreenMapView } from './views/FullscreenMapView';
 // Location Sheet
 import { initializeLocationSheet, setLocationSheetDependencies, showLocationSheet } from './location-sheet';
 
-// Get document ID from URL params (params already parsed above for agent loading)
-const documentId = params.get('doc') || 'default-doc';
+// Get document ID from URL path (e.g., /doc/tv-session -> tv-session)
+// Path format: /doc/{id}, fallback to query param for backwards compatibility
+const pathSegments = window.location.pathname.split('/').filter(Boolean);
+const documentId = (pathSegments[0] === 'doc' && pathSegments[1])
+  ? pathSegments[1]
+  : params.get('doc') || 'default-doc';
 const isAgent = isAgentMode; // Reuse the isAgentMode variable from above
 
 console.log('[Main] Starting application', { documentId, isAgent });
@@ -732,7 +736,7 @@ function openAgentTab(awareness: any) {
       return;
     }
 
-    const agentUrl = `${window.location.origin}${window.location.pathname}?doc=${documentId}&agent=true`;
+    const agentUrl = `${window.location.origin}/doc/${documentId}?agent=true`;
     console.log('[Main] No agent found, opening agent tab:', agentUrl);
 
     // Using named window target - if window with this name exists, it will be reused
@@ -963,10 +967,8 @@ function setupToolbarButtons(view: EditorView) {
       const newDocId = 'doc-' + Math.random().toString(36).substring(2, 15);
       console.log('[Main] Creating new document:', newDocId);
 
-      // Redirect to new document
-      const url = new URL(window.location.href);
-      url.searchParams.set('doc', newDocId);
-      window.location.href = url.toString();
+      // Redirect to new document (using path-based URL)
+      window.location.href = `${window.location.origin}/doc/${newDocId}`;
     });
   }
 

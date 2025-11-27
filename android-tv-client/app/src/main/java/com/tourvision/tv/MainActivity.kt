@@ -39,13 +39,13 @@ class MainActivity : Activity() {
         setupWebView()
         setupQrCode()
 
-        val url = "$BASE_URL/?doc=$DOC_ID"
+        val url = "$BASE_URL/doc/$DOC_ID"
         Log.d(TAG, "Loading URL: $url")
         webView.loadUrl(url)
     }
 
     private fun setupQrCode() {
-        val joinUrl = "$BASE_URL/?doc=$DOC_ID"
+        val joinUrl = "$BASE_URL/doc/$DOC_ID"
         Log.d(TAG, "Generating QR code for: $joinUrl")
 
         try {
