@@ -88,8 +88,10 @@ export class FullscreenMapView {
 
   /**
    * Change the map style
+   * @param styleName The style name (light, dark, satellite, streets)
+   * @param broadcast Whether to broadcast through awareness (default: true)
    */
-  setMapStyle(styleName: string): void {
+  setMapStyle(styleName: string, broadcast: boolean = true): void {
     if (!MAP_STYLES[styleName]) {
       console.warn('[Fullscreen] Unknown map style:', styleName);
       return;
@@ -103,6 +105,23 @@ export class FullscreenMapView {
       console.log('[Fullscreen] Changing map style to:', styleName);
       this.fullscreenMap.setStyle(MAP_STYLES[styleName]);
     }
+
+    // Broadcast style change through awareness (for follow mode)
+    if (broadcast && this.deps.globalAwareness) {
+      const currentUser = this.deps.globalAwareness.getLocalState()?.user || {};
+      this.deps.globalAwareness.setLocalStateField('user', {
+        ...currentUser,
+        mapStyle: styleName,
+      });
+      console.log('[Fullscreen] Broadcasted map style:', styleName);
+    }
+  }
+
+  /**
+   * Get current style name
+   */
+  getCurrentStyle(): string {
+    return this.currentStyle;
   }
 
   /**

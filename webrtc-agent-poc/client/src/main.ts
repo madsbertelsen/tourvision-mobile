@@ -425,6 +425,12 @@ async function setupYjs(documentId: string) {
             console.log('[ViewSync] Applying map bounds from user:', clientId, state.user.mapBounds);
             viewSyncService.applyRemoteMapBounds(state.user.mapBounds);
           }
+
+          // Apply map style if changed
+          if (wasFullscreenOpen && state?.user?.mapStyle) {
+            console.log('[ViewSync] Applying map style from user:', clientId, state.user.mapStyle);
+            viewSyncService.applyRemoteMapStyle(state.user.mapStyle);
+          }
         }
       }
     });

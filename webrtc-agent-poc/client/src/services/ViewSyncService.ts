@@ -146,6 +146,14 @@ export class ViewSyncService {
         if (state.user.mapBounds && state.user.viewState?.fullscreenMapOpen) {
           this.applyRemoteMapBounds(state.user.mapBounds);
         }
+
+        // Apply map style if fullscreen is open
+        if (state.user.mapStyle && state.user.viewState?.fullscreenMapOpen) {
+          // Slight delay to ensure map is initialized after fullscreen opens
+          setTimeout(() => {
+            this.applyRemoteMapStyle(state.user.mapStyle);
+          }, 200);
+        }
       }
     }
   }
@@ -213,6 +221,29 @@ export class ViewSyncService {
 
     // Sync the fullscreen map to the followed user's camera state
     this.fullscreenMapView.fitBounds(cameraData);
+
+    setTimeout(() => {
+      this.isUpdatingFromRemote = false;
+    }, 100);
+  }
+
+  /**
+   * Apply remote user's map style
+   */
+  applyRemoteMapStyle(styleName: string): void {
+    if (!styleName || !this.fullscreenMapView) return;
+
+    // Only apply if different from current style
+    const currentStyle = this.fullscreenMapView.getCurrentStyle();
+    if (currentStyle === styleName) {
+      return;
+    }
+
+    console.log('[ViewSyncService] Applying remote map style:', styleName);
+    this.isUpdatingFromRemote = true;
+
+    // Apply style without broadcasting (to avoid feedback loop)
+    this.fullscreenMapView.setMapStyle(styleName, false);
 
     setTimeout(() => {
       this.isUpdatingFromRemote = false;
