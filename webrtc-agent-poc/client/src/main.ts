@@ -22,6 +22,7 @@ import * as Y from 'yjs';
 // Mapbox GL JS
 
 // Services
+import { AnimatePlayback } from './services/AnimatePlayback';
 import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
@@ -505,6 +506,9 @@ let globalAwareness: any = null;
 // Global ViewSyncService for collaborative view synchronization
 let viewSyncService: ViewSyncService | null = null;
 
+// Global AnimatePlayback for landing page demo mode
+let animatePlayback: AnimatePlayback | null = null;
+
 // Initialize AwarenessOverlayRenderer
 awarenessOverlayRenderer = new AwarenessOverlayRenderer();
 
@@ -949,6 +953,13 @@ async function main() {
     console.log('[Main] Animate mode - skipping agent tab');
   } else if (!isAgent) {
     console.log('[Main] Agent tab disabled (enableAgent not set to true)');
+  }
+
+  // Initialize AnimatePlayback for landing page demo mode
+  if (isAnimateMode) {
+    console.log('[Main] Initializing AnimatePlayback for demo mode');
+    animatePlayback = new AnimatePlayback(editor);
+    animatePlayback.initialize();
   }
 
   // Set up toolbar button handlers

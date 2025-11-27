@@ -36,7 +36,6 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
           landing: resolve(__dirname, 'landing.html'),
-          landingScroll: resolve(__dirname, 'landing-scroll.html'),
         },
       },
     },
