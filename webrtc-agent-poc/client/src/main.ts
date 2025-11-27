@@ -4,32 +4,28 @@
  * This application supports two modes:
  * - User mode: Main document editor (auto-opens agent tab)
  * - Agent mode: Background tab that executes commands
+ *
  */
 
+import { baseKeymap } from 'prosemirror-commands';
+import { history, redo, undo } from 'prosemirror-history';
+import { keymap } from 'prosemirror-keymap';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { Schema, DOMParser } from 'prosemirror-model';
 import { customSchema } from './prosemirror-schema';
-import { keymap } from 'prosemirror-keymap';
-import { history, undo, redo } from 'prosemirror-history';
-import { baseKeymap } from 'prosemirror-commands';
 
 // Y.js imports
-import * as Y from 'yjs';
+import { yCursorPlugin, redo as yRedo, ySyncPlugin, undo as yUndo, yUndoPlugin } from 'y-prosemirror';
 import { WebrtcProvider } from 'y-webrtc';
-import { ySyncPlugin, yCursorPlugin, yUndoPlugin, undo as yUndo, redo as yRedo } from 'y-prosemirror';
+import * as Y from 'yjs';
 
 // Mapbox GL JS
-import mapboxgl from 'mapbox-gl';
-
-// QR Code generation
-import QRCode from 'qrcode';
 
 // Services
+import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
-import { GeocodingService } from './services/GeocodingService';
 import { ViewSyncService } from './services/ViewSyncService';
 
 // Conditionally import agent module
@@ -59,12 +55,12 @@ import { WaypointController } from './controllers/WaypointController';
 import { WebViewBridge } from './controllers/WebViewBridge';
 
 // Views
+import { AwarenessOverlayRenderer } from './views/AwarenessOverlayRenderer';
 import { BlockMapView } from './views/BlockMapView';
 import { FullscreenMapView } from './views/FullscreenMapView';
-import { AwarenessOverlayRenderer } from './views/AwarenessOverlayRenderer';
 
 // Location Sheet
-import { initializeLocationSheet, showLocationSheet, setLocationSheetDependencies } from './location-sheet';
+import { initializeLocationSheet, setLocationSheetDependencies, showLocationSheet } from './location-sheet';
 
 // Get document ID from URL params (params already parsed above for agent loading)
 const documentId = params.get('doc') || 'default-doc';
@@ -133,37 +129,6 @@ function updateStatus(message: string, type: 'connected' | 'connecting' | 'disco
   }
 }
 
-// Fetch TURN credentials from signaling server
-async function fetchTurnCredentials(): Promise<any> {
-  try {
-    // Auto-detect API URL based on current location
-    const getTurnApiUrl = () => {
-      const protocol = window.location.protocol; // http: or https:
-      const hostname = window.location.hostname;
-
-      // Always use port 8787 for TURN credentials API (Express server)
-      // (Vite client is on 5173, Express server is on 8787)
-      return `${protocol}//${hostname}:8787/api/turn-credentials`;
-    };
-
-    const apiUrl = getTurnApiUrl();
-    console.log('[TURN] Fetching credentials from:', apiUrl);
-
-    const response = await fetch(apiUrl);
-    if (!response.ok) {
-      console.error('[TURN] Failed to fetch credentials:', response.status, response.statusText);
-      return null;
-    }
-
-    const data = await response.json();
-    console.log('[TURN] ✅ Got Cloudflare TURN credentials:', data.iceServers?.length || 0, 'servers');
-    return data;
-  } catch (error) {
-    console.error('[TURN] Error fetching credentials:', error);
-    return null;
-  }
-}
-
 // Initialize Y.js document and WebRTC provider
 async function setupYjs(documentId: string) {
   console.log('[Y.js] Setting up Y.js document:', documentId);
@@ -198,23 +163,13 @@ async function setupYjs(documentId: string) {
   console.log('[Y.js] Using signaling server:', signalingUrl);
   console.log('[Y.js] Protocol:', window.location.protocol, 'Hostname:', window.location.hostname);
 
-  // Fetch TURN credentials from signaling server
-  const turnConfig = await fetchTurnCredentials();
-
-  // Prepare ICE servers configuration
-  let iceServers: RTCIceServer[];
-  if (turnConfig && turnConfig.iceServers) {
-    // Use Cloudflare TURN credentials
-    iceServers = turnConfig.iceServers;
-    console.log('[Y.js] Using Cloudflare TURN servers');
-  } else {
-    // Fallback to public STUN servers only
-    console.warn('[Y.js] TURN credentials not available, falling back to public STUN servers');
-    iceServers = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ];
-  }
+  // Start with fallback STUN servers
+  // TURN credentials will be received via WebSocket from signaling server
+  console.log('[Y.js] Starting with fallback STUN servers (TURN credentials will be sent via WebSocket)');
+  let iceServers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
 
   const provider = new WebrtcProvider(documentId, ydoc, {
     // WebSocket signaling server for cross-machine sync
@@ -285,9 +240,54 @@ async function setupYjs(documentId: string) {
     }
   });
 
+  // Function to update avatar display in toolbar
+  const updateAvatars = () => {
+    const avatarsContainer = document.getElementById('avatars');
+    if (!avatarsContainer) return;
+
+    // Clear existing avatars
+    avatarsContainer.innerHTML = '';
+
+    // Get all awareness states
+    const states = awareness.getStates();
+    const myClientId = awareness.clientID;
+
+    // Sort: self first, then others
+    const sortedEntries = Array.from(states.entries()).sort(([idA], [idB]) => {
+      if (idA === myClientId) return -1;
+      if (idB === myClientId) return 1;
+      return 0;
+    });
+
+    sortedEntries.forEach(([clientId, state]) => {
+      if (!state?.user?.name) return;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar' + (clientId === myClientId ? ' self' : '');
+      avatar.style.backgroundColor = state.user.color || '#666';
+      avatar.title = state.user.name;
+      avatar.tabIndex = 0; // Make focusable for D-pad navigation
+      avatar.setAttribute('role', 'button');
+      avatar.setAttribute('aria-label', state.user.name);
+
+      // Get initials (first letter of each word, max 2)
+      const initials = state.user.name
+        .split(' ')
+        .map((word: string) => word[0])
+        .slice(0, 2)
+        .join('');
+      avatar.textContent = initials;
+
+      avatarsContainer.appendChild(avatar);
+    });
+  };
+
   // Listen for awareness changes to show other users' map bounds
   awareness.on('change', ({ added, updated, removed }: any) => {
     console.log('[Awareness] Change event:', { added, updated, removed });
+
+    // Update avatars on any change
+    updateAvatars();
 
     // Handle added users
     added.forEach((clientId: number) => {
@@ -333,6 +333,9 @@ async function setupYjs(documentId: string) {
       removeBoundsOverlay(clientId);
     });
   });
+
+  // Initial avatar render
+  updateAvatars();
 
   console.log('[Y.js] Y.js document and WebRTC provider created');
 
@@ -521,6 +524,28 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
   // Keep global reference for backward compatibility
   globalEditorView = view;
+
+  // Debug logging for Android TV keyboard issues
+  console.log('[Debug] Adding focus/blur/touch event listeners to editor');
+  view.dom.addEventListener('focus', () => {
+    console.log('[Debug] Editor FOCUS gained');
+  });
+  view.dom.addEventListener('blur', (e: FocusEvent) => {
+    console.log('[Debug] Editor BLUR - relatedTarget:', e.relatedTarget);
+  });
+  view.dom.addEventListener('touchstart', (e: TouchEvent) => {
+    console.log('[Debug] Editor touchstart - target:', (e.target as HTMLElement)?.tagName, (e.target as HTMLElement)?.className);
+  }, { passive: true });
+  view.dom.addEventListener('touchend', (e: TouchEvent) => {
+    console.log('[Debug] Editor touchend - target:', (e.target as HTMLElement)?.tagName, (e.target as HTMLElement)?.className);
+  }, { passive: true });
+  view.dom.addEventListener('click', (e: MouseEvent) => {
+    console.log('[Debug] Editor click - target:', (e.target as HTMLElement)?.tagName, (e.target as HTMLElement)?.className);
+  });
+
+  // Also log on the container
+  container.addEventListener('focus', () => console.log('[Debug] Container FOCUS'), true);
+  container.addEventListener('blur', () => console.log('[Debug] Container BLUR'), true);
 
   // Set location sheet dependencies (with change notification callback)
   setLocationSheetDependencies(view, MAPBOX_TOKEN, notifyGeoMarkChange);
@@ -790,113 +815,6 @@ async function main() {
   updateStatus('Connecting to peers...', 'connecting');
   console.log('[Main] Application initialized successfully');
 
-  // Android TV WebView input handlers
-  // Only enable when running inside Android TV WebView (detected via user agent)
-  // Also allow ?showQR=true parameter for testing
-  const isAndroidTVWebView = navigator.userAgent.includes('Android TV') || params.get('showQR') === 'true';
-  console.log('[Main] User agent:', navigator.userAgent);
-  console.log('[Main] Is Android TV WebView:', isAndroidTVWebView);
-  if (isAndroidTVWebView) {
-    console.log('[Main] Android TV WebView detected, enabling input handlers');
-
-    // Expose editorView on window for Android input proxy
-    (window as any).editorView = view;
-
-    // Insert text at current cursor position using ProseMirror transaction
-    (window as any).insertText = (text: string) => {
-      // Focus the editor first to ensure it's active
-      view.focus();
-
-      // Get current state and selection
-      const { state } = view;
-      const { from, to } = state.selection;
-
-      // Create transaction that replaces selection (or inserts at cursor)
-      const tr = state.tr.replaceWith(from, to, state.schema.text(text));
-
-      // Move cursor to end of inserted text
-      tr.setSelection(state.selection.constructor.near(tr.doc.resolve(from + text.length)));
-
-      view.dispatch(tr);
-      console.log('[Main] Android TV: Inserted text at pos', from, ':', text);
-    };
-
-    // Handle backspace key using ProseMirror commands
-    (window as any).handleBackspace = () => {
-      view.focus();
-      const { state } = view;
-      const { from, to } = state.selection;
-
-      if (from === to && from > 0) {
-        // No selection, delete character before cursor
-        const tr = state.tr.delete(from - 1, from);
-        view.dispatch(tr);
-      } else if (from !== to) {
-        // Has selection, delete selected text
-        const tr = state.tr.deleteSelection();
-        view.dispatch(tr);
-      }
-      console.log('[Main] Android TV: Backspace at pos', from);
-    };
-
-    // Handle enter key - create new paragraph
-    (window as any).handleEnter = () => {
-      view.focus();
-      const { state } = view;
-      const { $from } = state.selection;
-
-      // Use splitBlock command behavior
-      const tr = state.tr.split($from.pos);
-      view.dispatch(tr);
-      console.log('[Main] Android TV: Enter at pos', $from.pos);
-    };
-
-    // Set cursor position at specific document index
-    (window as any).setCursorPosition = (pos: number) => {
-      view.focus();
-      const { state } = view;
-      // Clamp position to valid range
-      const maxPos = state.doc.content.size;
-      const safePos = Math.max(0, Math.min(pos, maxPos));
-
-      try {
-        const selection = state.selection.constructor.near(state.doc.resolve(safePos));
-        view.dispatch(state.tr.setSelection(selection));
-        console.log('[Main] Android TV: Set cursor to pos', safePos);
-      } catch (e) {
-        console.error('[Main] Android TV: Failed to set cursor position', e);
-      }
-    };
-
-    // Generate QR code for mobile users to join this document session
-    const qrContainer = document.getElementById('tv-qr-container');
-    const qrCanvas = document.getElementById('tv-qr-canvas') as HTMLCanvasElement;
-
-    if (qrContainer && qrCanvas) {
-      // Build the URL for mobile users to join
-      // Use current host so it works in both local dev and production
-      const joinUrl = `${window.location.origin}/?doc=${documentId}`;
-
-      console.log('[Main] Android TV: Generating QR code for URL:', joinUrl);
-
-      QRCode.toCanvas(qrCanvas, joinUrl, {
-        width: 120,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#ffffff'
-        }
-      }, (error) => {
-        if (error) {
-          console.error('[Main] Android TV: Failed to generate QR code:', error);
-        } else {
-          // Show the QR container
-          qrContainer.classList.add('visible');
-          console.log('[Main] Android TV: QR code generated successfully');
-        }
-      });
-    }
-  }
 }
 
 // Function to geocode a place name using Nominatim
