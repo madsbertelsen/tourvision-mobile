@@ -42,7 +42,7 @@ export class FullscreenMapView {
    * Extracted from main.ts:295-720
    * @param targetBounds Optional bounds to use (for follow mode - skips local calculation)
    */
-  show(targetBounds?: { north: number; south: number; east: number; west: number }): void {
+  show(targetBounds?: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
     console.log('[Fullscreen] Showing fullscreen map', targetBounds ? '(with target bounds)' : '');
 
     // Notify parent that fullscreen map is opening
@@ -146,29 +146,34 @@ export class FullscreenMapView {
       overlay.classList.add('fade-in');
     }, 10);
 
-    // Initialize fullscreen map
+    // Initialize fullscreen map (pass pitch/bearing from target bounds for follow mode)
+    const initialPitch = targetBounds?.pitch;
+    const initialBearing = targetBounds?.bearing;
     setTimeout(() => {
-      this.initializeFullscreenMap(adjustedBounds, currentLocations);
+      this.initializeFullscreenMap(adjustedBounds, currentLocations, initialPitch, initialBearing);
     }, 100);
   }
 
   /**
    * Initialize and render fullscreen map
+   * @param initialPitch Optional initial pitch/tilt (for follow mode)
+   * @param initialBearing Optional initial bearing/heading (for follow mode)
    */
-  private initializeFullscreenMap(adjustedBounds: any, currentLocations: Location[]): void {
+  private initializeFullscreenMap(adjustedBounds: any, currentLocations: Location[], initialPitch?: number, initialBearing?: number): void {
     // Remove existing map if any
     if (this.fullscreenMap) {
       this.fullscreenMap.remove();
     }
 
-    console.log('[Fullscreen] Creating map with adjusted bounds');
+    console.log('[Fullscreen] Creating map with adjusted bounds', { pitch: initialPitch, bearing: initialBearing });
 
     // Set Mapbox token
     (window as any).mapboxgl.accessToken = this.deps.mapboxToken;
 
     // Create fullscreen map with adjusted bounds (NO padding)
     // The bounds are pre-calculated to achieve the same visual alignment
-    this.fullscreenMap = new (window as any).mapboxgl.Map({
+    // Include pitch and bearing if provided (for follow mode)
+    const mapOptions: any = {
       container: 'fullscreen-map',
       style: 'mapbox://styles/mapbox/light-v11',
       bounds: adjustedBounds,
@@ -179,7 +184,17 @@ export class FullscreenMapView {
       interactive: true,
       trackResize: true,
       fadeDuration: 0
-    });
+    };
+
+    // Add pitch/bearing if provided (follow mode)
+    if (initialPitch !== undefined) {
+      mapOptions.pitch = initialPitch;
+    }
+    if (initialBearing !== undefined) {
+      mapOptions.bearing = initialBearing;
+    }
+
+    this.fullscreenMap = new (window as any).mapboxgl.Map(mapOptions);
 
     // Add markers
     this.fullscreenMap.on('load', () => {
@@ -605,9 +620,9 @@ export class FullscreenMapView {
   }
 
   /**
-   * Fit the fullscreen map to given bounds (for follow mode)
+   * Fit the fullscreen map to given bounds with pitch/bearing (for follow mode)
    */
-  fitBounds(boundsData: { north: number; south: number; east: number; west: number }): void {
+  fitBounds(boundsData: { north: number; south: number; east: number; west: number; pitch?: number; bearing?: number }): void {
     if (!this.fullscreenMap || !boundsData) {
       console.log('[Fullscreen] Cannot fitBounds - map not available or no bounds data');
       return;
@@ -621,10 +636,43 @@ export class FullscreenMapView {
 
     console.log('[Fullscreen] Fitting bounds from follow mode:', boundsData);
 
-    this.fullscreenMap.fitBounds(bounds, {
-      padding: 0,
-      animate: true,
-      duration: 300
+    // Use flyTo instead of fitBounds to include pitch and bearing
+    // Calculate center and appropriate zoom from bounds
+    const center = bounds.getCenter();
+
+    // Get current camera to determine zoom that fits bounds
+    // We need to calculate zoom that fits the bounds
+    const currentZoom = this.fullscreenMap.getZoom();
+
+    // Use cameraForBounds to get the appropriate zoom level
+    const cameraOptions = this.fullscreenMap.cameraForBounds(bounds, {
+      padding: 0
     });
+
+    if (cameraOptions) {
+      this.fullscreenMap.flyTo({
+        center: cameraOptions.center,
+        zoom: cameraOptions.zoom,
+        pitch: boundsData.pitch ?? 0,
+        bearing: boundsData.bearing ?? 0,
+        duration: 300,
+        essential: true
+      });
+    } else {
+      // Fallback to fitBounds if cameraForBounds fails
+      this.fullscreenMap.fitBounds(bounds, {
+        padding: 0,
+        animate: true,
+        duration: 300
+      });
+      // Apply pitch/bearing separately
+      if (boundsData.pitch !== undefined || boundsData.bearing !== undefined) {
+        this.fullscreenMap.easeTo({
+          pitch: boundsData.pitch ?? 0,
+          bearing: boundsData.bearing ?? 0,
+          duration: 300
+        });
+      }
+    }
   }
 }

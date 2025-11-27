@@ -45,18 +45,24 @@ export class AwarenessOverlayRenderer {
   }
 
   /**
-   * Update awareness with current map bounds
+   * Update awareness with current map bounds, pitch, and bearing
    * Extracted from main.ts:332-349
    */
   updateMapBoundsAwareness(awareness: any, map: mapboxgl.Map): void {
     const bounds = this.getVisibleBounds(map);
     const currentUser = awareness.getLocalState()?.user || {};
 
+    // Get camera orientation (pitch = tilt, bearing = heading/rotation)
+    const pitch = map.getPitch();
+    const bearing = map.getBearing();
+
     const boundsData = {
       north: bounds.getNorth(),
       south: bounds.getSouth(),
       east: bounds.getEast(),
       west: bounds.getWest(),
+      pitch,
+      bearing,
     };
 
     awareness.setLocalStateField('user', {
