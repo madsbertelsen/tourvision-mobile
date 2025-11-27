@@ -274,6 +274,17 @@ app.get('/debug', (req, res) => {
   }
 });
 
+// Landing page for root route
+const landingPagePath = join(__dirname, '../public/landing.html');
+app.get('/', (req, res) => {
+  if (existsSync(landingPagePath)) {
+    res.sendFile(landingPagePath);
+  } else {
+    // Fallback if landing page doesn't exist
+    res.redirect('/doc/demo');
+  }
+});
+
 // Serve static files from client dist directory
 // This serves the built Vite frontend application
 if (existsSync(clientDistPath)) {
@@ -290,24 +301,45 @@ if (existsSync(clientDistPath)) {
   // Serve static assets (JS, CSS, images, etc.)
   app.use(express.static(clientDistPath));
 
-  // Catch-all route for client-side routing
-  // This ensures that routes like /?doc=xyz work properly
-  app.get('*', (req, res) => {
+  // Document routes - serve the editor app
+  // Matches /doc/:documentId and /?doc=:documentId for backwards compatibility
+  app.get('/doc/*', (req, res) => {
     res.sendFile(join(clientDistPath, 'index.html'));
+  });
+
+  // Legacy query param support for backwards compatibility
+  app.get('*', (req, res, next) => {
+    // If accessing with ?doc= query param, serve the app
+    if (req.query.doc) {
+      res.sendFile(join(clientDistPath, 'index.html'));
+    } else {
+      // Otherwise 404 (landing page is handled above)
+      next();
+    }
   });
 } else {
   console.warn(`[Server] Client dist directory not found: ${clientDistPath}`);
   console.warn(`[Server] Run 'npm run build' in the client directory to build the frontend`);
 
-  // Fallback 404 when client is not built
-  app.use((req, res) => {
-    res.status(404).json({
-      error: 'Not Found',
+  // Document route placeholder when client not built
+  app.get('/doc/*', (req, res) => {
+    res.status(503).json({
+      error: 'Service Unavailable',
       message: 'Frontend not built. Run "npm run build" in the client directory.',
       path: req.path
     });
   });
 }
+
+// 404 handler for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: 'The requested resource was not found.',
+    path: req.path,
+    suggestion: 'Try accessing / for the landing page or /doc/:id for a document'
+  });
+});
 
 // Global error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
