@@ -2,6 +2,8 @@ package com.tourvision.tv
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,27 +14,58 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.ImageView
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 
 class MainActivity : Activity() {
     companion object {
         private const val TAG = "TourVisionTV"
         private const val BASE_URL = "http://192.168.1.223:5173"
+        private const val DOC_ID = "tv-session"
     }
 
     private lateinit var webView: WebView
+    private lateinit var qrCodeImage: ImageView
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        webView = WebView(this)
-        setContentView(webView)
+        webView = findViewById(R.id.webView)
+        qrCodeImage = findViewById(R.id.qrCodeImage)
 
         setupWebView()
+        setupQrCode()
 
-        val url = "$BASE_URL/?doc=tv-session"
+        val url = "$BASE_URL/?doc=$DOC_ID"
         Log.d(TAG, "Loading URL: $url")
         webView.loadUrl(url)
+    }
+
+    private fun setupQrCode() {
+        val joinUrl = "$BASE_URL/?doc=$DOC_ID"
+        Log.d(TAG, "Generating QR code for: $joinUrl")
+
+        try {
+            val qrCodeWriter = QRCodeWriter()
+            val bitMatrix = qrCodeWriter.encode(joinUrl, BarcodeFormat.QR_CODE, 256, 256)
+            val width = bitMatrix.width
+            val height = bitMatrix.height
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+
+            for (x in 0 until width) {
+                for (y in 0 until height) {
+                    bitmap.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
+                }
+            }
+
+            qrCodeImage.setImageBitmap(bitmap)
+            Log.d(TAG, "QR code generated successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate QR code: ${e.message}")
+        }
     }
 
     private fun setupWebView() {

@@ -39,9 +39,12 @@ const isAgentMode = params.get('agent') === 'true';
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
                        (import.meta.env.DEV && isAgentMode);
 
+// Store promise so main() can await it
+let agentModulePromise: Promise<void> | null = null;
+
 if (shouldLoadAgent) {
   console.log('[Main] Loading agent module...');
-  import('./agent').then((module) => {
+  agentModulePromise = import('./agent').then((module) => {
     initializeAgent = module.initializeAgent;
     console.log('[Main] Agent module loaded');
   }).catch((err) => {
@@ -772,9 +775,15 @@ async function main() {
   }
 
   // Initialize agent AFTER editor is created (agent needs editorView and schema)
-  if (isAgent && initializeAgent) {
-    console.log('[Main] Initializing agent with Y.js document observation');
-    initializeAgent(yXmlFragment, ydoc, documentId, editor, customSchema);
+  // Wait for agent module to load if we're in agent mode
+  if (isAgent && agentModulePromise) {
+    await agentModulePromise;
+    if (initializeAgent) {
+      console.log('[Main] Initializing agent with Y.js document observation');
+      initializeAgent(yXmlFragment, ydoc, documentId, editor, customSchema);
+    } else {
+      console.error('[Main] Agent module failed to load');
+    }
   }
 
   // Initialize FullscreenMapView now that awareness is available

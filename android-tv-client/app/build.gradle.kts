@@ -38,4 +38,7 @@ android {
 dependencies {
     implementation("androidx.leanback:leanback:1.0.0")
     implementation("androidx.core:core-ktx:1.12.0")
+
+    // QR Code generation
+    implementation("com.google.zxing:core:3.5.2")
 }
