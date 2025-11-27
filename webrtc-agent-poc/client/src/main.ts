@@ -760,8 +760,13 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
           // Insert character at end of document (for landing page demo)
           if (data.char) {
             const { state, dispatch } = view;
-            const endPos = state.doc.content.size - 1; // Before closing tag
-            const tr = state.tr.insertText(data.char, endPos);
+            // Find the last position inside the last text block
+            const lastPos = state.doc.content.size;
+            // Resolve the position to find a valid text insertion point
+            const $pos = state.doc.resolve(lastPos - 1);
+            // Get the position at the end of the deepest node (inside paragraph)
+            const insertPos = $pos.end($pos.depth);
+            const tr = state.tr.insertText(data.char, insertPos);
             dispatch(tr);
           }
           break;

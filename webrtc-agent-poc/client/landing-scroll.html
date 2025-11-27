@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TourVision - Collaborative Trip Planning</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    /* Full-screen editor iframe */
+    .editor-frame {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: rgba(0, 0, 0, 0.4);
+      font-size: 13px;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 100;
+    }
+
+    .scroll-indicator.hidden {
+      opacity: 0;
+    }
+
+    .scroll-arrow {
+      width: 24px;
+      height: 24px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: bounce 2s infinite;
+    }
+
+    .scroll-arrow svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(6px);
+      }
+      60% {
+        transform: translateY(3px);
+      }
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #3B82F6, #8B5CF6, #EC4899);
+      width: 0%;
+      transition: width 0.1s;
+      z-index: 100;
+    }
+
+    /* CTA overlay that appears at the end */
+    .cta-overlay {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 24px;
+      background: linear-gradient(to top, rgba(255,255,255,0.98), rgba(255,255,255,0));
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s, transform 0.5s;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .cta-overlay.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .btn {
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: #111;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #333;
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: #111;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      border-color: #111;
+    }
+
+    /* Hidden scroll container for scroll detection */
+    .scroll-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow-y: scroll;
+      z-index: 50;
+    }
+
+    .scroll-content {
+      height: 500vh; /* 5x viewport height for scroll distance */
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Progress bar -->
+  <div class="progress-bar" id="progress-bar"></div>
+
+  <!-- Editor iframe (the product IS the demo) -->
+  <iframe
+    id="editor-frame"
+    class="editor-frame"
+  ></iframe>
+
+  <!-- Invisible scroll container -->
+  <div class="scroll-container" id="scroll-container">
+    <div class="scroll-content"></div>
+  </div>
+
+  <!-- Scroll indicator -->
+  <div class="scroll-indicator" id="scroll-indicator">
+    <span>Scroll to explore</span>
+    <div class="scroll-arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12l7 7 7-7"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- CTA that appears at end -->
+  <div class="cta-overlay" id="cta-overlay">
+    <a href="#" class="btn btn-primary" onclick="startTrip(); return false;">Start Planning Your Trip</a>
+    <a href="#" class="btn btn-secondary" onclick="learnMore(); return false;">Learn More</a>
+  </div>
+
+  <script>
+    // Generate unique document ID
+    const demoDocId = 'demo-' + Math.random().toString(36).substring(2, 10);
+
+    // Set iframe src
+    const editorFrame = document.getElementById('editor-frame');
+    editorFrame.src = `/doc/${demoDocId}?animate=true&hideHeader=true`;
+
+    // Content sections revealed at different scroll positions
+    const contentSections = [
+      {
+        scrollPercent: 0,
+        text: `Welcome to TourVision
+
+`
+      },
+      {
+        scrollPercent: 5,
+        text: `The collaborative trip planning tool that lets you create beautiful itineraries with your travel companions.
+
+`
+      },
+      {
+        scrollPercent: 15,
+        text: `---
+
+Day 1: Tokyo
+
+`
+      },
+      {
+        scrollPercent: 20,
+        text: `Arrive at Narita Airport. `
+      },
+      {
+        scrollPercent: 25,
+        text: `Take the Narita Express to Shinjuku Station.
+
+`
+      },
+      {
+        scrollPercent: 30,
+        text: `First stop: Shibuya Crossing - the world's busiest pedestrian intersection.
+
+`
+      },
+      {
+        scrollPercent: 40,
+        text: `Evening: Explore the neon-lit streets of Shinjuku.
+
+`
+      },
+      {
+        scrollPercent: 50,
+        text: `---
+
+Day 2: Kyoto
+
+`
+      },
+      {
+        scrollPercent: 55,
+        text: `Take the Shinkansen bullet train from Tokyo Station. `
+      },
+      {
+        scrollPercent: 60,
+        text: `Journey time: about 2 hours.
+
+`
+      },
+      {
+        scrollPercent: 65,
+        text: `Must visit:
+`
+      },
+      {
+        scrollPercent: 70,
+        text: `- Fushimi Inari Shrine (thousands of orange torii gates)
+`
+      },
+      {
+        scrollPercent: 75,
+        text: `- Kinkaku-ji (the Golden Pavilion)
+`
+      },
+      {
+        scrollPercent: 80,
+        text: `- Arashiyama Bamboo Grove
+
+`
+      },
+      {
+        scrollPercent: 90,
+        text: `---
+
+Ready to plan your adventure?`
+      }
+    ];
+
+    let currentSectionIndex = 0;
+    let lastScrollPercent = 0;
+    let editorReady = false;
+    let typewriterQueue = [];
+    let isTyping = false;
+
+    // Wait for editor to be ready
+    window.addEventListener('message', (event) => {
+      if (event.data?.type === 'ready') {
+        editorReady = true;
+        console.log('[Landing] Editor ready');
+        // Process any queued content
+        processQueue();
+      }
+    });
+
+    // Type text character by character
+    function typeText(text, callback) {
+      // Always queue if editor not ready OR if already typing
+      if (!editorReady || isTyping) {
+        typewriterQueue.push({ text, callback });
+        return;
+      }
+
+      let index = 0;
+      isTyping = true;
+
+      function typeNext() {
+        if (index >= text.length) {
+          isTyping = false;
+          if (callback) callback();
+          // Process next item in queue after a small delay
+          setTimeout(processQueue, 50);
+          return;
+        }
+
+        const char = text[index];
+        editorFrame.contentWindow.postMessage({
+          type: 'typewriter',
+          char: char
+        }, '*');
+
+        index++;
+
+        // Vary typing speed
+        let delay = 15 + Math.random() * 25;
+        if (char === '\n') delay = 80;
+        if (char === '.') delay = 150;
+        if (char === ':') delay = 100;
+        if (char === '-') delay = 50;
+
+        setTimeout(typeNext, delay);
+      }
+
+      typeNext();
+    }
+
+    function processQueue() {
+      if (isTyping || typewriterQueue.length === 0) return;
+      const { text, callback } = typewriterQueue.shift();
+      // Recursive call - typeText will set isTyping and start processing
+      isTyping = false; // Reset before calling typeText
+      typeText(text, callback);
+    }
+
+    // Handle scroll
+    const scrollContainer = document.getElementById('scroll-container');
+    const progressBar = document.getElementById('progress-bar');
+    const scrollIndicator = document.getElementById('scroll-indicator');
+    const ctaOverlay = document.getElementById('cta-overlay');
+
+    scrollContainer.addEventListener('scroll', () => {
+      const scrollHeight = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+      const scrollPercent = (scrollContainer.scrollTop / scrollHeight) * 100;
+
+      // Update progress bar
+      progressBar.style.width = scrollPercent + '%';
+
+      // Hide scroll indicator after scrolling starts
+      if (scrollPercent > 2) {
+        scrollIndicator.classList.add('hidden');
+      } else {
+        scrollIndicator.classList.remove('hidden');
+      }
+
+      // Show CTA at end
+      if (scrollPercent > 95) {
+        ctaOverlay.classList.add('visible');
+      } else {
+        ctaOverlay.classList.remove('visible');
+      }
+
+      // Trigger content sections based on scroll position
+      while (currentSectionIndex < contentSections.length &&
+             scrollPercent >= contentSections[currentSectionIndex].scrollPercent) {
+        const section = contentSections[currentSectionIndex];
+        typeText(section.text);
+        currentSectionIndex++;
+      }
+
+      lastScrollPercent = scrollPercent;
+    });
+
+    // CTA actions
+    function startTrip() {
+      const tripId = 'trip-' + Math.random().toString(36).substring(2, 10);
+      window.location.href = '/doc/' + tripId;
+    }
+
+    function learnMore() {
+      window.location.href = '/landing.html';
+    }
+
+    // Trigger initial content after iframe loads
+    editorFrame.addEventListener('load', () => {
+      // Small delay for editor to initialize
+      setTimeout(() => {
+        if (currentSectionIndex === 0 && scrollContainer.scrollTop === 0) {
+          // Type the welcome message
+          const firstSection = contentSections[0];
+          typeText(firstSection.text);
+          currentSectionIndex = 1;
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
