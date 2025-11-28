@@ -27,6 +27,7 @@ import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
+import { VideoChatService } from './services/VideoChatService';
 import { ViewSyncService } from './services/ViewSyncService';
 
 // Conditionally import agent module
@@ -510,6 +511,10 @@ let viewSyncService: ViewSyncService | null = null;
 let animatePlayback: AnimatePlayback | null = null;
 let animateAgent: AnimateAgent | null = null;
 
+// Global VideoChatService for video calls
+let videoChatService: VideoChatService | null = null;
+let videoSignalingWs: WebSocket | null = null;
+
 // Initialize AwarenessOverlayRenderer
 awarenessOverlayRenderer = new AwarenessOverlayRenderer();
 
@@ -891,6 +896,189 @@ function openAgentTab(awareness: any) {
   });
 }
 
+// Set up video chat WebSocket and service
+function setupVideoChat(awareness: any, iceServers: RTCIceServer[]) {
+  // Create parallel WebSocket for video signaling
+  const getSignalingBaseUrl = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
+      return `${protocol}//${hostname}:8787/signaling`;
+    }
+    return `${protocol}//${hostname}/signaling`;
+  };
+
+  const signalingBaseUrl = getSignalingBaseUrl();
+  const videoWsUrl = `${signalingBaseUrl}/${documentId}`;
+
+  console.log('[VideoChat] Connecting to signaling server:', videoWsUrl);
+
+  videoSignalingWs = new WebSocket(videoWsUrl);
+
+  videoSignalingWs.onopen = () => {
+    console.log('[VideoChat] WebSocket connected, subscribing to video topic');
+    videoSignalingWs!.send(JSON.stringify({
+      type: 'subscribe',
+      topics: ['video']
+    }));
+  };
+
+  videoSignalingWs.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === 'publish' && message.topic === 'video') {
+        videoChatService?.handleSignalingMessage(message.data);
+      }
+    } catch (error) {
+      console.error('[VideoChat] Error parsing message:', error);
+    }
+  };
+
+  videoSignalingWs.onerror = (error) => {
+    console.error('[VideoChat] WebSocket error:', error);
+  };
+
+  videoSignalingWs.onclose = () => {
+    console.log('[VideoChat] WebSocket closed');
+  };
+
+  // Create VideoChatService
+  const clientId = String(awareness.clientID);
+  videoChatService = new VideoChatService(clientId, userName, awareness, iceServers);
+
+  // Set up publish function
+  videoChatService.publishToTopic = (topic: string, data: any) => {
+    if (videoSignalingWs && videoSignalingWs.readyState === WebSocket.OPEN) {
+      videoSignalingWs.send(JSON.stringify({
+        type: 'publish',
+        topic,
+        data
+      }));
+    }
+  };
+
+  // Set up event handlers
+  videoChatService.onLocalStream = (stream: MediaStream) => {
+    console.log('[VideoChat] Local stream received');
+    const localVideo = document.getElementById('local-video') as HTMLVideoElement;
+    if (localVideo) {
+      localVideo.srcObject = stream;
+    }
+    showVideoContainer();
+  };
+
+  videoChatService.onRemoteStream = (peerId: string, stream: MediaStream, peerName: string) => {
+    console.log('[VideoChat] Remote stream from:', peerId, peerName);
+    addRemoteVideo(peerId, stream, peerName);
+  };
+
+  videoChatService.onPeerDisconnect = (peerId: string) => {
+    console.log('[VideoChat] Peer disconnected:', peerId);
+    removeRemoteVideo(peerId);
+  };
+
+  videoChatService.onParticipantsChange = (count: number) => {
+    console.log('[VideoChat] Participant count:', count + 1); // +1 for self
+    updateVideoGridLayout(count + 1);
+  };
+
+  videoChatService.onError = (error: Error) => {
+    console.error('[VideoChat] Error:', error);
+    alert(`Video chat error: ${error.message}`);
+  };
+
+  console.log('[VideoChat] VideoChatService initialized');
+}
+
+// Video UI helpers
+function showVideoContainer() {
+  const container = document.getElementById('video-chat-container');
+  const joinBtn = document.getElementById('join-video-btn');
+  if (container) container.classList.add('visible');
+  if (joinBtn) joinBtn.classList.add('active');
+}
+
+function hideVideoContainer() {
+  const container = document.getElementById('video-chat-container');
+  const joinBtn = document.getElementById('join-video-btn');
+  if (container) container.classList.remove('visible');
+  if (joinBtn) joinBtn.classList.remove('active');
+}
+
+function addRemoteVideo(peerId: string, stream: MediaStream, peerName: string) {
+  const grid = document.getElementById('video-grid');
+  if (!grid) return;
+
+  // Check if video wrapper already exists
+  let wrapper = document.getElementById(`video-wrapper-${peerId}`);
+  if (wrapper) {
+    const video = wrapper.querySelector('video');
+    if (video) video.srcObject = stream;
+    return;
+  }
+
+  // Create new video wrapper
+  wrapper = document.createElement('div');
+  wrapper.id = `video-wrapper-${peerId}`;
+  wrapper.className = 'video-wrapper';
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+
+  const label = document.createElement('span');
+  label.className = 'video-label';
+  label.textContent = peerName;
+
+  wrapper.appendChild(video);
+  wrapper.appendChild(label);
+  grid.appendChild(wrapper);
+
+  updateVideoGridLayout(grid.children.length);
+}
+
+function removeRemoteVideo(peerId: string) {
+  const wrapper = document.getElementById(`video-wrapper-${peerId}`);
+  if (wrapper) {
+    wrapper.remove();
+  }
+
+  const grid = document.getElementById('video-grid');
+  if (grid) {
+    updateVideoGridLayout(grid.children.length);
+  }
+}
+
+function updateVideoGridLayout(count: number) {
+  const grid = document.getElementById('video-grid');
+  if (!grid) return;
+
+  // Remove all participant classes
+  grid.classList.remove('participants-1', 'participants-2', 'participants-3', 'participants-4');
+
+  // Add appropriate class
+  if (count <= 1) {
+    grid.classList.add('participants-1');
+  } else if (count === 2) {
+    grid.classList.add('participants-2');
+  } else if (count === 3) {
+    grid.classList.add('participants-3');
+  } else {
+    grid.classList.add('participants-4');
+  }
+}
+
+function showJoinVideoModal() {
+  const modal = document.getElementById('join-video-modal');
+  if (modal) modal.classList.add('visible');
+}
+
+function hideJoinVideoModal() {
+  const modal = document.getElementById('join-video-modal');
+  if (modal) modal.classList.remove('visible');
+}
+
 // Main initialization
 async function main() {
   updateStatus('Initializing Y.js...', 'connecting');
@@ -955,6 +1143,14 @@ async function main() {
   } else if (!isAgent) {
     console.log('[Main] Agent tab disabled (enableAgent not set to true)');
   }
+
+  // Set up video chat (parallel WebSocket for video signaling)
+  // Use the same ICE servers as y-webrtc
+  const iceServers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+  setupVideoChat(awareness, iceServers);
 
   // Initialize Animate mode for landing page demo
   // User tab: Creates scroll overlay and broadcasts position via awareness
@@ -1101,6 +1297,15 @@ function setupToolbarButtons(view: EditorView) {
   const createGeoMarkBtn = document.getElementById('create-geomark-btn') as HTMLButtonElement;
   const insertMapBtn = document.getElementById('insert-map-btn');
 
+  // Video chat buttons
+  const joinVideoBtn = document.getElementById('join-video-btn');
+  const joinWithVideoBtn = document.getElementById('join-with-video-btn');
+  const joinAudioOnlyBtn = document.getElementById('join-audio-only-btn');
+  const cancelJoinVideoBtn = document.getElementById('cancel-join-video-btn');
+  const toggleMuteBtn = document.getElementById('toggle-mute-btn');
+  const toggleCameraBtn = document.getElementById('toggle-camera-btn');
+  const leaveVideoBtn = document.getElementById('leave-video-btn');
+
   // Function to update button state based on selection
   const updateButtonState = () => {
     if (!createGeoMarkBtn) return;
@@ -1140,6 +1345,94 @@ function setupToolbarButtons(view: EditorView) {
   if (insertMapBtn) {
     insertMapBtn.addEventListener('click', () => insertMap(view));
   }
+
+  // Video chat button handlers
+  if (joinVideoBtn) {
+    joinVideoBtn.addEventListener('click', () => {
+      if (videoChatService?.isInCall()) {
+        // If already in call, leave
+        videoChatService.leave();
+        hideVideoContainer();
+      } else {
+        // Show join options modal
+        showJoinVideoModal();
+      }
+    });
+  }
+
+  if (joinWithVideoBtn) {
+    joinWithVideoBtn.addEventListener('click', async () => {
+      hideJoinVideoModal();
+      try {
+        await videoChatService?.join(false); // With video
+      } catch (error) {
+        console.error('[Main] Failed to join video call:', error);
+      }
+    });
+  }
+
+  if (joinAudioOnlyBtn) {
+    joinAudioOnlyBtn.addEventListener('click', async () => {
+      hideJoinVideoModal();
+      try {
+        await videoChatService?.join(true); // Audio only
+      } catch (error) {
+        console.error('[Main] Failed to join audio call:', error);
+      }
+    });
+  }
+
+  if (cancelJoinVideoBtn) {
+    cancelJoinVideoBtn.addEventListener('click', () => {
+      hideJoinVideoModal();
+    });
+  }
+
+  if (toggleMuteBtn) {
+    toggleMuteBtn.addEventListener('click', () => {
+      if (videoChatService) {
+        const isMuted = videoChatService.toggleMute();
+        toggleMuteBtn.classList.toggle('muted', isMuted);
+        toggleMuteBtn.title = isMuted ? 'Unmute Microphone' : 'Mute Microphone';
+      }
+    });
+  }
+
+  if (toggleCameraBtn) {
+    toggleCameraBtn.addEventListener('click', () => {
+      if (videoChatService) {
+        const isVideoOff = videoChatService.toggleVideo();
+        toggleCameraBtn.classList.toggle('muted', isVideoOff);
+        toggleCameraBtn.title = isVideoOff ? 'Turn Camera On' : 'Turn Camera Off';
+      }
+    });
+  }
+
+  if (leaveVideoBtn) {
+    leaveVideoBtn.addEventListener('click', () => {
+      if (videoChatService) {
+        videoChatService.leave();
+        hideVideoContainer();
+      }
+    });
+  }
+
+  // Close join modal when clicking backdrop
+  const joinVideoModal = document.getElementById('join-video-modal');
+  if (joinVideoModal) {
+    joinVideoModal.addEventListener('click', (e) => {
+      if (e.target === joinVideoModal) {
+        hideJoinVideoModal();
+      }
+    });
+  }
+
+  // Leave video call when page unloads
+  window.addEventListener('beforeunload', () => {
+    if (videoChatService?.isInCall()) {
+      videoChatService.leave();
+    }
+  });
 
   console.log('[Main] Toolbar buttons set up');
 }
