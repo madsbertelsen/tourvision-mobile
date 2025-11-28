@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Agent POC</title>
+
+  <!-- Mapbox GL CSS and JS -->
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    #app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    #editor-container {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 400px;
+      margin-top: 20px;
+    }
+
+    .ProseMirror {
+      outline: none;
+      min-height: 350px;
+      padding: 10px;
+    }
+
+    .ProseMirror p {
+      margin-bottom: 1em;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: white;
+      border-radius: 0;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    h1 {
+      display: none;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .toolbar button {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      filter: grayscale(100%);
+      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+
+    .toolbar button svg {
+      transition: all 0.2s;
+    }
+
+    .toolbar button:hover {
+      opacity: 0.9;
+      background: rgba(0, 0, 0, 0.05);
+      filter: grayscale(50%);
+    }
+
+    .toolbar button:active {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.1);
+      filter: grayscale(0%);
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .toolbar button:disabled:hover {
+      background: transparent;
+      filter: grayscale(100%);
+      opacity: 0.3;
+    }
+
+    .mode-badge {
+      display: none;
+    }
+
+    .doc-info {
+      display: none;
+    }
+
+    .status {
+      display: none;
+    }
+
+    /* Avatars */
+    .avatars {
+      display: flex;
+      align-items: center;
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+      text-transform: uppercase;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.15s ease, margin 0.15s ease;
+      margin-left: -8px;
+    }
+
+    .avatar:last-child {
+      margin-left: 0;
+    }
+
+    .avatar:hover,
+    .avatar:focus {
+      transform: scale(1.1);
+      z-index: 10;
+      outline: none;
+    }
+
+    .avatar:focus {
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .avatar.self {
+      opacity: 0.8;
+    }
+
+    .avatar.following {
+      outline: 2px solid #10b981;
+      outline-offset: 2px;
+    }
+
+    .avatar:not(.self) {
+      cursor: pointer;
+    }
+
+    /* Avatar Context Menu */
+    #avatar-context-menu {
+      position: fixed;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 2000;
+      padding: 4px 0;
+      min-width: 140px;
+    }
+
+    #avatar-context-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+    }
+
+    #avatar-context-menu button:hover {
+      background: #f5f5f5;
+    }
+
+    #avatar-context-menu button:active {
+      background: #e8e8e8;
+    }
+
+    /* Ensure ProseMirror has proper white-space handling */
+    .ProseMirror {
+      white-space: pre-wrap;
+    }
+
+    /* Hide header when hideHeader param is present */
+    body.hide-header header {
+      display: none;
+    }
+
+    /* Make app fullscreen when header is hidden */
+    body.hide-header #app {
+      max-width: none;
+      padding: 0;
+      height: 100vh;
+      margin: 0;
+    }
+
+    /* Make editor container fill screen when header is hidden */
+    body.hide-header #editor-container {
+      height: 100vh;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+
+    /* Fullscreen Map Overlay */
+    #fullscreen-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10000;
+      display: none;
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    }
+
+    #fullscreen-overlay.visible {
+      display: block;
+    }
+
+    #fullscreen-overlay.fade-in {
+      opacity: 1;
+    }
+
+    .backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.3);
+      z-index: 10001;
+    }
+
+    #fullscreen-map-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10002;
+    }
+
+    #fullscreen-map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      background-color: rgba(255, 255, 255, 0.95);
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10003;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-weight: 300;
+      transition: transform 0.2s;
+    }
+
+    .close-btn:hover {
+      transform: scale(1.1);
+    }
+
+    /* Map Style Switcher */
+    .map-style-switcher {
+      position: absolute;
+      bottom: 24px;
+      left: 16px;
+      z-index: 10003;
+      display: flex;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 6px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    .map-style-btn {
+      width: 48px;
+      height: 48px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      background-size: cover;
+      background-position: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .map-style-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .map-style-btn.active {
+      border-color: #3b82f6;
+    }
+
+    .map-style-btn[data-style="light"] {
+      background-color: #f0f0f0;
+      background-image: linear-gradient(135deg, #e8e8e8 25%, #f5f5f5 25%, #f5f5f5 50%, #e8e8e8 50%, #e8e8e8 75%, #f5f5f5 75%);
+      background-size: 8px 8px;
+    }
+
+    .map-style-btn[data-style="dark"] {
+      background-color: #2d2d2d;
+      background-image: linear-gradient(135deg, #333 25%, #3a3a3a 25%, #3a3a3a 50%, #333 50%, #333 75%, #3a3a3a 75%);
+      background-size: 8px 8px;
+    }
+
+    .map-style-btn[data-style="satellite"] {
+      background: linear-gradient(135deg, #2d5a27 0%, #1a3d18 50%, #0d2a0c 100%);
+    }
+
+    .map-style-btn[data-style="streets"] {
+      background-color: #fff;
+      background-image:
+        linear-gradient(90deg, #ddd 1px, transparent 1px),
+        linear-gradient(#ddd 1px, transparent 1px);
+      background-size: 12px 12px;
+    }
+
+    /* Video Chat Container */
+    #video-chat-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      background: #1a1a1a;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      z-index: 9000;
+      display: none;
+      overflow: hidden;
+    }
+
+    #video-chat-container.visible {
+      display: block;
+    }
+
+    #video-chat-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #333;
+      gap: 8px;
+    }
+
+    #video-chat-header span {
+      flex: 1;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .video-control-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      background: #444;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .video-control-btn:hover {
+      background: #555;
+    }
+
+    .video-control-btn.muted {
+      background: #dc2626;
+    }
+
+    .video-control-btn.muted:hover {
+      background: #ef4444;
+    }
+
+    #leave-video-btn {
+      background: #dc2626;
+    }
+
+    #leave-video-btn:hover {
+      background: #ef4444;
+    }
+
+    #video-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      background: #1a1a1a;
+    }
+
+    /* Single participant - full width */
+    #video-grid.participants-1 {
+      grid-template-columns: 1fr;
+    }
+
+    /* Two participants - side by side */
+    #video-grid.participants-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    /* Three or four - 2x2 grid */
+    #video-grid.participants-3,
+    #video-grid.participants-4 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .video-wrapper {
+      position: relative;
+      aspect-ratio: 4/3;
+      background: #2a2a2a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-wrapper .video-label {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .video-wrapper .audio-indicator {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      background: rgba(0,0,0,0.6);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .video-wrapper.audio-only {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-wrapper.audio-only .avatar-placeholder {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    /* Join Video Modal */
+    #join-video-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #join-video-modal.visible {
+      display: flex;
+    }
+
+    .join-video-dialog {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      width: 320px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .join-video-dialog h3 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .join-video-dialog .options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .join-video-dialog .option-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .join-video-dialog .option-btn:hover {
+      border-color: #333;
+      background: #f5f5f5;
+    }
+
+    .join-video-dialog .option-btn .icon {
+      font-size: 24px;
+    }
+
+    .join-video-dialog .option-btn .text {
+      flex: 1;
+    }
+
+    .join-video-dialog .option-btn .text strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .join-video-dialog .option-btn .text span {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .join-video-dialog .cancel-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      background: #f0f0f0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .join-video-dialog .cancel-btn:hover {
+      background: #e0e0e0;
+    }
+
+    /* Video button active state */
+    .toolbar button#join-video-btn.active {
+      filter: grayscale(0%);
+      opacity: 1;
+      background: rgba(34, 197, 94, 0.15);
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/main-BCv5msfH.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-Cvej7Dwr.css">
+</head>
+<body>
+  <script>
+    // Check for hideHeader parameter immediately (before body renders)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('hideHeader') === 'true') {
+      document.body.classList.add('hide-header');
+    }
+
+    // Intercept console logs and send them via postMessage for React Native WebView debugging
+    (function() {
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      const originalInfo = console.info;
+
+      function sendLog(level, args) {
+        const message = Array.from(args).map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg);
+            } catch (e) {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ');
+
+        // Send to parent/WebView
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }));
+        } else if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'editorLog',
+            level: level,
+            message: `[${level.toUpperCase()}] ${message}`
+          }, '*');
+        }
+      }
+
+      console.log = function(...args) {
+        originalLog.apply(console, args);
+        sendLog('log', args);
+      };
+
+      console.error = function(...args) {
+        originalError.apply(console, args);
+        sendLog('error', args);
+      };
+
+      console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        sendLog('warn', args);
+      };
+
+      console.info = function(...args) {
+        originalInfo.apply(console, args);
+        sendLog('info', args);
+      };
+
+      // Log that console interception is active
+      console.log('[Console] Log interception initialized for WebView debugging');
+    })();
+  </script>
+  <div id="app">
+    <header>
+      <h1>WebRTC Agent POC</h1>
+      <div id="mode-indicator"></div>
+      <div id="doc-info" class="doc-info"></div>
+      <div id="status" class="status connecting">Initializing...</div>
+      <div class="toolbar">
+        <button id="new-doc-btn" aria-label="New Document">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="create-geomark-btn" aria-label="Create Geo Mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </button>
+        <button id="insert-map-btn" aria-label="Insert Map">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+            <line x1="8" y1="2" x2="8" y2="18"></line>
+            <line x1="16" y1="6" x2="16" y2="22"></line>
+          </svg>
+        </button>
+        <button id="join-video-btn" aria-label="Join Video Call">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+        </button>
+      </div>
+      <div class="spacer"></div>
+      <div id="avatars" class="avatars"></div>
+    </header>
+    <div id="editor-container"></div>
+  </div>
+
+  <!-- Fullscreen Map Overlay (hidden by default) -->
+  <div id="fullscreen-overlay">
+    <div class="backdrop"></div>
+    <div id="fullscreen-map-container">
+      <div id="fullscreen-map"></div>
+    </div>
+    <button class="close-btn">✕</button>
+    <div class="map-style-switcher">
+      <button class="map-style-btn active" data-style="light" title="Light"></button>
+      <button class="map-style-btn" data-style="dark" title="Dark"></button>
+      <button class="map-style-btn" data-style="satellite" title="Satellite"></button>
+      <button class="map-style-btn" data-style="streets" title="Streets"></button>
+    </div>
+  </div>
+
+  <!-- Location Sheet (hidden by default) -->
+  <div id="location-sheet-backdrop"></div>
+  <div id="location-sheet">
+    <div class="location-sheet-handle"></div>
+    <div class="location-sheet-header">
+      <div id="location-color-dot" class="location-color-dot"></div>
+      <div id="location-sheet-title" class="location-sheet-title"></div>
+      <button id="location-sheet-close-btn" class="location-sheet-close">✕</button>
+    </div>
+    <div class="location-sheet-content">
+      <div id="location-sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- Avatar Context Menu (hidden by default) -->
+  <div id="avatar-context-menu" style="display: none;">
+    <button id="follow-user-btn">Follow</button>
+  </div>
+
+  <!-- Video Chat Container (hidden by default) -->
+  <div id="video-chat-container">
+    <div id="video-chat-header">
+      <span>Video Chat</span>
+      <button id="toggle-mute-btn" class="video-control-btn" title="Toggle Microphone">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+      </button>
+      <button id="toggle-camera-btn" class="video-control-btn" title="Toggle Camera">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+      </button>
+      <button id="leave-video-btn" class="video-control-btn" title="Leave Call">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div id="video-grid" class="participants-1">
+      <div id="local-video-wrapper" class="video-wrapper">
+        <video id="local-video" autoplay muted playsinline></video>
+        <span class="video-label">You</span>
+      </div>
+      <!-- Remote videos added dynamically -->
+    </div>
+  </div>
+
+  <!-- Join Video Modal (hidden by default) -->
+  <div id="join-video-modal">
+    <div class="join-video-dialog">
+      <h3>Join Video Call</h3>
+      <div class="options">
+        <button class="option-btn" id="join-with-video-btn">
+          <span class="icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+          </span>
+          <span class="text">
+            <strong>With Video</strong>
+            <span>Camera and microphone</span>
+          </span>
+        </button>
+        <button class="option-btn" id="join-audio-only-btn">
+          <span class="icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+          </span>
+          <span class="text">
+            <strong>Audio Only</strong>
+            <span>Microphone only, no camera</span>
+          </span>
+        </button>
+      </div>
+      <button class="cancel-btn" id="cancel-join-video-btn">Cancel</button>
+    </div>
+  </div>
+
+</body>
+</html>

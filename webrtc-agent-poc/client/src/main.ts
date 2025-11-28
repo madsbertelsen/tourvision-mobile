@@ -23,6 +23,7 @@ import * as Y from 'yjs';
 
 // Services
 import { AnimateAgent, AnimatePlayback } from './services/AnimatePlayback';
+import { AutoplayDemo } from './services/AutoplayDemo';
 import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
@@ -39,6 +40,8 @@ let initializeAgent: ((yXmlFragment: any, ydoc: any, documentId: string, editorV
 const params = new URL(window.location.href).searchParams;
 const isAgentMode = params.get('agent') === 'true';
 const isAnimateMode = params.get('animate') === 'true'; // Landing page demo mode
+const isAutoplayMode = params.get('autoplay') === 'true'; // Self-playing demo for landing page
+const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
                        (import.meta.env.DEV && isAgentMode);
 
@@ -140,14 +143,41 @@ function updateStatus(message: string, type: 'connected' | 'connecting' | 'disco
 }
 
 // Initialize Y.js document and WebRTC provider
-async function setupYjs(documentId: string) {
-  console.log('[Y.js] Setting up Y.js document:', documentId);
+async function setupYjs(documentId: string, options: { disableSync?: boolean } = {}) {
+  console.log('[Y.js] Setting up Y.js document:', documentId, options);
 
   // Create Y.js document
   const ydoc = new Y.Doc();
 
   // Get the shared ProseMirror type
   const yXmlFragment = ydoc.getXmlFragment('prosemirror');
+
+  // If sync is disabled (e.g., for autoplay demos), skip WebRTC provider
+  if (options.disableSync) {
+    console.log('[Y.js] Sync disabled - running in local-only mode');
+
+    // Create a minimal local-only awareness for cursor plugin compatibility
+    const { Awareness } = await import('y-protocols/awareness');
+    const awareness = new Awareness(ydoc);
+    globalAwareness = awareness;
+
+    // Set local user info
+    awareness.setLocalStateField('user', {
+      name: userName,
+      color: userDisplayColor,
+      mapBounds: null,
+      viewState: {
+        scrollTop: 0,
+        scrollLeft: 0,
+        fullscreenMapOpen: false,
+        isPresenting: false,
+        followingUserId: null,
+      },
+    });
+
+    console.log('[Y.js] Local-only awareness created');
+    return { ydoc, yXmlFragment, provider: null, awareness };
+  }
 
   // Create WebRTC provider
   // Use WebSocket signaling server (configurable via env) + BroadcastChannel
@@ -1084,7 +1114,10 @@ async function main() {
   updateStatus('Initializing Y.js...', 'connecting');
 
   // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
-  const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId);
+  // Disable sync for autoplay mode to prevent conflicts between multiple viewers
+  const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId, {
+    disableSync: isAutoplayMode
+  });
 
   updateStatus('Initializing editor...', 'connecting');
 
@@ -1167,6 +1200,137 @@ async function main() {
       animatePlayback = new AnimatePlayback(awareness, documentId);
       animatePlayback.initialize();
     }
+  }
+
+  // Initialize Autoplay mode for landing page demos (self-playing, no user interaction)
+  if (isAutoplayMode) {
+    console.log(`[Main] Initializing AutoplayDemo with script: ${autoplayScript}`);
+    const autoplay = new AutoplayDemo(editor, autoplayScript, awareness);
+
+    // Wire up heading insertion for autoplay
+    autoplay.onHeading = (level: 1 | 2 | 3, text: string) => {
+      const { state } = editor;
+
+      // Create heading node
+      const headingNode = customSchema.nodes.heading.create(
+        { level },
+        customSchema.text(text)
+      );
+
+      // Find where to insert the heading
+      // If document only has one empty paragraph, replace it with heading
+      // Otherwise, append heading at the end
+      let tr = state.tr;
+      const firstChild = state.doc.firstChild;
+      const childCount = state.doc.childCount;
+
+      if (childCount === 1 && firstChild && firstChild.type.name === 'paragraph' && firstChild.content.size === 0) {
+        // Document only has one empty paragraph - replace it with heading
+        tr = tr.replaceWith(0, state.doc.content.size, headingNode);
+      } else {
+        // Append heading at the end of document
+        tr = tr.insert(state.doc.content.size, headingNode);
+      }
+
+      editor.dispatch(tr);
+      console.log(`[AutoplayDemo] Inserted heading ${level}: ${text}`);
+    };
+
+    // Wire up newline (paragraph creation) for autoplay
+    autoplay.onNewline = () => {
+      const { state } = editor;
+      const endOfDoc = state.doc.content.size;
+
+      // Create empty paragraph
+      const paragraphNode = customSchema.nodes.paragraph.create();
+
+      // Check if last node is already an empty paragraph - don't add another
+      const lastChild = state.doc.lastChild;
+      if (lastChild && lastChild.type.name === 'paragraph' && lastChild.content.size === 0) {
+        // Already have empty paragraph, skip
+        return;
+      }
+
+      // Insert paragraph at end
+      const tr = state.tr.insert(endOfDoc, paragraphNode);
+      editor.dispatch(tr);
+      console.log('[AutoplayDemo] Inserted new paragraph');
+    };
+
+    // Wire up character typing for autoplay
+    autoplay.onType = (char: string) => {
+      const { state } = editor;
+
+      // Find the last paragraph and insert at its end
+      let insertPos = state.doc.content.size - 1;
+
+      // Walk through document to find last text-containing block
+      state.doc.descendants((node, pos) => {
+        if (node.type.name === 'paragraph') {
+          // Position at end of paragraph content (before closing tag)
+          insertPos = pos + node.nodeSize - 1;
+        }
+      });
+
+      const tr = state.tr.insertText(char, insertPos);
+      editor.dispatch(tr);
+    };
+
+    // Wire up geo-mark creation for autoplay
+    autoplay.onGeoMark = (placeName: string, lat: number, lng: number, colorIndex: number) => {
+      const { state } = editor;
+
+      // Find the last occurrence of the placeName in the document
+      let markStart = -1;
+      let markEnd = -1;
+
+      state.doc.descendants((node, pos) => {
+        if (node.isText) {
+          const text = node.text || '';
+          const idx = text.lastIndexOf(placeName);
+          if (idx !== -1) {
+            markStart = pos + idx;
+            markEnd = pos + idx + placeName.length;
+          }
+        }
+      });
+
+      if (markStart === -1) {
+        console.warn(`[AutoplayDemo] Could not find text "${placeName}" to mark`);
+        return;
+      }
+
+      // Create geoMark attributes
+      const geoMarkAttrs = {
+        geoId: `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        placeName,
+        lat,
+        lng,
+        coordSource: 'demo',
+        colorIndex,
+      };
+
+      const geoMarkMark = customSchema.marks.geoMark.create(geoMarkAttrs);
+      const tr = state.tr.addMark(markStart, markEnd, geoMarkMark);
+      editor.dispatch(tr);
+      console.log(`[AutoplayDemo] Created geo-mark: ${placeName} at positions ${markStart}-${markEnd}`);
+
+      // Trigger map update
+      notifyGeoMarkChange();
+    };
+
+    // Wire up map insertion for autoplay
+    autoplay.onInsertMap = () => {
+      const { state } = editor;
+      const endPos = state.doc.content.size;
+      const mapNode = customSchema.nodes.map.create({ height: 300 });
+      const tr = state.tr.insert(endPos - 1, mapNode);
+      editor.dispatch(tr);
+      console.log('[AutoplayDemo] Inserted map block');
+    };
+
+    // Start autoplay after a short delay (let editor settle)
+    setTimeout(() => autoplay.start(), 1000);
   }
 
   // Set up toolbar button handlers
@@ -1360,6 +1524,28 @@ function setupToolbarButtons(view: EditorView) {
     });
   }
 
+  // Helper function to show user-friendly media error messages
+  const showMediaError = (error: unknown, isVideoCall: boolean) => {
+    const err = error as Error;
+    let message = 'Failed to access camera/microphone.';
+
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      message = `No ${isVideoCall ? 'camera or microphone' : 'microphone'} found.\n\n` +
+        'Please check:\n' +
+        '• Your device has a camera/microphone\n' +
+        '• Browser has permission to access it\n\n' +
+        'On iOS: Settings → Safari → Camera/Microphone\n' +
+        'On Android: Tap lock icon → Site settings';
+    } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      message = 'Camera/microphone access was denied.\n\n' +
+        'Please allow access in your browser settings.';
+    } else if (err.name === 'NotReadableError') {
+      message = 'Camera/microphone is already in use by another app.';
+    }
+
+    alert(message);
+  };
+
   if (joinWithVideoBtn) {
     joinWithVideoBtn.addEventListener('click', async () => {
       hideJoinVideoModal();
@@ -1367,6 +1553,7 @@ function setupToolbarButtons(view: EditorView) {
         await videoChatService?.join(false); // With video
       } catch (error) {
         console.error('[Main] Failed to join video call:', error);
+        showMediaError(error, true);
       }
     });
   }
@@ -1378,6 +1565,7 @@ function setupToolbarButtons(view: EditorView) {
         await videoChatService?.join(true); // Audio only
       } catch (error) {
         console.error('[Main] Failed to join audio call:', error);
+        showMediaError(error, false);
       }
     });
   }

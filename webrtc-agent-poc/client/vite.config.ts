@@ -1,14 +1,18 @@
 import { defineConfig, loadEnv, Plugin } from 'vite';
 import { resolve } from 'path';
 
-// Custom plugin to handle SPA routing for /doc/* paths
-function spaFallback(): Plugin {
+// Custom plugin to handle routing
+function routingPlugin(): Plugin {
   return {
-    name: 'spa-fallback',
+    name: 'routing-plugin',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        // Rewrite /doc/* requests to index.html for SPA routing
-        if (req.url?.startsWith('/doc/')) {
+        // Serve landing.html at root
+        if (req.url === '/' || req.url === '/index.html') {
+          req.url = '/landing.html';
+        }
+        // Rewrite /doc/* requests to index.html for SPA routing (editor app)
+        else if (req.url?.startsWith('/doc/')) {
           req.url = '/index.html';
         }
         next();
@@ -22,7 +26,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [spaFallback()],
+    plugins: [routingPlugin()],
     server: {
       port: 5173,
       host: 'localhost',
