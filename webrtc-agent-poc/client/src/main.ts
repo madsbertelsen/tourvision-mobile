@@ -1363,6 +1363,23 @@ async function main() {
       console.log('[AutoplayDemo] Closed fullscreen map');
     };
 
+    player.onClickMapMarker = (markerIndex: number) => {
+      // Find markers in the fullscreen map overlay
+      const fullscreenOverlay = document.getElementById('fullscreen-overlay');
+      if (fullscreenOverlay) {
+        const markers = fullscreenOverlay.querySelectorAll('.mapboxgl-marker');
+        if (markers.length > markerIndex) {
+          const marker = markers[markerIndex] as HTMLElement;
+          marker.click();
+          console.log(`[AutoplayDemo] Clicked marker ${markerIndex} of ${markers.length}`);
+        } else {
+          console.warn(`[AutoplayDemo] Marker ${markerIndex} not found (${markers.length} markers)`);
+        }
+      } else {
+        console.warn('[AutoplayDemo] Fullscreen map overlay not found');
+      }
+    };
+
     // Wire up text selection for autoplay (find and select text)
     player.onSelect = (text: string) => {
       const { state } = editor;

@@ -29,7 +29,8 @@ export type DemoAction =
   | { type: 'clickToolbar'; button: 'geomark' | 'map'; lat?: number; lng?: number } // Simulate toolbar click
   | { type: 'comment'; text: string; heading?: string; duration?: number } // Product explainer commentary with typewriter effect
   | { type: 'openFullscreenMap' } // Open fullscreen map view
-  | { type: 'closeFullscreenMap' }; // Close fullscreen map view
+  | { type: 'closeFullscreenMap' } // Close fullscreen map view
+  | { type: 'clickMapMarker'; markerIndex: number }; // Click a marker on the fullscreen map (0-based index)
 
 export interface DemoScript {
   name: string;
@@ -199,7 +200,11 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
 
       // Open fullscreen map to showcase the map feature
       { type: 'openFullscreenMap' },
-      { type: 'pause', duration: 3000 },
+      { type: 'pause', duration: 1000 },
+
+      // Click marker to show transport configuration
+      { type: 'clickMapMarker', markerIndex: 1 }, // Click Tivoli Gardens
+      { type: 'pause', duration: 3000 }, // Show the location sheet
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
@@ -266,6 +271,7 @@ export class AutoplayDemo {
   public onPlaybackStopped?: () => void; // Called when playback stops due to stopAt/stopAfter
   public onOpenFullscreenMap?: () => void; // Open fullscreen map view
   public onCloseFullscreenMap?: () => void; // Close fullscreen map view
+  public onClickMapMarker?: (markerIndex: number) => void; // Click a marker on fullscreen map
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -532,6 +538,14 @@ export class AutoplayDemo {
         if (this.onCloseFullscreenMap) {
           this.onCloseFullscreenMap();
           console.log('[AutoplayDemo] Closing fullscreen map');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'clickMapMarker':
+        if (this.onClickMapMarker) {
+          this.onClickMapMarker(action.markerIndex);
+          console.log(`[AutoplayDemo] Clicking map marker ${action.markerIndex}`);
         }
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         break;
