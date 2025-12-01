@@ -120,6 +120,27 @@
       opacity: 0.3;
     }
 
+    /* Demo click animation for autoplay */
+    .toolbar button.demo-click {
+      animation: demo-click-pulse 0.3s ease-out;
+      background: rgba(59, 130, 246, 0.3) !important;
+    }
+
+    @keyframes demo-click-pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+      }
+      50% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+      }
+    }
+
     .mode-badge {
       display: none;
     }
@@ -221,25 +242,56 @@
       white-space: pre-wrap;
     }
 
+    /* Text selection styling - visible blue background */
+    /* Use high opacity and !important to ensure visibility in all states */
+    .ProseMirror ::selection,
+    .ProseMirror *::selection {
+      background: rgba(59, 130, 246, 0.5) !important;
+      color: inherit !important;
+    }
+
+    .ProseMirror ::-moz-selection,
+    .ProseMirror *::-moz-selection {
+      background: rgba(59, 130, 246, 0.5) !important;
+      color: inherit !important;
+    }
+
+    /* Demo selection highlight - custom class for reliable highlighting */
+    .demo-selection-highlight {
+      background: rgba(59, 130, 246, 0.4) !important;
+      border-radius: 2px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+
     /* Hide header when hideHeader param is present */
     body.hide-header header {
       display: none;
     }
 
-    /* Make app fullscreen when header is hidden */
+    /* Make app fullscreen container when header is hidden */
     body.hide-header #app {
       max-width: none;
-      padding: 0;
-      height: 100vh;
+      padding: 40px 20px;
+      min-height: 100vh;
       margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      background: #f5f5f5;
     }
 
-    /* Make editor container fill screen when header is hidden */
+    /* Keep editor as centered sheet when header is hidden */
     body.hide-header #editor-container {
-      height: 100vh;
+      max-width: 900px;
+      width: 100%;
+      min-height: calc(100vh - 80px);
       margin: 0;
-      border: none;
-      border-radius: 0;
+      /* Keep the card appearance */
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
     /* Fullscreen Map Overlay */
@@ -617,6 +669,65 @@
       opacity: 1;
       background: rgba(34, 197, 94, 0.15);
     }
+
+    /* Demo Commentary Overlay - product explainer style */
+    .demo-intro-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 10000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-in-out;
+    }
+
+    .demo-intro-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .demo-intro-overlay .comment-content {
+      text-align: center;
+      max-width: 80%;
+    }
+
+    .demo-intro-overlay .comment-heading {
+      color: #fff;
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .demo-intro-overlay .comment-text {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 24px;
+      font-weight: 500;
+      line-height: 1.4;
+      letter-spacing: -0.3px;
+    }
+
+    /* Blinking typewriter cursor */
+    .demo-intro-overlay .cursor {
+      display: inline-block;
+      width: 3px;
+      height: 0.9em;
+      background: #fff;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: cursor-blink 0.8s step-end infinite;
+    }
+
+    @keyframes cursor-blink {
+      50% { opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -723,6 +834,14 @@
       <div id="avatars" class="avatars"></div>
     </header>
     <div id="editor-container"></div>
+
+    <!-- Demo Commentary Overlay (product explainer style) -->
+    <div id="demo-intro-overlay" class="demo-intro-overlay">
+      <div class="comment-content">
+        <div class="comment-heading"></div>
+        <div class="comment-text"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Fullscreen Map Overlay (hidden by default) -->

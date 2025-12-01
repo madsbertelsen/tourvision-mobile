@@ -10,7 +10,7 @@
 import { baseKeymap } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { customSchema } from './prosemirror-schema';
 
@@ -23,7 +23,7 @@ import * as Y from 'yjs';
 
 // Services
 import { AnimateAgent, AnimatePlayback } from './services/AnimatePlayback';
-import { AutoplayDemo } from './services/AutoplayDemo';
+import { AutoplayDemo, ComposedDemoPlayer } from './services/AutoplayDemo';
 import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MarkerFactory } from './services/MarkerFactory';
@@ -42,6 +42,7 @@ const isAgentMode = params.get('agent') === 'true';
 const isAnimateMode = params.get('animate') === 'true'; // Landing page demo mode
 const isAutoplayMode = params.get('autoplay') === 'true'; // Self-playing demo for landing page
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
+const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
                        (import.meta.env.DEV && isAgentMode);
 
@@ -1203,12 +1204,21 @@ async function main() {
   }
 
   // Initialize Autoplay mode for landing page demos (self-playing, no user interaction)
+  // Supports both single-script mode (?autoplay=true&demo=maps) and composed mode (?autoplay=true&composed=fullDemo)
   if (isAutoplayMode) {
-    console.log(`[Main] Initializing AutoplayDemo with script: ${autoplayScript}`);
-    const autoplay = new AutoplayDemo(editor, autoplayScript, awareness);
+    // Create player - either ComposedDemoPlayer or AutoplayDemo
+    const player: AutoplayDemo | ComposedDemoPlayer = composedDemo
+      ? new ComposedDemoPlayer(editor, composedDemo, awareness)
+      : new AutoplayDemo(editor, autoplayScript, awareness);
+
+    if (composedDemo) {
+      console.log(`[Main] Initializing ComposedDemoPlayer with demo: ${composedDemo}`);
+    } else {
+      console.log(`[Main] Initializing AutoplayDemo with script: ${autoplayScript}`);
+    }
 
     // Wire up heading insertion for autoplay
-    autoplay.onHeading = (level: 1 | 2 | 3, text: string) => {
+    player.onHeading = (level: 1 | 2 | 3, text: string) => {
       const { state } = editor;
 
       // Create heading node
@@ -1237,47 +1247,62 @@ async function main() {
     };
 
     // Wire up newline (paragraph creation) for autoplay
-    autoplay.onNewline = () => {
+    player.onNewline = () => {
       const { state } = editor;
-      const endOfDoc = state.doc.content.size;
+      let insertPos = state.doc.content.size; // Default: end of doc
+
+      // Find map node at top level - if exists, insert BEFORE it
+      let offset = 0;
+      for (let i = 0; i < state.doc.childCount; i++) {
+        const node = state.doc.child(i);
+        if (node.type.name === 'map') {
+          insertPos = offset;
+          break;
+        }
+        offset += node.nodeSize;
+      }
 
       // Create empty paragraph
       const paragraphNode = customSchema.nodes.paragraph.create();
 
-      // Check if last node is already an empty paragraph - don't add another
-      const lastChild = state.doc.lastChild;
-      if (lastChild && lastChild.type.name === 'paragraph' && lastChild.content.size === 0) {
-        // Already have empty paragraph, skip
-        return;
-      }
-
-      // Insert paragraph at end
-      const tr = state.tr.insert(endOfDoc, paragraphNode);
+      // Insert paragraph at calculated position
+      const tr = state.tr.insert(insertPos, paragraphNode);
       editor.dispatch(tr);
-      console.log('[AutoplayDemo] Inserted new paragraph');
+      console.log('[AutoplayDemo] Inserted new paragraph at position', insertPos);
     };
 
     // Wire up character typing for autoplay
-    autoplay.onType = (char: string) => {
+    player.onType = (char: string) => {
       const { state } = editor;
 
-      // Find the last paragraph and insert at its end
+      // Find the last paragraph BEFORE any map block (top-level only)
       let insertPos = state.doc.content.size - 1;
+      let lastParagraphEnd = -1;
+      let offset = 0;
 
-      // Walk through document to find last text-containing block
-      state.doc.descendants((node, pos) => {
+      for (let i = 0; i < state.doc.childCount; i++) {
+        const node = state.doc.child(i);
+        if (node.type.name === 'map') {
+          break; // Stop at map
+        }
         if (node.type.name === 'paragraph') {
           // Position at end of paragraph content (before closing tag)
-          insertPos = pos + node.nodeSize - 1;
+          lastParagraphEnd = offset + node.nodeSize - 1;
         }
-      });
+        offset += node.nodeSize;
+      }
+
+      // Use last paragraph before map (or last paragraph if no map)
+      if (lastParagraphEnd > 0) {
+        insertPos = lastParagraphEnd;
+      }
 
       const tr = state.tr.insertText(char, insertPos);
       editor.dispatch(tr);
     };
 
     // Wire up geo-mark creation for autoplay
-    autoplay.onGeoMark = (placeName: string, lat: number, lng: number, colorIndex: number) => {
+    player.onGeoMark = (placeName: string, lat: number, lng: number, colorIndex: number) => {
       const { state } = editor;
 
       // Find the last occurrence of the placeName in the document
@@ -1320,7 +1345,7 @@ async function main() {
     };
 
     // Wire up map insertion for autoplay
-    autoplay.onInsertMap = () => {
+    player.onInsertMap = () => {
       const { state } = editor;
       const endPos = state.doc.content.size;
       const mapNode = customSchema.nodes.map.create({ height: 300 });
@@ -1329,8 +1354,134 @@ async function main() {
       console.log('[AutoplayDemo] Inserted map block');
     };
 
+    // Wire up text selection for autoplay (find and select text)
+    player.onSelect = (text: string) => {
+      const { state } = editor;
+      let markStart = -1;
+      let markEnd = -1;
+
+      // Find the last occurrence of the text in the document
+      state.doc.descendants((node, pos) => {
+        if (node.isText) {
+          const nodeText = node.text || '';
+          const idx = nodeText.lastIndexOf(text);
+          if (idx !== -1) {
+            markStart = pos + idx;
+            markEnd = pos + idx + text.length;
+          }
+        }
+      });
+
+      if (markStart === -1) {
+        console.warn(`[AutoplayDemo] Could not find text "${text}" to select`);
+        return null;
+      }
+
+      // Create a text selection using imported TextSelection
+      const tr = state.tr.setSelection(TextSelection.create(state.doc, markStart, markEnd));
+      editor.dispatch(tr);
+
+      // Focus the editor so the selection is visually rendered
+      editor.focus();
+
+      // Create an absolutely positioned highlight overlay (doesn't modify DOM structure)
+      // This is needed because ::selection CSS doesn't work reliably in unfocused iframes
+      try {
+        // Remove any existing highlight overlay
+        document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
+
+        // Get the bounding rect of the selection
+        const startCoords = editor.coordsAtPos(markStart);
+        const endCoords = editor.coordsAtPos(markEnd);
+
+        if (startCoords && endCoords) {
+          const overlay = document.createElement('div');
+          overlay.className = 'demo-selection-overlay';
+          overlay.style.cssText = `
+            position: absolute;
+            left: ${startCoords.left}px;
+            top: ${startCoords.top}px;
+            width: ${endCoords.right - startCoords.left}px;
+            height: ${startCoords.bottom - startCoords.top}px;
+            background: rgba(59, 130, 246, 0.35);
+            pointer-events: none;
+            z-index: 100;
+            border-radius: 2px;
+          `;
+          document.body.appendChild(overlay);
+          console.log(`[AutoplayDemo] Added highlight overlay for "${text}"`);
+        }
+      } catch (err) {
+        console.warn('[AutoplayDemo] Could not add highlight overlay:', err);
+      }
+
+      console.log(`[AutoplayDemo] Selected "${text}" at positions ${markStart}-${markEnd}`);
+      return { from: markStart, to: markEnd };
+    };
+
+    // Wire up toolbar click simulation for autoplay
+    player.onClickToolbar = (button: 'geomark' | 'map', lat?: number, lng?: number) => {
+      // Remove any demo highlight overlay before processing
+      document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
+
+      if (button === 'geomark') {
+        // Get current selection
+        const { state } = editor;
+        const { from, to } = state.selection;
+
+        if (from === to) {
+          console.warn('[AutoplayDemo] No selection for geo-mark');
+          return;
+        }
+
+        // Get selected text
+        const selectedText = state.doc.textBetween(from, to);
+
+        // Create geoMark with provided coordinates
+        const geoMarkAttrs = {
+          geoId: `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          placeName: selectedText,
+          lat: lat || 0,
+          lng: lng || 0,
+          coordSource: 'demo',
+          colorIndex: Math.floor(Math.random() * 8),
+        };
+
+        const geoMarkMark = customSchema.marks.geoMark.create(geoMarkAttrs);
+        let tr = state.tr.addMark(from, to, geoMarkMark);
+        // Collapse selection to end (deselect the text)
+        tr = tr.setSelection(TextSelection.create(tr.doc, to));
+        editor.dispatch(tr);
+        console.log(`[AutoplayDemo] Toolbar click: Created geo-mark for "${selectedText}"`);
+
+        // Trigger map update
+        notifyGeoMarkChange();
+
+        // Show visual feedback on toolbar button
+        const btn = document.getElementById('create-geomark-btn');
+        if (btn) {
+          btn.classList.add('demo-click');
+          setTimeout(() => btn.classList.remove('demo-click'), 300);
+        }
+      } else if (button === 'map') {
+        // Insert map at cursor
+        const { state } = editor;
+        const mapNode = customSchema.nodes.map.create({ height: 300 });
+        const tr = state.tr.insert(state.selection.from, mapNode);
+        editor.dispatch(tr);
+        console.log('[AutoplayDemo] Toolbar click: Inserted map');
+
+        // Show visual feedback on toolbar button
+        const btn = document.getElementById('insert-map-btn');
+        if (btn) {
+          btn.classList.add('demo-click');
+          setTimeout(() => btn.classList.remove('demo-click'), 300);
+        }
+      }
+    };
+
     // Start autoplay after a short delay (let editor settle)
-    setTimeout(() => autoplay.start(), 1000);
+    setTimeout(() => player.start(), 1000);
   }
 
   // Set up toolbar button handlers

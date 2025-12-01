@@ -41,6 +41,8 @@ export class BlockMapView {
    * @param editorView - ProseMirror editor view
    */
   create(node: any, editorView: EditorView) {
+    // Capture deps in local variable for use in closures (including destroy())
+    const deps = this.deps;
     const dom = document.createElement('div');
     dom.className = 'prosemirror-map';
     dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; overflow: hidden;`;
@@ -61,8 +63,8 @@ export class BlockMapView {
     clickOverlay.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (this.deps.showFullscreenMap) {
-        this.deps.showFullscreenMap();
+      if (deps.showFullscreenMap) {
+        deps.showFullscreenMap();
       }
     });
     dom.appendChild(clickOverlay);
@@ -85,7 +87,7 @@ export class BlockMapView {
                 lat: parseFloat(mark.attrs.lat),
                 lng: parseFloat(mark.attrs.lng),
                 colorIndex: colorIndex,
-                color: this.deps.colors[colorIndex % this.deps.colors.length],
+                color: deps.colors[colorIndex % deps.colors.length],
                 transportFrom: mark.attrs.transportFrom,
                 transportProfile: mark.attrs.transportProfile,
                 waypoints: mark.attrs.waypoints || [],
@@ -116,7 +118,7 @@ export class BlockMapView {
 
       if (!currentMap) {
         // Initialize Mapbox map
-        (window as any).mapboxgl.accessToken = this.deps.mapboxToken;
+        (window as any).mapboxgl.accessToken = deps.mapboxToken;
 
         let initialCenter: [number, number] = [0, 0];
         let initialZoom = 2;
@@ -153,7 +155,7 @@ export class BlockMapView {
         currentMap.once('style.load', () => {
           // Add markers
           locations.forEach((location: Location) => {
-            const el = this.deps.createMarkerElement(location.colorIndex);
+            const el = deps.createMarkerElement(location.colorIndex);
             const marker = new (window as any).mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
               .addTo(currentMap!);
@@ -170,8 +172,8 @@ export class BlockMapView {
                              toLocation.transportProfile === 'cycling' ? 'cycling' :
                              'driving-traffic';
 
-              const waypointsStr = this.deps.waypointController.buildWaypointsString(toLocation.waypoints);
-              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${this.deps.mapboxToken}`;
+              const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
 
               try {
                 const response = await fetch(url);
@@ -274,7 +276,7 @@ export class BlockMapView {
         } else {
           // Add new markers
           locations.forEach((location: Location) => {
-            const el = this.deps.createMarkerElement(location.colorIndex);
+            const el = deps.createMarkerElement(location.colorIndex);
             const marker = new (window as any).mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
               .addTo(currentMap!);
@@ -291,8 +293,8 @@ export class BlockMapView {
                              toLocation.transportProfile === 'cycling' ? 'cycling' :
                              'driving-traffic';
 
-              const waypointsStr = this.deps.waypointController.buildWaypointsString(toLocation.waypoints);
-              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${this.deps.mapboxToken}`;
+              const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
 
               try {
                 const response = await fetch(url);
@@ -374,7 +376,7 @@ export class BlockMapView {
     };
 
     // Listen to geo-mark changes reactively
-    this.deps.geoMarkChangeListeners.add(updateMapIfChanged);
+    deps.geoMarkChangeListeners.add(updateMapIfChanged);
 
     return {
       dom,
@@ -384,8 +386,8 @@ export class BlockMapView {
         return true;
       },
       destroy() {
-        // Remove geo-mark change listener
-        this.deps.geoMarkChangeListeners.delete(updateMapIfChanged);
+        // Remove geo-mark change listener (use deps from closure, not this.deps)
+        deps.geoMarkChangeListeners.delete(updateMapIfChanged);
         if (currentMap) {
           currentMap.remove();
         }
