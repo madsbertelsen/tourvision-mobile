@@ -20,6 +20,7 @@ export interface DemoPlayerOptions {
   editorUrl: string;
   steps: StepDefinition[];
   autoStart?: boolean;
+  dualPhone?: boolean; // Show two phones side by side for collab demos
 }
 
 // Messages sent from Player to Iframe
@@ -52,7 +53,7 @@ export type IframeMessage = DemoReadyEvent | DemoActionCompleteEvent | DemoStepC
 
 export class DemoPlayer {
   private container: HTMLElement;
-  private iframe: HTMLIFrameElement | null = null;
+  private iframes: HTMLIFrameElement[] = [];
   private tabsContainer: HTMLElement | null = null;
   private overlayContainer: HTMLElement | null = null;
   private phoneScreen: HTMLElement | null = null;
@@ -60,7 +61,7 @@ export class DemoPlayer {
   private options: DemoPlayerOptions;
   private currentStep: number = 0;
   private isPlaying: boolean = false;
-  private iframeReady: boolean = false;
+  private iframesReady: boolean[] = [];
 
   // Callbacks
   public onStepChange?: (step: number) => void;
@@ -82,7 +83,8 @@ export class DemoPlayer {
    * Create the DOM structure for the demo player
    */
   private createDOM(): void {
-    const { steps, editorUrl, demoScript } = this.options;
+    const { steps, editorUrl, demoScript, dualPhone } = this.options;
+    const phoneCount = dualPhone ? 2 : 1;
 
     // Create main wrapper
     const playerEl = document.createElement('div');
@@ -101,20 +103,47 @@ export class DemoPlayer {
       this.tabsContainer!.appendChild(tab);
     });
 
-    // Create phone mockup
-    const phoneMockup = document.createElement('div');
-    phoneMockup.className = 'phone-mockup';
+    // Create player frame (grows horizontally to fill)
+    const playerFrame = document.createElement('div');
+    playerFrame.className = 'player-frame' + (dualPhone ? ' dual-phone' : '');
 
-    this.phoneScreen = document.createElement('div');
-    this.phoneScreen.className = 'phone-screen';
+    // Create phone mockup(s)
+    for (let i = 0; i < phoneCount; i++) {
+      const phoneMockup = document.createElement('div');
+      phoneMockup.className = 'phone-mockup';
 
-    // Create iframe
-    // Include autoplay=true so AutoplayDemo is initialized in main.ts
-    // remoteControl=true tells AutoplayDemo to let parent handle overlays
-    this.iframe = document.createElement('iframe');
-    this.iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true`;
-    this.iframe.setAttribute('frameborder', '0');
-    this.iframe.setAttribute('allowfullscreen', 'true');
+      const phoneScreen = document.createElement('div');
+      phoneScreen.className = 'phone-screen';
+
+      // Create iframe
+      // Include autoplay=true so AutoplayDemo is initialized in main.ts
+      // remoteControl=true tells AutoplayDemo to let parent handle overlays
+      // For dual phone, second phone gets a different user identity
+      const iframe = document.createElement('iframe');
+      const userParam = dualPhone ? `&demoUser=${i + 1}` : '';
+      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${userParam}`;
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('allowfullscreen', 'true');
+
+      // Create home indicator
+      const homeIndicator = document.createElement('div');
+      homeIndicator.className = 'home-indicator';
+
+      // Assemble phone
+      phoneScreen.appendChild(iframe);
+      phoneScreen.appendChild(homeIndicator);
+      phoneMockup.appendChild(phoneScreen);
+      playerFrame.appendChild(phoneMockup);
+
+      // Store references
+      this.iframes.push(iframe);
+      this.iframesReady.push(false);
+
+      // Store first phone screen for backward compatibility
+      if (i === 0) {
+        this.phoneScreen = phoneScreen;
+      }
+    }
 
     // Create comment overlay
     this.overlayContainer = document.createElement('div');
@@ -131,20 +160,6 @@ export class DemoPlayer {
         <div class="comment-text"></div>
       </div>
     `;
-
-    // Create home indicator
-    const homeIndicator = document.createElement('div');
-    homeIndicator.className = 'home-indicator';
-
-    // Assemble phone
-    this.phoneScreen.appendChild(this.iframe);
-    this.phoneScreen.appendChild(homeIndicator);
-    phoneMockup.appendChild(this.phoneScreen);
-
-    // Create player frame (grows horizontally to fill)
-    const playerFrame = document.createElement('div');
-    playerFrame.className = 'player-frame';
-    playerFrame.appendChild(phoneMockup);
 
     // Create player content wrapper (frame + overlay)
     const playerContent = document.createElement('div');
@@ -193,11 +208,20 @@ export class DemoPlayer {
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 40px;
         min-width: 800px;
         background: #f3f4f6;
         border-radius: 16px;
         padding: 40px;
         min-height: 500px;
+      }
+
+      .player-frame.dual-phone {
+        min-width: 700px;
+      }
+
+      .player-frame.dual-phone .phone-mockup {
+        width: 240px;
       }
 
       .demo-tabs {
@@ -350,10 +374,17 @@ export class DemoPlayer {
     window.addEventListener('message', (event) => {
       const data = event.data;
 
+      // Find which iframe sent the message
+      const iframeIndex = this.iframes.findIndex(iframe =>
+        iframe.contentWindow === event.source
+      );
+
       switch (data.type) {
         case 'demoReady':
-          console.log('[DemoPlayer] Iframe ready');
-          this.iframeReady = true;
+          console.log('[DemoPlayer] Iframe ready:', iframeIndex);
+          if (iframeIndex >= 0) {
+            this.iframesReady[iframeIndex] = true;
+          }
           break;
 
         case 'demoActionComplete':
@@ -362,14 +393,17 @@ export class DemoPlayer {
           break;
 
         case 'demoStepChanged':
-          console.log('[DemoPlayer] Step changed:', data.step, data.heading, data.text);
-          this.updateTabs(data.step);
-          this.currentStep = data.step;
-          this.onStepChange?.(data.step);
+          // Only respond to first iframe's step changes to avoid duplicates
+          if (iframeIndex === 0) {
+            console.log('[DemoPlayer] Step changed:', data.step, data.heading, data.text);
+            this.updateTabs(data.step);
+            this.currentStep = data.step;
+            this.onStepChange?.(data.step);
 
-          // Show comment overlay if heading/text provided
-          if (data.heading || data.text) {
-            this.showComment(data.heading || '', data.text || '', data.duration || 1500);
+            // Show comment overlay if heading/text provided
+            if (data.heading || data.text) {
+              this.showComment(data.heading || '', data.text || '', data.duration || 1500);
+            }
           }
           break;
       }
@@ -377,33 +411,44 @@ export class DemoPlayer {
   }
 
   /**
-   * Wait for iframe to be ready
+   * Check if all iframes are ready
+   */
+  private allIframesReady(): boolean {
+    return this.iframesReady.every(ready => ready);
+  }
+
+  /**
+   * Wait for all iframes to be ready
    */
   private waitForReady(): Promise<void> {
     return new Promise((resolve) => {
-      if (this.iframeReady) {
+      if (this.allIframesReady()) {
         resolve();
         return;
       }
 
       const checkReady = () => {
-        if (this.iframeReady) {
+        if (this.allIframesReady()) {
           resolve();
         } else {
           setTimeout(checkReady, 100);
         }
       };
 
-      // Also wait for iframe load event
-      this.iframe?.addEventListener('load', () => {
-        // Give it a moment to initialize
-        setTimeout(() => {
-          if (!this.iframeReady) {
-            // Assume ready if no message received
-            this.iframeReady = true;
-          }
-          resolve();
-        }, 500);
+      // Also wait for iframe load events
+      this.iframes.forEach((iframe, index) => {
+        iframe.addEventListener('load', () => {
+          // Give it a moment to initialize
+          setTimeout(() => {
+            if (!this.iframesReady[index]) {
+              // Assume ready if no message received
+              this.iframesReady[index] = true;
+            }
+            if (this.allIframesReady()) {
+              resolve();
+            }
+          }, 500);
+        });
       });
 
       checkReady();
@@ -411,12 +456,14 @@ export class DemoPlayer {
   }
 
   /**
-   * Send a command to the iframe
+   * Send a command to all iframes
    */
   private sendCommand(message: DemoCommand | DemoControl): void {
-    if (this.iframe?.contentWindow) {
-      this.iframe.contentWindow.postMessage(message, '*');
-    }
+    this.iframes.forEach(iframe => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage(message, '*');
+      }
+    });
   }
 
   /**

@@ -62,6 +62,7 @@
     <h1>DemoPlayer Test</h1>
 
     <div class="demo-wrapper">
+      <h2 style="margin-bottom: 16px; color: #666;">Single Phone Demo</h2>
       <div id="demo-container"></div>
 
       <div class="controls">
@@ -70,11 +71,21 @@
         <button id="btn-comment">Show Comment</button>
       </div>
     </div>
+
+    <div class="demo-wrapper" style="margin-top: 60px;">
+      <h2 style="margin-bottom: 16px; color: #666;">Dual Phone Demo (Collaboration)</h2>
+      <div id="dual-demo-container"></div>
+
+      <div class="controls">
+        <button id="btn-start-dual">Start Dual Demo</button>
+      </div>
+    </div>
   </div>
 
   <script type="module">
     import { DemoPlayer } from './src/components/DemoPlayer.js';
 
+    // Single phone demo
     const player = new DemoPlayer({
       container: document.getElementById('demo-container'),
       demoScript: 'maps',
@@ -89,6 +100,20 @@
       ]
     });
 
+    // Dual phone demo for collaboration
+    const dualPlayer = new DemoPlayer({
+      container: document.getElementById('dual-demo-container'),
+      demoScript: 'collab',
+      editorUrl: '/doc/demo-collab-dual',
+      autoStart: false,
+      dualPhone: true,
+      steps: [
+        { label: 'Invite', heading: 'Invite Friends', text: 'Share your trip with a link' },
+        { label: 'Live Cursors', heading: 'Live Cursors', text: 'See your friends typing in real-time' },
+        { label: 'Map Sync', heading: 'Map Sync', text: 'Maps stay synchronized across devices' }
+      ]
+    });
+
     // Wire up controls
     document.getElementById('btn-start').addEventListener('click', () => {
       player.start();
@@ -100,6 +125,10 @@
 
     document.getElementById('btn-comment').addEventListener('click', () => {
       player.showComment('Test Heading', 'This is a test comment with typewriter effect', 2000);
+    });
+
+    document.getElementById('btn-start-dual').addEventListener('click', () => {
+      dualPlayer.start();
     });
 
     // Log step changes
