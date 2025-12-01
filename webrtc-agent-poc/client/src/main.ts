@@ -1380,6 +1380,75 @@ async function main() {
       }
     };
 
+    // Wire up finger tap animation for autoplay
+    player.onShowFingerTap = (selector: string, fromSide: 'left' | 'right' | 'bottom') => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const target = document.querySelector(selector) as HTMLElement;
+
+        if (!finger || !target) {
+          console.warn(`[AutoplayDemo] Finger tap failed - finger: ${!!finger}, target: ${!!target} (${selector})`);
+          resolve();
+          return;
+        }
+
+        const rect = target.getBoundingClientRect();
+        const targetX = rect.left + rect.width / 2;
+        const targetY = rect.top + rect.height / 2;
+
+        // Calculate start position based on fromSide
+        let startX: number, startY: number;
+        switch (fromSide) {
+          case 'left':
+            startX = -60;
+            startY = targetY;
+            break;
+          case 'bottom':
+            startX = targetX;
+            startY = window.innerHeight + 60;
+            break;
+          case 'right':
+          default:
+            startX = window.innerWidth + 60;
+            startY = targetY;
+            break;
+        }
+
+        // Position finger at start and make visible
+        finger.style.left = `${startX}px`;
+        finger.style.top = `${startY}px`;
+        finger.style.transition = 'none';
+        finger.classList.add('visible');
+
+        // Force reflow
+        finger.offsetHeight;
+
+        // Animate to target
+        finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+        finger.style.left = `${targetX}px`;
+        finger.style.top = `${targetY}px`;
+
+        // After reaching target, do tap animation
+        setTimeout(() => {
+          finger.classList.add('tapping');
+
+          // After tap, animate out
+          setTimeout(() => {
+            finger.classList.remove('tapping');
+            finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
+            finger.style.left = `${startX}px`;
+            finger.style.top = `${startY}px`;
+
+            // Hide after animation
+            setTimeout(() => {
+              finger.classList.remove('visible');
+              resolve();
+            }, 400);
+          }, 300);
+        }, 600);
+      });
+    };
+
     // Wire up text selection for autoplay (find and select text)
     player.onSelect = (text: string) => {
       const { state } = editor;

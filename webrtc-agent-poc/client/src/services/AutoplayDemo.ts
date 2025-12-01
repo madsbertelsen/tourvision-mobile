@@ -30,7 +30,8 @@ export type DemoAction =
   | { type: 'comment'; text: string; heading?: string; duration?: number } // Product explainer commentary with typewriter effect
   | { type: 'openFullscreenMap' } // Open fullscreen map view
   | { type: 'closeFullscreenMap' } // Close fullscreen map view
-  | { type: 'clickMapMarker'; markerIndex: number }; // Click a marker on the fullscreen map (0-based index)
+  | { type: 'clickMapMarker'; markerIndex: number } // Click a marker on the fullscreen map (0-based index)
+  | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom' }; // Show finger animation tapping on element
 
 export interface DemoScript {
   name: string;
@@ -198,13 +199,16 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Explain fullscreen map feature
       { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand it and explore locations', duration: 2000 },
 
-      // Open fullscreen map to showcase the map feature
+      // Finger taps on block map to open fullscreen
+      { type: 'showFingerTap', selector: '.prosemirror-map', fromSide: 'right' },
       { type: 'openFullscreenMap' },
       { type: 'pause', duration: 1000 },
 
       // Click marker to show transport configuration
       { type: 'clickMapMarker', markerIndex: 1 }, // Click Tivoli Gardens
-      { type: 'pause', duration: 3000 }, // Show the location sheet
+      { type: 'pause', duration: 1000 }, // Let location sheet appear
+      { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right' }, // Finger taps Configure Transport
+      { type: 'pause', duration: 2000 }, // Show the location sheet
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
@@ -272,6 +276,7 @@ export class AutoplayDemo {
   public onOpenFullscreenMap?: () => void; // Open fullscreen map view
   public onCloseFullscreenMap?: () => void; // Close fullscreen map view
   public onClickMapMarker?: (markerIndex: number) => void; // Click a marker on fullscreen map
+  public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Show finger tap animation
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -548,6 +553,18 @@ export class AutoplayDemo {
           console.log(`[AutoplayDemo] Clicking map marker ${action.markerIndex}`);
         }
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'showFingerTap':
+        if (this.onShowFingerTap) {
+          const fromSide = action.fromSide || 'right';
+          console.log(`[AutoplayDemo] Showing finger tap on ${action.selector} from ${fromSide}`);
+          this.onShowFingerTap(action.selector, fromSide).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
         break;
 
       default:
