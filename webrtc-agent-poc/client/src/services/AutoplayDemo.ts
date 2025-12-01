@@ -31,7 +31,8 @@ export type DemoAction =
   | { type: 'openFullscreenMap' } // Open fullscreen map view
   | { type: 'closeFullscreenMap' } // Close fullscreen map view
   | { type: 'clickMapMarker'; markerIndex: number } // Click a marker on the fullscreen map (0-based index)
-  | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom' }; // Show finger animation tapping on element
+  | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom' } // Show finger animation tapping on element
+  | { type: 'clickElement'; selector: string }; // Click an element by selector
 
 export interface DemoScript {
   name: string;
@@ -204,11 +205,15 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'openFullscreenMap' },
       { type: 'pause', duration: 1000 },
 
-      // Click marker to show transport configuration
-      { type: 'clickMapMarker', markerIndex: 1 }, // Click Tivoli Gardens
+      // Click marker to show location details
+      { type: 'showFingerTap', selector: '#fullscreen-overlay .mapboxgl-marker:nth-of-type(2)', fromSide: 'bottom' }, // Finger taps Tivoli Gardens marker
+      { type: 'clickMapMarker', markerIndex: 1 }, // Actually click to open sheet
       { type: 'pause', duration: 1000 }, // Let location sheet appear
+
+      // Tap Configure Transport
       { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right' }, // Finger taps Configure Transport
-      { type: 'pause', duration: 2000 }, // Show the location sheet
+      { type: 'clickElement', selector: '#transport-config-btn' }, // Actually click to expand
+      { type: 'pause', duration: 2000 }, // Show the result
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
@@ -277,6 +282,7 @@ export class AutoplayDemo {
   public onCloseFullscreenMap?: () => void; // Close fullscreen map view
   public onClickMapMarker?: (markerIndex: number) => void; // Click a marker on fullscreen map
   public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Show finger tap animation
+  public onClickElement?: (selector: string) => void; // Click an element by selector
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -565,6 +571,14 @@ export class AutoplayDemo {
         } else {
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         }
+        break;
+
+      case 'clickElement':
+        if (this.onClickElement) {
+          this.onClickElement(action.selector);
+          console.log(`[AutoplayDemo] Clicked element: ${action.selector}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
         break;
 
       default:

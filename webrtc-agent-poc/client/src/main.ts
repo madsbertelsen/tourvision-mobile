@@ -1449,6 +1449,17 @@ async function main() {
       });
     };
 
+    // Wire up element click for autoplay
+    player.onClickElement = (selector: string) => {
+      const element = document.querySelector(selector) as HTMLElement;
+      if (element) {
+        element.click();
+        console.log(`[AutoplayDemo] Clicked element: ${selector}`);
+      } else {
+        console.warn(`[AutoplayDemo] Element not found: ${selector}`);
+      }
+    };
+
     // Wire up text selection for autoplay (find and select text)
     player.onSelect = (text: string) => {
       const { state } = editor;
