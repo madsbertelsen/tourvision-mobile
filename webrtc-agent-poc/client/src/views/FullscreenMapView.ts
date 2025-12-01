@@ -396,9 +396,12 @@ export class FullscreenMapView {
         console.log('[Fullscreen] Marker interaction triggered:', e.type, location);
         // Check if we're in a WebView/iframe context
         const isInWebView = WebViewBridge.isInWebView();
-        console.log('[Fullscreen] isInWebView:', isInWebView);
+        // Check if autoplay is enabled - if so, show sheet directly even in iframe
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAutoplay = urlParams.get('autoplay') === 'true';
+        console.log('[Fullscreen] isInWebView:', isInWebView, 'isAutoplay:', isAutoplay);
 
-        if (isInWebView) {
+        if (isInWebView && !isAutoplay) {
           // In WebView: prevent default and send postMessage
           e.preventDefault();
           e.stopPropagation();

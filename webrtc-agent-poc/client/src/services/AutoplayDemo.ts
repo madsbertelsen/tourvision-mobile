@@ -213,7 +213,17 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Tap Configure Transport
       { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right' }, // Finger taps Configure Transport
       { type: 'clickElement', selector: '#transport-config-btn' }, // Actually click to expand
-      { type: 'pause', duration: 2000 }, // Show the result
+      { type: 'pause', duration: 1000 }, // Let it expand
+
+      // Tap Copenhagen as the origin
+      { type: 'showFingerTap', selector: '.source-location-chip', fromSide: 'right' }, // Finger taps Copenhagen
+      { type: 'clickElement', selector: '.source-location-chip' }, // Select Copenhagen
+      { type: 'pause', duration: 800 },
+
+      // Tap Walking as the transport mode
+      { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom' }, // Finger taps Walking
+      { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
+      { type: 'pause', duration: 1500 }, // Show the final result
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
