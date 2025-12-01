@@ -39,8 +39,9 @@ export class BlockMapView {
    *
    * @param node - ProseMirror map node
    * @param editorView - ProseMirror editor view
+   * @param getPos - Function to get node's position in document
    */
-  create(node: any, editorView: EditorView) {
+  create(node: any, editorView: EditorView, getPos: () => number | undefined) {
     // Capture deps in local variable for use in closures (including destroy())
     const deps = this.deps;
     const dom = document.createElement('div');
@@ -72,10 +73,34 @@ export class BlockMapView {
     let currentMap: mapboxgl.Map | null = null;
     let currentMarkers: mapboxgl.Marker[] = [];
 
-    // Extract locations from document
+    /**
+     * Find the section boundaries for this map (between previous heading and map position)
+     */
+    const getSectionBounds = (): { start: number; end: number } => {
+      const mapPos = getPos();
+      if (mapPos === undefined) return { start: 0, end: 0 };
+
+      const doc = editorView.state.doc;
+      let sectionStart = 0;
+
+      // Find the last heading before this map's position
+      doc.nodesBetween(0, mapPos, (node, pos) => {
+        if (node.type.name === 'heading') {
+          sectionStart = pos + node.nodeSize; // Start after the heading
+        }
+      });
+
+      return { start: sectionStart, end: mapPos };
+    };
+
+    // Extract locations from this section only
     const extractLocations = (): Location[] => {
       const locations: Location[] = [];
-      editorView.state.doc.descendants((node) => {
+      const { start, end } = getSectionBounds();
+
+      if (end <= start) return locations;
+
+      editorView.state.doc.nodesBetween(start, end, (node) => {
         if (node.isText && node.marks.length > 0) {
           for (const mark of node.marks) {
             if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {

@@ -634,8 +634,8 @@ function removeBoundsOverlay(clientId: number) {
 
 // Map Node View - renders Mapbox maps for map blocks
 // Delegates to BlockMapView class
-function createMapNodeView(node: any, editorView: EditorView) {
-  return blockMapView.create(node, editorView);
+function createMapNodeView(node: any, editorView: EditorView, getPos: () => number | undefined) {
+  return blockMapView.create(node, editorView, getPos);
 }
 
 // Initialize ProseMirror editor with Y.js sync
@@ -1228,14 +1228,23 @@ async function main() {
       );
 
       // Find where to insert the heading
-      // If document only has one empty paragraph, replace it with heading
+      // If document only contains empty paragraphs, replace all content with heading
       // Otherwise, append heading at the end
       let tr = state.tr;
-      const firstChild = state.doc.firstChild;
       const childCount = state.doc.childCount;
 
-      if (childCount === 1 && firstChild && firstChild.type.name === 'paragraph' && firstChild.content.size === 0) {
-        // Document only has one empty paragraph - replace it with heading
+      // Check if ALL children are empty paragraphs
+      let allEmptyParagraphs = true;
+      for (let i = 0; i < childCount; i++) {
+        const child = state.doc.child(i);
+        if (child.type.name !== 'paragraph' || child.content.size > 0) {
+          allEmptyParagraphs = false;
+          break;
+        }
+      }
+
+      if (allEmptyParagraphs && childCount > 0) {
+        // Document only has empty paragraphs - replace all with heading
         tr = tr.replaceWith(0, state.doc.content.size, headingNode);
       } else {
         // Append heading at the end of document
@@ -1249,42 +1258,29 @@ async function main() {
     // Wire up newline (paragraph creation) for autoplay
     player.onNewline = () => {
       const { state } = editor;
-      let insertPos = state.doc.content.size; // Default: end of doc
-
-      // Find map node at top level - if exists, insert BEFORE it
-      let offset = 0;
-      for (let i = 0; i < state.doc.childCount; i++) {
-        const node = state.doc.child(i);
-        if (node.type.name === 'map') {
-          insertPos = offset;
-          break;
-        }
-        offset += node.nodeSize;
-      }
+      // Always insert at the end of document
+      const insertPos = state.doc.content.size;
 
       // Create empty paragraph
       const paragraphNode = customSchema.nodes.paragraph.create();
 
-      // Insert paragraph at calculated position
+      // Insert paragraph at end
       const tr = state.tr.insert(insertPos, paragraphNode);
       editor.dispatch(tr);
-      console.log('[AutoplayDemo] Inserted new paragraph at position', insertPos);
+      console.log('[AutoplayDemo] Inserted new paragraph at end');
     };
 
     // Wire up character typing for autoplay
     player.onType = (char: string) => {
       const { state } = editor;
 
-      // Find the last paragraph BEFORE any map block (top-level only)
+      // Find the last paragraph in the document (including after maps)
       let insertPos = state.doc.content.size - 1;
       let lastParagraphEnd = -1;
       let offset = 0;
 
       for (let i = 0; i < state.doc.childCount; i++) {
         const node = state.doc.child(i);
-        if (node.type.name === 'map') {
-          break; // Stop at map
-        }
         if (node.type.name === 'paragraph') {
           // Position at end of paragraph content (before closing tag)
           lastParagraphEnd = offset + node.nodeSize - 1;
@@ -1292,7 +1288,7 @@ async function main() {
         offset += node.nodeSize;
       }
 
-      // Use last paragraph before map (or last paragraph if no map)
+      // Use last paragraph position
       if (lastParagraphEnd > 0) {
         insertPos = lastParagraphEnd;
       }
@@ -1344,13 +1340,15 @@ async function main() {
       notifyGeoMarkChange();
     };
 
-    // Wire up map insertion for autoplay
+    // Wire up map insertion for autoplay (simple insertion, no auto geo-marking)
+    // Demo uses explicit select/geomark actions, so just insert the map
     player.onInsertMap = () => {
       const { state } = editor;
       const endPos = state.doc.content.size;
       const mapNode = customSchema.nodes.map.create({ height: 300 });
       const tr = state.tr.insert(endPos - 1, mapNode);
       editor.dispatch(tr);
+      notifyGeoMarkChange();
       console.log('[AutoplayDemo] Inserted map block');
     };
 
@@ -1534,6 +1532,128 @@ async function geocodePlace(placeName: string) {
   }
 }
 
+/**
+ * Extract text content from paragraphs between the previous heading
+ * and the given position (where map will be inserted)
+ */
+function extractSectionText(
+  doc: any,
+  mapPosition: number
+): { text: string; startPos: number; endPos: number } {
+  let sectionStart = 0;
+  const sectionEnd = mapPosition;
+
+  // Find the last heading before mapPosition
+  doc.nodesBetween(0, mapPosition, (node: any, pos: number) => {
+    if (node.type.name === 'heading') {
+      sectionStart = pos + node.nodeSize; // Start after the heading
+    }
+  });
+
+  // Extract text content from that range
+  let text = '';
+  doc.nodesBetween(sectionStart, sectionEnd, (node: any) => {
+    if (node.isText) {
+      text += node.text;
+    } else if (node.type.name === 'paragraph') {
+      text += ' '; // Space between paragraphs
+    }
+  });
+
+  return { text: text.trim(), startPos: sectionStart, endPos: sectionEnd };
+}
+
+/**
+ * Extract location names from text using pattern matching
+ */
+function extractLocationsFromText(text: string): string[] {
+  const locations: string[] = [];
+  const locationPattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/g;
+  const matches = text.matchAll(locationPattern);
+
+  // Words that are never locations
+  const blacklist = ['The', 'A', 'An', 'This', 'That', 'These', 'Those',
+                     'I', 'We', 'You', 'He', 'She', 'It', 'They',
+                     'Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday',
+                     'Thursday', 'Friday', 'January', 'February', 'March',
+                     'April', 'May', 'June', 'July', 'August', 'September',
+                     'October', 'November', 'December', 'Hey', 'What'];
+
+  // Action words that shouldn't start a location phrase
+  const actionWords = ['Explore', 'Drive', 'Visit', 'See', 'Go', 'Take',
+                       'Walk', 'Fly', 'Meet', 'Check', 'Stop', 'Stay'];
+
+  for (const match of matches) {
+    let candidate = match[1];
+
+    // Strip leading action words from phrases like "Explore Copenhagen"
+    for (const action of actionWords) {
+      if (candidate.startsWith(action + ' ')) {
+        candidate = candidate.substring(action.length + 1);
+        break;
+      }
+    }
+
+    if (!blacklist.includes(candidate) && candidate.length > 2) {
+      if (!locations.includes(candidate)) {
+        locations.push(candidate);
+      }
+    }
+  }
+
+  return locations.slice(0, 10); // Limit to 10 locations
+}
+
+/**
+ * Find text position within a specific range of the document
+ */
+function findTextInRange(
+  doc: any,
+  searchText: string,
+  rangeStart: number,
+  rangeEnd: number
+): { from: number; to: number } | null {
+  let result: { from: number; to: number } | null = null;
+
+  doc.nodesBetween(rangeStart, rangeEnd, (node: any, pos: number) => {
+    if (result) return false; // Stop if already found
+
+    if (node.isText && node.text) {
+      const text = node.text;
+      const index = text.indexOf(searchText);
+
+      if (index !== -1) {
+        result = {
+          from: pos + index,
+          to: pos + index + searchText.length
+        };
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return result;
+}
+
+/**
+ * Check if text at position already has a geoMark
+ */
+function hasGeoMarkAt(doc: any, from: number, to: number): boolean {
+  let hasIt = false;
+  doc.nodesBetween(from, to, (node: any) => {
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'geoMark') {
+          hasIt = true;
+          return false;
+        }
+      }
+    }
+  });
+  return hasIt;
+}
+
 // Function to create a geo mark on selected text
 async function createGeoMark(view: EditorView) {
   const { state } = view;
@@ -1591,19 +1711,119 @@ async function createGeoMark(view: EditorView) {
   notifyGeoMarkChange();
 }
 
-// Function to insert a map block
-function insertMap(view: EditorView) {
+// Function to insert a map block (simple version for internal use)
+function insertMapNode(view: EditorView, position?: number) {
   const { state } = view;
-  const { $from } = state.selection;
+  const insertPos = position ?? state.selection.$from.pos;
 
   // Create the map node
   const mapNode = customSchema.nodes.map.create({ height: 400 });
 
-  // Insert at the current position
-  const tr = state.tr.insert($from.pos, mapNode);
+  // Insert at the specified position
+  const tr = state.tr.insert(insertPos, mapNode);
   view.dispatch(tr);
 
-  console.log('[Main] Inserted map block');
+  console.log('[Main] Inserted map block at position:', insertPos);
+}
+
+/**
+ * Create geo-mark for a location within the section bounds
+ */
+async function createGeoMarkInSection(
+  view: EditorView,
+  locationName: string,
+  sectionStart: number,
+  sectionEnd: number,
+  colorIndex: number
+): Promise<boolean> {
+  // Check if already has a geo-mark
+  const position = findTextInRange(view.state.doc, locationName, sectionStart, sectionEnd);
+  if (!position) {
+    console.warn(`[GeoMark] Could not find "${locationName}" in section`);
+    return false;
+  }
+
+  // Check if already marked
+  if (hasGeoMarkAt(view.state.doc, position.from, position.to)) {
+    console.log(`[GeoMark] "${locationName}" already has a geo-mark, skipping`);
+    return false;
+  }
+
+  // Geocode the location
+  const result = await geocodePlace(locationName);
+  if (!result) {
+    console.warn(`[GeoMark] Could not geocode: ${locationName}`);
+    return false;
+  }
+
+  // Create geo-mark
+  const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const mark = customSchema.marks.geoMark.create({
+    geoId,
+    displayText: locationName,
+    placeName: result.placeName || locationName,
+    lat: result.lat,
+    lng: result.lng,
+    colorIndex,
+    coordSource: 'nominatim'
+  });
+
+  const tr = view.state.tr.addMark(position.from, position.to, mark);
+  view.dispatch(tr);
+
+  console.log(`[GeoMark] Created: ${locationName} @ ${result.lat}, ${result.lng}`);
+  return true;
+}
+
+/**
+ * Insert a map block with automatic geo-marking of locations in the section above
+ */
+async function insertMapWithAutoGeoMark(view: EditorView): Promise<void> {
+  const { state } = view;
+  const insertPos = state.doc.content.size;
+
+  // 1. Extract text from section above
+  const { text, startPos, endPos } = extractSectionText(state.doc, insertPos);
+  console.log('[InsertMap] Section text:', text);
+
+  if (!text.trim()) {
+    // No text to process, just insert map
+    insertMapNode(view, insertPos);
+    notifyGeoMarkChange();
+    return;
+  }
+
+  // 2. Extract locations using pattern matching
+  const locations = extractLocationsFromText(text);
+  console.log('[InsertMap] Found locations:', locations);
+
+  if (locations.length === 0) {
+    // No locations found, just insert map
+    insertMapNode(view, insertPos);
+    notifyGeoMarkChange();
+    return;
+  }
+
+  // 3. Geocode and create geo-marks for each location
+  let createdCount = 0;
+  for (let i = 0; i < locations.length; i++) {
+    const locationName = locations[i];
+    const created = await createGeoMarkInSection(view, locationName, startPos, endPos, i);
+    if (created) createdCount++;
+  }
+
+  console.log(`[InsertMap] Created ${createdCount} geo-marks`);
+
+  // 4. Insert the map node (get fresh state after modifications)
+  insertMapNode(view, view.state.doc.content.size);
+
+  // 5. Notify change listeners (maps will auto-update)
+  notifyGeoMarkChange();
+}
+
+// Legacy function name for compatibility
+function insertMap(view: EditorView) {
+  insertMapWithAutoGeoMark(view);
 }
 
 // Set up toolbar button event listeners
@@ -1658,7 +1878,21 @@ function setupToolbarButtons(view: EditorView) {
   }
 
   if (insertMapBtn) {
-    insertMapBtn.addEventListener('click', () => insertMap(view));
+    insertMapBtn.addEventListener('click', async () => {
+      const btn = insertMapBtn as HTMLButtonElement;
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Detecting locations...';
+      btn.style.opacity = '0.6';
+
+      try {
+        await insertMapWithAutoGeoMark(view);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.opacity = '1';
+      }
+    });
   }
 
   // Video chat button handlers

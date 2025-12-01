@@ -18,8 +18,8 @@ export type DemoAction =
   | { type: 'pause'; duration: number }
   | { type: 'clear' }
   | { type: 'heading'; level: 1 | 2 | 3; text: string }
-  | { type: 'geomark'; placeName: string; lat: number; lng: number }
-  | { type: 'geocode'; placeName: string; lat: number; lng: number } // Simulates geocoding process
+  | { type: 'geomark'; text: string; lat: number; lng: number } // Find text and create geo-mark directly
+  | { type: 'geocode'; placeName: string; lat: number; lng: number } // Simulates geocoding process (types + marks)
   | { type: 'insertMap' }
   | { type: 'newline'; count?: number }
   | { type: 'moveCursor'; position: 'end' | 'start' | number }
@@ -119,35 +119,59 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
   maps: {
     name: 'Interactive Maps',
     loopDelay: 2500,
-    userName: 'Alex',
-    userColor: '#F59E0B',
+    userName: 'Emma',
+    userColor: '#EC4899',
     actions: [
-      // Intro comment (chapter heading + description)
-      { type: 'comment', heading: 'Location Tagging', text: 'Select any text and turn it into a map marker', duration: 2000 },
+      // Intro comment
+      { type: 'comment', heading: 'Location Tagging', text: 'Insert a map to auto-detect locations', duration: 2000 },
 
-      // Demo actions
-      { type: 'showCursor', userName: 'Alex', color: '#F59E0B' },
-      { type: 'heading', level: 1, text: 'Denmark Weekend' },
+      // Demo: Emma proposes a weekend trip to friends
+      { type: 'showCursor', userName: 'Emma', color: '#EC4899' },
+
+      // Main heading
+      { type: 'heading', level: 1, text: 'Weekend in Denmark?' },
+      { type: 'pause', duration: 300 },
+      { type: 'newline' },
+      { type: 'type', text: 'Hey guys! What do you think about this plan:', speed: 'normal' },
       { type: 'pause', duration: 400 },
       { type: 'newline' },
-      { type: 'type', text: '1. Copenhagen', speed: 'normal' },
-      { type: 'pause', duration: 300 },
-      { type: 'select', text: 'Copenhagen' },
-      { type: 'pause', duration: 800 },
-
-      // Mid-demo comment
-      { type: 'comment', text: 'Click to create a geo-mark', duration: 1500 },
-
-      { type: 'clickToolbar', button: 'geomark', lat: 55.6761, lng: 12.5683 },
       { type: 'newline' },
+
+      // ===== Day 1: Saturday (complete section) =====
+      { type: 'heading', level: 2, text: 'Saturday' },
+      { type: 'pause', duration: 200 },
+      { type: 'newline' },
+      { type: 'type', text: 'Explore Copenhagen and visit Tivoli Gardens', speed: 'normal' },
+      { type: 'pause', duration: 500 },
+      { type: 'newline' },
+
+      // Insert Saturday map
       { type: 'insertMap' },
-      { type: 'newline' },
-      { type: 'type', text: '2. Aarhus', speed: 'normal' },
-      { type: 'pause', duration: 300 },
-      { type: 'select', text: 'Aarhus' },
+      { type: 'pause', duration: 500 },
+
+      // Saturday geo-marks (auto-detected after map)
+      { type: 'geomark', text: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
+      { type: 'pause', duration: 400 },
+      { type: 'geomark', text: 'Tivoli Gardens', lat: 55.6733, lng: 12.5681 },
       { type: 'pause', duration: 800 },
-      { type: 'clickToolbar', button: 'geomark', lat: 56.1629, lng: 10.2039 },
-      { type: 'pause', duration: 3000 },
+      { type: 'newline' },
+
+      // ===== Day 2: Sunday (complete section) =====
+      { type: 'heading', level: 2, text: 'Sunday' },
+      { type: 'pause', duration: 200 },
+      { type: 'newline' },
+      { type: 'type', text: 'Drive to Aarhus for the old town museum', speed: 'normal' },
+      { type: 'pause', duration: 500 },
+      { type: 'newline' },
+
+      // Insert Sunday map
+      { type: 'insertMap' },
+      { type: 'pause', duration: 500 },
+
+      // Sunday geo-mark (auto-detected after map)
+      { type: 'geomark', text: 'Aarhus', lat: 56.1629, lng: 10.2039 },
+
+      { type: 'pause', duration: 2500 },
       { type: 'hideCursor' },
       { type: 'pause', duration: 500 },
       { type: 'clear' },
@@ -183,7 +207,7 @@ export class AutoplayDemo {
 
   // Callbacks for custom actions
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
-  public onInsertMap?: () => void;
+  public onInsertMap?: () => Promise<void> | void;
   public onHeading?: (level: 1 | 2 | 3, text: string) => void;
   public onNewline?: () => void; // Create new paragraph block
   public onType?: (char: string) => void; // Type a character into the last paragraph
@@ -309,11 +333,27 @@ export class AutoplayDemo {
         break;
 
       case 'geomark':
-        if (this.onGeoMark) {
-          this.onGeoMark(action.placeName, action.lat, action.lng, this.colorIndex);
-          this.colorIndex = (this.colorIndex + 1) % 8;
+        // Find and select the text, then create geo-mark
+        if (this.onSelect && this.onClickToolbar) {
+          const positions = this.onSelect(action.text);
+          if (positions) {
+            console.log(`[AutoplayDemo] Found and selected "${action.text}" for geo-mark`);
+            // Small delay to show selection, then create geo-mark
+            this.timeoutId = window.setTimeout(() => {
+              this.onClickToolbar!('geomark', action.lat, action.lng);
+              this.colorIndex = (this.colorIndex + 1) % 8;
+              // Move cursor to end of document after creating geo-mark
+              this.moveCursorToEnd();
+              this.timeoutId = window.setTimeout(() => this.playNextAction(), 400);
+            }, 300);
+          } else {
+            console.warn(`[AutoplayDemo] Could not find "${action.text}" for geo-mark`);
+            this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
+          }
+        } else {
+          console.warn('[AutoplayDemo] onSelect or onClickToolbar not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
         }
-        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
         break;
 
       case 'geocode':
@@ -322,8 +362,17 @@ export class AutoplayDemo {
 
       case 'insertMap':
         if (this.onInsertMap) {
-          this.onInsertMap();
+          const result = this.onInsertMap();
+          // Handle async callback
+          if (result instanceof Promise) {
+            result.then(() => {
+              console.log('[AutoplayDemo] Inserted map block');
+              this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+            });
+            return; // Don't continue synchronously
+          }
         }
+        console.log('[AutoplayDemo] Inserted map block');
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         break;
 
@@ -513,6 +562,21 @@ export class AutoplayDemo {
   }
 
   /**
+   * Move cursor to end of document
+   * Used after geo-mark creation to ensure subsequent content is appended at end
+   */
+  private moveCursorToEnd() {
+    const { state } = this.view;
+    const endPos = state.doc.content.size - 1;
+    try {
+      const tr = state.tr.setSelection(TextSelection.create(state.doc, endPos));
+      this.view.dispatch(tr);
+    } catch (e) {
+      // Ignore selection errors
+    }
+  }
+
+  /**
    * Show product explainer commentary with typewriter effect
    * Black overlay with white text, typing character by character
    * Supports optional heading (chapter name) that types first
@@ -629,7 +693,7 @@ export class ComposedDemoPlayer {
 
   // Callbacks - same as AutoplayDemo, will be passed through
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
-  public onInsertMap?: () => void;
+  public onInsertMap?: () => Promise<void> | void;
   public onHeading?: (level: 1 | 2 | 3, text: string) => void;
   public onNewline?: () => void;
   public onType?: (char: string) => void;
