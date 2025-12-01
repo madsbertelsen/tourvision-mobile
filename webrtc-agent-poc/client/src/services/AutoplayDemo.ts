@@ -224,6 +224,11 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom' }, // Finger taps Walking
       { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
       { type: 'pause', duration: 1500 }, // Show the final result
+
+      // Tap outside sheet to dismiss
+      { type: 'showFingerTap', selector: '#location-sheet-backdrop', fromSide: 'left' }, // Finger taps backdrop
+      { type: 'clickElement', selector: '#location-sheet-backdrop' }, // Dismiss sheet
+      { type: 'pause', duration: 800 },
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
