@@ -108,6 +108,37 @@ let awarenessOverlayRenderer: AwarenessOverlayRenderer;
 let blockMapView: BlockMapView;
 let fullscreenMapView: FullscreenMapView;
 
+// Demo clients map for simulating remote users with awareness-like state
+// This allows follow mode to work with simulated users like Marc in autoplay demos
+// Defined at module scope so it can be accessed from both the follow button handler and autoplay setup
+interface DemoClientState {
+  name: string;
+  color: string;
+  mapBounds: any | null;
+  viewState: {
+    scrollTop: number;
+    scrollLeft: number;
+    fullscreenMapOpen: boolean;
+    isPresenting: boolean;
+    followingUserId: number | null;
+  };
+}
+const demoClients = new Map<number, DemoClientState>();
+
+// Helper to get demo client state (for follow mode integration)
+function getDemoClientState(clientId: number) {
+  const client = demoClients.get(clientId);
+  if (!client) return null;
+  return {
+    user: {
+      name: client.name,
+      color: client.color,
+      mapBounds: client.mapBounds,
+      viewState: client.viewState,
+    }
+  };
+}
+
 // Generate user identity
 // Check for username in querystring first, otherwise use random for testing with multiple tabs
 const usernameParam = params.get('username');
@@ -141,6 +172,41 @@ function updateStatus(message: string, type: 'connected' | 'connecting' | 'disco
     statusEl.textContent = message;
     statusEl.className = `status ${type}`;
   }
+}
+
+// Track which avatar context menu is targeting (module scope for accessibility)
+let contextMenuTargetClientId: number | null = null;
+
+// Show context menu for avatar (module scope for autoplay demo compatibility)
+function showAvatarContextMenu(clientId: number, userName: string, avatarEl: HTMLElement, event: MouseEvent) {
+  const contextMenu = document.getElementById('avatar-context-menu');
+  const followBtn = document.getElementById('follow-user-btn');
+  if (!contextMenu || !followBtn) return;
+
+  contextMenuTargetClientId = clientId;
+  const followingUserId = viewSyncService?.getFollowingUserId() ?? null;
+
+  // Update button text
+  if (followingUserId === clientId) {
+    followBtn.textContent = 'Stop Following';
+  } else {
+    followBtn.textContent = `Follow ${userName}`;
+  }
+
+  // Position menu below avatar
+  const rect = avatarEl.getBoundingClientRect();
+  contextMenu.style.top = `${rect.bottom + 8}px`;
+  contextMenu.style.left = `${rect.left}px`;
+  contextMenu.style.display = 'block';
+}
+
+// Hide context menu (module scope)
+function hideAvatarContextMenu() {
+  const contextMenu = document.getElementById('avatar-context-menu');
+  if (contextMenu) {
+    contextMenu.style.display = 'none';
+  }
+  contextMenuTargetClientId = null;
 }
 
 // Initialize Y.js document and WebRTC provider
@@ -177,6 +243,47 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
     });
 
     console.log('[Y.js] Local-only awareness created');
+
+    // Set up follow button handler for demo mode (simplified, no updateAvatars needed)
+    const followUserBtn = document.getElementById('follow-user-btn');
+    if (followUserBtn) {
+      followUserBtn.addEventListener('click', () => {
+        if (contextMenuTargetClientId !== null && viewSyncService) {
+          const followingUserId = viewSyncService.getFollowingUserId();
+
+          if (followingUserId === contextMenuTargetClientId) {
+            // Stop following
+            viewSyncService.followUser(null);
+            console.log('[Main] Stopped following');
+          } else {
+            // Start following
+            viewSyncService.followUser(contextMenuTargetClientId);
+
+            // Check for demo client (for autoplay demos)
+            const demoState = getDemoClientState(contextMenuTargetClientId);
+            if (demoState) {
+              console.log('[Main] Now following demo client:', demoState.user.name);
+
+              // If demo client has fullscreen map open, sync to their view
+              if (demoState.user.viewState?.fullscreenMapOpen && demoState.user.mapBounds) {
+                console.log('[Main] Demo client has fullscreen open, opening with their bounds');
+                showFullscreenMap(demoState.user.mapBounds);
+              }
+            }
+          }
+        }
+        hideAvatarContextMenu();
+      });
+    }
+
+    // Close context menu when clicking outside (for local-only mode)
+    document.addEventListener('click', (e) => {
+      const contextMenu = document.getElementById('avatar-context-menu');
+      if (contextMenu && !contextMenu.contains(e.target as Node)) {
+        hideAvatarContextMenu();
+      }
+    });
+
     return { ydoc, yXmlFragment, provider: null, awareness };
   }
 
@@ -281,9 +388,6 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
     }
   });
 
-  // Track which avatar context menu is targeting
-  let contextMenuTargetClientId: number | null = null;
-
   // Function to update avatar display in toolbar
   const updateAvatars = () => {
     const avatarsContainer = document.getElementById('avatars');
@@ -339,38 +443,6 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
     });
   };
 
-  // Show context menu for avatar
-  const showAvatarContextMenu = (clientId: number, userName: string, avatarEl: HTMLElement, event: MouseEvent) => {
-    const contextMenu = document.getElementById('avatar-context-menu');
-    const followBtn = document.getElementById('follow-user-btn');
-    if (!contextMenu || !followBtn) return;
-
-    contextMenuTargetClientId = clientId;
-    const followingUserId = viewSyncService?.getFollowingUserId() ?? null;
-
-    // Update button text
-    if (followingUserId === clientId) {
-      followBtn.textContent = 'Stop Following';
-    } else {
-      followBtn.textContent = `Follow ${userName}`;
-    }
-
-    // Position menu below avatar
-    const rect = avatarEl.getBoundingClientRect();
-    contextMenu.style.top = `${rect.bottom + 8}px`;
-    contextMenu.style.left = `${rect.left}px`;
-    contextMenu.style.display = 'block';
-  };
-
-  // Hide context menu
-  const hideAvatarContextMenu = () => {
-    const contextMenu = document.getElementById('avatar-context-menu');
-    if (contextMenu) {
-      contextMenu.style.display = 'none';
-    }
-    contextMenuTargetClientId = null;
-  };
-
   // Set up context menu follow button
   const followUserBtn = document.getElementById('follow-user-btn');
   if (followUserBtn) {
@@ -385,8 +457,22 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
         } else {
           // Start following
           viewSyncService.followUser(contextMenuTargetClientId);
-          const state = awareness.getStates().get(contextMenuTargetClientId);
-          console.log('[Main] Now following:', state?.user?.name);
+
+          // Check for demo client first (for autoplay demos)
+          const demoState = getDemoClientState(contextMenuTargetClientId);
+          if (demoState) {
+            console.log('[Main] Now following demo client:', demoState.user.name);
+
+            // If demo client has fullscreen map open, sync to their view
+            if (demoState.user.viewState?.fullscreenMapOpen && demoState.user.mapBounds) {
+              console.log('[Main] Demo client has fullscreen open, opening with their bounds');
+              showFullscreenMap(demoState.user.mapBounds);
+            }
+          } else {
+            // Real awareness client
+            const state = awareness.getStates().get(contextMenuTargetClientId);
+            console.log('[Main] Now following:', state?.user?.name);
+          }
         }
 
         // Update avatars to reflect following state
@@ -1738,6 +1824,346 @@ async function main() {
           setTimeout(() => btn.classList.remove('demo-click'), 300);
         }
       }
+    };
+
+    // Wire up avatar display for autoplay demos
+    // Note: demoClients map and getDemoClientState function are defined at module scope
+    player.onShowAvatar = (name: string, color: string) => {
+      const avatarsContainer = document.getElementById('avatars');
+      if (!avatarsContainer) return;
+
+      // Generate a fake client ID for this demo user (use a high number to avoid collision)
+      const fakeClientId = 9999 + demoClients.size;
+
+      // Register in demoClients map
+      demoClients.set(fakeClientId, {
+        name,
+        color,
+        mapBounds: null,
+        viewState: {
+          scrollTop: 0,
+          scrollLeft: 0,
+          fullscreenMapOpen: false,
+          isPresenting: false,
+          followingUserId: null,
+        }
+      });
+
+      // Create avatar element
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar demo-avatar';
+      avatar.style.backgroundColor = color;
+      avatar.title = name;
+      avatar.setAttribute('data-name', name);
+      avatar.setAttribute('data-client-id', String(fakeClientId));
+      avatar.tabIndex = 0;
+      avatar.setAttribute('role', 'button');
+      avatar.setAttribute('aria-label', name);
+
+      // Get initials (first letter of each word, max 2)
+      const initials = name
+        .split(' ')
+        .map((word: string) => word[0])
+        .slice(0, 2)
+        .join('');
+      avatar.textContent = initials;
+
+      // Add click handler to show context menu (for follow functionality)
+      avatar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showAvatarContextMenu(fakeClientId, name, avatar, e as MouseEvent);
+      });
+
+      // Add with animation
+      avatar.style.transform = 'scale(0)';
+      avatar.style.opacity = '0';
+      avatarsContainer.appendChild(avatar);
+
+      // Trigger animation
+      requestAnimationFrame(() => {
+        avatar.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+        avatar.style.transform = 'scale(1)';
+        avatar.style.opacity = '1';
+      });
+
+      console.log(`[AutoplayDemo] Added avatar: ${name} (clientId: ${fakeClientId})`);
+    };
+
+    player.onClearAvatars = () => {
+      const avatarsContainer = document.getElementById('avatars');
+      if (!avatarsContainer) return;
+
+      // Remove only demo avatars
+      const demoAvatars = avatarsContainer.querySelectorAll('.demo-avatar');
+      demoAvatars.forEach(avatar => avatar.remove());
+
+      // Clear the demoClients map
+      demoClients.clear();
+
+      console.log('[AutoplayDemo] Cleared demo avatars');
+    };
+
+    // Wire up remote cursor display for collaboration demo
+    let remoteCursorEl: HTMLElement | null = null;
+
+    player.onShowRemoteCursor = (userName: string, color: string, position: 'start' | 'middle' | 'end') => {
+      // Remove existing cursor if any
+      if (remoteCursorEl) {
+        remoteCursorEl.remove();
+      }
+
+      const editorContainer = document.getElementById('editor-container');
+      const prosemirror = editorContainer?.querySelector('.ProseMirror') as HTMLElement;
+      if (!editorContainer || !prosemirror) return;
+
+      // Create cursor element that matches the real y-prosemirror cursor style
+      // See customCursorBuilder() for the actual implementation
+      remoteCursorEl = document.createElement('span');
+      remoteCursorEl.className = 'demo-yjs-cursor';
+      remoteCursorEl.style.position = 'absolute';
+      remoteCursorEl.style.marginLeft = '-1px';
+      remoteCursorEl.style.marginRight = '-1px';
+      remoteCursorEl.style.borderLeft = `2px solid ${color}`;
+      remoteCursorEl.style.borderRight = 'none';
+      remoteCursorEl.style.height = '1.2em';
+      remoteCursorEl.style.display = 'inline-block';
+      remoteCursorEl.style.pointerEvents = 'none';
+      remoteCursorEl.style.zIndex = '100';
+
+      // Create label that appears above the cursor (like real y-prosemirror)
+      const label = document.createElement('div');
+      label.style.position = 'absolute';
+      label.style.top = '-1.6em';
+      label.style.left = '0';
+      label.style.fontSize = '10px';
+      label.style.fontWeight = '600';
+      label.style.backgroundColor = color;
+      label.style.color = 'white';
+      label.style.padding = '2px 6px';
+      label.style.borderRadius = '3px';
+      label.style.whiteSpace = 'nowrap';
+      label.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+      label.style.pointerEvents = 'none';
+      label.textContent = userName;
+      remoteCursorEl.appendChild(label);
+
+      // Use ProseMirror's coordsAtPos to get exact pixel position
+      // Position mapping: start=beginning of doc, middle=middle paragraph, end=last paragraph
+      const docSize = editor.state.doc.content.size;
+      let pos = 1; // default to start
+      if (position === 'start') {
+        pos = 2; // Just after first paragraph start
+      } else if (position === 'middle') {
+        pos = Math.floor(docSize / 2);
+      } else if (position === 'end') {
+        pos = Math.max(1, docSize - 2);
+      }
+
+      // Get coordinates at the position
+      try {
+        const coords = editor.view.coordsAtPos(pos);
+        const containerRect = editorContainer.getBoundingClientRect();
+
+        // Position relative to editor container
+        remoteCursorEl.style.left = `${coords.left - containerRect.left}px`;
+        remoteCursorEl.style.top = `${coords.top - containerRect.top + editorContainer.scrollTop}px`;
+      } catch (e) {
+        // Fallback positioning if coordsAtPos fails
+        const containerRect = editorContainer.getBoundingClientRect();
+        const prosemirrorRect = prosemirror.getBoundingClientRect();
+        const prosemirrorTop = prosemirrorRect.top - containerRect.top + editorContainer.scrollTop;
+        remoteCursorEl.style.left = '20px';
+        remoteCursorEl.style.top = `${prosemirrorTop + 10}px`;
+      }
+
+      // Add to editor container
+      editorContainer.style.position = 'relative';
+      editorContainer.appendChild(remoteCursorEl);
+
+      // Fade in
+      remoteCursorEl.style.opacity = '0';
+      requestAnimationFrame(() => {
+        if (remoteCursorEl) {
+          remoteCursorEl.style.transition = 'opacity 0.2s ease-out';
+          remoteCursorEl.style.opacity = '1';
+        }
+      });
+
+      console.log(`[AutoplayDemo] Showed remote cursor for ${userName} at ${position} (pos=${pos})`);
+    };
+
+    player.onMoveRemoteCursor = (position: 'start' | 'middle' | 'end', duration: number): Promise<void> => {
+      return new Promise((resolve) => {
+        if (!remoteCursorEl) {
+          resolve();
+          return;
+        }
+
+        const editorContainer = document.getElementById('editor-container');
+        if (!editorContainer) {
+          resolve();
+          return;
+        }
+
+        // Calculate target position using ProseMirror coordinates
+        const docSize = editor.state.doc.content.size;
+        let pos = 1;
+        if (position === 'start') {
+          pos = 2;
+        } else if (position === 'middle') {
+          pos = Math.floor(docSize / 2);
+        } else if (position === 'end') {
+          pos = Math.max(1, docSize - 2);
+        }
+
+        try {
+          const coords = editor.view.coordsAtPos(pos);
+          const containerRect = editorContainer.getBoundingClientRect();
+
+          // Animate to new position
+          remoteCursorEl.style.transition = `top ${duration}ms ease-in-out, left ${duration}ms ease-in-out`;
+          remoteCursorEl.style.left = `${coords.left - containerRect.left}px`;
+          remoteCursorEl.style.top = `${coords.top - containerRect.top + editorContainer.scrollTop}px`;
+        } catch (e) {
+          // Fallback - just animate vertically
+          const prosemirror = editorContainer.querySelector('.ProseMirror') as HTMLElement;
+          if (prosemirror) {
+            const containerRect = editorContainer.getBoundingClientRect();
+            const prosemirrorRect = prosemirror.getBoundingClientRect();
+            const contentHeight = prosemirror.scrollHeight;
+            const prosemirrorTop = prosemirrorRect.top - containerRect.top + editorContainer.scrollTop;
+
+            let topOffset = prosemirrorTop + 10;
+            if (position === 'middle') {
+              topOffset = prosemirrorTop + contentHeight * 0.4;
+            } else if (position === 'end') {
+              topOffset = prosemirrorTop + contentHeight - 30;
+            }
+
+            remoteCursorEl.style.transition = `top ${duration}ms ease-in-out`;
+            remoteCursorEl.style.top = `${topOffset}px`;
+          }
+        }
+
+        setTimeout(resolve, duration);
+      });
+    };
+
+    player.onHideRemoteCursor = () => {
+      if (remoteCursorEl) {
+        remoteCursorEl.style.transition = 'opacity 0.2s ease-out';
+        remoteCursorEl.style.opacity = '0';
+        setTimeout(() => {
+          if (remoteCursorEl) {
+            remoteCursorEl.remove();
+            remoteCursorEl = null;
+          }
+        }, 200);
+      }
+      console.log('[AutoplayDemo] Hid remote cursor');
+    };
+
+    // Wire up remote map bounds overlay for collaboration demo
+    let remoteMapClientId: number | null = null;
+
+    player.onShowRemoteMapBounds = (clientId: number, userName: string, color: string, bounds: { north: number; south: number; east: number; west: number }) => {
+      // Find the demo client by userName instead of using hardcoded clientId from action
+      // (since onShowAvatar assigns dynamic clientIds based on registration order)
+      let actualClientId: number | null = null;
+      let demoClient: DemoClientState | null = null;
+      for (const [id, client] of demoClients.entries()) {
+        if (client.name === userName) {
+          actualClientId = id;
+          demoClient = client;
+          break;
+        }
+      }
+
+      remoteMapClientId = actualClientId ?? clientId;
+
+      // Update demo client state with mapBounds (for follow mode support)
+      if (demoClient) {
+        demoClient.mapBounds = {
+          ...bounds,
+          // Add center/zoom for accurate follow mode (estimate from bounds)
+          center: {
+            lng: (bounds.east + bounds.west) / 2,
+            lat: (bounds.north + bounds.south) / 2
+          },
+          zoom: 14, // Reasonable default zoom for Copenhagen area
+          pitch: 0,
+          bearing: 0,
+        };
+        demoClient.viewState.fullscreenMapOpen = true;
+        console.log(`[AutoplayDemo] Updated demo client ${actualClientId} (${userName}) mapBounds:`, demoClient.mapBounds);
+
+        // If we're following this demo client, open fullscreen map with their bounds
+        if (viewSyncService?.getFollowingUserId() === actualClientId) {
+          console.log(`[AutoplayDemo] Following ${userName}, opening fullscreen map with their bounds`);
+          showFullscreenMap(demoClient.mapBounds);
+        }
+      }
+
+      // Use existing function from AwarenessOverlayRenderer (use actualClientId for consistent layer naming)
+      addBoundsOverlay(actualClientId ?? clientId, bounds, color);
+      console.log(`[AutoplayDemo] Showed map bounds overlay for ${userName} (clientId: ${actualClientId ?? clientId})`);
+    };
+
+    player.onMoveRemoteMapBounds = (bounds: { north: number; south: number; east: number; west: number }, duration: number): Promise<void> => {
+      return new Promise((resolve) => {
+        if (remoteMapClientId !== null) {
+          // Update demo client state
+          const demoClient = demoClients.get(remoteMapClientId);
+          if (demoClient) {
+            demoClient.mapBounds = {
+              ...bounds,
+              center: {
+                lng: (bounds.east + bounds.west) / 2,
+                lat: (bounds.north + bounds.south) / 2
+              },
+              zoom: 14,
+              pitch: 0,
+              bearing: 0,
+            };
+
+            // If we're following this demo client, sync fullscreen map
+            if (viewSyncService?.getFollowingUserId() === remoteMapClientId && fullscreenMapView) {
+              const isFullscreenOpen = document.getElementById('fullscreen-overlay')?.classList.contains('visible');
+              if (isFullscreenOpen) {
+                console.log(`[AutoplayDemo] Syncing fullscreen map to demo client ${remoteMapClientId} bounds`);
+                fullscreenMapView.fitBounds(demoClient.mapBounds);
+              }
+            }
+          }
+
+          updateBoundsOverlay(remoteMapClientId, bounds, '#3B82F6');
+        }
+        setTimeout(resolve, duration);
+      });
+    };
+
+    player.onHideRemoteMapBounds = () => {
+      if (remoteMapClientId !== null) {
+        // Update demo client state
+        const demoClient = demoClients.get(remoteMapClientId);
+        if (demoClient) {
+          demoClient.mapBounds = null;
+          demoClient.viewState.fullscreenMapOpen = false;
+
+          // If we're following this demo client and fullscreen is open, close it
+          if (viewSyncService?.getFollowingUserId() === remoteMapClientId) {
+            const isFullscreenOpen = document.getElementById('fullscreen-overlay')?.classList.contains('visible');
+            if (isFullscreenOpen && fullscreenMapView) {
+              console.log(`[AutoplayDemo] Demo client ${remoteMapClientId} closed map, closing fullscreen`);
+              fullscreenMapView.hide();
+            }
+          }
+        }
+
+        removeBoundsOverlay(remoteMapClientId);
+        remoteMapClientId = null;
+      }
+      console.log('[AutoplayDemo] Hid map bounds overlay');
     };
 
     // Start autoplay after a short delay (let editor settle)

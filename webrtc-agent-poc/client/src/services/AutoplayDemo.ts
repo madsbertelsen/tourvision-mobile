@@ -34,7 +34,15 @@ export type DemoAction =
   | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Show finger animation tapping on element
   | { type: 'hideFinger' } // Hide the finger (for ending persisted finger sequences)
   | { type: 'clickElement'; selector: string } // Click an element by selector
-  | { type: 'fingerDrag'; selector: string; direction: 'up' | 'down' | 'left' | 'right'; distance?: number }; // Drag with finger on element
+  | { type: 'fingerDrag'; selector: string; direction: 'up' | 'down' | 'left' | 'right'; distance?: number } // Drag with finger on element
+  | { type: 'showAvatar'; name: string; color: string } // Show a user avatar
+  | { type: 'clearAvatars' } // Clear all demo avatars
+  | { type: 'showRemoteCursor'; userName: string; color: string; position?: 'start' | 'middle' | 'end' } // Show a remote user's cursor
+  | { type: 'moveRemoteCursor'; position: 'start' | 'middle' | 'end'; duration?: number } // Animate cursor to position
+  | { type: 'hideRemoteCursor' } // Hide the remote cursor
+  | { type: 'showRemoteMapBounds'; clientId: number; userName: string; color: string; bounds: { north: number; south: number; east: number; west: number } } // Show remote user's map viewport overlay
+  | { type: 'moveRemoteMapBounds'; bounds: { north: number; south: number; east: number; west: number }; duration?: number } // Animate map bounds overlay
+  | { type: 'hideRemoteMapBounds' }; // Hide the map bounds overlay
 
 export interface DemoScript {
   name: string;
@@ -166,6 +174,10 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
     userName: 'Emma',
     userColor: '#EC4899',
     actions: [
+      // Clear any previous avatars and show Emma
+      { type: 'clearAvatars' },
+      { type: 'showAvatar', name: 'Emma', color: '#EC4899' },
+
       // Step 0: Writing
       { type: 'comment', heading: 'Writing', text: 'Just type - like any other doc', duration: 2000, step: 0 },
 
@@ -177,7 +189,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 300 },
       { type: 'newline' },
       { type: 'type', text: 'Hey guys! What do you think about this plan:', speed: 'normal' },
-      { type: 'pause', duration: 400 },
+      { type: 'pause', duration: 600 },
+
       { type: 'newline' },
       { type: 'newline' },
 
@@ -260,7 +273,34 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Sunday geo-mark (auto-detected after map)
       { type: 'geomark', text: 'Aarhus', lat: 56.1629, lng: 10.2039 },
 
-      { type: 'pause', duration: 2500 },
+      { type: 'pause', duration: 1000 },
+
+      // Step 4: Share - show at the end with Marc joining
+      { type: 'comment', heading: 'Share', text: 'Invite friends to collaborate in real-time', duration: 2000, step: 4 },
+      { type: 'showAvatar', name: 'Marc', color: '#3B82F6' },
+
+      // Show Marc's cursor at the top
+      { type: 'showRemoteCursor', userName: 'Marc', color: '#3B82F6', position: 'start' },
+      { type: 'pause', duration: 600 },
+
+      // Marc "opens" fullscreen map - show his viewport as overlay on block map
+      // Bounds centered on the route between Copenhagen and Tivoli, small enough to be clearly a "viewport"
+      { type: 'showRemoteMapBounds', clientId: 9999, userName: 'Marc', color: '#3B82F6',
+        bounds: { north: 55.680, south: 55.672, east: 12.575, west: 12.562 } },
+      { type: 'pause', duration: 1200 },
+
+      // Marc pans down toward Tivoli Gardens - animate the overlay
+      { type: 'moveRemoteMapBounds', bounds: { north: 55.677, south: 55.669, east: 12.576, west: 12.563 }, duration: 1000 },
+      { type: 'pause', duration: 800 },
+      // Marc pans to look at Tivoli Gardens marker
+      { type: 'moveRemoteMapBounds', bounds: { north: 55.675, south: 55.667, east: 12.574, west: 12.561 }, duration: 1000 },
+      { type: 'pause', duration: 1200 },
+
+      // Marc closes fullscreen - remove overlay
+      { type: 'hideRemoteMapBounds' },
+      { type: 'hideRemoteCursor' },
+
+      { type: 'pause', duration: 300 },
       { type: 'hideCursor' },
       { type: 'pause', duration: 500 },
       { type: 'clear' },
@@ -312,6 +352,14 @@ export class AutoplayDemo {
   public onHideFinger?: () => void; // Hide the finger (for ending persisted sequences)
   public onClickElement?: (selector: string) => void; // Click an element by selector
   public onFingerDrag?: (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => Promise<void>; // Drag finger on element
+  public onShowAvatar?: (name: string, color: string) => void; // Show a user avatar
+  public onClearAvatars?: () => void; // Clear all demo avatars
+  public onShowRemoteCursor?: (userName: string, color: string, position: 'start' | 'middle' | 'end') => void; // Show remote cursor
+  public onMoveRemoteCursor?: (position: 'start' | 'middle' | 'end', duration: number) => Promise<void>; // Move remote cursor
+  public onHideRemoteCursor?: () => void; // Hide remote cursor
+  public onShowRemoteMapBounds?: (clientId: number, userName: string, color: string, bounds: { north: number; south: number; east: number; west: number }) => void; // Show remote map bounds overlay
+  public onMoveRemoteMapBounds?: (bounds: { north: number; south: number; east: number; west: number }, duration: number) => Promise<void>; // Animate map bounds
+  public onHideRemoteMapBounds?: () => void; // Hide map bounds overlay
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -629,6 +677,80 @@ export class AutoplayDemo {
         } else {
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         }
+        break;
+
+      case 'showAvatar':
+        if (this.onShowAvatar) {
+          this.onShowAvatar(action.name, action.color);
+          console.log(`[AutoplayDemo] Showing avatar: ${action.name}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
+        break;
+
+      case 'clearAvatars':
+        if (this.onClearAvatars) {
+          this.onClearAvatars();
+          console.log('[AutoplayDemo] Clearing avatars');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
+        break;
+
+      case 'showRemoteCursor':
+        if (this.onShowRemoteCursor) {
+          const position = action.position || 'start';
+          this.onShowRemoteCursor(action.userName, action.color, position);
+          console.log(`[AutoplayDemo] Showing remote cursor: ${action.userName} at ${position}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
+        break;
+
+      case 'moveRemoteCursor':
+        if (this.onMoveRemoteCursor) {
+          const duration = action.duration || 800;
+          console.log(`[AutoplayDemo] Moving remote cursor to ${action.position}`);
+          this.onMoveRemoteCursor(action.position, duration).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'hideRemoteCursor':
+        if (this.onHideRemoteCursor) {
+          this.onHideRemoteCursor();
+          console.log('[AutoplayDemo] Hiding remote cursor');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 200);
+        break;
+
+      case 'showRemoteMapBounds':
+        if (this.onShowRemoteMapBounds) {
+          this.onShowRemoteMapBounds(action.clientId, action.userName, action.color, action.bounds);
+          console.log(`[AutoplayDemo] Showing map bounds overlay for ${action.userName}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
+        break;
+
+      case 'moveRemoteMapBounds':
+        console.log(`[AutoplayDemo] Moving map bounds to:`, action.bounds);
+        if (this.onMoveRemoteMapBounds) {
+          this.onMoveRemoteMapBounds(action.bounds, action.duration || 600).then(() => {
+            console.log(`[AutoplayDemo] Map bounds move complete`);
+            this.playNextAction();
+          });
+        } else {
+          console.log(`[AutoplayDemo] No onMoveRemoteMapBounds handler, skipping after ${action.duration || 600}ms`);
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), action.duration || 600);
+        }
+        break;
+
+      case 'hideRemoteMapBounds':
+        if (this.onHideRemoteMapBounds) {
+          this.onHideRemoteMapBounds();
+          console.log('[AutoplayDemo] Hiding map bounds overlay');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
         break;
 
       default:
