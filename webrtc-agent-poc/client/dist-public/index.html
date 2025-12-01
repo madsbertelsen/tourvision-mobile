@@ -47,6 +47,27 @@
       margin-bottom: 1em;
     }
 
+    .ProseMirror h1 {
+      font-size: 1.75em;
+      font-weight: 700;
+      margin: 0 0 0.5em 0;
+      color: #333;
+    }
+
+    .ProseMirror h2 {
+      font-size: 1.25em;
+      font-weight: 600;
+      margin: 1em 0 0.3em 0;
+      color: #444;
+    }
+
+    .ProseMirror h3 {
+      font-size: 1.1em;
+      font-weight: 600;
+      margin: 0.8em 0 0.3em 0;
+      color: #555;
+    }
+
     header {
       position: sticky;
       top: 0;
@@ -118,6 +139,27 @@
       background: transparent;
       filter: grayscale(100%);
       opacity: 0.3;
+    }
+
+    /* Demo click animation for autoplay */
+    .toolbar button.demo-click {
+      animation: demo-click-pulse 0.3s ease-out;
+      background: rgba(59, 130, 246, 0.3) !important;
+    }
+
+    @keyframes demo-click-pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+      }
+      50% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+      }
     }
 
     .mode-badge {
@@ -221,25 +263,94 @@
       white-space: pre-wrap;
     }
 
+    /* Text selection styling - visible blue background */
+    /* Use high opacity and !important to ensure visibility in all states */
+    .ProseMirror ::selection,
+    .ProseMirror *::selection {
+      background: rgba(59, 130, 246, 0.5) !important;
+      color: inherit !important;
+    }
+
+    .ProseMirror ::-moz-selection,
+    .ProseMirror *::-moz-selection {
+      background: rgba(59, 130, 246, 0.5) !important;
+      color: inherit !important;
+    }
+
+    /* Demo selection highlight - custom class for reliable highlighting */
+    .demo-selection-highlight {
+      background: rgba(59, 130, 246, 0.4) !important;
+      border-radius: 2px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+
     /* Hide header when hideHeader param is present */
     body.hide-header header {
       display: none;
     }
 
-    /* Make app fullscreen when header is hidden */
+    /* Make app fullscreen container when header is hidden */
     body.hide-header #app {
       max-width: none;
-      padding: 0;
-      height: 100vh;
+      padding: 40px 20px;
+      min-height: 100vh;
       margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      background: #f5f5f5;
     }
 
-    /* Make editor container fill screen when header is hidden */
+    /* Keep editor as centered sheet when header is hidden */
     body.hide-header #editor-container {
-      height: 100vh;
+      max-width: 900px;
+      width: 100%;
+      min-height: calc(100vh - 80px);
       margin: 0;
-      border: none;
-      border-radius: 0;
+      /* Keep the card appearance */
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* Hide scrollbar in autoplay mode (for landing page iframe demos) */
+    html.autoplay-mode,
+    html.autoplay-mode body,
+    body.autoplay-mode,
+    body.autoplay-mode * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    html.autoplay-mode::-webkit-scrollbar,
+    html.autoplay-mode *::-webkit-scrollbar,
+    body.autoplay-mode::-webkit-scrollbar,
+    body.autoplay-mode *::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Reduce padding in autoplay mode for phone mockup demos */
+    body.autoplay-mode #app {
+      padding: 0 !important;
+    }
+    body.autoplay-mode #editor-container {
+      padding: 12px !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+    body.autoplay-mode header {
+      padding: 8px 12px !important;
+      margin-bottom: 0 !important;
+      box-shadow: none !important;
+      border-bottom: 1px solid #eee;
+    }
+    body.autoplay-mode .toolbar {
+      gap: 4px;
+    }
+    body.autoplay-mode .ProseMirror {
+      padding: 8px 4px !important;
     }
 
     /* Fullscreen Map Overlay */
@@ -617,8 +728,97 @@
       opacity: 1;
       background: rgba(34, 197, 94, 0.15);
     }
+
+    /* Demo Commentary Overlay - product explainer style */
+    .demo-intro-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 10000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-in-out;
+    }
+
+    .demo-intro-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .demo-intro-overlay .comment-content {
+      text-align: center;
+      max-width: 80%;
+    }
+
+    .demo-intro-overlay .comment-heading {
+      color: #fff;
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .demo-intro-overlay .comment-text {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 24px;
+      font-weight: 500;
+      line-height: 1.4;
+      letter-spacing: -0.3px;
+    }
+
+    /* Blinking typewriter cursor */
+    .demo-intro-overlay .cursor {
+      display: inline-block;
+      width: 3px;
+      height: 0.9em;
+      background: #fff;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: cursor-blink 0.8s step-end infinite;
+    }
+
+    @keyframes cursor-blink {
+      50% { opacity: 0; }
+    }
+
+    /* Demo Finger/Tap Cursor */
+    #demo-finger {
+      position: fixed;
+      z-index: 20000;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1);
+      transition: opacity 0.2s ease;
+    }
+
+    #demo-finger.visible {
+      opacity: 1;
+    }
+
+    #demo-finger.tapping {
+      animation: finger-tap 0.3s ease-out;
+    }
+
+    @keyframes finger-tap {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(0.85); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+
+    #demo-finger svg {
+      width: 48px;
+      height: 48px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    }
   </style>
-  <script type="module" crossorigin src="/assets/main-BCv5msfH.js"></script>
+  <script type="module" crossorigin src="/assets/main-BSKqBZRz.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/main-Cvej7Dwr.css">
 </head>
 <body>
@@ -627,6 +827,10 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get('hideHeader') === 'true') {
       document.body.classList.add('hide-header');
+    }
+    if (params.get('autoplay') === 'true') {
+      document.body.classList.add('autoplay-mode');
+      document.documentElement.classList.add('autoplay-mode');
     }
 
     // Intercept console logs and send them via postMessage for React Native WebView debugging
@@ -725,6 +929,14 @@
       <div id="avatars" class="avatars"></div>
     </header>
     <div id="editor-container"></div>
+
+    <!-- Demo Commentary Overlay (product explainer style) -->
+    <div id="demo-intro-overlay" class="demo-intro-overlay">
+      <div class="comment-content">
+        <div class="comment-heading"></div>
+        <div class="comment-text"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Fullscreen Map Overlay (hidden by default) -->
@@ -829,6 +1041,15 @@
       </div>
       <button class="cancel-btn" id="cancel-join-video-btn">Cancel</button>
     </div>
+  </div>
+
+  <!-- Demo Finger Cursor (hidden by default) -->
+  <div id="demo-finger">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Finger/hand pointing icon -->
+      <path d="M12 2C10.343 2 9 3.343 9 5V12.5L7.5 11C6.672 10.172 5.328 10.172 4.5 11C3.672 11.828 3.672 13.172 4.5 14L10.293 19.793C10.683 20.183 11.316 20.183 11.707 19.793L18.5 13C18.5 13 19.5 12 19.5 10.5V5C19.5 3.343 18.157 2 16.5 2H12Z" fill="#FFFFFF" stroke="#333333" stroke-width="1.5"/>
+      <circle cx="12" cy="7" r="2" fill="#333333"/>
+    </svg>
   </div>
 
 </body>

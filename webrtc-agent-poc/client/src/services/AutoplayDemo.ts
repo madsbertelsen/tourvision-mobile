@@ -33,7 +33,8 @@ export type DemoAction =
   | { type: 'clickMapMarker'; markerIndex: number } // Click a marker on the fullscreen map (0-based index)
   | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Show finger animation tapping on element
   | { type: 'hideFinger' } // Hide the finger (for ending persisted finger sequences)
-  | { type: 'clickElement'; selector: string }; // Click an element by selector
+  | { type: 'clickElement'; selector: string } // Click an element by selector
+  | { type: 'fingerDrag'; selector: string; direction: 'up' | 'down' | 'left' | 'right'; distance?: number }; // Drag with finger on element
 
 export interface DemoScript {
   name: string;
@@ -207,7 +208,11 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Finger taps on block map to open fullscreen (start sequence with persist)
       { type: 'showFingerTap', selector: '.prosemirror-map', fromSide: 'right', persist: true },
       { type: 'openFullscreenMap' },
-      { type: 'pause', duration: 1000 },
+      { type: 'pause', duration: 800 },
+
+      // Pan the map up so markers are in upper half of screen
+      { type: 'fingerDrag', selector: '#fullscreen-map', direction: 'up', distance: 180 },
+      { type: 'pause', duration: 500 },
 
       // Click marker to show location details (finger moves to marker)
       { type: 'showFingerTap', selector: '#fullscreen-overlay .mapboxgl-marker:nth-of-type(2)', fromSide: 'bottom', persist: true },
@@ -306,6 +311,7 @@ export class AutoplayDemo {
   public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Show finger tap animation
   public onHideFinger?: () => void; // Hide the finger (for ending persisted sequences)
   public onClickElement?: (selector: string) => void; // Click an element by selector
+  public onFingerDrag?: (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => Promise<void>; // Drag finger on element
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -611,6 +617,18 @@ export class AutoplayDemo {
           console.log(`[AutoplayDemo] Clicked element: ${action.selector}`);
         }
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
+        break;
+
+      case 'fingerDrag':
+        if (this.onFingerDrag) {
+          const distance = action.distance || 150;
+          console.log(`[AutoplayDemo] Dragging finger on ${action.selector} ${action.direction} ${distance}px`);
+          this.onFingerDrag(action.selector, action.direction, distance).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
         break;
 
       default:

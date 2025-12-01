@@ -1518,6 +1518,91 @@ async function main() {
       }
     };
 
+    // Wire up finger drag for autoplay (for panning maps)
+    player.onFingerDrag = (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const target = document.querySelector(selector) as HTMLElement;
+
+        if (!finger || !target) {
+          console.warn(`[AutoplayDemo] Finger drag failed - finger: ${!!finger}, target: ${!!target} (${selector})`);
+          resolve();
+          return;
+        }
+
+        // Get target's center as starting point for drag
+        const rect = target.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+
+        // Calculate end position and pan offset based on direction
+        // Note: Drag direction is opposite to pan direction
+        // Drag UP = pan DOWN (move finger up, map content goes up, so panBy negative Y)
+        let endX = startX;
+        let endY = startY;
+        let panX = 0;
+        let panY = 0;
+        switch (direction) {
+          case 'up':
+            endY = startY - distance;
+            panY = distance; // Pan down (positive Y moves map content up)
+            break;
+          case 'down':
+            endY = startY + distance;
+            panY = -distance;
+            break;
+          case 'left':
+            endX = startX - distance;
+            panX = distance;
+            break;
+          case 'right':
+            endX = startX + distance;
+            panX = -distance;
+            break;
+        }
+
+        // Position finger at start (instant if already visible)
+        if (!finger.classList.contains('visible')) {
+          finger.style.transition = 'none';
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.classList.add('visible');
+          finger.offsetHeight; // Force reflow
+        } else {
+          // Move to start position first
+          finger.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+        }
+
+        // Start the drag after finger is in position
+        setTimeout(() => {
+          // Show pressing state
+          finger.classList.add('tapping');
+
+          // Animate finger drag with smooth transition
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${endX}px`;
+          finger.style.top = `${endY}px`;
+
+          // Use Mapbox's panBy for smooth map panning (if this is the fullscreen map)
+          const map = fullscreenMapView?.getMap();
+          if (map) {
+            // panBy takes [x, y] offset in pixels, with duration option
+            map.panBy([panX, panY], { duration: 600, easing: (t: number) => t * (2 - t) });
+            console.log(`[AutoplayDemo] Panning map by [${panX}, ${panY}]`);
+          }
+
+          // After animation completes
+          setTimeout(() => {
+            finger.classList.remove('tapping');
+            fingerPersisted = true; // Keep finger visible after drag
+            resolve();
+          }, 650);
+        }, fingerPersisted ? 100 : 300);
+      });
+    };
+
     // Wire up element click for autoplay
     player.onClickElement = (selector: string) => {
       const element = document.querySelector(selector) as HTMLElement;
