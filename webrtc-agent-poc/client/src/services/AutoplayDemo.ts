@@ -27,11 +27,12 @@ export type DemoAction =
   | { type: 'hideCursor' } // Hide simulated remote cursor
   | { type: 'select'; text: string } // Select text in the document
   | { type: 'clickToolbar'; button: 'geomark' | 'map'; lat?: number; lng?: number } // Simulate toolbar click
-  | { type: 'comment'; text: string; heading?: string; duration?: number } // Product explainer commentary with typewriter effect
+  | { type: 'comment'; text: string; heading?: string; duration?: number; step?: number } // Product explainer commentary with typewriter effect
   | { type: 'openFullscreenMap' } // Open fullscreen map view
   | { type: 'closeFullscreenMap' } // Close fullscreen map view
   | { type: 'clickMapMarker'; markerIndex: number } // Click a marker on the fullscreen map (0-based index)
-  | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom' } // Show finger animation tapping on element
+  | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Show finger animation tapping on element
+  | { type: 'hideFinger' } // Hide the finger (for ending persisted finger sequences)
   | { type: 'clickElement'; selector: string }; // Click an element by selector
 
 export interface DemoScript {
@@ -164,8 +165,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
     userName: 'Emma',
     userColor: '#EC4899',
     actions: [
-      // Intro comment
-      { type: 'comment', heading: 'Location Tagging', text: 'Insert a map to auto-detect locations', duration: 2000 },
+      // Step 0: Writing
+      { type: 'comment', heading: 'Writing', text: 'Just type - like any other doc', duration: 2000, step: 0 },
 
       // Demo: Emma proposes a weekend trip to friends
       { type: 'showCursor', userName: 'Emma', color: '#EC4899' },
@@ -191,43 +192,49 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'insertMap' },
       { type: 'pause', duration: 500 },
 
+      // Step 1: Location Tagging - explain the auto-detection
+      { type: 'comment', heading: 'Location Tagging', text: 'Places are auto-detected from text', duration: 2000, step: 1 },
+
       // Saturday geo-marks (auto-detected after map)
       { type: 'geomark', text: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
       { type: 'pause', duration: 400 },
       { type: 'geomark', text: 'Tivoli Gardens', lat: 55.6733, lng: 12.5681 },
       { type: 'pause', duration: 800 },
 
-      // Explain fullscreen map feature
-      { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand it and explore locations', duration: 2000 },
+      // Step 2: Fullscreen Map
+      { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand and explore', duration: 2000, step: 2 },
 
-      // Finger taps on block map to open fullscreen
-      { type: 'showFingerTap', selector: '.prosemirror-map', fromSide: 'right' },
+      // Finger taps on block map to open fullscreen (start sequence with persist)
+      { type: 'showFingerTap', selector: '.prosemirror-map', fromSide: 'right', persist: true },
       { type: 'openFullscreenMap' },
       { type: 'pause', duration: 1000 },
 
-      // Click marker to show location details
-      { type: 'showFingerTap', selector: '#fullscreen-overlay .mapboxgl-marker:nth-of-type(2)', fromSide: 'bottom' }, // Finger taps Tivoli Gardens marker
+      // Click marker to show location details (finger moves to marker)
+      { type: 'showFingerTap', selector: '#fullscreen-overlay .mapboxgl-marker:nth-of-type(2)', fromSide: 'bottom', persist: true },
       { type: 'clickMapMarker', markerIndex: 1 }, // Actually click to open sheet
       { type: 'pause', duration: 1000 }, // Let location sheet appear
 
-      // Tap Configure Transport
-      { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right' }, // Finger taps Configure Transport
+      // Step 3: Transport
+      { type: 'comment', heading: 'Transport', text: 'Add routes between locations', duration: 2000, step: 3 },
+
+      // Tap Configure Transport (finger moves to button)
+      { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right', persist: true },
       { type: 'clickElement', selector: '#transport-config-btn' }, // Actually click to expand
       { type: 'pause', duration: 1000 }, // Let it expand
 
-      // Tap Copenhagen as the origin
-      { type: 'showFingerTap', selector: '.source-location-chip', fromSide: 'right' }, // Finger taps Copenhagen
+      // Tap Copenhagen as the origin (finger moves to chip)
+      { type: 'showFingerTap', selector: '.source-location-chip', fromSide: 'right', persist: true },
       { type: 'clickElement', selector: '.source-location-chip' }, // Select Copenhagen
       { type: 'pause', duration: 800 },
 
-      // Tap Walking as the transport mode
-      { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom' }, // Finger taps Walking
+      // Tap Walking as the transport mode (finger moves to button)
+      { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom', persist: true },
       { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
       { type: 'pause', duration: 1500 }, // Show the final result
 
-      // Tap outside sheet to dismiss
-      { type: 'showFingerTap', selector: '#location-sheet-backdrop', fromSide: 'left' }, // Finger taps backdrop
-      { type: 'clickElement', selector: '#location-sheet-backdrop' }, // Dismiss sheet
+      // Tap X button to dismiss sheet (finger moves to close button, then exits)
+      { type: 'showFingerTap', selector: '#location-sheet-close-btn', fromSide: 'right' }, // Last tap - no persist
+      { type: 'clickElement', selector: '#location-sheet-close-btn' }, // Dismiss sheet
       { type: 'pause', duration: 800 },
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
@@ -296,7 +303,8 @@ export class AutoplayDemo {
   public onOpenFullscreenMap?: () => void; // Open fullscreen map view
   public onCloseFullscreenMap?: () => void; // Close fullscreen map view
   public onClickMapMarker?: (markerIndex: number) => void; // Click a marker on fullscreen map
-  public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Show finger tap animation
+  public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Show finger tap animation
+  public onHideFinger?: () => void; // Hide the finger (for ending persisted sequences)
   public onClickElement?: (selector: string) => void; // Click an element by selector
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
@@ -549,7 +557,7 @@ export class AutoplayDemo {
 
       case 'comment':
         // Show product explainer commentary with typewriter effect
-        this.showComment(action.text, action.heading, action.duration, () => this.playNextAction());
+        this.showComment(action.text, action.heading, action.duration, () => this.playNextAction(), action.step);
         break;
 
       case 'openFullscreenMap':
@@ -579,13 +587,22 @@ export class AutoplayDemo {
       case 'showFingerTap':
         if (this.onShowFingerTap) {
           const fromSide = action.fromSide || 'right';
-          console.log(`[AutoplayDemo] Showing finger tap on ${action.selector} from ${fromSide}`);
-          this.onShowFingerTap(action.selector, fromSide).then(() => {
+          const persist = action.persist || false;
+          console.log(`[AutoplayDemo] Showing finger tap on ${action.selector} from ${fromSide}${persist ? ' (persist)' : ''}`);
+          this.onShowFingerTap(action.selector, fromSide, persist).then(() => {
             this.playNextAction();
           });
         } else {
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         }
+        break;
+
+      case 'hideFinger':
+        if (this.onHideFinger) {
+          this.onHideFinger();
+          console.log('[AutoplayDemo] Hiding finger');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
         break;
 
       case 'clickElement':
@@ -760,8 +777,15 @@ export class AutoplayDemo {
    * Show product explainer commentary with typewriter effect
    * Black overlay with white text, typing character by character
    * Supports optional heading (chapter name) that types first
+   * If step is provided, sends postMessage to parent for tab sync
    */
-  private showComment(text: string, heading: string | undefined, duration: number | undefined, callback: () => void) {
+  private showComment(text: string, heading: string | undefined, duration: number | undefined, callback: () => void, step?: number) {
+    // Send step update to parent window (for landing page tab sync)
+    if (step !== undefined && window.parent !== window) {
+      const demoId = new URLSearchParams(window.location.search).get('demo') || 'maps';
+      window.parent.postMessage({ type: 'demoStep', step, demoId }, '*');
+      console.log(`[AutoplayDemo] Sent step ${step} to parent (demo: ${demoId})`);
+    }
     const overlay = document.getElementById('demo-intro-overlay');
     const headingEl = overlay?.querySelector('.comment-heading') as HTMLElement | null;
     const textEl = overlay?.querySelector('.comment-text') as HTMLElement | null;

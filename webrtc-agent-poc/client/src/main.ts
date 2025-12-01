@@ -1381,7 +1381,11 @@ async function main() {
     };
 
     // Wire up finger tap animation for autoplay
-    player.onShowFingerTap = (selector: string, fromSide: 'left' | 'right' | 'bottom') => {
+    // Track if finger is currently persisted (visible from previous tap)
+    let fingerPersisted = false;
+    let lastFingerFromSide: 'left' | 'right' | 'bottom' = 'right';
+
+    player.onShowFingerTap = (selector: string, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => {
       return new Promise<void>((resolve) => {
         const finger = document.getElementById('demo-finger');
         const target = document.querySelector(selector) as HTMLElement;
@@ -1396,7 +1400,7 @@ async function main() {
         const targetX = rect.left + rect.width / 2;
         const targetY = rect.top + rect.height / 2;
 
-        // Calculate start position based on fromSide
+        // Calculate start position based on fromSide (for entry animation)
         let startX: number, startY: number;
         switch (fromSide) {
           case 'left':
@@ -1414,39 +1418,104 @@ async function main() {
             break;
         }
 
-        // Position finger at start and make visible
-        finger.style.left = `${startX}px`;
-        finger.style.top = `${startY}px`;
-        finger.style.transition = 'none';
-        finger.classList.add('visible');
+        lastFingerFromSide = fromSide;
 
-        // Force reflow
-        finger.offsetHeight;
+        // If finger is already visible (persisted), just animate to new target
+        if (fingerPersisted && finger.classList.contains('visible')) {
+          // Animate directly to new target
+          finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
 
-        // Animate to target
-        finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
-        finger.style.left = `${targetX}px`;
-        finger.style.top = `${targetY}px`;
-
-        // After reaching target, do tap animation
-        setTimeout(() => {
-          finger.classList.add('tapping');
-
-          // After tap, animate out
+          // After reaching target, do tap animation
           setTimeout(() => {
-            finger.classList.remove('tapping');
-            finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
-            finger.style.left = `${startX}px`;
-            finger.style.top = `${startY}px`;
+            finger.classList.add('tapping');
 
-            // Hide after animation
             setTimeout(() => {
-              finger.classList.remove('visible');
+              finger.classList.remove('tapping');
+              fingerPersisted = !!persist;
               resolve();
-            }, 400);
-          }, 300);
-        }, 600);
+            }, 300);
+          }, 400);
+        } else {
+          // Full entry animation from off-screen
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.style.transition = 'none';
+          finger.classList.add('visible');
+
+          // Force reflow
+          finger.offsetHeight;
+
+          // Animate to target
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // After reaching target, do tap animation
+          setTimeout(() => {
+            finger.classList.add('tapping');
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+
+              if (persist) {
+                // Keep finger visible at target position
+                fingerPersisted = true;
+                resolve();
+              } else {
+                // Animate out
+                fingerPersisted = false;
+                finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
+                finger.style.left = `${startX}px`;
+                finger.style.top = `${startY}px`;
+
+                // Hide after animation
+                setTimeout(() => {
+                  finger.classList.remove('visible');
+                  resolve();
+                }, 400);
+              }
+            }, 300);
+          }, 600);
+        }
       });
+    };
+
+    // Wire up hide finger for ending persisted sequences
+    player.onHideFinger = () => {
+      const finger = document.getElementById('demo-finger');
+      if (finger && finger.classList.contains('visible')) {
+        // Calculate exit position based on last entry side
+        let exitX: number, exitY: number;
+        const currentX = parseFloat(finger.style.left) || 0;
+        const currentY = parseFloat(finger.style.top) || 0;
+
+        switch (lastFingerFromSide) {
+          case 'left':
+            exitX = -60;
+            exitY = currentY;
+            break;
+          case 'bottom':
+            exitX = currentX;
+            exitY = window.innerHeight + 60;
+            break;
+          case 'right':
+          default:
+            exitX = window.innerWidth + 60;
+            exitY = currentY;
+            break;
+        }
+
+        finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
+        finger.style.left = `${exitX}px`;
+        finger.style.top = `${exitY}px`;
+
+        setTimeout(() => {
+          finger.classList.remove('visible');
+          fingerPersisted = false;
+        }, 400);
+      }
     };
 
     // Wire up element click for autoplay

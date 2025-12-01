@@ -315,6 +315,21 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
+    /* Hide scrollbar in autoplay mode (for landing page iframe demos) */
+    html.autoplay-mode,
+    html.autoplay-mode body,
+    body.autoplay-mode,
+    body.autoplay-mode * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    html.autoplay-mode::-webkit-scrollbar,
+    html.autoplay-mode *::-webkit-scrollbar,
+    body.autoplay-mode::-webkit-scrollbar,
+    body.autoplay-mode *::-webkit-scrollbar {
+      display: none;
+    }
+
     /* Fullscreen Map Overlay */
     #fullscreen-overlay {
       position: fixed;
@@ -787,6 +802,10 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get('hideHeader') === 'true') {
       document.body.classList.add('hide-header');
+    }
+    if (params.get('autoplay') === 'true') {
+      document.body.classList.add('autoplay-mode');
+      document.documentElement.classList.add('autoplay-mode');
     }
 
     // Intercept console logs and send them via postMessage for React Native WebView debugging
