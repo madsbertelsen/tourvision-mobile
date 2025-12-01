@@ -37,6 +37,43 @@ export interface DemoScript {
   userColor?: string; // Color for the cursor
 }
 
+/**
+ * Playback control options - parsed from query params
+ * Example URLs:
+ *   ?autoplay=true&demo=maps&stopAt=10       - Stop after action index 10
+ *   ?autoplay=true&demo=maps&stopAfter=insertMap  - Stop after first insertMap action
+ *   ?autoplay=true&demo=maps&stopAfter=geomark:2  - Stop after 2nd geomark action
+ */
+export interface PlaybackOptions {
+  stopAt?: number;        // Stop after action at this index (0-based)
+  stopAfter?: string;     // Stop after action type, e.g., "insertMap" or "geomark:2" (2nd occurrence)
+  noLoop?: boolean;       // Don't loop after completion
+}
+
+/**
+ * Parse playback options from URL query params
+ */
+export function parsePlaybackOptions(): PlaybackOptions {
+  const params = new URLSearchParams(window.location.search);
+  const options: PlaybackOptions = {};
+
+  const stopAt = params.get('stopAt');
+  if (stopAt !== null) {
+    options.stopAt = parseInt(stopAt, 10);
+  }
+
+  const stopAfter = params.get('stopAfter');
+  if (stopAfter !== null) {
+    options.stopAfter = stopAfter;
+  }
+
+  if (params.has('noLoop')) {
+    options.noLoop = true;
+  }
+
+  return options;
+}
+
 // ===== Composed Demo Types (for multi-section demos) =====
 
 // Section definition - references an existing script by name
@@ -203,7 +240,8 @@ export class AutoplayDemo {
   private currentActionIndex = 0;
   private timeoutId: number | null = null;
   private colorIndex = 0;
-  private fakeClientId: number = 0;
+  private options: PlaybackOptions;
+  private actionTypeCounts: Map<string, number> = new Map(); // Track occurrences of each action type
 
   // Callbacks for custom actions
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
@@ -214,13 +252,14 @@ export class AutoplayDemo {
   public onSelect?: (text: string) => { from: number; to: number } | null; // Select text, return positions
   public onClickToolbar?: (button: 'geomark' | 'map', lat?: number, lng?: number) => void; // Toolbar click
   public onLoopComplete?: () => void; // Called when script completes one full loop (for composed mode)
+  public onPlaybackStopped?: () => void; // Called when playback stops due to stopAt/stopAfter
 
-  constructor(view: EditorView, scriptName: string = 'collab', awareness?: any) {
+  constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
     this.script = DEMO_SCRIPTS[scriptName] || DEMO_SCRIPTS.collab;
     this.awareness = awareness;
-    this.fakeClientId = Math.floor(Math.random() * 1000000) + 1000000; // Fake client ID for demo cursor
-    console.log(`[AutoplayDemo] Initialized with script: ${this.script.name}`);
+    this.options = options || parsePlaybackOptions();
+    console.log(`[AutoplayDemo] Initialized with script: ${this.script.name}`, this.options);
   }
 
   /**
@@ -234,6 +273,7 @@ export class AutoplayDemo {
     this.isPaused = false;
     this.currentActionIndex = 0;
     this.colorIndex = 0;
+    this.actionTypeCounts.clear();
     this.clearDocument();
     this.playNextAction();
   }
@@ -277,20 +317,71 @@ export class AutoplayDemo {
         return;
       }
 
+      // If noLoop option is set, stop
+      if (this.options.noLoop) {
+        console.log('[AutoplayDemo] Script complete (noLoop mode)');
+        this.stop();
+        if (this.onPlaybackStopped) this.onPlaybackStopped();
+        return;
+      }
+
       // Otherwise, loop normally (standalone mode)
       console.log('[AutoplayDemo] Script complete, restarting...');
       this.timeoutId = window.setTimeout(() => {
         this.currentActionIndex = 0;
         this.colorIndex = 0;
+        this.actionTypeCounts.clear();
         this.playNextAction();
       }, this.script.loopDelay || 3000);
       return;
     }
 
     const action = this.script.actions[this.currentActionIndex];
+    const actionIndex = this.currentActionIndex;
     this.currentActionIndex++;
 
+    // Track action type occurrences
+    const count = (this.actionTypeCounts.get(action.type) || 0) + 1;
+    this.actionTypeCounts.set(action.type, count);
+
+    // Execute the action
     this.executeAction(action);
+
+    // Check stop conditions AFTER action is executed
+    // (for async actions, this happens before they complete - we handle that separately)
+    this.checkStopConditions(action.type, actionIndex, count);
+  }
+
+  /**
+   * Check if playback should stop based on options
+   */
+  private checkStopConditions(actionType: string, actionIndex: number, typeCount: number) {
+    // Check stopAt (index-based)
+    if (this.options.stopAt !== undefined && actionIndex >= this.options.stopAt) {
+      console.log(`[AutoplayDemo] Stopping at action index ${actionIndex} (stopAt=${this.options.stopAt})`);
+      // Use setTimeout to allow current action to complete
+      setTimeout(() => {
+        this.stop();
+        if (this.onPlaybackStopped) this.onPlaybackStopped();
+      }, 100);
+      return;
+    }
+
+    // Check stopAfter (type-based)
+    if (this.options.stopAfter) {
+      const [type, occurrenceStr] = this.options.stopAfter.split(':');
+      const targetOccurrence = occurrenceStr ? parseInt(occurrenceStr, 10) : 1;
+
+      if (actionType === type && typeCount >= targetOccurrence) {
+        console.log(`[AutoplayDemo] Stopping after ${actionType} #${typeCount} (stopAfter=${this.options.stopAfter})`);
+        // Use setTimeout to allow current action to complete
+        setTimeout(() => {
+          this.stop();
+          if (this.onPlaybackStopped) this.onPlaybackStopped();
+        }, 100);
+        return;
+      }
+    }
   }
 
   /**
@@ -666,6 +757,27 @@ export class AutoplayDemo {
    */
   isActive(): boolean {
     return this.isPlaying;
+  }
+
+  /**
+   * Get current action index (for debugging)
+   */
+  getCurrentActionIndex(): number {
+    return this.currentActionIndex;
+  }
+
+  /**
+   * Get script actions (for debugging/testing)
+   */
+  getActions(): DemoAction[] {
+    return this.script.actions;
+  }
+
+  /**
+   * Get action at specific index (for debugging)
+   */
+  getActionAt(index: number): DemoAction | undefined {
+    return this.script.actions[index];
   }
 
   /**
