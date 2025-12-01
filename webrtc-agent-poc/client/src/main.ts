@@ -41,6 +41,7 @@ const params = new URL(window.location.href).searchParams;
 const isAgentMode = params.get('agent') === 'true';
 const isAnimateMode = params.get('animate') === 'true'; // Landing page demo mode
 const isAutoplayMode = params.get('autoplay') === 'true'; // Self-playing demo for landing page
+const isRemoteControlMode = params.get('remoteControl') === 'true'; // Controlled by parent DemoPlayer
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
@@ -2167,7 +2168,12 @@ async function main() {
     };
 
     // Start autoplay after a short delay (let editor settle)
-    setTimeout(() => player.start(), 1000);
+    // In remote control mode, wait for parent DemoPlayer to send start command
+    if (!isRemoteControlMode) {
+      setTimeout(() => player.start(), 1000);
+    } else {
+      console.log('[Main] Remote control mode - waiting for parent to start demo');
+    }
   }
 
   // Set up toolbar button handlers

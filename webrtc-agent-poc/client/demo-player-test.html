@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DemoPlayer Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 32px;
+      color: #111827;
+    }
+
+    .demo-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .controls {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .controls button {
+      padding: 10px 20px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      background: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .controls button:hover {
+      border-color: #3B82F6;
+      color: #3B82F6;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>DemoPlayer Test</h1>
+
+    <div class="demo-wrapper">
+      <div id="demo-container"></div>
+
+      <div class="controls">
+        <button id="btn-start">Start</button>
+        <button id="btn-stop">Stop</button>
+        <button id="btn-comment">Show Comment</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { DemoPlayer } from './src/components/DemoPlayer.js';
+
+    const player = new DemoPlayer({
+      container: document.getElementById('demo-container'),
+      demoScript: 'maps',
+      editorUrl: '/doc/demo-maps',
+      autoStart: false,
+      steps: [
+        { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
+        { label: 'Location Tagging', heading: 'Location Tagging', text: 'Places are auto-detected from text' },
+        { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
+        { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
+        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
+      ]
+    });
+
+    // Wire up controls
+    document.getElementById('btn-start').addEventListener('click', () => {
+      player.start();
+    });
+
+    document.getElementById('btn-stop').addEventListener('click', () => {
+      player.stop();
+    });
+
+    document.getElementById('btn-comment').addEventListener('click', () => {
+      player.showComment('Test Heading', 'This is a test comment with typewriter effect', 2000);
+    });
+
+    // Log step changes
+    player.onStepChange = (step) => {
+      console.log('Step changed to:', step);
+    };
+  </script>
+</body>
+</html>

@@ -334,6 +334,7 @@ export class AutoplayDemo {
   private colorIndex = 0;
   private options: PlaybackOptions;
   private actionTypeCounts: Map<string, number> = new Map(); // Track occurrences of each action type
+  private remoteControlMode = false; // When true, parent controls overlay display
 
   // Callbacks for custom actions
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
@@ -366,7 +367,55 @@ export class AutoplayDemo {
     this.script = DEMO_SCRIPTS[scriptName] || DEMO_SCRIPTS.collab;
     this.awareness = awareness;
     this.options = options || parsePlaybackOptions();
+
+    // Check if running in remote control mode (controlled by parent DemoPlayer)
+    const params = new URLSearchParams(window.location.search);
+    this.remoteControlMode = params.get('remoteControl') === 'true' && window.parent !== window;
+
+    if (this.remoteControlMode) {
+      console.log(`[AutoplayDemo] Remote control mode enabled`);
+      this.setupRemoteControlListener();
+      // Notify parent that we're ready
+      this.notifyParent({ type: 'demoReady' });
+    }
+
     console.log(`[AutoplayDemo] Initialized with script: ${this.script.name}`, this.options);
+  }
+
+  /**
+   * Setup listener for commands from parent DemoPlayer
+   */
+  private setupRemoteControlListener(): void {
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+
+      if (data.type === 'demoControl') {
+        console.log(`[AutoplayDemo] Received control command: ${data.command}`);
+        switch (data.command) {
+          case 'start':
+            this.start();
+            break;
+          case 'stop':
+            this.stop();
+            break;
+          case 'pause':
+            if (!this.isPaused) this.togglePause();
+            break;
+          case 'resume':
+            if (this.isPaused) this.togglePause();
+            break;
+        }
+      }
+    });
+  }
+
+  /**
+   * Send message to parent window (DemoPlayer)
+   */
+  private notifyParent(message: { type: string; [key: string]: any }): void {
+    if (window.parent !== window) {
+      window.parent.postMessage(message, '*');
+    }
   }
 
   /**
@@ -918,14 +967,32 @@ export class AutoplayDemo {
    * Black overlay with white text, typing character by character
    * Supports optional heading (chapter name) that types first
    * If step is provided, sends postMessage to parent for tab sync
+   *
+   * In remote control mode: skip overlay display, let parent DemoPlayer handle it
    */
   private showComment(text: string, heading: string | undefined, duration: number | undefined, callback: () => void, step?: number) {
-    // Send step update to parent window (for landing page tab sync)
+    // Send step update to parent window (for landing page tab sync or DemoPlayer)
     if (step !== undefined && window.parent !== window) {
       const demoId = new URLSearchParams(window.location.search).get('demo') || 'maps';
-      window.parent.postMessage({ type: 'demoStep', step, demoId }, '*');
-      console.log(`[AutoplayDemo] Sent step ${step} to parent (demo: ${demoId})`);
+      // Use demoStepChanged for remote control mode, demoStep for legacy landing page
+      const messageType = this.remoteControlMode ? 'demoStepChanged' : 'demoStep';
+      window.parent.postMessage({ type: messageType, step, demoId, heading, text, duration }, '*');
+      console.log(`[AutoplayDemo] Sent step ${step} to parent (demo: ${demoId}, remote: ${this.remoteControlMode})`);
     }
+
+    // In remote control mode, let parent DemoPlayer handle the overlay display
+    if (this.remoteControlMode) {
+      // Calculate how long the comment would take in normal mode
+      const typingTime = (heading?.length || 0) * 40 + (text?.length || 0) * 40 + 500;
+      const holdDuration = duration || 1500;
+      const totalDuration = typingTime + holdDuration + 300;
+
+      console.log(`[AutoplayDemo] Remote mode: skipping overlay, waiting ${totalDuration}ms for parent to show comment`);
+      this.timeoutId = window.setTimeout(callback, totalDuration);
+      return;
+    }
+
+    // Normal mode: show overlay in iframe
     const overlay = document.getElementById('demo-intro-overlay');
     const headingEl = overlay?.querySelector('.comment-heading') as HTMLElement | null;
     const textEl = overlay?.querySelector('.comment-text') as HTMLElement | null;
