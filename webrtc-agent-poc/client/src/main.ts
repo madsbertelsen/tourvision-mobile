@@ -1352,6 +1352,17 @@ async function main() {
       console.log('[AutoplayDemo] Inserted map block');
     };
 
+    // Wire up fullscreen map for autoplay
+    player.onOpenFullscreenMap = () => {
+      (window as any).showFullscreenMap();
+      console.log('[AutoplayDemo] Opened fullscreen map');
+    };
+
+    player.onCloseFullscreenMap = () => {
+      (window as any).hideFullscreenMap();
+      console.log('[AutoplayDemo] Closed fullscreen map');
+    };
+
     // Wire up text selection for autoplay (find and select text)
     player.onSelect = (text: string) => {
       const { state } = editor;

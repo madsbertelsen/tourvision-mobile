@@ -27,7 +27,9 @@ export type DemoAction =
   | { type: 'hideCursor' } // Hide simulated remote cursor
   | { type: 'select'; text: string } // Select text in the document
   | { type: 'clickToolbar'; button: 'geomark' | 'map'; lat?: number; lng?: number } // Simulate toolbar click
-  | { type: 'comment'; text: string; heading?: string; duration?: number }; // Product explainer commentary with typewriter effect
+  | { type: 'comment'; text: string; heading?: string; duration?: number } // Product explainer commentary with typewriter effect
+  | { type: 'openFullscreenMap' } // Open fullscreen map view
+  | { type: 'closeFullscreenMap' }; // Close fullscreen map view
 
 export interface DemoScript {
   name: string;
@@ -191,6 +193,15 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 400 },
       { type: 'geomark', text: 'Tivoli Gardens', lat: 55.6733, lng: 12.5681 },
       { type: 'pause', duration: 800 },
+
+      // Explain fullscreen map feature
+      { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand it and explore locations', duration: 2000 },
+
+      // Open fullscreen map to showcase the map feature
+      { type: 'openFullscreenMap' },
+      { type: 'pause', duration: 3000 },
+      { type: 'closeFullscreenMap' },
+      { type: 'pause', duration: 500 },
       { type: 'newline' },
 
       // ===== Day 2: Sunday (complete section) =====
@@ -253,6 +264,8 @@ export class AutoplayDemo {
   public onClickToolbar?: (button: 'geomark' | 'map', lat?: number, lng?: number) => void; // Toolbar click
   public onLoopComplete?: () => void; // Called when script completes one full loop (for composed mode)
   public onPlaybackStopped?: () => void; // Called when playback stops due to stopAt/stopAfter
+  public onOpenFullscreenMap?: () => void; // Open fullscreen map view
+  public onCloseFullscreenMap?: () => void; // Close fullscreen map view
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -505,6 +518,22 @@ export class AutoplayDemo {
       case 'comment':
         // Show product explainer commentary with typewriter effect
         this.showComment(action.text, action.heading, action.duration, () => this.playNextAction());
+        break;
+
+      case 'openFullscreenMap':
+        if (this.onOpenFullscreenMap) {
+          this.onOpenFullscreenMap();
+          console.log('[AutoplayDemo] Opening fullscreen map');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'closeFullscreenMap':
+        if (this.onCloseFullscreenMap) {
+          this.onCloseFullscreenMap();
+          console.log('[AutoplayDemo] Closing fullscreen map');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         break;
 
       default:
