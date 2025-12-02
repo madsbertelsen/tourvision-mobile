@@ -142,8 +142,9 @@
       opacity: 0.3;
     }
 
-    /* Format toolbar buttons (H1, H2, P) */
+    /* Format toolbar buttons (H1, H2, P) - hidden by default, use context menu instead */
     .format-toolbar {
+      display: none;
       margin-left: 8px;
       border-left: 1px solid #ddd;
       padding-left: 8px;
@@ -281,6 +282,65 @@
 
     #avatar-context-menu button:active {
       background: #e8e8e8;
+    }
+
+    /* Text Selection Context Menu */
+    #text-selection-context-menu {
+      position: fixed;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 4px;
+      min-width: 160px;
+      z-index: 2000;
+      display: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    #text-selection-context-menu.visible {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #text-selection-context-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #333;
+      text-align: left;
+    }
+
+    #text-selection-context-menu button:hover {
+      background: #f3f4f6;
+    }
+
+    #text-selection-context-menu button:active {
+      background: #e5e7eb;
+    }
+
+    #text-selection-context-menu button .icon {
+      font-size: 16px;
+      min-width: 24px;
+      text-align: center;
+      font-weight: 700;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #text-selection-context-menu .context-menu-divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 4px 8px;
     }
 
     /* Ensure ProseMirror has proper white-space handling */
@@ -920,6 +980,72 @@
       height: 48px;
       filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
     }
+
+    /* Double-tap animation for text selection */
+    #demo-finger.double-tapping {
+      animation: finger-double-tap 0.5s ease-out;
+    }
+
+    @keyframes finger-double-tap {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      15% { transform: translate(-50%, -50%) scale(0.85); }
+      30% { transform: translate(-50%, -50%) scale(1); }
+      45% { transform: translate(-50%, -50%) scale(0.85); }
+      60% { transform: translate(-50%, -50%) scale(1); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* Selection Handles for Demo */
+    .selection-handle {
+      position: fixed;
+      width: 16px;
+      height: 16px;
+      background: #3b82f6;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 19999;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .selection-handle.visible {
+      opacity: 1;
+    }
+
+    /* Start handle - circle above with stem going down */
+    .selection-handle-start::after {
+      content: '';
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background: #3b82f6;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 100%;
+    }
+
+    /* End handle - circle below with stem going up */
+    .selection-handle-end::after {
+      content: '';
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background: #3b82f6;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 100%;
+    }
+
+    /* Demo selection highlight */
+    .demo-selection-highlight {
+      position: absolute;
+      background: rgba(59, 130, 246, 0.35);
+      pointer-events: none;
+      z-index: 99;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -1091,6 +1217,26 @@
     <button id="follow-user-btn">Follow</button>
   </div>
 
+  <!-- Text Selection Context Menu (hidden by default) -->
+  <div id="text-selection-context-menu">
+    <button id="context-heading1-btn">
+      <span class="icon">H1</span> Heading 1
+    </button>
+    <button id="context-heading2-btn">
+      <span class="icon">H2</span> Heading 2
+    </button>
+    <button id="context-paragraph-btn">
+      <span class="icon">P</span> Paragraph
+    </button>
+    <div class="context-menu-divider"></div>
+    <button id="context-geomark-btn">
+      <span class="icon">📍</span> Create Geo Mark
+    </button>
+    <button id="context-map-btn">
+      <span class="icon">🗺️</span> Insert Map
+    </button>
+  </div>
+
   <!-- Video Chat Container (hidden by default) -->
   <div id="video-chat-container">
     <div id="video-chat-header">
@@ -1169,6 +1315,10 @@
       <circle cx="12" cy="7" r="2" fill="#333333"/>
     </svg>
   </div>
+
+  <!-- Selection Handles for Demo (hidden by default) -->
+  <div id="selection-handle-start" class="selection-handle selection-handle-start"></div>
+  <div id="selection-handle-end" class="selection-handle selection-handle-end"></div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

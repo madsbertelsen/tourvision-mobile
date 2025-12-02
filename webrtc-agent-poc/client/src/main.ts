@@ -3826,6 +3826,9 @@ function setupToolbarButtons(view: EditorView) {
   const textSelectionContextMenu = document.getElementById('text-selection-context-menu');
   const contextGeoMarkBtn = document.getElementById('context-geomark-btn');
   const contextMapBtn = document.getElementById('context-map-btn');
+  const contextHeading1Btn = document.getElementById('context-heading1-btn');
+  const contextHeading2Btn = document.getElementById('context-heading2-btn');
+  const contextParagraphBtn = document.getElementById('context-paragraph-btn');
   let contextMenuDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const showTextSelectionContextMenu = (x: number, y: number, hasSelection: boolean = true) => {
@@ -3994,6 +3997,31 @@ function setupToolbarButtons(view: EditorView) {
     contextMapBtn.addEventListener('click', async () => {
       hideTextSelectionContextMenu();
       await insertMapWithAutoGeoMark(view);
+    });
+  }
+
+  // Heading context menu button handlers
+  if (contextHeading1Btn) {
+    contextHeading1Btn.addEventListener('click', () => {
+      hideTextSelectionContextMenu();
+      setBlockType('heading', { level: 1 });
+      view.focus();
+    });
+  }
+
+  if (contextHeading2Btn) {
+    contextHeading2Btn.addEventListener('click', () => {
+      hideTextSelectionContextMenu();
+      setBlockType('heading', { level: 2 });
+      view.focus();
+    });
+  }
+
+  if (contextParagraphBtn) {
+    contextParagraphBtn.addEventListener('click', () => {
+      hideTextSelectionContextMenu();
+      setBlockType('paragraph');
+      view.focus();
     });
   }
 
