@@ -144,10 +144,32 @@ function getDemoClientState(clientId: number) {
 
 // Generate user identity
 // Check for username in querystring first, otherwise use random for testing with multiple tabs
+// demoUser is used for dual phone demos with deterministic identities (1=Alice, 2=Bob)
 const usernameParam = params.get('username');
-const userNumber = Math.floor(Math.random() * 10) + 1; // 1-10
-const userColor = COLORS[userNumber - 1]; // Use same index as user number
-const userName = usernameParam || (isAgent ? 'Agent' : `User ${userNumber}`);
+const demoUserParam = params.get('demoUser');
+const DEMO_USERS = [
+  { name: 'Alice', color: '#3b82f6' },  // Blue
+  { name: 'Bob', color: '#10b981' },    // Green
+];
+
+let userNumber: number;
+let userName: string;
+let userColor: string;
+
+if (demoUserParam) {
+  // Dual phone demo mode - use deterministic identity
+  const demoUserIndex = parseInt(demoUserParam, 10) - 1;
+  const demoUser = DEMO_USERS[demoUserIndex] || DEMO_USERS[0];
+  userNumber = demoUserIndex + 1;
+  userName = demoUser.name;
+  userColor = demoUser.color;
+  console.log('[Main] Demo user mode:', { demoUser: demoUserParam, userName, userColor });
+} else {
+  // Normal mode - random identity
+  userNumber = Math.floor(Math.random() * 10) + 1; // 1-10
+  userColor = COLORS[userNumber - 1]; // Use same index as user number
+  userName = usernameParam || (isAgent ? 'Agent' : `User ${userNumber}`);
+}
 const userDisplayColor = isAgent ? '#10b981' : userColor;
 
 console.log('[Main] User identity:', { userName, userDisplayColor });
