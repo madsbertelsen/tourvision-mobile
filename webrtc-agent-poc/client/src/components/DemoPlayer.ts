@@ -118,10 +118,15 @@ export class DemoPlayer {
       // Create iframe
       // Include autoplay=true so AutoplayDemo is initialized in main.ts
       // remoteControl=true tells AutoplayDemo to let parent handle overlays
-      // For dual phone, second phone gets a different user identity
+      // For dual phone: enableSync=true so both phones sync, demoUser for different identities
+      // Second phone gets observeOnly=true so it doesn't run the demo script
       const iframe = document.createElement('iframe');
-      const userParam = dualPhone ? `&demoUser=${i + 1}` : '';
-      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${userParam}`;
+      let dualParams = '';
+      if (dualPhone) {
+        const isSecondPhone = i === 1;
+        dualParams = `&enableSync=true&demoUser=${i + 1}${isSecondPhone ? '&observeOnly=true' : ''}`;
+      }
+      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${dualParams}`;
       iframe.setAttribute('frameborder', '0');
       iframe.setAttribute('allowfullscreen', 'true');
 

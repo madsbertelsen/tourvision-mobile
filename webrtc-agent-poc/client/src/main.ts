@@ -42,6 +42,8 @@ const isAgentMode = params.get('agent') === 'true';
 const isAnimateMode = params.get('animate') === 'true'; // Landing page demo mode
 const isAutoplayMode = params.get('autoplay') === 'true'; // Self-playing demo for landing page
 const isRemoteControlMode = params.get('remoteControl') === 'true'; // Controlled by parent DemoPlayer
+const enableSync = params.get('enableSync') === 'true'; // Force sync even in autoplay mode (for dual phone demos)
+const isObserveOnly = params.get('observeOnly') === 'true'; // Don't run demo, just observe synced content
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
@@ -1203,8 +1205,9 @@ async function main() {
 
   // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
   // Disable sync for autoplay mode to prevent conflicts between multiple viewers
+  // UNLESS enableSync=true is set (for dual phone demos that need to sync)
   const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId, {
-    disableSync: isAutoplayMode
+    disableSync: isAutoplayMode && !enableSync
   });
 
   updateStatus('Initializing editor...', 'connecting');
@@ -1292,7 +1295,8 @@ async function main() {
 
   // Initialize Autoplay mode for landing page demos (self-playing, no user interaction)
   // Supports both single-script mode (?autoplay=true&demo=maps) and composed mode (?autoplay=true&composed=fullDemo)
-  if (isAutoplayMode) {
+  // Skip if observeOnly is true (second phone in dual mode just observes synced content)
+  if (isAutoplayMode && !isObserveOnly) {
     // Create player - either ComposedDemoPlayer or AutoplayDemo
     const player: AutoplayDemo | ComposedDemoPlayer = composedDemo
       ? new ComposedDemoPlayer(editor, composedDemo, awareness)
