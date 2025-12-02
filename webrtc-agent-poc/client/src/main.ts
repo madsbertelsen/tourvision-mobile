@@ -601,33 +601,36 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
   return { ydoc, yXmlFragment, provider, awareness };
 }
 
-// Custom cursor builder for minimal, non-intrusive presence indicators
+// Custom cursor builder for prominent presence indicators
+// Made extra visible for small phone demos (240px phones in DemoPlayer)
 function customCursorBuilder(user: any): HTMLElement {
   const cursor = document.createElement('span');
   cursor.classList.add('ProseMirror-yjs-cursor');
   cursor.style.position = 'relative';
-  cursor.style.marginLeft = '-1px';
-  cursor.style.marginRight = '-1px';
-  cursor.style.borderLeft = `2px solid ${user.color}`;
-  cursor.style.borderRight = `2px solid ${user.color}`;
-  cursor.style.height = '1.2em';
+  cursor.style.marginLeft = '-2px';
+  cursor.style.marginRight = '-2px';
+  cursor.style.borderLeft = `3px solid ${user.color}`;
+  cursor.style.borderRight = 'none';
+  cursor.style.height = '1.4em';
   cursor.style.display = 'inline-block';
   cursor.style.pointerEvents = 'none';
+  cursor.style.animation = 'cursor-blink 1s ease-in-out infinite';
 
   // Create label that appears above the cursor
   const label = document.createElement('div');
   label.style.position = 'absolute';
-  label.style.top = '-1.8em';
-  label.style.left = '0';
-  label.style.fontSize = '10px';
-  label.style.fontWeight = '600';
+  label.style.top = '-2em';
+  label.style.left = '-2px';
+  label.style.fontSize = '11px';
+  label.style.fontWeight = '700';
   label.style.backgroundColor = user.color;
   label.style.color = 'white';
-  label.style.padding = '2px 6px';
-  label.style.borderRadius = '3px';
+  label.style.padding = '3px 8px';
+  label.style.borderRadius = '4px';
   label.style.whiteSpace = 'nowrap';
-  label.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+  label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
   label.style.pointerEvents = 'none';
+  label.style.zIndex = '1000';
   label.textContent = user.name || 'Anonymous';
 
   cursor.appendChild(label);
