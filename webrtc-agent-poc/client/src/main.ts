@@ -1406,7 +1406,11 @@ async function main() {
         insertPos = lastParagraphEnd;
       }
 
+      // Insert text and set selection to the new cursor position
+      // This makes the cursor visible to other users via y-prosemirror awareness
       const tr = state.tr.insertText(char, insertPos);
+      const newCursorPos = insertPos + char.length;
+      tr.setSelection(TextSelection.create(tr.doc, newCursorPos));
       editor.dispatch(tr);
     };
 
