@@ -3922,9 +3922,13 @@ function setupToolbarButtons(view: EditorView) {
 
     // If menu would go below viewport, show above selection
     if (finalY + menuHeight > viewportHeight - 8) {
-      // Use selectionTop if provided, otherwise estimate based on line height
-      const topPosition = selectionTop ?? (y - menuHeight - 24); // 24px = approx line height + gap
-      finalY = topPosition - menuHeight - 8;
+      if (selectionTop !== undefined) {
+        // Position menu above the selection (8px gap)
+        finalY = selectionTop - menuHeight - 8;
+      } else {
+        // Estimate: y is typically selectionBottom + 8, so selectionTop ≈ y - 32 (line height ~24px)
+        finalY = y - menuHeight - 40;
+      }
       // Ensure it doesn't go above viewport
       if (finalY < 8) finalY = 8;
     }
