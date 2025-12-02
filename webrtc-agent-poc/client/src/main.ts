@@ -791,7 +791,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       this.updateState(newState);
 
       // Auto-scroll to keep cursor in view when document changes
-      if (tr.docChanged || tr.scrolledIntoView) {
+      if (tr.docChanged) {
         const editorContainer = document.getElementById('editor-container');
         if (editorContainer) {
           // Use requestAnimationFrame to ensure DOM is updated before scrolling
@@ -809,7 +809,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
                   const scrollAmount = cursorBottom - containerRect.bottom + 60; // 60px padding
                   editorContainer.scrollTo({
                     top: editorContainer.scrollTop + scrollAmount,
-                    behavior: 'smooth'
+                    behavior: 'auto' // Instant scroll to avoid conflicts
                   });
                 }
                 // Check if cursor is above visible area
@@ -817,7 +817,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
                   const scrollAmount = containerRect.top - cursorTop + 60;
                   editorContainer.scrollTo({
                     top: editorContainer.scrollTop - scrollAmount,
-                    behavior: 'smooth'
+                    behavior: 'auto' // Instant scroll to avoid conflicts
                   });
                 }
               }
