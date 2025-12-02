@@ -789,6 +789,44 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       // Apply transaction and update state
       const newState = this.state.apply(tr);
       this.updateState(newState);
+
+      // Auto-scroll to keep cursor in view when document changes
+      if (tr.docChanged || tr.scrolledIntoView) {
+        const editorContainer = document.getElementById('editor-container');
+        if (editorContainer) {
+          // Use requestAnimationFrame to ensure DOM is updated before scrolling
+          requestAnimationFrame(() => {
+            try {
+              const selection = newState.selection;
+              const coords = this.coordsAtPos(selection.head);
+              if (coords) {
+                const containerRect = editorContainer.getBoundingClientRect();
+                const cursorTop = coords.top;
+                const cursorBottom = coords.bottom;
+
+                // Check if cursor is below visible area
+                if (cursorBottom > containerRect.bottom - 20) {
+                  const scrollAmount = cursorBottom - containerRect.bottom + 60; // 60px padding
+                  editorContainer.scrollTo({
+                    top: editorContainer.scrollTop + scrollAmount,
+                    behavior: 'smooth'
+                  });
+                }
+                // Check if cursor is above visible area
+                else if (cursorTop < containerRect.top + 20) {
+                  const scrollAmount = containerRect.top - cursorTop + 60;
+                  editorContainer.scrollTo({
+                    top: editorContainer.scrollTop - scrollAmount,
+                    behavior: 'smooth'
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore scroll errors
+            }
+          });
+        }
+      }
     },
   });
 

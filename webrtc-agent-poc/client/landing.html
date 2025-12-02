@@ -531,31 +531,14 @@
       <div class="feature-header">
         <div class="feature-label">Location Tagging</div>
         <h2>Tag places, see them on the map</h2>
-        <p>Select any text and turn it into a geo-mark. Locations automatically appear on your embedded map.</p>
+        <p>Double-tap any text and create a geo-mark. Insert maps to visualize your locations.</p>
       </div>
       <!-- DemoPlayer mounts here -->
       <div id="maps-demo-container"></div>
     </section>
 
-    <!-- Feature 2: Real-time Collaboration -->
-    <section class="feature-section alt" id="features">
-      <div class="feature-header">
-        <div class="feature-label">Real-time Collaboration</div>
-        <h2>Write together, plan together</h2>
-        <p>See your travel companions' cursors in real-time. Every edit syncs instantly across all devices.</p>
-      </div>
-      <div class="phone-mockup">
-        <div class="phone-screen">
-          <iframe
-            src="/doc/demo-collab?hideHeader=true&autoplay=true&demo=collab"
-            loading="lazy"
-          ></iframe>
-        </div>
-      </div>
-    </section>
-
     <!-- Additional Features Grid -->
-    <section class="feature-section alt">
+    <section class="feature-section alt" id="features">
       <div class="feature-header">
         <div class="feature-label">More Features</div>
         <h2>Everything you need to plan</h2>
@@ -656,37 +639,55 @@
 
   </script>
 
-  <!-- ComposedDemoPlayer for maps demo with transition to collaboration -->
+  <!-- DemoPlayer for maps demo with dynamic second phone for collaboration -->
   <script type="module">
-    import { ComposedDemoPlayer } from './src/components/ComposedDemoPlayer.js';
+    import { DemoPlayer } from './src/components/DemoPlayer.js';
 
-    const composedDemo = new ComposedDemoPlayer({
+    const SHARE_STEP = 4; // Step index when to add second phone
+
+    // Generate unique session ID for this landing page instance
+    // This prevents ghost states when multiple tabs view the landing page
+    const sessionId = Math.random().toString(36).substring(2, 10);
+    const demoDocId = `demo-maps-${sessionId}`;
+    console.log('[Landing] Session ID:', sessionId, 'Doc ID:', demoDocId);
+
+    // Store reference for cleanup
+    let demoPlayer = null;
+
+    demoPlayer = new DemoPlayer({
       container: document.getElementById('maps-demo-container'),
-      // Single phone demo: Writing → Location Tagging → Map → Transport → Share (triggers transition)
-      singlePhoneDemo: {
-        demoScript: 'maps',
-        editorUrl: '/doc/demo-maps',
-        steps: [
-          { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
-          { label: 'Location Tagging', heading: 'Location Tagging', text: 'Places are auto-detected from text' },
-          { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
-          { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
-          { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
-        ]
-      },
-      // Dual phone collaboration demo with Y.js sync and cursor awareness
-      dualPhoneDemo: {
-        demoScript: 'collab',
-        editorUrl: '/doc/demo-collab-dual',
-        steps: [
-          { label: 'Invite', heading: 'Invite Friends', text: 'Share your trip with a link' },
-          { label: 'Live Cursors', heading: 'Live Cursors', text: 'See your friends typing in real-time' },
-          { label: 'Map Sync', heading: 'Map Sync', text: 'Maps stay synchronized across devices' }
-        ]
-      },
-      // Transition to dual phone when reaching "Share" step (index 4)
-      transitionAfterStep: 4,
+      demoScript: 'maps',
+      editorUrl: `/doc/${demoDocId}`, // Unique per session
+      sessionId: sessionId,
+      enableSync: true, // Enable Y.js sync from the start for addSecondPhone
+      steps: [
+        { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
+        { label: 'Location Tagging', heading: 'Location Tagging', text: 'Double-tap text to create geo-marks' },
+        { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
+        { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
+        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
+      ],
       autoStart: true
+    });
+
+    // Add second phone (Bob) when reaching the Share step
+    demoPlayer.onStepChange = (step) => {
+      console.log('[Landing] Step changed:', step);
+      if (step === SHARE_STEP) {
+        // Add Bob's phone after the overlay finishes
+        setTimeout(() => {
+          demoPlayer.addSecondPhone();
+        }, 2500);
+      }
+    };
+
+    // Cleanup on page unload to prevent ghost states
+    window.addEventListener('beforeunload', () => {
+      console.log('[Landing] Page unloading - destroying demo player');
+      if (demoPlayer) {
+        demoPlayer.destroy();
+        demoPlayer = null;
+      }
     });
   </script>
 </body>
