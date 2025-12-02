@@ -48,6 +48,7 @@
     }
 
     .ProseMirror h1 {
+      display: block; /* Override global h1 { display: none } */
       font-size: 1.75em;
       font-weight: 700;
       margin: 0 0 0.5em 0;
@@ -139,6 +140,30 @@
       background: transparent;
       filter: grayscale(100%);
       opacity: 0.3;
+    }
+
+    /* Format toolbar buttons (H1, H2, P) */
+    .format-toolbar {
+      margin-left: 8px;
+      border-left: 1px solid #ddd;
+      padding-left: 8px;
+    }
+    .format-btn {
+      min-width: 32px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .format-btn .format-label {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .format-btn.active,
+    body.show-toolbar header .format-toolbar .format-btn.active {
+      background: rgba(59, 130, 246, 0.4) !important;
+      color: #3b82f6 !important;
+      transform: scale(0.95);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+      filter: grayscale(0) !important;
+      opacity: 1 !important;
     }
 
     /* Demo click animation for autoplay */
@@ -351,6 +376,84 @@
     }
     body.autoplay-mode .ProseMirror {
       padding: 8px 4px !important;
+    }
+
+    /* Compact toolbar mode - shows format buttons and avatars */
+    body.show-toolbar header {
+      padding: 6px 12px !important;
+      margin-bottom: 0 !important;
+      box-shadow: none !important;
+      border-bottom: 1px solid #eee;
+      min-height: auto !important;
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+    }
+    body.show-toolbar header h1,
+    body.show-toolbar header #mode-indicator,
+    body.show-toolbar header #doc-info,
+    body.show-toolbar header #status,
+    body.show-toolbar header .toolbar:not(.format-toolbar),
+    body.show-toolbar header .spacer {
+      display: none !important;
+    }
+    body.show-toolbar header .format-toolbar {
+      display: flex !important;
+      margin-left: 0;
+      border-left: none;
+      padding-left: 0;
+      gap: 2px;
+    }
+    body.show-toolbar header .format-toolbar .format-btn {
+      padding: 4px 8px;
+      min-width: 28px;
+      height: 28px;
+      font-size: 11px;
+    }
+    body.show-toolbar header #avatars {
+      display: flex !important;
+      margin-left: auto;
+    }
+    body.show-toolbar #app {
+      padding: 0 !important;
+    }
+    body.show-toolbar #editor-container {
+      padding: 12px !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    /* Remote cursor for collaboration demo */
+    .remote-cursor {
+      position: absolute;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .remote-cursor-caret {
+      width: 2px;
+      height: 18px;
+      border-radius: 1px;
+      animation: cursor-blink 1s ease-in-out infinite;
+    }
+
+    @keyframes cursor-blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.3; }
+    }
+
+    .remote-cursor-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      margin-top: -2px;
     }
 
     /* Fullscreen Map Overlay */
@@ -826,6 +929,12 @@
     if (params.get('hideHeader') === 'true') {
       document.body.classList.add('hide-header');
     }
+    // showToolbar shows compact header with only avatars (for demo phone frames)
+    if (params.get('showToolbar') === 'true') {
+      document.body.classList.add('show-toolbar');
+      document.body.classList.add('autoplay-mode'); // Also apply autoplay styles
+      document.documentElement.classList.add('autoplay-mode');
+    }
     if (params.get('autoplay') === 'true') {
       document.body.classList.add('autoplay-mode');
       document.documentElement.classList.add('autoplay-mode');
@@ -921,6 +1030,17 @@
             <polygon points="23 7 16 12 23 17 23 7"></polygon>
             <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
           </svg>
+        </button>
+      </div>
+      <div class="toolbar format-toolbar">
+        <button id="heading1-btn" class="format-btn" aria-label="Heading 1" title="Heading 1">
+          <span class="format-label">H1</span>
+        </button>
+        <button id="heading2-btn" class="format-btn" aria-label="Heading 2" title="Heading 2">
+          <span class="format-label">H2</span>
+        </button>
+        <button id="paragraph-btn" class="format-btn" aria-label="Paragraph" title="Paragraph">
+          <span class="format-label">P</span>
         </button>
       </div>
       <div class="spacer"></div>
