@@ -558,6 +558,27 @@ function animateBoundsOverlay(clientId, oldBounds, newBounds, duration = 300) {
 3. **Period Detection** - Agent period trigger not hooked up yet
 4. **CORS Issues** - Browser-based LLM calls may need proxy
 
+## Troubleshooting / Bug Fixes
+
+### H1 Headings Converting to Paragraphs (Fixed)
+
+**Symptom:** Clicking H1 button creates a heading, but typing text causes it to revert to a paragraph. H2 works correctly.
+
+**Root Cause:** The global CSS rule `h1 { display: none; }` (used to hide the page header h1) was affecting H1 elements inside the ProseMirror editor. The `.ProseMirror h1` selector had styling but didn't override `display`, so editor H1s were hidden. When typing into a hidden element, ProseMirror created a new paragraph instead.
+
+**Fix:** Added `display: block;` to `.ProseMirror h1` in `client/index.html`:
+```css
+.ProseMirror h1 {
+  display: block; /* Override global h1 { display: none } */
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 0 0 0.5em 0;
+  color: #333;
+}
+```
+
+**Lesson:** Always check for global CSS rules that might affect elements inside the editor. When hiding elements globally (like `h1 { display: none }`), ensure editor-specific selectors explicitly override with `display: block`.
+
 ## Next Steps
 
 1. ~~**Implement Phase 1-4**~~ ✅ Done - y-webrtc sync working
