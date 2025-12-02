@@ -2240,11 +2240,16 @@ async function main() {
         if (x < 8) x = 8;
         if (x + menuWidth > window.innerWidth - 8) x = window.innerWidth - menuWidth - 8;
 
+        // Get selectionTop for smart positioning
+        const selectionTop = hasSelection
+          ? editor.coordsAtPos(from)?.top
+          : editor.coordsAtPos(from)?.top;
+
         // Show the context menu
         const showFn = (window as any).showTextSelectionContextMenu;
         if (showFn) {
-          showFn(x, y, hasSelection);
-          console.log(`[AutoplayDemo] Showed context menu ${position} ${hasSelection ? 'selection' : 'cursor'} at (${x}, ${y})`);
+          showFn(x, y, hasSelection, selectionTop);
+          console.log(`[AutoplayDemo] Showed context menu ${position} ${hasSelection ? 'selection' : 'cursor'} at (${x}, ${y}), selectionTop: ${selectionTop}`);
         } else {
           console.warn('[AutoplayDemo] showTextSelectionContextMenu not available');
         }
