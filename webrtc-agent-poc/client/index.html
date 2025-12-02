@@ -97,6 +97,32 @@
       align-items: center;
     }
 
+    /* Mobile: Hide format buttons until text is selected */
+    @media (max-width: 768px) {
+      /* In show-toolbar mode, hide format buttons by default */
+      body.show-toolbar header .format-toolbar .format-btn {
+        display: none;
+      }
+      /* Show format buttons when text is selected */
+      body.show-toolbar.has-selection header .format-toolbar .format-btn {
+        display: flex;
+      }
+      /* Keep avatars visible */
+      body.show-toolbar header #avatars {
+        display: flex !important;
+      }
+      /* Hide header in normal mode (not show-toolbar) */
+      body:not(.show-toolbar) header {
+        display: none !important;
+      }
+      body:not(.show-toolbar) #app {
+        padding-top: 10px;
+      }
+      body:not(.show-toolbar) #mobile-action-bar {
+        top: 0;
+      }
+    }
+
     .toolbar button {
       width: 40px;
       height: 40px;
@@ -284,63 +310,90 @@
       background: #e8e8e8;
     }
 
-    /* Text Selection Context Menu */
-    #text-selection-context-menu {
-      position: fixed;
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      padding: 4px;
-      min-width: 160px;
-      z-index: 2000;
-      display: none;
-      opacity: 0;
-      transform: translateY(-4px);
-      transition: opacity 0.15s ease, transform 0.15s ease;
+    /* iOS Safari: Suppress native callout menu */
+    @supports (-webkit-touch-callout: none) {
+      .ProseMirror {
+        -webkit-touch-callout: none;
+        -webkit-user-select: text;
+        user-select: text;
+      }
     }
 
-    #text-selection-context-menu.visible {
-      display: block;
+    /* Mobile Action Bar - Fixed at bottom for touch devices */
+    #mobile-action-bar {
+      display: none; /* Hidden by default, shown via JS on touch devices */
+      position: fixed;
+      top: 64px; /* Below the sticky header */
+      left: 0;
+      right: 0;
+      z-index: 999; /* Below header (1000) */
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 8px 16px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: opacity 0.2s ease-out, transform 0.2s ease-out, visibility 0.2s;
+    }
+
+    #mobile-action-bar.visible {
       opacity: 1;
+      visibility: visible;
       transform: translateY(0);
     }
 
-    #text-selection-context-menu button {
+    .mobile-action-bar-content {
       display: flex;
-      align-items: center;
+      justify-content: space-around;
       gap: 8px;
-      width: 100%;
-      padding: 10px 12px;
-      border: none;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .mobile-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 12px;
       background: transparent;
-      cursor: pointer;
-      border-radius: 6px;
-      font-size: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 10px;
       color: #333;
-      text-align: left;
+      cursor: pointer;
+      min-width: 60px;
+      touch-action: manipulation;
+      transition: all 0.15s ease;
     }
 
-    #text-selection-context-menu button:hover {
-      background: #f3f4f6;
+    .mobile-action-btn svg {
+      color: #555;
+      transition: color 0.15s ease;
     }
 
-    #text-selection-context-menu button:active {
-      background: #e5e7eb;
+    .mobile-action-btn .label {
+      font-weight: 500;
+      color: #666;
     }
 
-    #text-selection-context-menu button .icon {
-      font-size: 16px;
-      min-width: 24px;
-      text-align: center;
-      font-weight: 700;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    .mobile-action-btn:active {
+      background: rgba(0, 0, 0, 0.05);
     }
 
-    #text-selection-context-menu .context-menu-divider {
-      height: 1px;
-      background: #e5e7eb;
-      margin: 4px 8px;
+    .mobile-action-btn:active svg {
+      color: #007AFF;
+    }
+
+    .mobile-action-btn .icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .mobile-action-btn .label {
+      font-weight: 500;
     }
 
     /* Ensure ProseMirror has proper white-space handling */
@@ -569,6 +622,13 @@
     #fullscreen-map {
       width: 100vw;
       height: 100vh;
+      /* Style transition effect - crossfade between map styles */
+      opacity: 1;
+      transition: opacity 300ms ease-out;
+    }
+
+    #fullscreen-map.style-transitioning {
+      opacity: 0;
     }
 
     .close-btn {
@@ -1175,8 +1235,18 @@
         <button id="heading2-btn" class="format-btn" aria-label="Heading 2" title="Heading 2">
           <span class="format-label">H2</span>
         </button>
-        <button id="paragraph-btn" class="format-btn" aria-label="Paragraph" title="Paragraph">
-          <span class="format-label">P</span>
+        <button id="format-geomark-btn" class="format-btn" aria-label="Create Geo Mark" title="Create Geo Mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </button>
+        <button id="format-map-btn" class="format-btn" aria-label="Insert Map" title="Insert Map">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+            <line x1="8" y1="2" x2="8" y2="18"></line>
+            <line x1="16" y1="6" x2="16" y2="22"></line>
+          </svg>
         </button>
       </div>
       <div class="spacer"></div>
@@ -1227,24 +1297,43 @@
     <button id="follow-user-btn">Follow</button>
   </div>
 
-  <!-- Text Selection Context Menu (hidden by default) -->
-  <div id="text-selection-context-menu">
-    <button id="context-heading1-btn">
-      <span class="icon">H1</span> Heading 1
-    </button>
-    <button id="context-heading2-btn">
-      <span class="icon">H2</span> Heading 2
-    </button>
-    <button id="context-paragraph-btn">
-      <span class="icon">P</span> Paragraph
-    </button>
-    <div class="context-menu-divider"></div>
-    <button id="context-geomark-btn">
-      <span class="icon">📍</span> Create Geo Mark
-    </button>
-    <button id="context-map-btn">
-      <span class="icon">🗺️</span> Insert Map
-    </button>
+  <!-- Mobile Selection Action Bar (fixed at bottom for touch devices) -->
+  <div id="mobile-action-bar">
+    <div class="mobile-action-bar-content">
+      <button id="mobile-geomark-btn" class="mobile-action-btn" aria-label="Create Geo Mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+        <span class="label">Geo Mark</span>
+      </button>
+      <button id="mobile-map-btn" class="mobile-action-btn" aria-label="Insert Map">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+          <line x1="8" y1="2" x2="8" y2="18"></line>
+          <line x1="16" y1="6" x2="16" y2="22"></line>
+        </svg>
+        <span class="label">Map</span>
+      </button>
+      <button id="mobile-h1-btn" class="mobile-action-btn" aria-label="Heading 1">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h8"></path>
+          <path d="M4 6v12"></path>
+          <path d="M12 6v12"></path>
+          <path d="M17 12l3-2v8"></path>
+        </svg>
+        <span class="label">H1</span>
+      </button>
+      <button id="mobile-h2-btn" class="mobile-action-btn" aria-label="Heading 2">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h8"></path>
+          <path d="M4 6v12"></path>
+          <path d="M12 6v12"></path>
+          <path d="M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1"></path>
+        </svg>
+        <span class="label">H2</span>
+      </button>
+    </div>
   </div>
 
   <!-- Video Chat Container (hidden by default) -->

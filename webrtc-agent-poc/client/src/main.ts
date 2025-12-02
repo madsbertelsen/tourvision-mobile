@@ -2191,67 +2191,17 @@ async function main() {
       });
     };
 
-    // Wire up context menu show (show at current selection or cursor position)
-    player.onShowContextMenu = (position: 'above' | 'below') => {
+    // Wire up context menu show (show toolbar buttons when text is selected)
+    player.onShowContextMenu = (_position: 'above' | 'below') => {
       return new Promise<void>((resolve) => {
         const { state } = editor;
         const { from, to } = state.selection;
         const hasSelection = from !== to;
 
-        // Get coordinates for positioning
-        let x: number, y: number;
-        const menuWidth = 160;
-
+        // Add has-selection class to show toolbar buttons
         if (hasSelection) {
-          // Position relative to selection
-          const startCoords = editor.coordsAtPos(from);
-          const endCoords = editor.coordsAtPos(to);
-
-          if (!startCoords || !endCoords) {
-            console.warn('[AutoplayDemo] Could not get selection coordinates');
-            resolve();
-            return;
-          }
-
-          x = (startCoords.left + endCoords.right) / 2 - menuWidth / 2;
-          if (position === 'above') {
-            y = startCoords.top - 96;
-          } else {
-            y = endCoords.bottom + 8;
-          }
-        } else {
-          // Position relative to cursor
-          const cursorCoords = editor.coordsAtPos(from);
-          if (!cursorCoords) {
-            console.warn('[AutoplayDemo] Could not get cursor coordinates');
-            resolve();
-            return;
-          }
-
-          x = cursorCoords.left - menuWidth / 2;
-          if (position === 'above') {
-            y = cursorCoords.top - 56; // Smaller menu (only Insert Map)
-          } else {
-            y = cursorCoords.bottom + 8;
-          }
-        }
-
-        // Ensure within viewport
-        if (x < 8) x = 8;
-        if (x + menuWidth > window.innerWidth - 8) x = window.innerWidth - menuWidth - 8;
-
-        // Get selectionTop for smart positioning
-        const selectionTop = hasSelection
-          ? editor.coordsAtPos(from)?.top
-          : editor.coordsAtPos(from)?.top;
-
-        // Show the context menu
-        const showFn = (window as any).showTextSelectionContextMenu;
-        if (showFn) {
-          showFn(x, y, hasSelection, selectionTop);
-          console.log(`[AutoplayDemo] Showed context menu ${position} ${hasSelection ? 'selection' : 'cursor'} at (${x}, ${y}), selectionTop: ${selectionTop}`);
-        } else {
-          console.warn('[AutoplayDemo] showTextSelectionContextMenu not available');
+          document.body.classList.add('has-selection');
+          console.log('[AutoplayDemo] Showed toolbar buttons (has-selection class added)');
         }
 
         // Brief pause for visual effect
@@ -2259,25 +2209,23 @@ async function main() {
       });
     };
 
-    // Wire up context menu item tap (finger animation + execute action)
+    // Wire up toolbar item tap (finger animation + execute action)
     player.onTapContextMenuItem = (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph') => {
       return new Promise<void>(async (resolve) => {
         const finger = document.getElementById('demo-finger');
-        const contextMenu = (window as any).getTextSelectionContextMenu?.();
 
-        // Map item to button ID
+        // Map item to new toolbar button IDs
         const buttonIdMap: Record<string, string> = {
-          'geomark': 'context-geomark-btn',
-          'map': 'context-map-btn',
-          'h1': 'context-heading1-btn',
-          'h2': 'context-heading2-btn',
-          'paragraph': 'context-paragraph-btn'
+          'geomark': 'format-geomark-btn',
+          'map': 'format-map-btn',
+          'h1': 'heading1-btn',
+          'h2': 'heading2-btn'
         };
-        const buttonId = buttonIdMap[item] || 'context-geomark-btn';
-        const button = document.getElementById(buttonId);
+        const buttonId = buttonIdMap[item];
+        const button = buttonId ? document.getElementById(buttonId) : null;
 
-        if (!finger || !contextMenu || !button) {
-          console.warn(`[AutoplayDemo] Context menu tap failed - finger: ${!!finger}, menu: ${!!contextMenu}, button: ${!!button}`);
+        if (!finger || !button) {
+          console.warn(`[AutoplayDemo] Toolbar tap failed - finger: ${!!finger}, button: ${!!button}, item: ${item}`);
           resolve();
           return;
         }
@@ -2307,10 +2255,6 @@ async function main() {
         // Release tap
         finger.classList.remove('tapping');
 
-        // Hide menu and execute action
-        const hideFn = (window as any).hideTextSelectionContextMenu;
-        if (hideFn) hideFn();
-
         // Clean up selection UI
         hideSelectionHandles();
         document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
@@ -2319,9 +2263,9 @@ async function main() {
         button.style.background = '';
 
         // Execute the actual action by clicking the button
-        if (button) button.click();
+        button.click();
 
-        console.log(`[AutoplayDemo] Tapped context menu item: ${item}`);
+        console.log(`[AutoplayDemo] Tapped toolbar button: ${item}`);
 
         // Brief pause before continuing
         setTimeout(resolve, 300);
@@ -3685,10 +3629,11 @@ function setupToolbarButtons(view: EditorView) {
     });
   }
 
-  // Format toolbar button handlers (H1, H2, P)
+  // Format toolbar button handlers (H1, H2, Geo Mark, Map)
   const heading1Btn = document.getElementById('heading1-btn');
   const heading2Btn = document.getElementById('heading2-btn');
-  const paragraphBtn = document.getElementById('paragraph-btn');
+  const formatGeoMarkBtn = document.getElementById('format-geomark-btn');
+  const formatMapBtn = document.getElementById('format-map-btn');
 
   const setBlockType = (nodeType: string, attrs?: Record<string, unknown>) => {
     const { state, dispatch } = view;
@@ -3723,6 +3668,13 @@ function setupToolbarButtons(view: EditorView) {
       return;
     }
 
+    // In show-toolbar mode (mobile demo), don't show active states on format buttons
+    if (document.body.classList.contains('show-toolbar')) {
+      heading1Btn?.classList.remove('active');
+      heading2Btn?.classList.remove('active');
+      return;
+    }
+
     const { state } = view;
     const { $from } = state.selection;
     const parentNode = $from.parent;
@@ -3733,7 +3685,6 @@ function setupToolbarButtons(view: EditorView) {
     // Remove active class from all format buttons
     heading1Btn?.classList.remove('active');
     heading2Btn?.classList.remove('active');
-    paragraphBtn?.classList.remove('active');
 
     // Add active class to current block type
     if (nodeName === 'heading') {
@@ -3745,9 +3696,6 @@ function setupToolbarButtons(view: EditorView) {
         heading2Btn?.classList.add('active');
         console.log('[updateFormatButtonStates] Set H2 as active');
       }
-    } else if (nodeName === 'paragraph') {
-      paragraphBtn?.classList.add('active');
-      console.log('[updateFormatButtonStates] Set P as active');
     }
   };
 
@@ -3772,10 +3720,15 @@ function setupToolbarButtons(view: EditorView) {
     });
   }
 
-  if (paragraphBtn) {
-    paragraphBtn.addEventListener('click', () => {
-      setBlockType('paragraph');
-      updateFormatButtonStates();
+  if (formatGeoMarkBtn) {
+    formatGeoMarkBtn.addEventListener('click', () => {
+      createGeoMark(view);
+    });
+  }
+
+  if (formatMapBtn) {
+    formatMapBtn.addEventListener('click', () => {
+      insertMap(view);
     });
   }
 
@@ -3891,218 +3844,119 @@ function setupToolbarButtons(view: EditorView) {
     }
   });
 
-  // === Text Selection Context Menu ===
-  const textSelectionContextMenu = document.getElementById('text-selection-context-menu');
-  const contextGeoMarkBtn = document.getElementById('context-geomark-btn');
-  const contextMapBtn = document.getElementById('context-map-btn');
-  const contextHeading1Btn = document.getElementById('context-heading1-btn');
-  const contextHeading2Btn = document.getElementById('context-heading2-btn');
-  const contextParagraphBtn = document.getElementById('context-paragraph-btn');
-  let contextMenuDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // === Mobile/Touch Selection Handling ===
 
-  const showTextSelectionContextMenu = (x: number, y: number, hasSelection: boolean = true, selectionTop?: number) => {
-    if (!textSelectionContextMenu) return;
+  // Mobile Action Bar (fixed at bottom for touch devices)
+  const mobileActionBar = document.getElementById('mobile-action-bar');
+  const mobileGeoMarkBtn = document.getElementById('mobile-geomark-btn');
+  const mobileMapBtn = document.getElementById('mobile-map-btn');
+  const mobileH1Btn = document.getElementById('mobile-h1-btn');
+  const mobileH2Btn = document.getElementById('mobile-h2-btn');
 
-    // Show/hide geomark button based on selection
-    if (contextGeoMarkBtn) {
-      (contextGeoMarkBtn as HTMLElement).style.display = hasSelection ? 'flex' : 'none';
-    }
+  // iOS detection for touch-optimized behavior
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || isIOS;
+  const isMobile = window.innerWidth <= 768 || isTouchDevice;
+  console.log('[Selection] iOS:', isIOS, 'Touch device:', isTouchDevice, 'Mobile:', isMobile, 'Width:', window.innerWidth);
 
-    // Temporarily show menu off-screen to measure its height
-    textSelectionContextMenu.style.left = '-9999px';
-    textSelectionContextMenu.style.top = '-9999px';
-    textSelectionContextMenu.style.display = 'block';
-    const menuHeight = textSelectionContextMenu.offsetHeight;
-    const menuWidth = textSelectionContextMenu.offsetWidth;
+  // Enable mobile action bar on touch devices or narrow screens
+  if (isMobile && mobileActionBar) {
+    mobileActionBar.style.display = 'block';
+    console.log('[MobileActionBar] Enabled for mobile/touch device');
+  }
 
-    // Smart positioning - check if menu would overflow viewport
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
-    let finalX = x;
-    let finalY = y;
-
-    // Horizontal bounds
-    if (finalX < 8) finalX = 8;
-    if (finalX + menuWidth > viewportWidth - 8) finalX = viewportWidth - menuWidth - 8;
-
-    // If menu would go below viewport, show above selection
-    if (finalY + menuHeight > viewportHeight - 8) {
-      if (selectionTop !== undefined) {
-        // Position menu above the selection (8px gap)
-        finalY = selectionTop - menuHeight - 8;
-      } else {
-        // Estimate: y is typically selectionBottom + 8, so selectionTop ≈ y - 32 (line height ~24px)
-        finalY = y - menuHeight - 40;
-      }
-      // Ensure it doesn't go above viewport
-      if (finalY < 8) finalY = 8;
-    }
-
-    // Position the menu
-    textSelectionContextMenu.style.left = `${finalX}px`;
-    textSelectionContextMenu.style.top = `${finalY}px`;
-
-    // Force reflow to enable transition
-    textSelectionContextMenu.offsetHeight;
-    textSelectionContextMenu.classList.add('visible');
-
-    console.log('[ContextMenu] Showing at', finalX, finalY, 'hasSelection:', hasSelection, 'requested:', x, y);
+  // Mobile Action Bar show/hide
+  const showMobileActionBar = () => {
+    if (!mobileActionBar || !isTouchDevice) return;
+    mobileActionBar.classList.add('visible');
+    document.body.classList.add('has-selection');
+    console.log('[MobileActionBar] Shown');
   };
 
-  const hideTextSelectionContextMenu = () => {
-    if (!textSelectionContextMenu) return;
-
-    textSelectionContextMenu.classList.remove('visible');
-    // Hide after transition completes
-    setTimeout(() => {
-      if (!textSelectionContextMenu.classList.contains('visible')) {
-        textSelectionContextMenu.style.display = 'none';
-      }
-    }, 150);
-
-    console.log('[ContextMenu] Hidden');
+  const hideMobileActionBar = () => {
+    if (!mobileActionBar) return;
+    mobileActionBar.classList.remove('visible');
+    document.body.classList.remove('has-selection');
+    console.log('[MobileActionBar] Hidden');
   };
 
-  // Check selection and show/hide context menu
-  const checkSelectionForContextMenu = () => {
-    // Clear any pending debounce
-    if (contextMenuDebounceTimer) {
-      clearTimeout(contextMenuDebounceTimer);
-      contextMenuDebounceTimer = null;
-    }
-
-    const { state } = view;
-    const { from, to } = state.selection;
-    const hasSelection = from !== to;
-
-    if (!hasSelection) {
-      hideTextSelectionContextMenu();
-      return;
-    }
-
-    // Debounce to avoid flicker during rapid selection changes
-    contextMenuDebounceTimer = setTimeout(() => {
-      // Re-check selection (may have changed during debounce)
-      const currentState = view.state;
-      const currentFrom = currentState.selection.from;
-      const currentTo = currentState.selection.to;
-      if (currentFrom === currentTo) {
-        hideTextSelectionContextMenu();
+  // iOS/Touch/Mobile: Use selectionchange event which works better on mobile
+  // IMPORTANT: On mobile, we show the action bar based on DOM selection directly,
+  // not ProseMirror's selection state which may not be synced yet
+  if (isMobile) {
+    document.addEventListener('selectionchange', () => {
+      // Only process if selection is within our editor
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        hideMobileActionBar();
+        document.body.classList.remove('has-selection'); // Also toggle for show-toolbar mode
+        console.log('[MobileActionBar] selectionchange: No selection or collapsed');
         return;
       }
 
-      // Get position for the menu (below selection, centered)
-      const startCoords = view.coordsAtPos(currentFrom);
-      const endCoords = view.coordsAtPos(currentTo);
-      const menuWidth = 160; // min-width from CSS
-      const x = endCoords.left - menuWidth / 2;
-      const y = endCoords.bottom + 8; // 8px below selection
+      // Check if selection is within the editor
+      try {
+        const range = selection.getRangeAt(0);
+        if (!view.dom.contains(range.commonAncestorContainer)) {
+          console.log('[MobileActionBar] selectionchange: Selection outside editor');
+          return;
+        }
+        // DOM selection is valid and within editor - show the bar directly
+        // Don't wait for ProseMirror sync, the DOM selection is the source of truth
+        console.log('[MobileActionBar] selectionchange: Valid selection in editor, showing bar');
+        document.body.classList.add('has-selection'); // Also toggle for show-toolbar mode
+        showMobileActionBar();
+      } catch (e) {
+        console.log('[MobileActionBar] selectionchange: Error getting range', e);
+        return;
+      }
+    });
+    console.log('[ContextMenu] Added selectionchange listener for mobile device');
+  }
 
-      // Pass selectionTop so menu can flip above if needed
-      showTextSelectionContextMenu(x, y, true, startCoords.top);
-    }, 300); // 300ms debounce
+  // Mobile Action Bar button handlers
+  // Helper to add both click and touchend handlers (touchend is faster on mobile)
+  const addButtonHandler = (btn: HTMLElement | null, handler: () => void | Promise<void>) => {
+    if (!btn) return;
+
+    // Click handler for desktop
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handler();
+    });
+
+    // Touchend handler for mobile (faster than click)
+    if (isTouchDevice) {
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handler();
+      }, { passive: false });
+    }
   };
 
-  // Listen for selection changes
-  view.dom.addEventListener('mouseup', checkSelectionForContextMenu);
-  view.dom.addEventListener('keyup', (e) => {
-    // Only check on arrow keys or shift combinations that might change selection
-    if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-      checkSelectionForContextMenu();
-    }
+  addButtonHandler(mobileGeoMarkBtn, async () => {
+    hideMobileActionBar();
+    await createGeoMark(view);
   });
 
-  // Double-click handler for empty lines (shows "Insert Map" only)
-  view.dom.addEventListener('dblclick', (e) => {
-    // Clear any pending debounce from selection
-    if (contextMenuDebounceTimer) {
-      clearTimeout(contextMenuDebounceTimer);
-      contextMenuDebounceTimer = null;
-    }
-
-    const { state } = view;
-    const { from, to } = state.selection;
-    const hasSelection = from !== to;
-
-    // If text was selected by double-click, the mouseup handler will handle it
-    if (hasSelection) return;
-
-    // No selection - show context menu with only "Insert Map"
-    const coords = view.coordsAtPos(from);
-    if (!coords) return;
-
-    const menuWidth = 160;
-    const x = coords.left - menuWidth / 2;
-    const y = coords.bottom + 8;
-
-    // Pass coords.top as selectionTop so menu can flip above if needed
-    showTextSelectionContextMenu(x, y, false, coords.top);
-    console.log('[ContextMenu] Double-click on empty line, showing Insert Map only');
+  addButtonHandler(mobileMapBtn, async () => {
+    hideMobileActionBar();
+    await insertMapWithAutoGeoMark(view);
   });
 
-  // Dismiss on click outside
-  document.addEventListener('click', (e) => {
-    if (!textSelectionContextMenu) return;
-    const target = e.target as HTMLElement;
-
-    // Don't dismiss if clicking inside the menu or the editor
-    if (textSelectionContextMenu.contains(target)) return;
-    if (view.dom.contains(target)) return;
-
-    hideTextSelectionContextMenu();
+  addButtonHandler(mobileH1Btn, () => {
+    hideMobileActionBar();
+    setBlockType('heading', { level: 1 });
+    view.focus();
   });
 
-  // Dismiss on Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      hideTextSelectionContextMenu();
-    }
+  addButtonHandler(mobileH2Btn, () => {
+    hideMobileActionBar();
+    setBlockType('heading', { level: 2 });
+    view.focus();
   });
-
-  // Context menu button handlers
-  if (contextGeoMarkBtn) {
-    contextGeoMarkBtn.addEventListener('click', async () => {
-      hideTextSelectionContextMenu();
-      await createGeoMark(view);
-    });
-  }
-
-  if (contextMapBtn) {
-    contextMapBtn.addEventListener('click', async () => {
-      hideTextSelectionContextMenu();
-      await insertMapWithAutoGeoMark(view);
-    });
-  }
-
-  // Heading context menu button handlers
-  if (contextHeading1Btn) {
-    contextHeading1Btn.addEventListener('click', () => {
-      hideTextSelectionContextMenu();
-      setBlockType('heading', { level: 1 });
-      view.focus();
-    });
-  }
-
-  if (contextHeading2Btn) {
-    contextHeading2Btn.addEventListener('click', () => {
-      hideTextSelectionContextMenu();
-      setBlockType('heading', { level: 2 });
-      view.focus();
-    });
-  }
-
-  if (contextParagraphBtn) {
-    contextParagraphBtn.addEventListener('click', () => {
-      hideTextSelectionContextMenu();
-      setBlockType('paragraph');
-      view.focus();
-    });
-  }
-
-  // Expose context menu functions globally for demo system
-  (window as any).showTextSelectionContextMenu = showTextSelectionContextMenu;
-  (window as any).hideTextSelectionContextMenu = hideTextSelectionContextMenu;
-  (window as any).getTextSelectionContextMenu = () => textSelectionContextMenu;
 
   console.log('[Main] Toolbar buttons set up');
 }
