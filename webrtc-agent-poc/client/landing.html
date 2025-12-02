@@ -656,22 +656,37 @@
 
   </script>
 
-  <!-- DemoPlayer for maps demo -->
+  <!-- ComposedDemoPlayer for maps demo with transition to collaboration -->
   <script type="module">
-    import { DemoPlayer } from './src/components/DemoPlayer.js';
+    import { ComposedDemoPlayer } from './src/components/ComposedDemoPlayer.js';
 
-    const mapsDemo = new DemoPlayer({
+    const composedDemo = new ComposedDemoPlayer({
       container: document.getElementById('maps-demo-container'),
-      demoScript: 'maps',
-      editorUrl: '/doc/demo-maps',
-      autoStart: true,
-      steps: [
-        { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
-        { label: 'Location Tagging', heading: 'Location Tagging', text: 'Places are auto-detected from text' },
-        { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
-        { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
-        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
-      ]
+      // Single phone demo: Writing → Location Tagging → Map → Transport → Share (triggers transition)
+      singlePhoneDemo: {
+        demoScript: 'maps',
+        editorUrl: '/doc/demo-maps',
+        steps: [
+          { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
+          { label: 'Location Tagging', heading: 'Location Tagging', text: 'Places are auto-detected from text' },
+          { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
+          { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
+          { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
+        ]
+      },
+      // Dual phone collaboration demo with Y.js sync and cursor awareness
+      dualPhoneDemo: {
+        demoScript: 'collab',
+        editorUrl: '/doc/demo-collab-dual',
+        steps: [
+          { label: 'Invite', heading: 'Invite Friends', text: 'Share your trip with a link' },
+          { label: 'Live Cursors', heading: 'Live Cursors', text: 'See your friends typing in real-time' },
+          { label: 'Map Sync', heading: 'Map Sync', text: 'Maps stay synchronized across devices' }
+        ]
+      },
+      // Transition to dual phone when reaching "Share" step (index 4)
+      transitionAfterStep: 4,
+      autoStart: true
     });
   </script>
 </body>
