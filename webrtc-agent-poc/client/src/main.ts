@@ -3455,6 +3455,31 @@ function insertMapNode(view: EditorView, position?: number) {
   view.dispatch(tr);
 
   console.log('[Main] Inserted map block at position:', insertPos);
+
+  // Scroll to show the inserted map
+  const editorContainer = document.getElementById('editor-container');
+  if (editorContainer) {
+    requestAnimationFrame(() => {
+      try {
+        // Get coordinates of the inserted map position
+        const coords = view.coordsAtPos(insertPos);
+        if (coords) {
+          const containerRect = editorContainer.getBoundingClientRect();
+          // If the map (400px height) extends below visible area, scroll down
+          const mapBottom = coords.top + 400;
+          if (mapBottom > containerRect.bottom - 20) {
+            const scrollAmount = mapBottom - containerRect.bottom + 60;
+            editorContainer.scrollTo({
+              top: editorContainer.scrollTop + scrollAmount,
+              behavior: 'smooth'
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore scroll errors
+      }
+    });
+  }
 }
 
 /**
