@@ -400,18 +400,22 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* Hide scrollbar in autoplay mode (for landing page iframe demos) */
+    /* Hide scrollbar in autoplay/show-toolbar modes (for landing page iframe demos) */
     html.autoplay-mode,
     html.autoplay-mode body,
     body.autoplay-mode,
-    body.autoplay-mode * {
+    body.autoplay-mode *,
+    body.show-toolbar,
+    body.show-toolbar * {
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
     html.autoplay-mode::-webkit-scrollbar,
     html.autoplay-mode *::-webkit-scrollbar,
     body.autoplay-mode::-webkit-scrollbar,
-    body.autoplay-mode *::-webkit-scrollbar {
+    body.autoplay-mode *::-webkit-scrollbar,
+    body.show-toolbar::-webkit-scrollbar,
+    body.show-toolbar *::-webkit-scrollbar {
       display: none;
     }
 
@@ -424,6 +428,9 @@
       border: none !important;
       border-radius: 0 !important;
       box-shadow: none !important;
+      /* Enable scrolling within iframe demos */
+      overflow-y: auto;
+      max-height: calc(100vh - 50px); /* Account for toolbar */
     }
     body.autoplay-mode header {
       padding: 8px 12px !important;
@@ -482,6 +489,9 @@
       border: none !important;
       border-radius: 0 !important;
       box-shadow: none !important;
+      /* Enable scrolling within iframe demos */
+      overflow-y: auto;
+      max-height: calc(100vh - 50px); /* Account for toolbar */
     }
 
     /* Remote cursor for collaboration demo */
