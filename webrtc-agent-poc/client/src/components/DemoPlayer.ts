@@ -67,6 +67,7 @@ export class DemoPlayer {
   private tabsContainer: HTMLElement | null = null;
   private overlayContainer: HTMLElement | null = null;
   private phoneScreen: HTMLElement | null = null;
+  private commentDismissTimer: ReturnType<typeof setTimeout> | null = null;
   private playerFrame: HTMLElement | null = null;
   private hasSecondPhone: boolean = false;
   private messageHandler: ((event: MessageEvent) => void) | null = null;
@@ -161,7 +162,7 @@ export class DemoPlayer {
         // Single phone with sync enabled (for later addSecondPhone)
         syncParams = `&enableSync=true&demoUser=1`;
       }
-      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${syncParams}`;
+      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true${syncParams}`;
       iframe.setAttribute('frameborder', '0');
       iframe.setAttribute('allowfullscreen', 'true');
 
@@ -214,6 +215,11 @@ export class DemoPlayer {
         <div class="comment-text"></div>
       </div>
     `;
+
+    // Add click handler to dismiss overlay and resume playback
+    this.overlayContainer.addEventListener('click', () => {
+      this.hideComment();
+    });
 
     // Create player content wrapper (frame + overlay)
     const playerContent = document.createElement('div');
@@ -339,14 +345,13 @@ export class DemoPlayer {
 
       .comment-overlay {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 8px;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.3s ease-in-out;
@@ -356,17 +361,21 @@ export class DemoPlayer {
 
       .comment-overlay.visible {
         opacity: 1;
+        pointer-events: auto;
+        cursor: pointer;
       }
 
       .comment-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
         text-align: center;
-        color: white;
-        padding: 40px 32px;
+        padding: 20px;
       }
 
       .comment-icon {
-        margin-bottom: 24px;
-        opacity: 0.7;
+        display: none;
       }
 
       .comment-icon svg {
@@ -375,20 +384,16 @@ export class DemoPlayer {
       }
 
       .comment-heading {
-        font-size: 36px;
-        font-weight: 700;
-        margin-bottom: 12px;
-        letter-spacing: -0.5px;
-        min-height: 44px;
+        font-size: 24px;
+        font-weight: 600;
         color: white;
+        line-height: 1.3;
       }
 
       .comment-text {
         font-size: 18px;
-        font-weight: 500;
-        opacity: 0.7;
-        min-height: 24px;
-        color: white;
+        font-weight: 400;
+        color: rgba(255, 255, 255, 0.8);
         line-height: 1.4;
       }
 
@@ -681,35 +686,57 @@ export class DemoPlayer {
   }
 
   /**
-   * Show comment overlay with typewriter effect
+   * Show comment overlay and pause playback
    */
-  public async showComment(heading: string, text: string, duration: number = 1500): Promise<void> {
+  public async showComment(heading: string, text: string, duration: number = 3000): Promise<void> {
     if (!this.overlayContainer) return;
+
+    // Clear any existing dismiss timer
+    if (this.commentDismissTimer) {
+      clearTimeout(this.commentDismissTimer);
+      this.commentDismissTimer = null;
+    }
 
     const headingEl = this.overlayContainer.querySelector('.comment-heading') as HTMLElement;
     const textEl = this.overlayContainer.querySelector('.comment-text') as HTMLElement;
 
-    // Clear previous content
-    headingEl.innerHTML = '';
-    textEl.innerHTML = '';
+    // Set text directly (no typewriter effect)
+    headingEl.textContent = heading;
+    textEl.textContent = text;
+
+    // Pause all iframes
+    this.iframes.forEach(iframe => {
+      iframe.contentWindow?.postMessage({ type: 'demoControl', command: 'pause' }, '*');
+    });
 
     // Show overlay
     this.overlayContainer.classList.add('visible');
 
-    // Type heading
-    await this.typeText(headingEl, heading, 40);
+    // Auto-dismiss after duration
+    this.commentDismissTimer = setTimeout(() => {
+      this.hideComment();
+    }, duration);
+  }
 
-    // Brief pause
-    await this.delay(200);
+  /**
+   * Hide comment overlay and resume playback
+   */
+  public hideComment(): void {
+    if (!this.overlayContainer) return;
 
-    // Type body text
-    await this.typeText(textEl, text, 30);
+    // Clear dismiss timer if user clicked early
+    if (this.commentDismissTimer) {
+      clearTimeout(this.commentDismissTimer);
+      this.commentDismissTimer = null;
+    }
 
-    // Hold for duration
-    await this.delay(duration);
-
-    // Fade out
+    // Hide overlay
     this.overlayContainer.classList.remove('visible');
+
+    // Resume all iframes
+    this.iframes.forEach(iframe => {
+      iframe.contentWindow?.postMessage({ type: 'demoControl', command: 'resume' }, '*');
+    });
   }
 
   /**
@@ -928,7 +955,7 @@ export class DemoPlayer {
     // - demoUser=2 for Bob identity
     // - observeOnly=true so Bob doesn't run the demo script
     const iframe = document.createElement('iframe');
-    iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true&enableSync=true&demoUser=2&observeOnly=true`;
+    iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true&enableSync=true&demoUser=2&observeOnly=true`;
     iframe.setAttribute('frameborder', '0');
     iframe.setAttribute('allowfullscreen', 'true');
 

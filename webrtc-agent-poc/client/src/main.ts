@@ -46,6 +46,9 @@ const enableSync = params.get('enableSync') === 'true'; // Force sync even in au
 const isObserveOnly = params.get('observeOnly') === 'true'; // Don't run demo, just observe synced content
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
+
+// Flag to temporarily disable format button state updates during finger tap animations
+let formatButtonUpdateDisabled = false;
 const shouldLoadAgent = import.meta.env.VITE_BUILD_MODE === 'agent' ||
                        (import.meta.env.DEV && isAgentMode);
 
@@ -1333,7 +1336,7 @@ async function main() {
       console.log(`[Main] Initializing AutoplayDemo with script: ${autoplayScript}`);
     }
 
-    // Wire up heading insertion for autoplay
+    // Wire up heading insertion for autoplay (legacy - inserts heading with text immediately)
     player.onHeading = (level: 1 | 2 | 3, text: string) => {
       const { state } = editor;
 
@@ -1371,6 +1374,44 @@ async function main() {
       console.log(`[AutoplayDemo] Inserted heading ${level}: ${text}`);
     };
 
+    // Wire up heading level setting (for typewriter animation)
+    // This changes the current/last block to a heading without inserting text
+    player.onSetHeadingLevel = (level: 1 | 2 | 3) => {
+      const { state } = editor;
+
+      // Find the last block in the document
+      const lastChild = state.doc.lastChild;
+      if (!lastChild) {
+        console.log(`[AutoplayDemo] No last child found`);
+        return;
+      }
+
+      // Get the position of the last block
+      const lastBlockPos = state.doc.content.size - lastChild.nodeSize;
+
+      console.log(`[AutoplayDemo] Converting block at pos ${lastBlockPos}, type: ${lastChild.type.name}, size: ${lastChild.nodeSize}`);
+
+      const headingType = customSchema.nodes.heading;
+      let tr = state.tr;
+
+      // Delete the last block and insert a new heading in its place
+      tr = tr.delete(lastBlockPos, lastBlockPos + lastChild.nodeSize);
+      const newHeading = headingType.create({ level });
+      tr = tr.insert(lastBlockPos, newHeading);
+
+      // Set selection inside the new heading (position after the opening tag)
+      tr = tr.setSelection(TextSelection.create(tr.doc, lastBlockPos + 1));
+
+      editor.dispatch(tr);
+
+      // Verify the change
+      const newLastChild = editor.state.doc.lastChild;
+      console.log(`[AutoplayDemo] Set heading level ${level} for typewriter, new type: ${newLastChild?.type.name}`);
+
+      // Dispatch event to update format button states (listened to by createEditor)
+      document.dispatchEvent(new CustomEvent('format-changed'));
+    };
+
     // Wire up newline (paragraph creation) for autoplay
     player.onNewline = () => {
       const { state } = editor;
@@ -1390,23 +1431,24 @@ async function main() {
     player.onType = (char: string) => {
       const { state } = editor;
 
-      // Find the last paragraph in the document (including after maps)
+      // Find the last text-containing block (paragraph or heading) in the document
       let insertPos = state.doc.content.size - 1;
-      let lastParagraphEnd = -1;
+      let lastTextBlockEnd = -1;
       let offset = 0;
 
       for (let i = 0; i < state.doc.childCount; i++) {
         const node = state.doc.child(i);
-        if (node.type.name === 'paragraph') {
-          // Position at end of paragraph content (before closing tag)
-          lastParagraphEnd = offset + node.nodeSize - 1;
+        // Support both paragraphs and headings as text containers
+        if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+          // Position at end of block content (before closing tag)
+          lastTextBlockEnd = offset + node.nodeSize - 1;
         }
         offset += node.nodeSize;
       }
 
-      // Use last paragraph position
-      if (lastParagraphEnd > 0) {
-        insertPos = lastParagraphEnd;
+      // Use last text block position
+      if (lastTextBlockEnd > 0) {
+        insertPos = lastTextBlockEnd;
       }
 
       // Insert text and set selection to the new cursor position
@@ -1551,12 +1593,20 @@ async function main() {
           // After reaching target, do tap animation
           setTimeout(() => {
             finger.classList.add('tapping');
+            target.classList.add('active'); // Show button as pressed
+            console.log(`[FingerTap] Added active class to ${selector}, classes: ${target.className}`);
+
+            // Actually click the target to trigger its handler
+            target.click();
+            console.log(`[FingerTap] Triggered click on ${selector}`);
 
             setTimeout(() => {
               finger.classList.remove('tapping');
+              // Don't remove active class - let updateFormatButtonStates handle it based on actual state
+              console.log(`[FingerTap] Tap animation complete for ${selector}`);
               fingerPersisted = !!persist;
               resolve();
-            }, 300);
+            }, 500); // Increased from 300ms for more visible press
           }, 400);
         } else {
           // Full entry animation from off-screen
@@ -1576,9 +1626,17 @@ async function main() {
           // After reaching target, do tap animation
           setTimeout(() => {
             finger.classList.add('tapping');
+            target.classList.add('active'); // Show button as pressed
+            console.log(`[FingerTap] Added active class to ${selector}, classes: ${target.className}`);
+
+            // Actually click the target to trigger its handler
+            target.click();
+            console.log(`[FingerTap] Triggered click on ${selector}`);
 
             setTimeout(() => {
               finger.classList.remove('tapping');
+              // Don't remove active class - let updateFormatButtonStates handle it based on actual state
+              console.log(`[FingerTap] Tap animation complete for ${selector}`);
 
               if (persist) {
                 // Keep finger visible at target position
@@ -1597,7 +1655,7 @@ async function main() {
                   resolve();
                 }, 400);
               }
-            }, 300);
+            }, 500);
           }, 600);
         }
       });
@@ -1637,6 +1695,15 @@ async function main() {
           fingerPersisted = false;
         }, 400);
       }
+
+      // Also hide selection handles when finger is hidden
+      const startHandle = document.getElementById('selection-handle-start');
+      const endHandle = document.getElementById('selection-handle-end');
+      startHandle?.classList.remove('visible');
+      endHandle?.classList.remove('visible');
+
+      // Remove any selection overlay
+      document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
     };
 
     // Wire up finger drag for autoplay (for panning maps)
@@ -1721,6 +1788,587 @@ async function main() {
             resolve();
           }, 650);
         }, fingerPersisted ? 100 : 300);
+      });
+    };
+
+    // Wire up finger scroll for autoplay (for scrolling editor content)
+    player.onFingerScroll = (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const editorContainer = document.getElementById('editor-container');
+
+        if (!finger || !editorContainer) {
+          console.warn(`[AutoplayDemo] Finger scroll failed - finger: ${!!finger}, editorContainer: ${!!editorContainer}`);
+          resolve();
+          return;
+        }
+
+        // Get editor container's bounds
+        const rect = editorContainer.getBoundingClientRect();
+
+        // Calculate starting position based on fromSide
+        let startX: number, startY: number;
+        const offsetFromEdge = 60; // How far from the edge to start
+
+        switch (fromSide) {
+          case 'left':
+            startX = rect.left + offsetFromEdge;
+            startY = rect.top + rect.height / 2;
+            break;
+          case 'bottom':
+            startX = rect.left + rect.width / 2;
+            startY = rect.bottom - offsetFromEdge;
+            break;
+          case 'right':
+          default:
+            startX = rect.right - offsetFromEdge;
+            startY = rect.top + rect.height / 2;
+            break;
+        }
+
+        // Calculate end position based on scroll direction
+        // Swipe UP to scroll DOWN (reveal more content below)
+        // Swipe DOWN to scroll UP (reveal more content above)
+        let endX = startX;
+        let endY = startY;
+        let scrollAmount = 0;
+
+        if (direction === 'up') {
+          // Swipe finger up = scroll content up (scrollTop increases)
+          endY = startY - distance;
+          scrollAmount = distance;
+        } else {
+          // Swipe finger down = scroll content down (scrollTop decreases)
+          endY = startY + distance;
+          scrollAmount = -distance;
+        }
+
+        // Position finger at start
+        finger.style.transition = 'none';
+        finger.style.left = `${startX}px`;
+        finger.style.top = `${startY}px`;
+        finger.classList.add('visible');
+        finger.offsetHeight; // Force reflow
+
+        // Start the scroll animation
+        setTimeout(() => {
+          // Show pressing state
+          finger.classList.add('tapping');
+
+          // Animate finger movement
+          finger.style.transition = 'left 0.5s ease-out, top 0.5s ease-out';
+          finger.style.left = `${endX}px`;
+          finger.style.top = `${endY}px`;
+
+          // Smooth scroll the window (not the container, since it doesn't have overflow)
+          window.scrollBy({
+            top: scrollAmount,
+            behavior: 'smooth'
+          });
+
+          console.log(`[AutoplayDemo] Scrolling window by ${scrollAmount}px (direction: ${direction})`);
+
+          // After animation completes
+          setTimeout(() => {
+            finger.classList.remove('tapping');
+            finger.classList.remove('visible');
+            fingerPersisted = false;
+            resolve();
+          }, 550);
+        }, 200);
+      });
+    };
+
+    // Helper: Find text in document and return positions
+    const findTextInDocument = (text: string): { from: number; to: number } | null => {
+      const { state } = editor;
+      let markStart = -1;
+      let markEnd = -1;
+
+      state.doc.descendants((node, pos) => {
+        if (node.isText) {
+          const nodeText = node.text || '';
+          const idx = nodeText.lastIndexOf(text);
+          if (idx !== -1) {
+            markStart = pos + idx;
+            markEnd = pos + idx + text.length;
+          }
+        }
+      });
+
+      if (markStart === -1) return null;
+      return { from: markStart, to: markEnd };
+    };
+
+    // Helper: Update selection handle positions
+    const updateSelectionHandles = (from: number, to: number) => {
+      const startHandle = document.getElementById('selection-handle-start');
+      const endHandle = document.getElementById('selection-handle-end');
+
+      const startCoords = editor.coordsAtPos(from);
+      const endCoords = editor.coordsAtPos(to);
+
+      if (startHandle && startCoords) {
+        startHandle.style.left = `${startCoords.left}px`;
+        startHandle.style.top = `${startCoords.top - 20}px`; // Above text, accounting for stem
+        startHandle.classList.add('visible');
+      }
+
+      if (endHandle && endCoords) {
+        endHandle.style.left = `${endCoords.right}px`;
+        endHandle.style.top = `${endCoords.bottom}px`; // Below text
+        endHandle.classList.add('visible');
+      }
+    };
+
+    // Helper: Hide selection handles
+    const hideSelectionHandles = () => {
+      const startHandle = document.getElementById('selection-handle-start');
+      const endHandle = document.getElementById('selection-handle-end');
+      startHandle?.classList.remove('visible');
+      endHandle?.classList.remove('visible');
+    };
+
+    // Track current selection for handle dragging
+    let currentSelectionFrom = 0;
+    let currentSelectionTo = 0;
+
+    // Wire up finger text selection (double-tap to select word, show handles)
+    player.onFingerSelect = (text: string, fromSide: 'left' | 'right' | 'bottom') => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const positions = findTextInDocument(text);
+
+        if (!finger || !positions) {
+          console.warn(`[AutoplayDemo] Finger select failed - finger: ${!!finger}, text found: ${!!positions} ("${text}")`);
+          resolve();
+          return;
+        }
+
+        // Get coordinates for the middle of the text
+        const startCoords = editor.coordsAtPos(positions.from);
+        const endCoords = editor.coordsAtPos(positions.to);
+        if (!startCoords || !endCoords) {
+          console.warn(`[AutoplayDemo] Could not get coordinates for "${text}"`);
+          resolve();
+          return;
+        }
+
+        const targetX = (startCoords.left + endCoords.right) / 2;
+        const targetY = (startCoords.top + startCoords.bottom) / 2;
+
+        // Calculate start position based on fromSide
+        let startX: number, startY: number;
+        switch (fromSide) {
+          case 'left':
+            startX = -60;
+            startY = targetY;
+            break;
+          case 'bottom':
+            startX = targetX;
+            startY = window.innerHeight + 60;
+            break;
+          case 'right':
+          default:
+            startX = window.innerWidth + 60;
+            startY = targetY;
+            break;
+        }
+
+        lastFingerFromSide = fromSide;
+
+        // If finger is already visible (persisted), just animate to new target
+        const doDoubleTapAndSelect = () => {
+          // Double-tap animation
+          finger.classList.add('double-tapping');
+
+          // Wait for double-tap animation to complete
+          setTimeout(() => {
+            finger.classList.remove('double-tapping');
+
+            // Create the text selection
+            const { state } = editor;
+            const tr = state.tr.setSelection(TextSelection.create(state.doc, positions.from, positions.to));
+            editor.dispatch(tr);
+            editor.focus();
+
+            // Store current selection for handle dragging
+            currentSelectionFrom = positions.from;
+            currentSelectionTo = positions.to;
+
+            // Create highlight overlay
+            try {
+              document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
+              const overlay = document.createElement('div');
+              overlay.className = 'demo-selection-overlay';
+              overlay.style.cssText = `
+                position: absolute;
+                left: ${startCoords.left}px;
+                top: ${startCoords.top}px;
+                width: ${endCoords.right - startCoords.left}px;
+                height: ${startCoords.bottom - startCoords.top}px;
+                background: rgba(59, 130, 246, 0.35);
+                pointer-events: none;
+                z-index: 100;
+                border-radius: 2px;
+              `;
+              document.body.appendChild(overlay);
+            } catch (err) {
+              console.warn('[AutoplayDemo] Could not add highlight overlay:', err);
+            }
+
+            // Show selection handles
+            updateSelectionHandles(positions.from, positions.to);
+
+            console.log(`[AutoplayDemo] Finger selected "${text}" at ${positions.from}-${positions.to}`);
+            fingerPersisted = true; // Keep finger visible
+            resolve();
+          }, 500); // Wait for double-tap animation (0.5s)
+        };
+
+        if (fingerPersisted && finger.classList.contains('visible')) {
+          // Animate directly to text target
+          finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          setTimeout(doDoubleTapAndSelect, 400);
+        } else {
+          // Full entry animation from off-screen
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.style.transition = 'none';
+          finger.classList.add('visible');
+
+          // Force reflow
+          finger.offsetHeight;
+
+          // Animate to target
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          setTimeout(doDoubleTapAndSelect, 600);
+        }
+      });
+    };
+
+    // Wire up selection handle drag (drag handle to expand/shrink selection)
+    player.onDragSelectionHandle = (handle: 'start' | 'end', toText: string) => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const handleEl = document.getElementById(`selection-handle-${handle}`);
+        const targetPositions = findTextInDocument(toText);
+
+        if (!finger || !handleEl || !targetPositions) {
+          console.warn(`[AutoplayDemo] Drag handle failed - finger: ${!!finger}, handle: ${!!handleEl}, target: ${!!targetPositions} ("${toText}")`);
+          resolve();
+          return;
+        }
+
+        // Get current handle position
+        const handleRect = handleEl.getBoundingClientRect();
+        const handleX = handleRect.left + handleRect.width / 2;
+        const handleY = handleRect.top + handleRect.height / 2;
+
+        // Get target position (end of text for 'end' handle, start for 'start' handle)
+        const targetCoords = handle === 'end'
+          ? editor.coordsAtPos(targetPositions.to)
+          : editor.coordsAtPos(targetPositions.from);
+
+        if (!targetCoords) {
+          console.warn(`[AutoplayDemo] Could not get target coordinates for "${toText}"`);
+          resolve();
+          return;
+        }
+
+        const targetX = handle === 'end' ? targetCoords.right : targetCoords.left;
+        const targetY = handle === 'end' ? targetCoords.bottom + 8 : targetCoords.top - 28;
+
+        // Move finger to handle position first
+        finger.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+        finger.style.left = `${handleX}px`;
+        finger.style.top = `${handleY}px`;
+
+        setTimeout(() => {
+          // Press down on handle
+          finger.classList.add('tapping');
+
+          // Calculate new selection bounds
+          const newFrom = handle === 'start' ? targetPositions.from : currentSelectionFrom;
+          const newTo = handle === 'end' ? targetPositions.to : currentSelectionTo;
+
+          // Animate finger and handle together to new position
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // Animate handle
+          handleEl.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          handleEl.style.left = `${targetX}px`;
+          handleEl.style.top = `${handle === 'end' ? targetCoords.bottom : targetCoords.top - 20}px`;
+
+          // Update selection progressively during drag
+          const animateSelection = () => {
+            // Update the text selection
+            const { state } = editor;
+            const tr = state.tr.setSelection(TextSelection.create(state.doc, newFrom, newTo));
+            editor.dispatch(tr);
+
+            // Update highlight overlay
+            try {
+              const existingOverlay = document.querySelector('.demo-selection-overlay');
+              const newStartCoords = editor.coordsAtPos(newFrom);
+              const newEndCoords = editor.coordsAtPos(newTo);
+              if (existingOverlay && newStartCoords && newEndCoords) {
+                (existingOverlay as HTMLElement).style.left = `${newStartCoords.left}px`;
+                (existingOverlay as HTMLElement).style.top = `${newStartCoords.top}px`;
+                (existingOverlay as HTMLElement).style.width = `${newEndCoords.right - newStartCoords.left}px`;
+              }
+            } catch (err) {
+              // Ignore overlay update errors
+            }
+
+            // Update both handles
+            updateSelectionHandles(newFrom, newTo);
+          };
+
+          // Animate selection over the drag duration
+          setTimeout(() => {
+            animateSelection();
+            currentSelectionFrom = newFrom;
+            currentSelectionTo = newTo;
+
+            // Release press
+            finger.classList.remove('tapping');
+
+            // Reset handle transitions
+            handleEl.style.transition = 'opacity 0.2s ease';
+
+            console.log(`[AutoplayDemo] Dragged ${handle} handle to "${toText}", selection: ${newFrom}-${newTo}`);
+            fingerPersisted = true;
+            resolve();
+          }, 600);
+        }, 300);
+      });
+    };
+
+    // Wire up context menu show (show at current selection or cursor position)
+    player.onShowContextMenu = (position: 'above' | 'below') => {
+      return new Promise<void>((resolve) => {
+        const { state } = editor;
+        const { from, to } = state.selection;
+        const hasSelection = from !== to;
+
+        // Get coordinates for positioning
+        let x: number, y: number;
+        const menuWidth = 160;
+
+        if (hasSelection) {
+          // Position relative to selection
+          const startCoords = editor.coordsAtPos(from);
+          const endCoords = editor.coordsAtPos(to);
+
+          if (!startCoords || !endCoords) {
+            console.warn('[AutoplayDemo] Could not get selection coordinates');
+            resolve();
+            return;
+          }
+
+          x = (startCoords.left + endCoords.right) / 2 - menuWidth / 2;
+          if (position === 'above') {
+            y = startCoords.top - 96;
+          } else {
+            y = endCoords.bottom + 8;
+          }
+        } else {
+          // Position relative to cursor
+          const cursorCoords = editor.coordsAtPos(from);
+          if (!cursorCoords) {
+            console.warn('[AutoplayDemo] Could not get cursor coordinates');
+            resolve();
+            return;
+          }
+
+          x = cursorCoords.left - menuWidth / 2;
+          if (position === 'above') {
+            y = cursorCoords.top - 56; // Smaller menu (only Insert Map)
+          } else {
+            y = cursorCoords.bottom + 8;
+          }
+        }
+
+        // Ensure within viewport
+        if (x < 8) x = 8;
+        if (x + menuWidth > window.innerWidth - 8) x = window.innerWidth - menuWidth - 8;
+
+        // Show the context menu
+        const showFn = (window as any).showTextSelectionContextMenu;
+        if (showFn) {
+          showFn(x, y, hasSelection);
+          console.log(`[AutoplayDemo] Showed context menu ${position} ${hasSelection ? 'selection' : 'cursor'} at (${x}, ${y})`);
+        } else {
+          console.warn('[AutoplayDemo] showTextSelectionContextMenu not available');
+        }
+
+        // Brief pause for visual effect
+        setTimeout(resolve, 200);
+      });
+    };
+
+    // Wire up context menu item tap (finger animation + execute action)
+    player.onTapContextMenuItem = (item: 'geomark' | 'map') => {
+      return new Promise<void>(async (resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const contextMenu = (window as any).getTextSelectionContextMenu?.();
+        const buttonId = item === 'geomark' ? 'context-geomark-btn' : 'context-map-btn';
+        const button = document.getElementById(buttonId);
+
+        if (!finger || !contextMenu || !button) {
+          console.warn(`[AutoplayDemo] Context menu tap failed - finger: ${!!finger}, menu: ${!!contextMenu}, button: ${!!button}`);
+          resolve();
+          return;
+        }
+
+        // Get button position
+        const buttonRect = button.getBoundingClientRect();
+        const targetX = buttonRect.left + buttonRect.width / 2;
+        const targetY = buttonRect.top + buttonRect.height / 2;
+
+        // Move finger to button
+        finger.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+        finger.style.left = `${targetX}px`;
+        finger.style.top = `${targetY}px`;
+
+        await new Promise(r => setTimeout(r, 300));
+
+        // Tap animation
+        finger.classList.add('tapping');
+
+        await new Promise(r => setTimeout(r, 150));
+
+        // Highlight button
+        button.style.background = '#e5e7eb';
+
+        await new Promise(r => setTimeout(r, 100));
+
+        // Release tap
+        finger.classList.remove('tapping');
+
+        // Hide menu and execute action
+        const hideFn = (window as any).hideTextSelectionContextMenu;
+        if (hideFn) hideFn();
+
+        // Clean up selection UI
+        hideSelectionHandles();
+        document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
+
+        // Reset button background
+        button.style.background = '';
+
+        // Execute the actual action
+        if (item === 'geomark') {
+          // Trigger the real geo-mark creation
+          const geomarkBtn = document.getElementById('context-geomark-btn');
+          if (geomarkBtn) geomarkBtn.click();
+        } else {
+          // Trigger the real map insertion
+          const mapBtn = document.getElementById('context-map-btn');
+          if (mapBtn) mapBtn.click();
+        }
+
+        console.log(`[AutoplayDemo] Tapped context menu item: ${item}`);
+
+        // Brief pause before continuing
+        setTimeout(resolve, 300);
+      });
+    };
+
+    // Wire up finger double-tap at cursor position (for empty lines)
+    player.onFingerDoubleTap = (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        if (!finger) {
+          console.warn('[AutoplayDemo] Finger element not found');
+          resolve();
+          return;
+        }
+
+        // Get target position
+        const { state } = editor;
+        let targetPos: number;
+
+        if (target === 'endOfDoc') {
+          targetPos = state.doc.content.size - 1;
+        } else {
+          targetPos = state.selection.from;
+        }
+
+        const coords = editor.coordsAtPos(targetPos);
+        if (!coords) {
+          console.warn('[AutoplayDemo] Could not get coordinates for position');
+          resolve();
+          return;
+        }
+
+        const targetX = coords.left;
+        const targetY = (coords.top + coords.bottom) / 2;
+
+        // Calculate start position based on fromSide
+        let startX: number, startY: number;
+        switch (fromSide) {
+          case 'left':
+            startX = -60;
+            startY = targetY;
+            break;
+          case 'bottom':
+            startX = targetX;
+            startY = window.innerHeight + 60;
+            break;
+          case 'right':
+          default:
+            startX = window.innerWidth + 60;
+            startY = targetY;
+            break;
+        }
+
+        const doDoubleTap = () => {
+          // Double-tap animation
+          finger.classList.add('double-tapping');
+
+          setTimeout(() => {
+            finger.classList.remove('double-tapping');
+
+            // Move cursor to position
+            const tr = state.tr.setSelection(TextSelection.create(state.doc, targetPos, targetPos));
+            editor.dispatch(tr);
+            editor.focus();
+
+            console.log(`[AutoplayDemo] Finger double-tapped at position ${targetPos}`);
+            fingerPersisted = true;
+            resolve();
+          }, 500);
+        };
+
+        if (fingerPersisted && finger.classList.contains('visible')) {
+          // Animate directly to target
+          finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+          setTimeout(doDoubleTap, 400);
+        } else {
+          // Full entry animation
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.style.transition = 'none';
+          finger.classList.add('visible');
+          finger.offsetHeight;
+
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+          setTimeout(doDoubleTap, 600);
+        }
       });
     };
 
@@ -2226,6 +2874,273 @@ async function main() {
   updateStatus('Connecting to peers...', 'connecting');
   console.log('[Main] Application initialized successfully');
 
+  // === Cleanup handlers for demo state isolation ===
+  // Clear Y.js document content at startup if in demo mode with sync enabled
+  // This prevents ghost states from previous sessions in the same document
+  if (isAutoplayMode && enableSync) {
+    console.log('[Main] Demo mode with sync - clearing Y.js document content');
+    ydoc.transact(() => {
+      while (yXmlFragment.length > 0) {
+        yXmlFragment.delete(0, 1);
+      }
+    });
+  }
+
+  // Add beforeunload cleanup to properly disconnect and clear state
+  window.addEventListener('beforeunload', () => {
+    console.log('[Main] Page unloading - cleaning up state');
+
+    // 1. Clear awareness state (removes our cursor/presence from other clients)
+    if (awareness) {
+      awareness.setLocalState(null);
+    }
+
+    // 2. Disconnect WebRTC provider
+    if (provider) {
+      provider.disconnect();
+      provider.destroy();
+    }
+
+    // 3. Clear demo clients map (for autoplay demos)
+    demoClients.clear();
+  });
+
+  /**
+   * Handle demo commands forwarded from DemoPlayer (for Bob's phone in dual-phone mode)
+   */
+  function handleDemoCommand(data: any): void {
+    switch (data.command) {
+      case 'scroll':
+        // Scroll to a target in the editor
+        console.log('[Main] Executing scroll command:', data.target);
+        const editorContainer = document.getElementById('editor-container');
+        if (!editorContainer) return;
+
+        if (data.target === 'firstMap') {
+          // Scroll to first map block
+          const firstMap = document.querySelector('.prosemirror-map');
+          if (firstMap) {
+            firstMap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else if (data.target === 'secondMap') {
+          // Scroll to second map block
+          const maps = document.querySelectorAll('.prosemirror-map');
+          if (maps.length > 1) {
+            maps[1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else if (typeof data.target === 'number') {
+          // Scroll to specific pixel position
+          editorContainer.scrollTop = data.target;
+        }
+        break;
+
+      case 'fingerTap':
+        // Show finger tap animation (Bob's phone)
+        console.log('[Main] Executing fingerTap command:', data.selector);
+        showBobFingerTap(data.selector, data.fromSide || 'right');
+        break;
+
+      case 'openFullscreenMap':
+        // Open fullscreen map on Bob's phone
+        console.log('[Main] Executing openFullscreenMap command');
+        if (fullscreenMapView) {
+          fullscreenMapView.show();
+        }
+        break;
+
+      case 'closeFullscreenMap':
+        // Close fullscreen map on Bob's phone
+        console.log('[Main] Executing closeFullscreenMap command');
+        if (fullscreenMapView) {
+          fullscreenMapView.hide();
+        }
+        break;
+
+      case 'panMap':
+        // Pan the fullscreen map
+        console.log('[Main] Executing panMap command:', data.direction, data.distance);
+        if (fullscreenMapView) {
+          const map = fullscreenMapView.getMap();
+          if (map) {
+            const distance = data.distance || 100;
+            let offset: [number, number] = [0, 0];
+            switch (data.direction) {
+              case 'up': offset = [0, -distance]; break;
+              case 'down': offset = [0, distance]; break;
+              case 'left': offset = [-distance, 0]; break;
+              case 'right': offset = [distance, 0]; break;
+            }
+            map.panBy(offset, { duration: 500 });
+          }
+        }
+        break;
+
+      case 'zoomMap':
+        // Zoom the fullscreen map
+        console.log('[Main] Executing zoomMap command:', data.direction, data.amount);
+        if (fullscreenMapView) {
+          const map = fullscreenMapView.getMap();
+          if (map) {
+            const amount = data.amount || 1;
+            if (data.direction === 'in') {
+              map.zoomIn({ duration: 500 });
+            } else {
+              map.zoomOut({ duration: 500 });
+            }
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * Show finger tap animation on Bob's phone
+   */
+  function showBobFingerTap(selector: string, fromSide: string): void {
+    const target = document.querySelector(selector);
+    if (!target) {
+      console.warn('[Main] Finger tap target not found:', selector);
+      return;
+    }
+
+    // Get or create finger element for Bob
+    let finger = document.getElementById('demo-finger-bob');
+    if (!finger) {
+      finger = document.createElement('div');
+      finger.id = 'demo-finger-bob';
+      finger.className = 'demo-finger';
+      finger.innerHTML = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23333'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E" style="width: 48px; height: 48px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));" />`;
+      document.body.appendChild(finger);
+    }
+
+    const rect = target.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Calculate start position based on fromSide
+    let startX = centerX;
+    let startY = centerY;
+    const offset = 80;
+    switch (fromSide) {
+      case 'left': startX = centerX - offset; break;
+      case 'right': startX = centerX + offset; break;
+      case 'bottom': startY = centerY + offset; break;
+    }
+
+    // Position finger at start
+    finger.style.left = `${startX - 24}px`;
+    finger.style.top = `${startY - 24}px`;
+    finger.classList.add('visible');
+
+    // Animate to center
+    setTimeout(() => {
+      finger!.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+      finger!.style.left = `${centerX - 24}px`;
+      finger!.style.top = `${centerY - 24}px`;
+
+      // Add tap effect
+      setTimeout(() => {
+        finger!.classList.add('tapping');
+        setTimeout(() => {
+          finger!.classList.remove('tapping');
+          // Hide after tap
+          setTimeout(() => {
+            finger!.classList.remove('visible');
+            finger!.style.transition = '';
+          }, 200);
+        }, 150);
+      }, 300);
+    }, 50);
+  }
+
+  // Listen for messages from parent DemoPlayer
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data?.type) return;
+
+    switch (data.type) {
+      case 'demoCleanup':
+        console.log('[Main] Received demoCleanup message from parent');
+        // Clear awareness state
+        if (awareness) {
+          awareness.setLocalState(null);
+        }
+        // Disconnect provider
+        if (provider) {
+          provider.disconnect();
+          provider.destroy();
+        }
+        // Clear demo state
+        demoClients.clear();
+        break;
+
+      case 'captureSnapshot':
+        // Capture current Y.js state and send back to parent
+        console.log('[Main] Capturing snapshot for step:', data.step);
+        const stateVector = Y.encodeStateAsUpdate(ydoc);
+        window.parent?.postMessage({
+          type: 'snapshotCaptured',
+          step: data.step,
+          actionIndex: data.actionIndex,
+          stateVector: Array.from(stateVector)  // Convert Uint8Array for postMessage
+        }, '*');
+        break;
+
+      case 'restoreSnapshot':
+        // Restore Y.js state from snapshot
+        console.log('[Main] Restoring snapshot for step:', data.step);
+
+        // Close fullscreen map if open (it's from a different step's state)
+        if (fullscreenMapView) {
+          fullscreenMapView.hide();
+        }
+
+        // Hide finger cursor if visible
+        const finger = document.getElementById('demo-finger');
+        if (finger) {
+          finger.classList.remove('visible');
+        }
+
+        // Clear demo clients to prevent ghost avatars
+        demoClients.clear();
+
+        const updateData = new Uint8Array(data.stateVector);
+
+        // Clear existing document content
+        const yXmlFragment = ydoc.getXmlFragment('prosemirror');
+        ydoc.transact(() => {
+          while (yXmlFragment.length > 0) {
+            yXmlFragment.delete(0, 1);
+          }
+        });
+
+        // Apply the snapshot - create a fresh doc and copy state
+        const tempDoc = new Y.Doc();
+        Y.applyUpdate(tempDoc, updateData);
+        const tempFragment = tempDoc.getXmlFragment('prosemirror');
+
+        // Copy content from temp doc to main doc
+        ydoc.transact(() => {
+          for (let i = 0; i < tempFragment.length; i++) {
+            const item = tempFragment.get(i);
+            if (item) {
+              // Clone the item into our document
+              yXmlFragment.insert(i, [item.clone()]);
+            }
+          }
+        });
+
+        console.log('[Main] Snapshot restored, fragment length:', yXmlFragment.length);
+        break;
+
+      case 'demoCommand':
+        // Handle demo commands forwarded from DemoPlayer (for Bob's phone)
+        console.log('[Main] Received demoCommand:', data.command);
+        handleDemoCommand(data);
+        break;
+    }
+  });
+
 }
 
 // Function to geocode a place name using Nominatim
@@ -2388,11 +3303,17 @@ async function createGeoMark(view: EditorView) {
   const { from, to } = state.selection;
 
   if (from === to) {
+    // In autoplay/demo mode, silently skip (don't block with alert)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autoplay') === 'true') {
+      console.warn('[GeoMark] No text selected during autoplay, skipping');
+      return;
+    }
     alert('Please select some text to create a geo mark');
     return;
   }
 
-  // Get the selected text
+  // Get the selected text (save it before async operation)
   const selectedText = state.doc.textBetween(from, to);
 
   // Show loading state
@@ -2404,6 +3325,49 @@ async function createGeoMark(view: EditorView) {
   if (!geocodeResult) {
     updateStatus('Could not find location', 'disconnected');
     alert(`Could not find coordinates for "${selectedText}". Please try a different location name.`);
+    return;
+  }
+
+  // Re-find the text in the current document state (may have changed during async geocoding)
+  const currentState = view.state;
+  let newFrom = -1;
+  let newTo = -1;
+
+  currentState.doc.descendants((node, pos) => {
+    if (newFrom !== -1) return false; // Already found
+    if (node.isText && node.text) {
+      const idx = node.text.indexOf(selectedText);
+      if (idx !== -1) {
+        newFrom = pos + idx;
+        newTo = pos + idx + selectedText.length;
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (newFrom === -1) {
+    updateStatus('Text not found', 'disconnected');
+    console.warn(`[Main] Could not find "${selectedText}" in current document state`);
+    return;
+  }
+
+  // Check if already has a geo mark
+  let alreadyMarked = false;
+  currentState.doc.nodesBetween(newFrom, newTo, (node) => {
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'geoMark') {
+          alreadyMarked = true;
+          return false;
+        }
+      }
+    }
+  });
+
+  if (alreadyMarked) {
+    updateStatus('Already marked', 'connected');
+    console.log(`[Main] "${selectedText}" already has a geo mark`);
     return;
   }
 
@@ -2422,8 +3386,8 @@ async function createGeoMark(view: EditorView) {
     coordSource: 'nominatim'
   });
 
-  // Apply the mark to the selection
-  const tr = state.tr.addMark(from, to, mark);
+  // Apply the mark using current state (not the stale captured state)
+  const tr = currentState.tr.addMark(newFrom, newTo, mark);
   view.dispatch(tr);
 
   updateStatus('Geo mark created', 'connected');
@@ -2464,15 +3428,15 @@ async function createGeoMarkInSection(
   sectionEnd: number,
   colorIndex: number
 ): Promise<boolean> {
-  // Check if already has a geo-mark
-  const position = findTextInRange(view.state.doc, locationName, sectionStart, sectionEnd);
-  if (!position) {
+  // Check if position exists initially
+  const initialPosition = findTextInRange(view.state.doc, locationName, sectionStart, sectionEnd);
+  if (!initialPosition) {
     console.warn(`[GeoMark] Could not find "${locationName}" in section`);
     return false;
   }
 
   // Check if already marked
-  if (hasGeoMarkAt(view.state.doc, position.from, position.to)) {
+  if (hasGeoMarkAt(view.state.doc, initialPosition.from, initialPosition.to)) {
     console.log(`[GeoMark] "${locationName}" already has a geo-mark, skipping`);
     return false;
   }
@@ -2481,6 +3445,35 @@ async function createGeoMarkInSection(
   const result = await geocodePlace(locationName);
   if (!result) {
     console.warn(`[GeoMark] Could not geocode: ${locationName}`);
+    return false;
+  }
+
+  // Re-find the text position after async geocoding (document may have changed)
+  const currentDoc = view.state.doc;
+  let newFrom = -1;
+  let newTo = -1;
+
+  currentDoc.descendants((node, pos) => {
+    if (newFrom !== -1) return false;
+    if (node.isText && node.text) {
+      const idx = node.text.indexOf(locationName);
+      if (idx !== -1) {
+        newFrom = pos + idx;
+        newTo = pos + idx + locationName.length;
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (newFrom === -1) {
+    console.warn(`[GeoMark] Could not find "${locationName}" after geocoding`);
+    return false;
+  }
+
+  // Check again if already marked (may have changed)
+  if (hasGeoMarkAt(currentDoc, newFrom, newTo)) {
+    console.log(`[GeoMark] "${locationName}" already has a geo-mark (after geocoding), skipping`);
     return false;
   }
 
@@ -2496,7 +3489,7 @@ async function createGeoMarkInSection(
     coordSource: 'nominatim'
   });
 
-  const tr = view.state.tr.addMark(position.from, position.to, mark);
+  const tr = view.state.tr.addMark(newFrom, newTo, mark);
   view.dispatch(tr);
 
   console.log(`[GeoMark] Created: ${locationName} @ ${result.lat}, ${result.lng}`);
@@ -2623,6 +3616,100 @@ function setupToolbarButtons(view: EditorView) {
     });
   }
 
+  // Format toolbar button handlers (H1, H2, P)
+  const heading1Btn = document.getElementById('heading1-btn');
+  const heading2Btn = document.getElementById('heading2-btn');
+  const paragraphBtn = document.getElementById('paragraph-btn');
+
+  const setBlockType = (nodeType: string, attrs?: Record<string, unknown>) => {
+    const { state, dispatch } = view;
+    const { $from, $to } = state.selection;
+    const range = $from.blockRange($to);
+
+    console.log(`[setBlockType] Called with nodeType: ${nodeType}, selection: ${$from.pos}-${$to.pos}, range: ${range ? `${range.start}-${range.end}` : 'null'}`);
+    console.log(`[setBlockType] Current doc:`, state.doc.toString());
+
+    if (!range) {
+      console.log(`[setBlockType] No block range found, returning false`);
+      return false;
+    }
+
+    const type = state.schema.nodes[nodeType];
+    if (!type) {
+      console.log(`[setBlockType] Node type ${nodeType} not found`);
+      return false;
+    }
+
+    const tr = state.tr.setBlockType(range.start, range.end, type, attrs);
+    dispatch(tr);
+    view.focus();
+    console.log(`[setBlockType] Changed to ${nodeType}, new doc:`, view.state.doc.toString());
+    return true;
+  };
+
+  const updateFormatButtonStates = () => {
+    // Skip update during finger tap animations (let the animation control active state)
+    if (formatButtonUpdateDisabled) {
+      console.log('[FormatButtons] Update skipped - formatButtonUpdateDisabled is true');
+      return;
+    }
+
+    const { state } = view;
+    const { $from } = state.selection;
+    const parentNode = $from.parent;
+    const nodeName = parentNode.type.name;
+
+    console.log(`[updateFormatButtonStates] selection pos: ${$from.pos}, nodeName: ${nodeName}, level: ${parentNode.attrs?.level || 'N/A'}`);
+
+    // Remove active class from all format buttons
+    heading1Btn?.classList.remove('active');
+    heading2Btn?.classList.remove('active');
+    paragraphBtn?.classList.remove('active');
+
+    // Add active class to current block type
+    if (nodeName === 'heading') {
+      const level = parentNode.attrs.level;
+      if (level === 1) {
+        heading1Btn?.classList.add('active');
+        console.log('[updateFormatButtonStates] Set H1 as active');
+      } else if (level === 2) {
+        heading2Btn?.classList.add('active');
+        console.log('[updateFormatButtonStates] Set H2 as active');
+      }
+    } else if (nodeName === 'paragraph') {
+      paragraphBtn?.classList.add('active');
+      console.log('[updateFormatButtonStates] Set P as active');
+    }
+  };
+
+  // Initial state and listen for changes
+  updateFormatButtonStates();
+  view.dom.addEventListener('mouseup', updateFormatButtonStates);
+  view.dom.addEventListener('keyup', updateFormatButtonStates);
+  // Listen for programmatic format changes (e.g., from autoplay demo)
+  document.addEventListener('format-changed', updateFormatButtonStates);
+
+  if (heading1Btn) {
+    heading1Btn.addEventListener('click', () => {
+      setBlockType('heading', { level: 1 });
+      updateFormatButtonStates();
+    });
+  }
+
+  if (heading2Btn) {
+    heading2Btn.addEventListener('click', () => {
+      setBlockType('heading', { level: 2 });
+      updateFormatButtonStates();
+    });
+  }
+
+  if (paragraphBtn) {
+    paragraphBtn.addEventListener('click', () => {
+      setBlockType('paragraph');
+      updateFormatButtonStates();
+    });
+  }
+
   // Video chat button handlers
   if (joinVideoBtn) {
     joinVideoBtn.addEventListener('click', () => {
@@ -2734,6 +3821,186 @@ function setupToolbarButtons(view: EditorView) {
       videoChatService.leave();
     }
   });
+
+  // === Text Selection Context Menu ===
+  const textSelectionContextMenu = document.getElementById('text-selection-context-menu');
+  const contextGeoMarkBtn = document.getElementById('context-geomark-btn');
+  const contextMapBtn = document.getElementById('context-map-btn');
+  let contextMenuDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const showTextSelectionContextMenu = (x: number, y: number, hasSelection: boolean = true) => {
+    if (!textSelectionContextMenu) return;
+
+    // Show/hide geomark button based on selection
+    if (contextGeoMarkBtn) {
+      (contextGeoMarkBtn as HTMLElement).style.display = hasSelection ? 'flex' : 'none';
+    }
+
+    // Position the menu
+    textSelectionContextMenu.style.left = `${x}px`;
+    textSelectionContextMenu.style.top = `${y}px`;
+
+    // Make visible (triggers CSS transition)
+    textSelectionContextMenu.style.display = 'block';
+    // Force reflow to enable transition
+    textSelectionContextMenu.offsetHeight;
+    textSelectionContextMenu.classList.add('visible');
+
+    console.log('[ContextMenu] Showing at', x, y, 'hasSelection:', hasSelection);
+  };
+
+  const hideTextSelectionContextMenu = () => {
+    if (!textSelectionContextMenu) return;
+
+    textSelectionContextMenu.classList.remove('visible');
+    // Hide after transition completes
+    setTimeout(() => {
+      if (!textSelectionContextMenu.classList.contains('visible')) {
+        textSelectionContextMenu.style.display = 'none';
+      }
+    }, 150);
+
+    console.log('[ContextMenu] Hidden');
+  };
+
+  // Check selection and show/hide context menu
+  const checkSelectionForContextMenu = () => {
+    // Clear any pending debounce
+    if (contextMenuDebounceTimer) {
+      clearTimeout(contextMenuDebounceTimer);
+      contextMenuDebounceTimer = null;
+    }
+
+    const { state } = view;
+    const { from, to } = state.selection;
+    const hasSelection = from !== to;
+
+    if (!hasSelection) {
+      hideTextSelectionContextMenu();
+      return;
+    }
+
+    // Debounce to avoid flicker during rapid selection changes
+    contextMenuDebounceTimer = setTimeout(() => {
+      // Re-check selection (may have changed during debounce)
+      const currentState = view.state;
+      const currentFrom = currentState.selection.from;
+      const currentTo = currentState.selection.to;
+      if (currentFrom === currentTo) {
+        hideTextSelectionContextMenu();
+        return;
+      }
+
+      // Get position below the selection
+      const endCoords = view.coordsAtPos(currentTo);
+
+      // Position menu below selection, centered
+      const menuWidth = 160; // min-width from CSS
+      let x = endCoords.left - menuWidth / 2;
+      let y = endCoords.bottom + 8; // 8px below selection
+
+      // Ensure menu stays within viewport
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const menuHeight = 88; // Approximate height with 2 buttons
+
+      // Horizontal bounds
+      if (x < 8) x = 8;
+      if (x + menuWidth > viewportWidth - 8) x = viewportWidth - menuWidth - 8;
+
+      // If menu would go below viewport, show above selection
+      if (y + menuHeight > viewportHeight - 8) {
+        const startCoords = view.coordsAtPos(currentFrom);
+        y = startCoords.top - menuHeight - 8;
+      }
+
+      showTextSelectionContextMenu(x, y);
+    }, 300); // 300ms debounce
+  };
+
+  // Listen for selection changes
+  view.dom.addEventListener('mouseup', checkSelectionForContextMenu);
+  view.dom.addEventListener('keyup', (e) => {
+    // Only check on arrow keys or shift combinations that might change selection
+    if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      checkSelectionForContextMenu();
+    }
+  });
+
+  // Double-click handler for empty lines (shows "Insert Map" only)
+  view.dom.addEventListener('dblclick', (e) => {
+    // Clear any pending debounce from selection
+    if (contextMenuDebounceTimer) {
+      clearTimeout(contextMenuDebounceTimer);
+      contextMenuDebounceTimer = null;
+    }
+
+    const { state } = view;
+    const { from, to } = state.selection;
+    const hasSelection = from !== to;
+
+    // If text was selected by double-click, the mouseup handler will handle it
+    if (hasSelection) return;
+
+    // No selection - show context menu with only "Insert Map"
+    const coords = view.coordsAtPos(from);
+    if (!coords) return;
+
+    const menuWidth = 160;
+    let x = coords.left - menuWidth / 2;
+    let y = coords.bottom + 8;
+
+    // Ensure within viewport
+    if (x < 8) x = 8;
+    if (x + menuWidth > window.innerWidth - 8) x = window.innerWidth - menuWidth - 8;
+
+    const menuHeight = 48; // Single button height
+    if (y + menuHeight > window.innerHeight - 8) {
+      y = coords.top - menuHeight - 8;
+    }
+
+    showTextSelectionContextMenu(x, y, false);
+    console.log('[ContextMenu] Double-click on empty line, showing Insert Map only');
+  });
+
+  // Dismiss on click outside
+  document.addEventListener('click', (e) => {
+    if (!textSelectionContextMenu) return;
+    const target = e.target as HTMLElement;
+
+    // Don't dismiss if clicking inside the menu or the editor
+    if (textSelectionContextMenu.contains(target)) return;
+    if (view.dom.contains(target)) return;
+
+    hideTextSelectionContextMenu();
+  });
+
+  // Dismiss on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideTextSelectionContextMenu();
+    }
+  });
+
+  // Context menu button handlers
+  if (contextGeoMarkBtn) {
+    contextGeoMarkBtn.addEventListener('click', async () => {
+      hideTextSelectionContextMenu();
+      await createGeoMark(view);
+    });
+  }
+
+  if (contextMapBtn) {
+    contextMapBtn.addEventListener('click', async () => {
+      hideTextSelectionContextMenu();
+      await insertMapWithAutoGeoMark(view);
+    });
+  }
+
+  // Expose context menu functions globally for demo system
+  (window as any).showTextSelectionContextMenu = showTextSelectionContextMenu;
+  (window as any).hideTextSelectionContextMenu = hideTextSelectionContextMenu;
+  (window as any).getTextSelectionContextMenu = () => textSelectionContextMenu;
 
   console.log('[Main] Toolbar buttons set up');
 }

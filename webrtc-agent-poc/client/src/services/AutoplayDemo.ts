@@ -42,7 +42,22 @@ export type DemoAction =
   | { type: 'hideRemoteCursor' } // Hide the remote cursor
   | { type: 'showRemoteMapBounds'; clientId: number; userName: string; color: string; bounds: { north: number; south: number; east: number; west: number } } // Show remote user's map viewport overlay
   | { type: 'moveRemoteMapBounds'; bounds: { north: number; south: number; east: number; west: number }; duration?: number } // Animate map bounds overlay
-  | { type: 'hideRemoteMapBounds' }; // Hide the map bounds overlay
+  | { type: 'hideRemoteMapBounds' } // Hide the map bounds overlay
+  // Bob actions (for dual-phone Share demo - sent to second phone)
+  | { type: 'bobScroll'; target: 'firstMap' | 'secondMap' | number } // Scroll Bob's editor to a target
+  | { type: 'bobFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom' } // Show finger tap on Bob's phone
+  | { type: 'bobOpenFullscreenMap' } // Open fullscreen map on Bob's phone
+  | { type: 'bobCloseFullscreenMap' } // Close fullscreen map on Bob's phone
+  | { type: 'bobPanMap'; direction: 'up' | 'down' | 'left' | 'right'; distance?: number } // Pan Bob's fullscreen map
+  | { type: 'bobZoomMap'; direction: 'in' | 'out'; amount?: number } // Zoom Bob's fullscreen map
+  // Finger text selection actions
+  | { type: 'fingerSelect'; text: string; fromSide?: 'left' | 'right' | 'bottom' } // Double-tap to select text, show handles
+  | { type: 'dragSelectionHandle'; handle: 'start' | 'end'; toText: string } // Drag selection handle to expand/shrink
+  // Context menu actions
+  | { type: 'showContextMenu'; position?: 'above' | 'below' } // Show context menu at current selection
+  | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' } // Tap a context menu item
+  | { type: 'fingerDoubleTap'; target: 'cursor' | 'endOfDoc'; fromSide?: 'left' | 'right' | 'bottom' } // Double-tap at cursor or end of document
+  | { type: 'fingerScroll'; direction: 'up' | 'down'; distance?: number; fromSide?: 'left' | 'right' | 'bottom' }; // Scroll editor with finger swipe
 
 export interface DemoScript {
   name: string;
@@ -200,20 +215,38 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'newline' },
       { type: 'type', text: 'Explore Copenhagen and visit Tivoli Gardens', speed: 'normal' },
       { type: 'pause', duration: 500 },
-      { type: 'newline' },
+      { type: 'newline', count: 2 },
 
-      // Insert Saturday map
-      { type: 'insertMap' },
+      // Step 1: Location Tagging - using context menu
+      { type: 'comment', heading: 'Location Tagging', text: 'Double-tap text to create geo-marks', duration: 2000, step: 1 },
+
+      // Create geo-mark for Copenhagen via context menu
+      { type: 'fingerSelect', text: 'Copenhagen', fromSide: 'right' },
       { type: 'pause', duration: 500 },
-
-      // Step 1: Location Tagging - explain the auto-detection
-      { type: 'comment', heading: 'Location Tagging', text: 'Places are auto-detected from text', duration: 2000, step: 1 },
-
-      // Saturday geo-marks (auto-detected after map)
-      { type: 'geomark', text: 'Copenhagen', lat: 55.6761, lng: 12.5683 },
+      { type: 'showContextMenu' },
       { type: 'pause', duration: 400 },
-      { type: 'geomark', text: 'Tivoli Gardens', lat: 55.6733, lng: 12.5681 },
+      { type: 'tapContextMenuItem', item: 'geomark' },
+      { type: 'pause', duration: 600 },
+
+      // Create geo-mark for Tivoli Gardens via context menu
+      { type: 'fingerSelect', text: 'Tivoli Gardens', fromSide: 'right' },
+      { type: 'pause', duration: 500 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'geomark' },
       { type: 'pause', duration: 800 },
+
+      // Insert Saturday map via context menu (double-tap on empty line)
+      { type: 'fingerDoubleTap', target: 'endOfDoc', fromSide: 'bottom' },
+      { type: 'pause', duration: 400 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'map' },
+      { type: 'pause', duration: 600 },
+
+      // Scroll down to see the map that was just inserted
+      { type: 'fingerScroll', direction: 'up', distance: 300, fromSide: 'right' },
+      { type: 'pause', duration: 400 },
 
       // Step 2: Fullscreen Map
       { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand and explore', duration: 2000, step: 2 },
@@ -250,10 +283,13 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
       { type: 'pause', duration: 1500 }, // Show the final result
 
-      // Tap X button to dismiss sheet (finger moves to close button, then exits)
-      { type: 'showFingerTap', selector: '#location-sheet-close-btn', fromSide: 'right' }, // Last tap - no persist
+      // Tap X button to dismiss location sheet
+      { type: 'showFingerTap', selector: '#location-sheet-close-btn', fromSide: 'right', persist: true },
       { type: 'clickElement', selector: '#location-sheet-close-btn' }, // Dismiss sheet
-      { type: 'pause', duration: 800 },
+      { type: 'pause', duration: 600 },
+
+      // Tap X button in top-right to exit fullscreen map (shows user how to close)
+      { type: 'showFingerTap', selector: '#fullscreen-overlay .close-btn', fromSide: 'left' }, // Final tap - no persist
       { type: 'closeFullscreenMap' },
       { type: 'pause', duration: 500 },
       { type: 'newline' },
@@ -264,43 +300,139 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'newline' },
       { type: 'type', text: 'Drive to Aarhus for the old town museum', speed: 'normal' },
       { type: 'pause', duration: 500 },
-      { type: 'newline' },
+      { type: 'newline', count: 2 },
 
-      // Insert Sunday map
-      { type: 'insertMap' },
+      // Scroll down to keep new content visible
+      { type: 'fingerScroll', direction: 'up', distance: 100, fromSide: 'right' },
+      { type: 'pause', duration: 300 },
+
+      // Create geo-mark for Aarhus via context menu
+      { type: 'fingerSelect', text: 'Aarhus', fromSide: 'right' },
       { type: 'pause', duration: 500 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'geomark' },
+      { type: 'pause', duration: 600 },
 
-      // Sunday geo-mark (auto-detected after map)
-      { type: 'geomark', text: 'Aarhus', lat: 56.1629, lng: 10.2039 },
+      // Insert Sunday map via context menu (double-tap on empty line)
+      { type: 'fingerDoubleTap', target: 'endOfDoc', fromSide: 'bottom' },
+      { type: 'pause', duration: 400 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'map' },
+      { type: 'pause', duration: 600 },
+
+      // Scroll down to see the second map
+      { type: 'fingerScroll', direction: 'up', distance: 150, fromSide: 'right' },
+      { type: 'pause', duration: 400 },
+
+      // Step 4: Share - real-time collaboration shown via dual phones (Alice/Bob)
+      // The second phone (Bob) demonstrates live Y.js sync, so no fake "Marc" avatar needed
+      { type: 'comment', heading: 'Share', text: 'Invite friends to collaborate in real-time', duration: 2000, step: 4 },
 
       { type: 'pause', duration: 1000 },
 
-      // Step 4: Share - show at the end with Marc joining
-      { type: 'comment', heading: 'Share', text: 'Invite friends to collaborate in real-time', duration: 2000, step: 4 },
-      { type: 'showAvatar', name: 'Marc', color: '#3B82F6' },
+      // Bob scrolls down to the first map
+      { type: 'bobScroll', target: 'firstMap' },
+      { type: 'pause', duration: 500 },
 
-      // Show Marc's cursor at the top
-      { type: 'showRemoteCursor', userName: 'Marc', color: '#3B82F6', position: 'start' },
+      // Bob taps on the map to open fullscreen
+      { type: 'bobFingerTap', selector: '.prosemirror-map', fromSide: 'right' },
+      { type: 'bobOpenFullscreenMap' },
+      { type: 'pause', duration: 800 },
+
+      // Bob zooms in
+      { type: 'bobZoomMap', direction: 'in' },
       { type: 'pause', duration: 600 },
 
-      // Marc "opens" fullscreen map - show his viewport as overlay on block map
-      // Bounds centered on the route between Copenhagen and Tivoli, small enough to be clearly a "viewport"
-      { type: 'showRemoteMapBounds', clientId: 9999, userName: 'Marc', color: '#3B82F6',
-        bounds: { north: 55.680, south: 55.672, east: 12.575, west: 12.562 } },
-      { type: 'pause', duration: 1200 },
+      // Bob pans around
+      { type: 'bobPanMap', direction: 'left', distance: 80 },
+      { type: 'pause', duration: 500 },
+      { type: 'bobPanMap', direction: 'up', distance: 60 },
+      { type: 'pause', duration: 500 },
 
-      // Marc pans down toward Tivoli Gardens - animate the overlay
-      { type: 'moveRemoteMapBounds', bounds: { north: 55.677, south: 55.669, east: 12.576, west: 12.563 }, duration: 1000 },
+      // Bob zooms in more
+      { type: 'bobZoomMap', direction: 'in' },
+      { type: 'pause', duration: 600 },
+
+      // Bob pans right
+      { type: 'bobPanMap', direction: 'right', distance: 100 },
       { type: 'pause', duration: 800 },
-      // Marc pans to look at Tivoli Gardens marker
-      { type: 'moveRemoteMapBounds', bounds: { north: 55.675, south: 55.667, east: 12.574, west: 12.561 }, duration: 1000 },
-      { type: 'pause', duration: 1200 },
 
-      // Marc closes fullscreen - remove overlay
-      { type: 'hideRemoteMapBounds' },
-      { type: 'hideRemoteCursor' },
+      // Bob closes fullscreen map
+      { type: 'bobFingerTap', selector: '#fullscreen-overlay .close-btn', fromSide: 'left' },
+      { type: 'bobCloseFullscreenMap' },
 
-      { type: 'pause', duration: 300 },
+      { type: 'pause', duration: 500 },
+      { type: 'hideCursor' },
+      { type: 'hideFinger' },
+      { type: 'pause', duration: 500 },
+      { type: 'clear' },
+    ]
+  },
+
+  // Simple test demo for debugging button tap active states
+  btnTest: {
+    name: 'Button Tap Test',
+    loopDelay: 0, // No loop
+    userName: 'Test',
+    userColor: '#3B82F6',
+    actions: [
+      { type: 'pause', duration: 1000 },
+      { type: 'showFingerTap', selector: '#heading1-btn', fromSide: 'bottom' },
+      { type: 'pause', duration: 2000 },
+      { type: 'showFingerTap', selector: '#heading2-btn', fromSide: 'bottom' },
+      { type: 'pause', duration: 2000 },
+      { type: 'showFingerTap', selector: '#paragraph-btn', fromSide: 'bottom' },
+      { type: 'pause', duration: 2000 },
+    ]
+  },
+
+  // Test demo for finger text selection
+  fingerSelectTest: {
+    name: 'Finger Selection Test',
+    loopDelay: 0, // No loop
+    userName: 'Test',
+    userColor: '#10B981',
+    actions: [
+      // Type some content first
+      { type: 'showCursor', userName: 'Test', color: '#10B981' },
+      { type: 'heading', level: 1, text: 'Copenhagen Trip' },
+      { type: 'newline' },
+      { type: 'type', text: 'Visit Copenhagen and then head to Denmark for more adventures.', speed: 'fast' },
+      { type: 'newline', count: 2 },
+      { type: 'pause', duration: 1000 },
+
+      // Double-tap to select "Copenhagen"
+      { type: 'fingerSelect', text: 'Copenhagen', fromSide: 'right' },
+      { type: 'pause', duration: 800 },
+
+      // Show context menu and tap "Create Geo Mark"
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 600 },
+      { type: 'tapContextMenuItem', item: 'geomark' },
+      { type: 'pause', duration: 1000 },
+
+      // Double-tap to select "Denmark"
+      { type: 'fingerSelect', text: 'Denmark', fromSide: 'right' },
+      { type: 'pause', duration: 800 },
+
+      // Show context menu and tap "Create Geo Mark"
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 600 },
+      { type: 'tapContextMenuItem', item: 'geomark' },
+      { type: 'pause', duration: 1000 },
+
+      // Double-tap on new line (at end of document) to insert map
+      { type: 'fingerDoubleTap', target: 'endOfDoc', fromSide: 'bottom' },
+      { type: 'pause', duration: 500 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 600 },
+      { type: 'tapContextMenuItem', item: 'map' },
+      { type: 'pause', duration: 2500 },
+
+      // Clean up
+      { type: 'hideFinger' },
       { type: 'hideCursor' },
       { type: 'pause', duration: 500 },
       { type: 'clear' },
@@ -329,6 +461,7 @@ export class AutoplayDemo {
   private awareness: any;
   private isPlaying = false;
   private isPaused = false;
+  private pendingStepCallback: (() => void) | null = null;
   private currentActionIndex = 0;
   private timeoutId: number | null = null;
   private colorIndex = 0;
@@ -340,6 +473,7 @@ export class AutoplayDemo {
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
   public onInsertMap?: () => Promise<void> | void;
   public onHeading?: (level: 1 | 2 | 3, text: string) => void;
+  public onSetHeadingLevel?: (level: 1 | 2 | 3) => void; // Set current block to heading (for typewriter animation)
   public onNewline?: () => void; // Create new paragraph block
   public onType?: (char: string) => void; // Type a character into the last paragraph
   public onSelect?: (text: string) => { from: number; to: number } | null; // Select text, return positions
@@ -361,6 +495,14 @@ export class AutoplayDemo {
   public onShowRemoteMapBounds?: (clientId: number, userName: string, color: string, bounds: { north: number; south: number; east: number; west: number }) => void; // Show remote map bounds overlay
   public onMoveRemoteMapBounds?: (bounds: { north: number; south: number; east: number; west: number }, duration: number) => Promise<void>; // Animate map bounds
   public onHideRemoteMapBounds?: () => void; // Hide map bounds overlay
+  // Finger text selection callbacks
+  public onFingerSelect?: (text: string, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap to select text, show handles
+  public onDragSelectionHandle?: (handle: 'start' | 'end', toText: string) => Promise<void>; // Drag selection handle to expand/shrink
+  // Context menu callbacks
+  public onShowContextMenu?: (position: 'above' | 'below') => Promise<void>; // Show context menu at selection
+  public onTapContextMenuItem?: (item: 'geomark' | 'map') => Promise<void>; // Tap a context menu item
+  public onFingerDoubleTap?: (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap at position
+  public onFingerScroll?: (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Scroll with finger swipe
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -402,7 +544,26 @@ export class AutoplayDemo {
             if (!this.isPaused) this.togglePause();
             break;
           case 'resume':
-            if (this.isPaused) this.togglePause();
+            if (this.isPaused) {
+              // Check if there's a pending callback from showComment (remote mode)
+              // If so, just clear pause state and call the callback - don't use togglePause
+              // which would also call playNextAction() causing double-advancement
+              if (this.pendingStepCallback) {
+                this.isPaused = false;
+                const callback = this.pendingStepCallback;
+                this.pendingStepCallback = null;
+                callback();
+              } else {
+                // Normal resume (no pending callback)
+                this.togglePause();
+              }
+            }
+            break;
+          case 'resumeFromAction':
+            // Resume playback from a specific action index (for chapter navigation)
+            if (typeof data.actionIndex === 'number') {
+              this.resumeFromAction(data.actionIndex);
+            }
             break;
         }
       }
@@ -430,8 +591,77 @@ export class AutoplayDemo {
     this.currentActionIndex = 0;
     this.colorIndex = 0;
     this.actionTypeCounts.clear();
+
+    // Clear previous demo state before starting fresh
+    this.clearDemoState();
+
     this.clearDocument();
     this.playNextAction();
+  }
+
+  /**
+   * Resume playback from a specific action index (for chapter navigation)
+   * Document state should already be restored via snapshot before calling this
+   */
+  resumeFromAction(actionIndex: number) {
+    // Stop any current playback
+    if (this.timeoutId !== null) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
+    console.log(`[AutoplayDemo] Resuming from action index: ${actionIndex}`);
+    this.isPlaying = true;
+    this.isPaused = false;
+    this.currentActionIndex = actionIndex;
+
+    // Count action types up to this point (for stopAfter tracking)
+    this.actionTypeCounts.clear();
+    for (let i = 0; i < actionIndex; i++) {
+      const action = this.script.actions[i];
+      const count = (this.actionTypeCounts.get(action.type) || 0) + 1;
+      this.actionTypeCounts.set(action.type, count);
+    }
+
+    // Clear visual demo state (cursors, overlays) before resuming
+    this.clearDemoState();
+
+    // Continue playback
+    this.playNextAction();
+  }
+
+  /**
+   * Clear all demo state from previous runs
+   * This prevents ghost avatars, cursors, and map bounds from accumulating
+   */
+  private clearDemoState(): void {
+    console.log('[AutoplayDemo] Clearing demo state');
+
+    // Clear demo avatars via callback
+    if (this.onClearAvatars) {
+      this.onClearAvatars();
+    }
+
+    // Hide any remote cursor
+    if (this.onHideRemoteCursor) {
+      this.onHideRemoteCursor();
+    }
+
+    // Hide map bounds overlay
+    if (this.onHideRemoteMapBounds) {
+      this.onHideRemoteMapBounds();
+    }
+
+    // Hide finger animation
+    if (this.onHideFinger) {
+      this.onHideFinger();
+    }
+
+    // Remove any demo highlight overlays
+    document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
+
+    // Remove any demo cursor elements
+    document.querySelectorAll('.demo-yjs-cursor').forEach(el => el.remove());
   }
 
   /**
@@ -482,13 +712,21 @@ export class AutoplayDemo {
       }
 
       // Otherwise, loop normally (standalone mode)
+      // loopDelay of 0 means no loop
+      const loopDelay = this.script.loopDelay;
+      if (loopDelay === 0) {
+        console.log('[AutoplayDemo] Script complete (loopDelay=0, no restart)');
+        this.stop();
+        if (this.onPlaybackStopped) this.onPlaybackStopped();
+        return;
+      }
       console.log('[AutoplayDemo] Script complete, restarting...');
       this.timeoutId = window.setTimeout(() => {
         this.currentActionIndex = 0;
         this.colorIndex = 0;
         this.actionTypeCounts.clear();
         this.playNextAction();
-      }, this.script.loopDelay || 3000);
+      }, loopDelay ?? 3000);
       return;
     }
 
@@ -802,6 +1040,122 @@ export class AutoplayDemo {
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
         break;
 
+      // Bob actions - send to parent DemoPlayer which forwards to Bob's iframe
+      case 'bobScroll':
+        console.log(`[AutoplayDemo] Sending bobScroll to parent: ${action.target}`);
+        this.notifyParent({ type: 'bobCommand', command: 'scroll', target: action.target });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 800);
+        break;
+
+      case 'bobFingerTap':
+        console.log(`[AutoplayDemo] Sending bobFingerTap to parent: ${action.selector}`);
+        this.notifyParent({ type: 'bobCommand', command: 'fingerTap', selector: action.selector, fromSide: action.fromSide || 'right' });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 1000);
+        break;
+
+      case 'bobOpenFullscreenMap':
+        console.log('[AutoplayDemo] Sending bobOpenFullscreenMap to parent');
+        this.notifyParent({ type: 'bobCommand', command: 'openFullscreenMap' });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 1000);
+        break;
+
+      case 'bobCloseFullscreenMap':
+        console.log('[AutoplayDemo] Sending bobCloseFullscreenMap to parent');
+        this.notifyParent({ type: 'bobCommand', command: 'closeFullscreenMap' });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'bobPanMap':
+        console.log(`[AutoplayDemo] Sending bobPanMap to parent: ${action.direction}`);
+        this.notifyParent({ type: 'bobCommand', command: 'panMap', direction: action.direction, distance: action.distance || 100 });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 800);
+        break;
+
+      case 'bobZoomMap':
+        console.log(`[AutoplayDemo] Sending bobZoomMap to parent: ${action.direction}`);
+        this.notifyParent({ type: 'bobCommand', command: 'zoomMap', direction: action.direction, amount: action.amount || 1 });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 800);
+        break;
+
+      // Finger text selection actions
+      case 'fingerSelect':
+        if (this.onFingerSelect) {
+          const fromSide = action.fromSide || 'right';
+          console.log(`[AutoplayDemo] Finger selecting "${action.text}" from ${fromSide}`);
+          this.onFingerSelect(action.text, fromSide).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onFingerSelect not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'dragSelectionHandle':
+        if (this.onDragSelectionHandle) {
+          console.log(`[AutoplayDemo] Dragging ${action.handle} handle to "${action.toText}"`);
+          this.onDragSelectionHandle(action.handle, action.toText).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onDragSelectionHandle not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      // Context menu actions
+      case 'showContextMenu':
+        if (this.onShowContextMenu) {
+          const position = action.position || 'below';
+          console.log(`[AutoplayDemo] Showing context menu ${position} selection`);
+          this.onShowContextMenu(position).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onShowContextMenu not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'tapContextMenuItem':
+        if (this.onTapContextMenuItem) {
+          console.log(`[AutoplayDemo] Tapping context menu item: ${action.item}`);
+          this.onTapContextMenuItem(action.item).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onTapContextMenuItem not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'fingerDoubleTap':
+        if (this.onFingerDoubleTap) {
+          const fromSide = action.fromSide || 'right';
+          console.log(`[AutoplayDemo] Finger double-tap at ${action.target} from ${fromSide}`);
+          this.onFingerDoubleTap(action.target, fromSide).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onFingerDoubleTap not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'fingerScroll':
+        if (this.onFingerScroll) {
+          const distance = action.distance || 150;
+          const fromSide = action.fromSide || 'right';
+          console.log(`[AutoplayDemo] Finger scroll ${action.direction} ${distance}px from ${fromSide}`);
+          this.onFingerScroll(action.direction, distance, fromSide).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onFingerScroll not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
       default:
         this.playNextAction();
     }
@@ -827,10 +1181,26 @@ export class AutoplayDemo {
   }
 
   /**
-   * Insert a heading
+   * Insert a heading with finger tap animation and typewriter effect
    */
   private insertHeading(level: 1 | 2 | 3, text: string, callback: () => void) {
-    if (this.onHeading) {
+    // If we have the new typewriter-style callback, use finger tap + typewriter
+    if (this.onSetHeadingLevel && this.onType && this.onShowFingerTap) {
+      // Step 1: Show finger tap on heading button
+      const buttonId = level === 1 ? '#heading1-btn' : '#heading2-btn';
+      console.log(`[AutoplayDemo] Showing finger tap on ${buttonId} for heading level ${level}`);
+      this.onShowFingerTap(buttonId, 'bottom', false).then(() => {
+        // Step 2: Set the block to heading level
+        this.onSetHeadingLevel!(level);
+        this.updateCursorPosition();
+
+        // Step 3: Type the text with typewriter effect
+        this.timeoutId = window.setTimeout(() => {
+          this.typeText(text, 'fast', callback);
+        }, 200);
+      });
+    } else if (this.onHeading) {
+      // Fallback to old behavior: insert heading with text immediately
       this.onHeading(level, text);
       this.updateCursorPosition();
       this.timeoutId = window.setTimeout(callback, 100);
@@ -976,19 +1346,27 @@ export class AutoplayDemo {
       const demoId = new URLSearchParams(window.location.search).get('demo') || 'maps';
       // Use demoStepChanged for remote control mode, demoStep for legacy landing page
       const messageType = this.remoteControlMode ? 'demoStepChanged' : 'demoStep';
-      window.parent.postMessage({ type: messageType, step, demoId, heading, text, duration }, '*');
-      console.log(`[AutoplayDemo] Sent step ${step} to parent (demo: ${demoId}, remote: ${this.remoteControlMode})`);
+      // Include actionIndex for snapshot capture (DemoPlayer needs to know which action to resume from)
+      window.parent.postMessage({
+        type: messageType,
+        step,
+        actionIndex: this.currentActionIndex,
+        demoId,
+        heading,
+        text,
+        duration
+      }, '*');
+      console.log(`[AutoplayDemo] Sent step ${step} to parent (actionIndex: ${this.currentActionIndex}, demo: ${demoId}, remote: ${this.remoteControlMode})`);
     }
 
     // In remote control mode, let parent DemoPlayer handle the overlay display
+    // The demo pauses itself and waits for parent to send resume command
     if (this.remoteControlMode) {
-      // Calculate how long the comment would take in normal mode
-      const typingTime = (heading?.length || 0) * 40 + (text?.length || 0) * 40 + 500;
-      const holdDuration = duration || 1500;
-      const totalDuration = typingTime + holdDuration + 300;
-
-      console.log(`[AutoplayDemo] Remote mode: skipping overlay, waiting ${totalDuration}ms for parent to show comment`);
-      this.timeoutId = window.setTimeout(callback, totalDuration);
+      console.log(`[AutoplayDemo] Remote mode: pausing and waiting for parent to resume`);
+      // Store the callback to be called when parent sends resume
+      this.pendingStepCallback = callback;
+      // Pause the demo - parent will resume it after showing comment
+      this.isPaused = true;
       return;
     }
 
