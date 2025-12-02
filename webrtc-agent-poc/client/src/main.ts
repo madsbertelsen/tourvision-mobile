@@ -2217,11 +2217,20 @@ async function main() {
     };
 
     // Wire up context menu item tap (finger animation + execute action)
-    player.onTapContextMenuItem = (item: 'geomark' | 'map') => {
+    player.onTapContextMenuItem = (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph') => {
       return new Promise<void>(async (resolve) => {
         const finger = document.getElementById('demo-finger');
         const contextMenu = (window as any).getTextSelectionContextMenu?.();
-        const buttonId = item === 'geomark' ? 'context-geomark-btn' : 'context-map-btn';
+
+        // Map item to button ID
+        const buttonIdMap: Record<string, string> = {
+          'geomark': 'context-geomark-btn',
+          'map': 'context-map-btn',
+          'h1': 'context-heading1-btn',
+          'h2': 'context-heading2-btn',
+          'paragraph': 'context-paragraph-btn'
+        };
+        const buttonId = buttonIdMap[item] || 'context-geomark-btn';
         const button = document.getElementById(buttonId);
 
         if (!finger || !contextMenu || !button) {
@@ -2266,16 +2275,8 @@ async function main() {
         // Reset button background
         button.style.background = '';
 
-        // Execute the actual action
-        if (item === 'geomark') {
-          // Trigger the real geo-mark creation
-          const geomarkBtn = document.getElementById('context-geomark-btn');
-          if (geomarkBtn) geomarkBtn.click();
-        } else {
-          // Trigger the real map insertion
-          const mapBtn = document.getElementById('context-map-btn');
-          if (mapBtn) mapBtn.click();
-        }
+        // Execute the actual action by clicking the button
+        if (button) button.click();
 
         console.log(`[AutoplayDemo] Tapped context menu item: ${item}`);
 

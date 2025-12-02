@@ -55,7 +55,7 @@ export type DemoAction =
   | { type: 'dragSelectionHandle'; handle: 'start' | 'end'; toText: string } // Drag selection handle to expand/shrink
   // Context menu actions
   | { type: 'showContextMenu'; position?: 'above' | 'below' } // Show context menu at current selection
-  | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' } // Tap a context menu item
+  | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' } // Tap a context menu item
   | { type: 'fingerDoubleTap'; target: 'cursor' | 'endOfDoc'; fromSide?: 'left' | 'right' | 'bottom' } // Double-tap at cursor or end of document
   | { type: 'fingerScroll'; direction: 'up' | 'down'; distance?: number; fromSide?: 'left' | 'right' | 'bottom' }; // Scroll editor with finger swipe
 
@@ -199,8 +199,13 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Demo: Emma proposes a weekend trip to friends
       { type: 'showCursor', userName: 'Emma', color: '#EC4899' },
 
-      // Main heading
-      { type: 'heading', level: 1, text: 'Weekend in Denmark?' },
+      // Main heading - type then select and format via context menu
+      { type: 'type', text: 'Weekend in Denmark?', speed: 'normal' },
+      { type: 'fingerSelect', text: 'Weekend in Denmark?', fromSide: 'right' },
+      { type: 'pause', duration: 400 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'h1' },
       { type: 'pause', duration: 300 },
       { type: 'newline' },
       { type: 'type', text: 'Hey guys! What do you think about this plan:', speed: 'normal' },
@@ -210,7 +215,12 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'newline' },
 
       // ===== Day 1: Saturday (complete section) =====
-      { type: 'heading', level: 2, text: 'Saturday' },
+      { type: 'type', text: 'Saturday', speed: 'normal' },
+      { type: 'fingerSelect', text: 'Saturday', fromSide: 'right' },
+      { type: 'pause', duration: 400 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'h2' },
       { type: 'pause', duration: 200 },
       { type: 'newline' },
       { type: 'type', text: 'Explore Copenhagen and visit Tivoli Gardens', speed: 'normal' },
@@ -295,7 +305,12 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'newline' },
 
       // ===== Day 2: Sunday (complete section) =====
-      { type: 'heading', level: 2, text: 'Sunday' },
+      { type: 'type', text: 'Sunday', speed: 'normal' },
+      { type: 'fingerSelect', text: 'Sunday', fromSide: 'right' },
+      { type: 'pause', duration: 400 },
+      { type: 'showContextMenu' },
+      { type: 'pause', duration: 400 },
+      { type: 'tapContextMenuItem', item: 'h2' },
       { type: 'pause', duration: 200 },
       { type: 'newline' },
       { type: 'type', text: 'Drive to Aarhus for the old town museum', speed: 'normal' },
@@ -500,7 +515,7 @@ export class AutoplayDemo {
   public onDragSelectionHandle?: (handle: 'start' | 'end', toText: string) => Promise<void>; // Drag selection handle to expand/shrink
   // Context menu callbacks
   public onShowContextMenu?: (position: 'above' | 'below') => Promise<void>; // Show context menu at selection
-  public onTapContextMenuItem?: (item: 'geomark' | 'map') => Promise<void>; // Tap a context menu item
+  public onTapContextMenuItem?: (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph') => Promise<void>; // Tap a context menu item
   public onFingerDoubleTap?: (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap at position
   public onFingerScroll?: (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Scroll with finger swipe
 
