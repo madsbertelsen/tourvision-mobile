@@ -21,6 +21,8 @@ export interface DemoPlayerOptions {
   steps: StepDefinition[];
   autoStart?: boolean;
   dualPhone?: boolean; // Show two phones side by side for collab demos
+  enableSync?: boolean; // Enable Y.js sync from the start (needed for addSecondPhone)
+  sessionId?: string; // Unique session ID for state isolation (auto-generated if not provided)
 }
 
 // Messages sent from Player to Iframe
@@ -31,7 +33,8 @@ export interface DemoCommand {
 
 export interface DemoControl {
   type: 'demoControl';
-  command: 'start' | 'stop' | 'pause' | 'resume';
+  command: 'start' | 'stop' | 'pause' | 'resume' | 'resumeFromAction';
+  actionIndex?: number;  // Required for resumeFromAction command
 }
 
 // Messages received from Iframe
@@ -51,17 +54,32 @@ export interface DemoStepChangedEvent {
 
 export type IframeMessage = DemoReadyEvent | DemoActionCompleteEvent | DemoStepChangedEvent;
 
+// Snapshot data for a step
+interface StepSnapshot {
+  step: number;
+  actionIndex: number;
+  stateVector: number[];  // Y.js state as array (for postMessage serialization)
+}
+
 export class DemoPlayer {
   private container: HTMLElement;
   private iframes: HTMLIFrameElement[] = [];
   private tabsContainer: HTMLElement | null = null;
   private overlayContainer: HTMLElement | null = null;
   private phoneScreen: HTMLElement | null = null;
+  private playerFrame: HTMLElement | null = null;
+  private hasSecondPhone: boolean = false;
+  private messageHandler: ((event: MessageEvent) => void) | null = null;
 
   private options: DemoPlayerOptions;
+  private sessionId: string;
   private currentStep: number = 0;
   private isPlaying: boolean = false;
   private iframesReady: boolean[] = [];
+
+  // Chapter snapshots for navigation
+  private snapshots: Map<number, StepSnapshot> = new Map();
+  private currentActionIndex: number = 0;  // Track current action for snapshot capture
 
   // Callbacks
   public onStepChange?: (step: number) => void;
@@ -70,6 +88,9 @@ export class DemoPlayer {
   constructor(options: DemoPlayerOptions) {
     this.options = options;
     this.container = options.container;
+    // Generate unique session ID if not provided
+    this.sessionId = options.sessionId || Math.random().toString(36).substring(2, 10);
+    console.log('[DemoPlayer] Session ID:', this.sessionId);
     this.createDOM();
     this.setupMessageListener();
 
@@ -83,7 +104,7 @@ export class DemoPlayer {
    * Create the DOM structure for the demo player
    */
   private createDOM(): void {
-    const { steps, editorUrl, demoScript, dualPhone } = this.options;
+    const { steps, editorUrl, demoScript, dualPhone, enableSync } = this.options;
     const phoneCount = dualPhone ? 2 : 1;
 
     // Create main wrapper
@@ -106,9 +127,20 @@ export class DemoPlayer {
     // Create player frame (grows horizontally to fill)
     const playerFrame = document.createElement('div');
     playerFrame.className = 'player-frame' + (dualPhone ? ' dual-phone' : '');
+    this.playerFrame = playerFrame; // Store reference for addSecondPhone
+
+    // User identities for dual phone mode
+    const DEMO_USERS = [
+      { name: 'Alice', color: '#3b82f6' },  // Blue
+      { name: 'Bob', color: '#10b981' },    // Green
+    ];
 
     // Create phone mockup(s)
     for (let i = 0; i < phoneCount; i++) {
+      // Wrap phone in container for label positioning
+      const phoneWrapper = document.createElement('div');
+      phoneWrapper.className = 'phone-wrapper';
+
       const phoneMockup = document.createElement('div');
       phoneMockup.className = 'phone-mockup';
 
@@ -121,12 +153,15 @@ export class DemoPlayer {
       // For dual phone: enableSync=true so both phones sync, demoUser for different identities
       // Second phone gets observeOnly=true so it doesn't run the demo script
       const iframe = document.createElement('iframe');
-      let dualParams = '';
+      let syncParams = '';
       if (dualPhone) {
         const isSecondPhone = i === 1;
-        dualParams = `&enableSync=true&demoUser=${i + 1}${isSecondPhone ? '&observeOnly=true' : ''}`;
+        syncParams = `&enableSync=true&demoUser=${i + 1}${isSecondPhone ? '&observeOnly=true' : ''}`;
+      } else if (enableSync) {
+        // Single phone with sync enabled (for later addSecondPhone)
+        syncParams = `&enableSync=true&demoUser=1`;
       }
-      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${dualParams}`;
+      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true${syncParams}`;
       iframe.setAttribute('frameborder', '0');
       iframe.setAttribute('allowfullscreen', 'true');
 
@@ -138,7 +173,21 @@ export class DemoPlayer {
       phoneScreen.appendChild(iframe);
       phoneScreen.appendChild(homeIndicator);
       phoneMockup.appendChild(phoneScreen);
-      playerFrame.appendChild(phoneMockup);
+      phoneWrapper.appendChild(phoneMockup);
+
+      // Add user label for dual phone mode
+      if (dualPhone || enableSync) {
+        const user = DEMO_USERS[i];
+        const label = document.createElement('div');
+        label.className = 'phone-label';
+        label.innerHTML = `
+          <span class="phone-label-avatar" style="background-color: ${user.color}">${user.name[0]}</span>
+          <span class="phone-label-name">${user.name}</span>
+        `;
+        phoneWrapper.appendChild(label);
+      }
+
+      playerFrame.appendChild(phoneWrapper);
 
       // Store references
       this.iframes.push(iframe);
@@ -368,6 +417,111 @@ export class DemoPlayer {
         background: rgba(0, 0, 0, 0.3);
         border-radius: 2px;
       }
+
+      /* Phone wrapper for label positioning */
+      .phone-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      /* User label below phone */
+      .phone-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        opacity: 0;
+        transform: translateY(-10px);
+        animation: labelFadeIn 0.3s ease-out forwards;
+        animation-delay: 0.2s;
+      }
+
+      .phone-label-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .phone-label-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      @keyframes labelFadeIn {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Second phone slide-in animation */
+      .phone-wrapper.second-phone {
+        animation: slideInFromRight 0.5s ease-out forwards;
+      }
+
+      .phone-wrapper.second-phone .phone-label {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes slideInFromRight {
+        from {
+          opacity: 0;
+          transform: translateX(50px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      /* Transition for player frame when adding second phone */
+      .player-frame.transitioning {
+        transition: all 0.3s ease-out;
+      }
+
+      /* Second phone slide-out animation for removal */
+      .phone-wrapper.second-phone.removing {
+        animation: slideOutToRight 0.3s ease-out forwards;
+      }
+
+      @keyframes slideOutToRight {
+        from {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        to {
+          opacity: 0;
+          transform: translateX(50px);
+        }
+      }
+
+      /* Label fade-out animation */
+      .phone-label.removing {
+        animation: labelFadeOut 0.3s ease-out forwards;
+      }
+
+      @keyframes labelFadeOut {
+        from {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        to {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -376,7 +530,7 @@ export class DemoPlayer {
    * Setup message listener for iframe communication
    */
   private setupMessageListener(): void {
-    window.addEventListener('message', (event) => {
+    this.messageHandler = (event: MessageEvent) => {
       const data = event.data;
 
       // Find which iframe sent the message
@@ -393,17 +547,46 @@ export class DemoPlayer {
           break;
 
         case 'demoActionComplete':
-          console.log('[DemoPlayer] Action complete:', data.actionIndex);
-          // Continue to next action if playing
+          // Track current action index for snapshot capture
+          if (iframeIndex === 0 && typeof data.actionIndex === 'number') {
+            this.currentActionIndex = data.actionIndex;
+          }
           break;
 
         case 'demoStepChanged':
           // Only respond to first iframe's step changes to avoid duplicates
           if (iframeIndex === 0) {
-            console.log('[DemoPlayer] Step changed:', data.step, data.heading, data.text);
+            console.log('[DemoPlayer] Step changed:', data.step, 'actionIndex:', data.actionIndex, data.heading, data.text);
             this.updateTabs(data.step);
             this.currentStep = data.step;
+            // Track the action index from the demo
+            if (typeof data.actionIndex === 'number') {
+              this.currentActionIndex = data.actionIndex;
+            }
             this.onStepChange?.(data.step);
+
+            // Capture snapshot for this step if we don't have one yet
+            if (!this.snapshots.has(data.step)) {
+              const actionIdx = data.actionIndex ?? this.currentActionIndex;
+              console.log(`[DemoPlayer] Requesting snapshot for step ${data.step}, actionIndex ${actionIdx}`);
+              // Request snapshot from first iframe
+              this.iframes[0]?.contentWindow?.postMessage({
+                type: 'captureSnapshot',
+                step: data.step,
+                actionIndex: actionIdx
+              }, '*');
+            }
+
+            // Dynamically add/remove second phone based on step (for enableSync mode)
+            if (this.options.enableSync && !this.options.dualPhone) {
+              if (data.step === 4) {
+                // Share step - add Bob's phone
+                this.addSecondPhone();
+              } else if (data.step === 0 && this.hasSecondPhone) {
+                // Writing step (loop restart) - remove Bob's phone
+                this.removeSecondPhone();
+              }
+            }
 
             // Show comment overlay if heading/text provided
             if (data.heading || data.text) {
@@ -411,8 +594,34 @@ export class DemoPlayer {
             }
           }
           break;
+
+        case 'snapshotCaptured':
+          // Store the captured snapshot
+          console.log(`[DemoPlayer] Snapshot captured for step ${data.step}, actionIndex ${data.actionIndex}`);
+          this.snapshots.set(data.step, {
+            step: data.step,
+            actionIndex: data.actionIndex,
+            stateVector: data.stateVector
+          });
+          break;
+
+        case 'bobCommand':
+          // Forward command to Bob's iframe (second phone)
+          if (this.iframes.length > 1 && this.iframes[1]?.contentWindow) {
+            console.log(`[DemoPlayer] Forwarding bobCommand to Bob:`, data.command);
+            // Extract type from data to avoid overwriting 'demoCommand'
+            const { type: _, ...commandData } = data;
+            this.iframes[1].contentWindow.postMessage({
+              type: 'demoCommand',
+              ...commandData
+            }, '*');
+          } else {
+            console.warn('[DemoPlayer] No second iframe to forward bobCommand to');
+          }
+          break;
       }
-    });
+    };
+    window.addEventListener('message', this.messageHandler);
   }
 
   /**
@@ -551,7 +760,8 @@ export class DemoPlayer {
   }
 
   /**
-   * Go to a specific step
+   * Go to a specific step (chapter navigation)
+   * If we have a snapshot, restore it and resume playback from that action
    */
   public goToStep(step: number): void {
     const stepDef = this.options.steps[step];
@@ -560,14 +770,56 @@ export class DemoPlayer {
     this.currentStep = step;
     this.updateTabs(step);
 
-    // Show the step comment
-    this.showComment(stepDef.heading, stepDef.text);
+    // Handle second phone visibility based on step
+    // Bob's phone should only be visible at Share step (step 4)
+    if (this.options.enableSync && !this.options.dualPhone) {
+      if (step < 4 && this.hasSecondPhone) {
+        // Going to a step before Share - remove Bob's phone
+        this.removeSecondPhone();
+      } else if (step === 4 && !this.hasSecondPhone) {
+        // Going to Share step - add Bob's phone
+        this.addSecondPhone();
+      }
+    }
 
-    // Tell iframe to jump to this step
-    this.sendCommand({
-      type: 'demoControl',
-      command: 'start'
-    });
+    // Check if we have a snapshot for this step
+    const snapshot = this.snapshots.get(step);
+
+    if (snapshot) {
+      console.log(`[DemoPlayer] Restoring snapshot for step ${step}, resuming from action ${snapshot.actionIndex}`);
+
+      // Restore snapshot to all iframes
+      this.iframes.forEach(iframe => {
+        iframe.contentWindow?.postMessage({
+          type: 'restoreSnapshot',
+          step: step,
+          stateVector: snapshot.stateVector
+        }, '*');
+      });
+
+      // Show the step comment
+      this.showComment(stepDef.heading, stepDef.text);
+
+      // Resume playback from the action after the comment
+      // Small delay to let snapshot restore complete
+      setTimeout(() => {
+        this.sendCommand({
+          type: 'demoControl',
+          command: 'resumeFromAction',
+          actionIndex: snapshot.actionIndex
+        });
+      }, 100);
+    } else {
+      console.log(`[DemoPlayer] No snapshot for step ${step}, showing comment only`);
+      // No snapshot yet - just show the comment
+      this.showComment(stepDef.heading, stepDef.text);
+
+      // Start from beginning (demo hasn't played this step yet)
+      this.sendCommand({
+        type: 'demoControl',
+        command: 'start'
+      });
+    }
   }
 
   /**
@@ -604,7 +856,173 @@ export class DemoPlayer {
    * Clean up resources
    */
   public destroy(): void {
+    console.log('[DemoPlayer] Destroying player, session:', this.sessionId);
     this.stop();
+
+    // Send cleanup message to all iframes before removing them
+    this.iframes.forEach(iframe => {
+      try {
+        iframe.contentWindow?.postMessage({ type: 'demoCleanup' }, '*');
+      } catch (e) {
+        // Iframe may already be gone
+      }
+    });
+
+    // Remove message listener
+    if (this.messageHandler) {
+      window.removeEventListener('message', this.messageHandler);
+      this.messageHandler = null;
+    }
+
+    // Clear iframe references
+    this.iframes = [];
+    this.iframesReady = [];
+
+    // Clear DOM
     this.container.innerHTML = '';
+  }
+
+  /**
+   * Dynamically add a second phone (Bob) with Y.js sync
+   * Requires enableSync=true to have been set in options
+   */
+  public addSecondPhone(): void {
+    if (this.hasSecondPhone || !this.playerFrame) {
+      console.log('[DemoPlayer] Second phone already added or playerFrame not ready');
+      return;
+    }
+
+    console.log('[DemoPlayer] Adding second phone (Bob)');
+    this.hasSecondPhone = true;
+
+    const { editorUrl, demoScript } = this.options;
+
+    // Add dual-phone class to player frame for styling
+    this.playerFrame.classList.add('transitioning', 'dual-phone');
+
+    // Add label to first phone (Alice) if not already present
+    const firstWrapper = this.playerFrame.querySelector('.phone-wrapper');
+    if (firstWrapper && !firstWrapper.querySelector('.phone-label')) {
+      const aliceLabel = document.createElement('div');
+      aliceLabel.className = 'phone-label';
+      aliceLabel.innerHTML = `
+        <span class="phone-label-avatar" style="background-color: #3b82f6">A</span>
+        <span class="phone-label-name">Alice</span>
+      `;
+      firstWrapper.appendChild(aliceLabel);
+    }
+
+    // Create wrapper for second phone
+    const phoneWrapper = document.createElement('div');
+    phoneWrapper.className = 'phone-wrapper second-phone';
+
+    // Create second phone mockup
+    const phoneMockup = document.createElement('div');
+    phoneMockup.className = 'phone-mockup';
+
+    const phoneScreen = document.createElement('div');
+    phoneScreen.className = 'phone-screen';
+
+    // Create iframe for second phone (Bob)
+    // - enableSync=true for Y.js sync
+    // - demoUser=2 for Bob identity
+    // - observeOnly=true so Bob doesn't run the demo script
+    const iframe = document.createElement('iframe');
+    iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&hideHeader=true&enableSync=true&demoUser=2&observeOnly=true`;
+    iframe.setAttribute('frameborder', '0');
+    iframe.setAttribute('allowfullscreen', 'true');
+
+    // Create home indicator
+    const homeIndicator = document.createElement('div');
+    homeIndicator.className = 'home-indicator';
+
+    // Assemble phone
+    phoneScreen.appendChild(iframe);
+    phoneScreen.appendChild(homeIndicator);
+    phoneMockup.appendChild(phoneScreen);
+    phoneWrapper.appendChild(phoneMockup);
+
+    // Add Bob's label
+    const bobLabel = document.createElement('div');
+    bobLabel.className = 'phone-label';
+    bobLabel.innerHTML = `
+      <span class="phone-label-avatar" style="background-color: #10b981">B</span>
+      <span class="phone-label-name">Bob</span>
+    `;
+    phoneWrapper.appendChild(bobLabel);
+
+    // Add to player frame
+    this.playerFrame.appendChild(phoneWrapper);
+
+    // Store references
+    this.iframes.push(iframe);
+    this.iframesReady.push(false);
+
+    // Setup ready listener for second iframe
+    iframe.addEventListener('load', () => {
+      setTimeout(() => {
+        const index = this.iframes.indexOf(iframe);
+        if (index >= 0) {
+          this.iframesReady[index] = true;
+          console.log('[DemoPlayer] Second phone iframe ready');
+        }
+      }, 500);
+    });
+
+    // Remove transitioning class after animation
+    setTimeout(() => {
+      this.playerFrame?.classList.remove('transitioning');
+    }, 500);
+  }
+
+  /**
+   * Remove the second phone (Bob) - used when demo loops back to start
+   */
+  public removeSecondPhone(): void {
+    if (!this.hasSecondPhone || !this.playerFrame) {
+      console.log('[DemoPlayer] No second phone to remove');
+      return;
+    }
+
+    console.log('[DemoPlayer] Removing second phone (Bob)');
+
+    // Find and remove the second phone wrapper
+    const secondWrapper = this.playerFrame.querySelector('.phone-wrapper.second-phone');
+    if (secondWrapper) {
+      // Send cleanup message to second iframe before removing
+      const secondIframe = this.iframes[1];
+      if (secondIframe?.contentWindow) {
+        try {
+          secondIframe.contentWindow.postMessage({ type: 'demoCleanup' }, '*');
+        } catch (e) {
+          // Iframe may already be gone
+        }
+      }
+
+      // Animate out
+      secondWrapper.classList.add('removing');
+
+      setTimeout(() => {
+        secondWrapper.remove();
+
+        // Update tracking
+        this.hasSecondPhone = false;
+        if (this.iframes.length > 1) {
+          this.iframes.pop();
+          this.iframesReady.pop();
+        }
+
+        // Remove dual-phone class from player frame
+        this.playerFrame?.classList.remove('dual-phone');
+      }, 300);
+    }
+
+    // Also remove Alice's label when going back to single phone
+    const firstWrapper = this.playerFrame.querySelector('.phone-wrapper');
+    const aliceLabel = firstWrapper?.querySelector('.phone-label');
+    if (aliceLabel) {
+      aliceLabel.classList.add('removing');
+      setTimeout(() => aliceLabel.remove(), 300);
+    }
   }
 }
