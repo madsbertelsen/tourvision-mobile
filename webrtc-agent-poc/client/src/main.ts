@@ -3895,7 +3895,7 @@ function setupToolbarButtons(view: EditorView) {
   const contextParagraphBtn = document.getElementById('context-paragraph-btn');
   let contextMenuDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const showTextSelectionContextMenu = (x: number, y: number, hasSelection: boolean = true) => {
+  const showTextSelectionContextMenu = (x: number, y: number, hasSelection: boolean = true, selectionTop?: number) => {
     if (!textSelectionContextMenu) return;
 
     // Show/hide geomark button based on selection
@@ -3903,17 +3903,41 @@ function setupToolbarButtons(view: EditorView) {
       (contextGeoMarkBtn as HTMLElement).style.display = hasSelection ? 'flex' : 'none';
     }
 
-    // Position the menu
-    textSelectionContextMenu.style.left = `${x}px`;
-    textSelectionContextMenu.style.top = `${y}px`;
-
-    // Make visible (triggers CSS transition)
+    // Temporarily show menu off-screen to measure its height
+    textSelectionContextMenu.style.left = '-9999px';
+    textSelectionContextMenu.style.top = '-9999px';
     textSelectionContextMenu.style.display = 'block';
+    const menuHeight = textSelectionContextMenu.offsetHeight;
+    const menuWidth = textSelectionContextMenu.offsetWidth;
+
+    // Smart positioning - check if menu would overflow viewport
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    let finalX = x;
+    let finalY = y;
+
+    // Horizontal bounds
+    if (finalX < 8) finalX = 8;
+    if (finalX + menuWidth > viewportWidth - 8) finalX = viewportWidth - menuWidth - 8;
+
+    // If menu would go below viewport, show above selection
+    if (finalY + menuHeight > viewportHeight - 8) {
+      // Use selectionTop if provided, otherwise estimate based on line height
+      const topPosition = selectionTop ?? (y - menuHeight - 24); // 24px = approx line height + gap
+      finalY = topPosition - menuHeight - 8;
+      // Ensure it doesn't go above viewport
+      if (finalY < 8) finalY = 8;
+    }
+
+    // Position the menu
+    textSelectionContextMenu.style.left = `${finalX}px`;
+    textSelectionContextMenu.style.top = `${finalY}px`;
+
     // Force reflow to enable transition
     textSelectionContextMenu.offsetHeight;
     textSelectionContextMenu.classList.add('visible');
 
-    console.log('[ContextMenu] Showing at', x, y, 'hasSelection:', hasSelection);
+    console.log('[ContextMenu] Showing at', finalX, finalY, 'hasSelection:', hasSelection, 'requested:', x, y);
   };
 
   const hideTextSelectionContextMenu = () => {
@@ -3958,30 +3982,15 @@ function setupToolbarButtons(view: EditorView) {
         return;
       }
 
-      // Get position below the selection
+      // Get position for the menu (below selection, centered)
+      const startCoords = view.coordsAtPos(currentFrom);
       const endCoords = view.coordsAtPos(currentTo);
-
-      // Position menu below selection, centered
       const menuWidth = 160; // min-width from CSS
-      let x = endCoords.left - menuWidth / 2;
-      let y = endCoords.bottom + 8; // 8px below selection
+      const x = endCoords.left - menuWidth / 2;
+      const y = endCoords.bottom + 8; // 8px below selection
 
-      // Ensure menu stays within viewport
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const menuHeight = 88; // Approximate height with 2 buttons
-
-      // Horizontal bounds
-      if (x < 8) x = 8;
-      if (x + menuWidth > viewportWidth - 8) x = viewportWidth - menuWidth - 8;
-
-      // If menu would go below viewport, show above selection
-      if (y + menuHeight > viewportHeight - 8) {
-        const startCoords = view.coordsAtPos(currentFrom);
-        y = startCoords.top - menuHeight - 8;
-      }
-
-      showTextSelectionContextMenu(x, y);
+      // Pass selectionTop so menu can flip above if needed
+      showTextSelectionContextMenu(x, y, true, startCoords.top);
     }, 300); // 300ms debounce
   };
 
@@ -4014,19 +4023,11 @@ function setupToolbarButtons(view: EditorView) {
     if (!coords) return;
 
     const menuWidth = 160;
-    let x = coords.left - menuWidth / 2;
-    let y = coords.bottom + 8;
+    const x = coords.left - menuWidth / 2;
+    const y = coords.bottom + 8;
 
-    // Ensure within viewport
-    if (x < 8) x = 8;
-    if (x + menuWidth > window.innerWidth - 8) x = window.innerWidth - menuWidth - 8;
-
-    const menuHeight = 48; // Single button height
-    if (y + menuHeight > window.innerHeight - 8) {
-      y = coords.top - menuHeight - 8;
-    }
-
-    showTextSelectionContextMenu(x, y, false);
+    // Pass coords.top as selectionTop so menu can flip above if needed
+    showTextSelectionContextMenu(x, y, false, coords.top);
     console.log('[ContextMenu] Double-click on empty line, showing Insert Map only');
   });
 
