@@ -1410,7 +1410,8 @@ async function main() {
       }
 
       // Insert text and set selection to the new cursor position
-      // This makes the cursor visible to other users via y-prosemirror awareness
+      // Focus the editor so yCursorPlugin broadcasts cursor to other users via awareness
+      editor.focus();
       const tr = state.tr.insertText(char, insertPos);
       const newCursorPos = insertPos + char.length;
       tr.setSelection(TextSelection.create(tr.doc, newCursorPos));
