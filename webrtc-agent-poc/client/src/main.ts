@@ -2219,7 +2219,8 @@ async function main() {
           'geomark': 'format-geomark-btn',
           'map': 'format-map-btn',
           'h1': 'heading1-btn',
-          'h2': 'heading2-btn'
+          'h2': 'heading2-btn',
+          'share': 'share-btn'
         };
         const buttonId = buttonIdMap[item];
         const button = buttonId ? document.getElementById(buttonId) : null;
@@ -2837,6 +2838,236 @@ async function main() {
       console.log('[AutoplayDemo] Hid map bounds overlay');
     };
 
+    // Wire up share modal actions
+    player.onShowShareModal = () => {
+      const modal = document.getElementById('share-modal');
+      if (modal) {
+        // Reset state
+        const copyBtn = document.getElementById('share-copy-btn');
+        if (copyBtn) {
+          copyBtn.classList.remove('copied', 'tapped');
+        }
+        const status = document.getElementById('share-status');
+        if (status) {
+          status.classList.remove('visible');
+        }
+        // Show modal
+        modal.classList.add('visible');
+        console.log('[AutoplayDemo] Showing share modal');
+      }
+    };
+
+    player.onTapCopyUrl = () => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const copyBtn = document.getElementById('share-copy-btn') as HTMLElement;
+
+        if (!finger || !copyBtn) {
+          console.warn(`[AutoplayDemo] Tap copy URL failed - finger: ${!!finger}, copyBtn: ${!!copyBtn}`);
+          resolve();
+          return;
+        }
+
+        // Get copy button position
+        const rect = copyBtn.getBoundingClientRect();
+        const targetX = rect.left + rect.width / 2;
+        const targetY = rect.top + rect.height / 2;
+
+        // Animate finger from right side to target
+        const startX = window.innerWidth + 60;
+        const startY = targetY;
+
+        // Position finger at start
+        finger.style.left = `${startX}px`;
+        finger.style.top = `${startY}px`;
+        finger.classList.add('visible');
+
+        // Animate to target
+        setTimeout(() => {
+          finger.style.transition = 'left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // Tap animation
+          setTimeout(() => {
+            finger.classList.add('tapping');
+            copyBtn.classList.add('tapped');
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+              copyBtn.classList.remove('tapped');
+              copyBtn.classList.add('copied');
+
+              // Show "Copied!" status
+              const status = document.getElementById('share-status');
+              if (status) {
+                status.classList.add('visible');
+              }
+
+              // Hide finger and resolve
+              setTimeout(() => {
+                finger.classList.remove('visible');
+                finger.style.transition = '';
+                resolve();
+              }, 400);
+            }, 200);
+          }, 450);
+        }, 50);
+      });
+    };
+
+    player.onHideShareModal = () => {
+      const modal = document.getElementById('share-modal');
+      if (modal) {
+        modal.classList.remove('visible');
+        // Reset copy button state
+        const copyBtn = document.getElementById('share-copy-btn');
+        if (copyBtn) {
+          copyBtn.classList.remove('copied');
+        }
+        console.log('[AutoplayDemo] Hiding share modal');
+      }
+    };
+
+    // Wire up chapter state setup for independent/shuffleable chapters
+    player.onSetupChapterState = async (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content') => {
+      console.log(`[AutoplayDemo] Setting up chapter state: ${state}`);
+
+      // Step 1: Clear the document
+      const { tr } = editor.state;
+      let clearTr = editor.state.tr.delete(0, editor.state.doc.content.size);
+      // Insert empty paragraph to ensure valid document
+      const emptyPara = customSchema.nodes.paragraph.create();
+      clearTr = clearTr.insert(0, emptyPara);
+      editor.dispatch(clearTr);
+
+      if (state === 'empty') {
+        console.log('[AutoplayDemo] Chapter state: empty - done');
+        return;
+      }
+
+      // Step 2: Build document content based on state
+      // All states except 'empty' include the Saturday content base
+      const nodes: any[] = [];
+
+      // H1: "Weekend in Denmark?"
+      nodes.push(customSchema.nodes.heading.create(
+        { level: 1 },
+        customSchema.text('Weekend in Denmark?')
+      ));
+
+      // Intro paragraph
+      nodes.push(customSchema.nodes.paragraph.create(
+        null,
+        customSchema.text('Hey guys! What do you think about this plan:')
+      ));
+
+      // Empty paragraph for spacing
+      nodes.push(customSchema.nodes.paragraph.create());
+
+      // H2: "Saturday"
+      nodes.push(customSchema.nodes.heading.create(
+        { level: 2 },
+        customSchema.text('Saturday')
+      ));
+
+      // Saturday description - with or without geomarks depending on state
+      if (state === 'saturday-content') {
+        // Just text, no geomarks
+        nodes.push(customSchema.nodes.paragraph.create(
+          null,
+          customSchema.text('Explore Copenhagen and visit Tivoli Gardens')
+        ));
+        nodes.push(customSchema.nodes.paragraph.create());
+      } else {
+        // saturday-with-map or full-content: include geomarks
+        const copenhagenMark = customSchema.marks.geoMark.create({
+          geoId: `geo-setup-copenhagen-${Date.now()}`,
+          displayText: 'Copenhagen',
+          placeName: 'Copenhagen, Denmark',
+          lat: 55.6761,
+          lng: 12.5683,
+          colorIndex: 0,
+          coordSource: 'setup'
+        });
+        const tivoliMark = customSchema.marks.geoMark.create({
+          geoId: `geo-setup-tivoli-${Date.now()}`,
+          displayText: 'Tivoli Gardens',
+          placeName: 'Tivoli Gardens, Copenhagen',
+          lat: 55.6736,
+          lng: 12.5681,
+          colorIndex: 1,
+          coordSource: 'setup'
+        });
+
+        // Create text with geomarks: "Explore Copenhagen and visit Tivoli Gardens"
+        const saturdayText = customSchema.nodes.paragraph.create(null, [
+          customSchema.text('Explore '),
+          customSchema.text('Copenhagen', [copenhagenMark]),
+          customSchema.text(' and visit '),
+          customSchema.text('Tivoli Gardens', [tivoliMark])
+        ]);
+        nodes.push(saturdayText);
+        nodes.push(customSchema.nodes.paragraph.create());
+
+        // Add Saturday map
+        nodes.push(customSchema.nodes.map.create({ height: 300 }));
+        nodes.push(customSchema.nodes.paragraph.create());
+      }
+
+      // For full-content, add Sunday section
+      if (state === 'full-content') {
+        // H2: "Sunday"
+        nodes.push(customSchema.nodes.heading.create(
+          { level: 2 },
+          customSchema.text('Sunday')
+        ));
+
+        // Sunday description with Aarhus geomark
+        const aarhusMark = customSchema.marks.geoMark.create({
+          geoId: `geo-setup-aarhus-${Date.now()}`,
+          displayText: 'Aarhus',
+          placeName: 'Aarhus, Denmark',
+          lat: 56.1629,
+          lng: 10.2039,
+          colorIndex: 2,
+          coordSource: 'setup'
+        });
+
+        const sundayText = customSchema.nodes.paragraph.create(null, [
+          customSchema.text('Drive to '),
+          customSchema.text('Aarhus', [aarhusMark]),
+          customSchema.text(' for the old town museum')
+        ]);
+        nodes.push(sundayText);
+        nodes.push(customSchema.nodes.paragraph.create());
+
+        // Add Sunday map
+        nodes.push(customSchema.nodes.map.create({ height: 300 }));
+        nodes.push(customSchema.nodes.paragraph.create());
+      }
+
+      // Step 3: Insert all nodes into the document
+      let insertTr = editor.state.tr;
+      // Delete the empty paragraph we inserted earlier
+      insertTr = insertTr.delete(0, editor.state.doc.content.size);
+
+      // Insert all nodes at position 0
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        insertTr = insertTr.insert(0, nodes[i]);
+      }
+
+      editor.dispatch(insertTr);
+
+      // Step 4: Notify map listeners to update
+      notifyGeoMarkChange();
+
+      console.log(`[AutoplayDemo] Chapter state ${state} setup complete with ${nodes.length} nodes`);
+
+      // Small delay to let maps render
+      await new Promise(resolve => setTimeout(resolve, 100));
+    };
+
     // Start autoplay after a short delay (let editor settle)
     // In remote control mode, wait for parent DemoPlayer to send start command
     if (!isRemoteControlMode) {
@@ -2945,7 +3176,7 @@ async function main() {
         break;
 
       case 'panMap':
-        // Pan the fullscreen map
+        // Pan the fullscreen map with finger drag animation
         console.log('[Main] Executing panMap command:', data.direction, data.distance);
         if (fullscreenMapView) {
           const map = fullscreenMapView.getMap();
@@ -2958,23 +3189,28 @@ async function main() {
               case 'left': offset = [-distance, 0]; break;
               case 'right': offset = [distance, 0]; break;
             }
-            map.panBy(offset, { duration: 500 });
+            // Show finger drag animation, then pan
+            showBobFingerDrag(data.direction, distance, () => {
+              map.panBy(offset, { duration: 400 });
+            });
           }
         }
         break;
 
       case 'zoomMap':
-        // Zoom the fullscreen map
+        // Zoom the fullscreen map with finger pinch animation
         console.log('[Main] Executing zoomMap command:', data.direction, data.amount);
         if (fullscreenMapView) {
           const map = fullscreenMapView.getMap();
           if (map) {
-            const amount = data.amount || 1;
-            if (data.direction === 'in') {
-              map.zoomIn({ duration: 500 });
-            } else {
-              map.zoomOut({ duration: 500 });
-            }
+            // Show pinch gesture animation, then zoom
+            showBobPinchGesture(data.direction === 'in', () => {
+              if (data.direction === 'in') {
+                map.zoomIn({ duration: 400 });
+              } else {
+                map.zoomOut({ duration: 400 });
+              }
+            });
           }
         }
         break;
@@ -3039,6 +3275,164 @@ async function main() {
         }, 150);
       }, 300);
     }, 50);
+  }
+
+  /**
+   * Show finger drag animation on Bob's phone (for panning)
+   */
+  function showBobFingerDrag(direction: string, distance: number, onDragStart: () => void): void {
+    // Get fullscreen overlay as reference for positioning
+    const overlay = document.getElementById('fullscreen-overlay');
+    if (!overlay) {
+      onDragStart();
+      return;
+    }
+
+    // Get or create finger element for Bob
+    let finger = document.getElementById('demo-finger-bob');
+    if (!finger) {
+      finger = document.createElement('div');
+      finger.id = 'demo-finger-bob';
+      finger.className = 'demo-finger';
+      finger.innerHTML = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23333'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E" style="width: 48px; height: 48px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));" />`;
+      document.body.appendChild(finger);
+    }
+
+    const rect = overlay.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Calculate drag distance (scaled for visual effect)
+    const dragDistance = Math.min(distance * 0.8, 80);
+
+    // Calculate start and end positions based on direction
+    // Drag opposite to pan direction (drag left to pan right, etc.)
+    let startX = centerX, startY = centerY;
+    let endX = centerX, endY = centerY;
+
+    switch (direction) {
+      case 'up':
+        startY = centerY + dragDistance / 2;
+        endY = centerY - dragDistance / 2;
+        break;
+      case 'down':
+        startY = centerY - dragDistance / 2;
+        endY = centerY + dragDistance / 2;
+        break;
+      case 'left':
+        startX = centerX + dragDistance / 2;
+        endX = centerX - dragDistance / 2;
+        break;
+      case 'right':
+        startX = centerX - dragDistance / 2;
+        endX = centerX + dragDistance / 2;
+        break;
+    }
+
+    // Position finger at start
+    finger.style.transition = '';
+    finger.style.left = `${startX - 24}px`;
+    finger.style.top = `${startY - 24}px`;
+    finger.classList.add('visible');
+    finger.classList.add('pressing'); // Show pressed state
+
+    // Start dragging after brief delay
+    setTimeout(() => {
+      finger!.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+      finger!.style.left = `${endX - 24}px`;
+      finger!.style.top = `${endY - 24}px`;
+
+      // Trigger the map pan at start of drag
+      onDragStart();
+
+      // Release and hide after drag completes
+      setTimeout(() => {
+        finger!.classList.remove('pressing');
+        setTimeout(() => {
+          finger!.classList.remove('visible');
+          finger!.style.transition = '';
+        }, 150);
+      }, 400);
+    }, 100);
+  }
+
+  /**
+   * Show pinch gesture animation on Bob's phone (for zooming)
+   */
+  function showBobPinchGesture(zoomIn: boolean, onPinch: () => void): void {
+    // Get fullscreen overlay as reference for positioning
+    const overlay = document.getElementById('fullscreen-overlay');
+    if (!overlay) {
+      onPinch();
+      return;
+    }
+
+    // Get or create two finger elements for pinch gesture
+    let finger1 = document.getElementById('demo-finger-bob');
+    let finger2 = document.getElementById('demo-finger-bob-2');
+
+    if (!finger1) {
+      finger1 = document.createElement('div');
+      finger1.id = 'demo-finger-bob';
+      finger1.className = 'demo-finger';
+      finger1.innerHTML = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23333'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E" style="width: 48px; height: 48px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));" />`;
+      document.body.appendChild(finger1);
+    }
+
+    if (!finger2) {
+      finger2 = document.createElement('div');
+      finger2.id = 'demo-finger-bob-2';
+      finger2.className = 'demo-finger';
+      finger2.innerHTML = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23333'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E" style="width: 48px; height: 48px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));" />`;
+      document.body.appendChild(finger2);
+    }
+
+    const rect = overlay.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Pinch distance (spread for zoom in, pinch for zoom out)
+    const closeDistance = 30;
+    const farDistance = 70;
+
+    const startDist = zoomIn ? closeDistance : farDistance;
+    const endDist = zoomIn ? farDistance : closeDistance;
+
+    // Position fingers at starting distance (diagonal)
+    finger1.style.transition = '';
+    finger2.style.transition = '';
+    finger1.style.left = `${centerX - startDist - 24}px`;
+    finger1.style.top = `${centerY - startDist - 24}px`;
+    finger2.style.left = `${centerX + startDist - 24}px`;
+    finger2.style.top = `${centerY + startDist - 24}px`;
+
+    finger1.classList.add('visible', 'pressing');
+    finger2.classList.add('visible', 'pressing');
+
+    // Animate pinch/spread
+    setTimeout(() => {
+      finger1!.style.transition = 'left 0.35s ease-out, top 0.35s ease-out';
+      finger2!.style.transition = 'left 0.35s ease-out, top 0.35s ease-out';
+      finger1!.style.left = `${centerX - endDist - 24}px`;
+      finger1!.style.top = `${centerY - endDist - 24}px`;
+      finger2!.style.left = `${centerX + endDist - 24}px`;
+      finger2!.style.top = `${centerY + endDist - 24}px`;
+
+      // Trigger the zoom
+      onPinch();
+
+      // Release and hide after gesture
+      setTimeout(() => {
+        finger1!.classList.remove('pressing');
+        finger2!.classList.remove('pressing');
+        setTimeout(() => {
+          finger1!.classList.remove('visible');
+          finger2!.classList.remove('visible');
+          finger1!.style.transition = '';
+          finger2!.style.transition = '';
+        }, 150);
+      }, 350);
+    }, 100);
   }
 
   // Listen for messages from parent DemoPlayer

@@ -208,16 +208,25 @@ export class DemoPlayer {
       }
     }
 
-    // Create comment overlay
+    // Create comment overlay with presenter/paused UX
     this.overlayContainer = document.createElement('div');
     this.overlayContainer.className = 'comment-overlay';
     this.overlayContainer.innerHTML = `
-      <div class="comment-content">
-        <div class="comment-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
+      <div class="pause-indicator">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="#9ca3af">
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+        </svg>
+      </div>
+      <div class="comment-card">
+        <div class="presenter-badge">
+          <div class="presenter-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22l-.75-12.07A4 4 0 0 1 12 2z"/>
+              <circle cx="12" cy="6" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <span class="presenter-name">Guide</span>
         </div>
         <div class="comment-heading"></div>
         <div class="comment-text"></div>
@@ -295,8 +304,6 @@ export class DemoPlayer {
         justify-content: center;
         gap: 40px;
         min-width: 800px;
-        background: #f3f4f6;
-        border-radius: 16px;
         padding: 40px;
         min-height: 500px;
       }
@@ -371,15 +378,17 @@ export class DemoPlayer {
       .comment-overlay {
         position: absolute;
         inset: 0;
-        background: rgba(0, 0, 0, 0.85);
+     #   background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 16px;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.3s ease-in-out;
+        transition: opacity 0.3s ease-in-out, backdrop-filter 0.3s ease-in-out;
         z-index: 100;
         border-radius: 16px;
       }
@@ -390,36 +399,94 @@ export class DemoPlayer {
         cursor: pointer;
       }
 
-      .comment-content {
+      /* Pause indicator - flashes then fades */
+      .pause-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0;
+        animation: none;
+      }
+
+      .comment-overlay.visible .pause-indicator {
+        animation: pauseFlash 0.8s ease-out forwards;
+      }
+
+      @keyframes pauseFlash {
+        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+        20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        40% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+      }
+
+      /* Presenter card */
+      .comment-card {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 8px;
+        gap: 12px;
         text-align: center;
-        padding: 20px;
+        padding: 24px 32px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        max-width: 280px;
+        opacity: 0;
+        transform: translateY(10px);
+        animation: none;
       }
 
-      .comment-icon {
-        display: none;
+      .comment-overlay.visible .comment-card {
+        animation: cardSlideIn 0.4s ease-out 0.3s forwards;
       }
 
-      .comment-icon svg {
-        width: 48px;
-        height: 48px;
+      @keyframes cardSlideIn {
+        0% { opacity: 0; transform: translateY(10px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Presenter badge */
+      .presenter-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px 6px 8px;
+        background: rgba(59, 130, 246, 0.9);
+        border-radius: 20px;
+        margin-bottom: 4px;
+      }
+
+      .presenter-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+
+      .presenter-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        letter-spacing: 0.3px;
       }
 
       .comment-heading {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 600;
-        color: white;
+        color: #111827;
         line-height: 1.3;
       }
 
       .comment-text {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 400;
-        color: rgba(255, 255, 255, 0.8);
-        line-height: 1.4;
+        color: #4b5563;
+        line-height: 1.5;
       }
 
       .comment-heading .cursor,
@@ -773,6 +840,7 @@ export class DemoPlayer {
 
   /**
    * Show comment overlay and pause playback
+   * Features: pause indicator animation, presenter badge, blur background
    */
   public async showComment(heading: string, text: string, duration: number = 3000): Promise<void> {
     if (!this.overlayContainer) return;
@@ -785,10 +853,25 @@ export class DemoPlayer {
 
     const headingEl = this.overlayContainer.querySelector('.comment-heading') as HTMLElement;
     const textEl = this.overlayContainer.querySelector('.comment-text') as HTMLElement;
+    const pauseIndicator = this.overlayContainer.querySelector('.pause-indicator') as HTMLElement;
+    const commentCard = this.overlayContainer.querySelector('.comment-card') as HTMLElement;
 
     // Set text directly (no typewriter effect)
     headingEl.textContent = heading;
     textEl.textContent = text;
+
+    // Reset animations by removing and re-adding animation class
+    // This ensures animations play every time
+    if (pauseIndicator) {
+      pauseIndicator.style.animation = 'none';
+      pauseIndicator.offsetHeight; // Force reflow
+      pauseIndicator.style.animation = '';
+    }
+    if (commentCard) {
+      commentCard.style.animation = 'none';
+      commentCard.offsetHeight; // Force reflow
+      commentCard.style.animation = '';
+    }
 
     // Pause all iframes
     this.iframes.forEach(iframe => {

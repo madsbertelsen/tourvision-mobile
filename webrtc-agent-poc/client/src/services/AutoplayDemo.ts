@@ -58,7 +58,13 @@ export type DemoAction =
   | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' | 'share' } // Tap a context menu item
   | { type: 'fingerTapButton'; button: 'geomark' | 'map' | 'h1' | 'h2' | 'share' } // Tap a toolbar button with finger animation
   | { type: 'fingerDoubleTap'; target: 'cursor' | 'endOfDoc'; fromSide?: 'left' | 'right' | 'bottom' } // Double-tap at cursor or end of document
-  | { type: 'fingerScroll'; direction: 'up' | 'down'; distance?: number; fromSide?: 'left' | 'right' | 'bottom' }; // Scroll editor with finger swipe
+  | { type: 'fingerScroll'; direction: 'up' | 'down'; distance?: number; fromSide?: 'left' | 'right' | 'bottom' } // Scroll editor with finger swipe
+  // Share modal actions
+  | { type: 'showShareModal' } // Show the share modal with URL
+  | { type: 'tapCopyUrl' } // Tap the copy button to copy the share URL
+  | { type: 'hideShareModal' } // Hide the share modal
+  // Chapter state setup (for independent chapters)
+  | { type: 'setupChapterState'; state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content'; step?: number }; // Setup document state for chapter
 
 export interface DemoScript {
   name: string;
@@ -194,7 +200,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'clearAvatars' },
       { type: 'showAvatar', name: 'Emma', color: '#EC4899' },
 
-      // Step 0: Writing
+      // Step 0: Writing - starts with empty document
+      { type: 'setupChapterState', state: 'empty', step: 0 },
       { type: 'comment', heading: 'Writing', text: 'Just type - like any other doc', duration: 2000, step: 0 },
 
       // Demo: Emma proposes a weekend trip to friends
@@ -228,7 +235,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 500 },
       { type: 'newline', count: 2 },
 
-      // Step 1: Location Tagging - using context menu
+      // Step 1: Location Tagging - text exists, will create geomarks
+      { type: 'setupChapterState', state: 'saturday-content', step: 1 },
       { type: 'comment', heading: 'Location Tagging', text: 'Double-tap text to create geo-marks', duration: 2000, step: 1 },
 
       // Create geo-mark for Copenhagen via context menu
@@ -256,10 +264,11 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 600 },
 
       // Scroll down to see the map that was just inserted
-      { type: 'fingerScroll', direction: 'up', distance: 300, fromSide: 'right' },
-      { type: 'pause', duration: 400 },
+   //   { type: 'fingerScroll', direction: 'up', distance: 300, fromSide: 'right' },
+//      { type: 'pause', duration: 400 },
 
-      // Step 2: Fullscreen Map
+      // Step 2: Fullscreen Map - geomarks and map exist
+      { type: 'setupChapterState', state: 'saturday-with-map', step: 2 },
       { type: 'comment', heading: 'Fullscreen Map', text: 'Click any map to expand and explore', duration: 2000, step: 2 },
 
       // Finger taps on block map to open fullscreen (start sequence with persist)
@@ -276,7 +285,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'clickMapMarker', markerIndex: 1 }, // Actually click to open sheet
       { type: 'pause', duration: 1000 }, // Let location sheet appear
 
-      // Step 3: Transport
+      // Step 3: Transport - needs fullscreen map with location sheet open
+      { type: 'setupChapterState', state: 'saturday-with-map', step: 3 },
       { type: 'comment', heading: 'Transport', text: 'Add routes between locations', duration: 2000, step: 3 },
 
       // Tap Configure Transport (finger moves to button)
@@ -305,49 +315,39 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 500 },
       { type: 'newline' },
 
-      // ===== Day 2: Sunday (complete section) =====
-      { type: 'type', text: 'Sunday', speed: 'normal' },
-      { type: 'fingerSelect', text: 'Sunday', fromSide: 'right' },
-      { type: 'pause', duration: 400 },
-      { type: 'showContextMenu' },
-      { type: 'pause', duration: 400 },
-      { type: 'tapContextMenuItem', item: 'h2' },
-      { type: 'pause', duration: 200 },
-      { type: 'newline' },
-      { type: 'type', text: 'Drive to Aarhus for the old town museum', speed: 'normal' },
-      { type: 'pause', duration: 500 },
-      { type: 'newline', count: 2 },
-
-      // Scroll down to keep new content visible
-      { type: 'fingerScroll', direction: 'up', distance: 100, fromSide: 'right' },
-      { type: 'pause', duration: 300 },
-
-      // Create geo-mark for Aarhus via context menu
-      { type: 'fingerSelect', text: 'Aarhus', fromSide: 'right' },
-      { type: 'pause', duration: 500 },
-      { type: 'showContextMenu' },
-      { type: 'pause', duration: 400 },
-      { type: 'tapContextMenuItem', item: 'geomark' },
-      { type: 'pause', duration: 600 },
-
-      // Insert Sunday map via context menu (double-tap on empty line)
-      { type: 'fingerDoubleTap', target: 'endOfDoc', fromSide: 'bottom' },
-      { type: 'pause', duration: 400 },
-      { type: 'showContextMenu' },
-      { type: 'pause', duration: 400 },
-      { type: 'tapContextMenuItem', item: 'map' },
-      { type: 'pause', duration: 600 },
-
-      // Scroll down to see the second map
-      { type: 'fingerScroll', direction: 'up', distance: 150, fromSide: 'right' },
-      { type: 'pause', duration: 400 },
-
-      // Step 4: Share - real-time collaboration shown via dual phones (Alice/Bob)
-      // The second phone (Bob) demonstrates live Y.js sync, so no fake "Marc" avatar needed
-      // Tap the Share button to trigger the share action
+      // Step 4: Share - Alice shares a link with Bob
+      { type: 'setupChapterState', state: 'saturday-with-map', step: 4 },
+      // Tap the Share button to show the share modal
       { type: 'fingerTapButton', button: 'share' },
       { type: 'pause', duration: 300 },
-      { type: 'comment', heading: 'Share', text: 'Send to Bob and collaborate in real-time', duration: 2000, step: 4 },
+      { type: 'showShareModal' },
+      { type: 'pause', duration: 800 },
+
+      // Tap the copy button to copy the URL
+      { type: 'tapCopyUrl' },
+      { type: 'pause', duration: 1500 },
+
+      // Hide the share modal
+      { type: 'hideShareModal' },
+      { type: 'pause', duration: 400 },
+
+      // Show the step comment - Bob joined via the shared link
+      { type: 'comment', heading: 'Share', text: 'Bob joined via shared link', duration: 2000, step: 4 },
+      { type: 'pause', duration: 400 },
+
+      // Bob's avatar appears in Alice's toolbar (he joined!)
+      { type: 'showAvatar', name: 'Bob', color: '#3b82f6' },
+      { type: 'pause', duration: 800 },
+
+      // Alice taps Bob's avatar to see options
+      { type: 'showFingerTap', selector: '.avatar[data-name="Bob"]', fromSide: 'right', persist: true },
+      { type: 'clickElement', selector: '.avatar[data-name="Bob"]' },
+      { type: 'pause', duration: 500 },
+
+      // Alice taps "Follow" in the context menu
+      { type: 'showFingerTap', selector: '#follow-user-btn', fromSide: 'right' },
+      { type: 'clickElement', selector: '#follow-user-btn' },
+      { type: 'pause', duration: 600 },
 
       { type: 'pause', duration: 1000 },
 
@@ -522,6 +522,12 @@ export class AutoplayDemo {
   public onTapContextMenuItem?: (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' | 'share') => Promise<void>; // Tap a toolbar/menu item
   public onFingerDoubleTap?: (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap at position
   public onFingerScroll?: (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Scroll with finger swipe
+  // Share modal callbacks
+  public onShowShareModal?: () => void; // Show share modal
+  public onTapCopyUrl?: () => Promise<void>; // Tap copy button
+  public onHideShareModal?: () => void; // Hide share modal
+  // Chapter state setup callback
+  public onSetupChapterState?: (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content') => Promise<void>; // Setup document state
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -669,26 +675,29 @@ export class AutoplayDemo {
     console.log(`[AutoplayDemo] Going to step: ${targetStep}`);
 
     // Find the action index for the first action with this step number
-    // Typically this is a 'comment' action with step: N
+    // Priority: setupChapterState with step > comment with step
+    // setupChapterState makes chapters independent/shuffleable
     let actionIndex = 0;
+    let foundSetup = false;
+
+    // First, look for setupChapterState with matching step
     for (let i = 0; i < this.script.actions.length; i++) {
       const action = this.script.actions[i];
-      if (action.type === 'comment' && 'step' in action && action.step === targetStep) {
+      if (action.type === 'setupChapterState' && 'step' in action && action.step === targetStep) {
         actionIndex = i;
+        foundSetup = true;
+        console.log(`[AutoplayDemo] Found setupChapterState for step ${targetStep} at action ${actionIndex}`);
         break;
       }
     }
 
-    // Special handling for steps that require setup from earlier steps
-    // Step 2 (Fullscreen Map) and Step 3 (Transport) need content from Step 1
-    // (geomarks and map block), so we start from Step 1 to build up the state
-    if (targetStep === 2 || targetStep === 3) {
-      // Find the step 1 (Location Tagging) comment and start from there
+    // Fall back to comment with matching step if no setupChapterState found
+    if (!foundSetup) {
       for (let i = 0; i < this.script.actions.length; i++) {
         const action = this.script.actions[i];
-        if (action.type === 'comment' && 'step' in action && action.step === 1) {
+        if (action.type === 'comment' && 'step' in action && action.step === targetStep) {
           actionIndex = i;
-          console.log(`[AutoplayDemo] Step ${targetStep} requires content setup, starting from step 1 at action ${actionIndex}`);
+          console.log(`[AutoplayDemo] Found comment for step ${targetStep} at action ${actionIndex}`);
           break;
         }
       }
@@ -741,6 +750,11 @@ export class AutoplayDemo {
     // Close fullscreen map if open (also hides location sheet)
     if (this.onCloseFullscreenMap) {
       this.onCloseFullscreenMap();
+    }
+
+    // Hide share modal if open
+    if (this.onHideShareModal) {
+      this.onHideShareModal();
     }
 
     // Remove any demo highlight overlays
@@ -1252,6 +1266,47 @@ export class AutoplayDemo {
         } else {
           console.warn('[AutoplayDemo] onFingerScroll not configured');
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      // Share modal actions
+      case 'showShareModal':
+        if (this.onShowShareModal) {
+          this.onShowShareModal();
+          console.log('[AutoplayDemo] Showing share modal');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 400);
+        break;
+
+      case 'tapCopyUrl':
+        if (this.onTapCopyUrl) {
+          console.log('[AutoplayDemo] Tapping copy URL button');
+          this.onTapCopyUrl().then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onTapCopyUrl not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'hideShareModal':
+        if (this.onHideShareModal) {
+          this.onHideShareModal();
+          console.log('[AutoplayDemo] Hiding share modal');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 400);
+        break;
+
+      case 'setupChapterState':
+        if (this.onSetupChapterState) {
+          console.log(`[AutoplayDemo] Setting up chapter state: ${action.state}`);
+          this.onSetupChapterState(action.state).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onSetupChapterState not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
         }
         break;
 
