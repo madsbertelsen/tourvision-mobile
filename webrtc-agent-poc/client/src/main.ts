@@ -44,8 +44,14 @@ const isAutoplayMode = params.get('autoplay') === 'true'; // Self-playing demo f
 const isRemoteControlMode = params.get('remoteControl') === 'true'; // Controlled by parent DemoPlayer
 const enableSync = params.get('enableSync') === 'true'; // Force sync even in autoplay mode (for dual phone demos)
 const isObserveOnly = params.get('observeOnly') === 'true'; // Don't run demo, just observe synced content
+const isOfflineMode = params.get('offline') === 'true'; // No network connections (for landing page demo without server)
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
+
+// Add body class for autoplay/demo mode (used to hide UI elements like style picker)
+if (isAutoplayMode || isRemoteControlMode) {
+  document.body.classList.add('autoplay-mode');
+}
 
 // Flag to temporarily disable format button state updates during finger tap animations
 let formatButtonUpdateDisabled = false;
@@ -106,6 +112,27 @@ const waypointController = new WaypointController({
 
 // Use colors from MarkerFactory (maintains single source of truth)
 const COLORS = MarkerFactory.COLORS;
+
+// Predefined locations for deterministic demo mode (no Nominatim API calls)
+// These are the locations used in demo scripts
+const DEMO_LOCATIONS: Record<string, { placeName: string; lat: string; lng: string }> = {
+  'Copenhagen': { placeName: 'Copenhagen, Capital Region of Denmark, Denmark', lat: '55.6761', lng: '12.5683' },
+  'Tivoli Gardens': { placeName: 'Tivoli Gardens, Copenhagen, Capital Region of Denmark, Denmark', lat: '55.6736', lng: '12.5681' },
+  'Aarhus': { placeName: 'Aarhus, Central Denmark Region, Denmark', lat: '56.1629', lng: '10.2039' },
+  'Denmark': { placeName: 'Denmark', lat: '56.2639', lng: '9.5018' },
+  // Italy demo locations
+  'Rome': { placeName: 'Rome, Lazio, Italy', lat: '41.9028', lng: '12.4964' },
+  'Florence': { placeName: 'Florence, Tuscany, Italy', lat: '43.7696', lng: '11.2558' },
+  'Venice': { placeName: 'Venice, Veneto, Italy', lat: '45.4408', lng: '12.3155' },
+  // Japan demo locations
+  'Tokyo': { placeName: 'Tokyo, Japan', lat: '35.6762', lng: '139.6503' },
+  'Kyoto': { placeName: 'Kyoto, Kyoto Prefecture, Japan', lat: '35.0116', lng: '135.7681' },
+  'Narita': { placeName: 'Narita, Chiba Prefecture, Japan', lat: '35.7764', lng: '140.3183' },
+  'Shinjuku': { placeName: 'Shinjuku, Tokyo, Japan', lat: '35.6938', lng: '139.7034' },
+};
+
+// Counter for deterministic geo-mark colors during demo mode
+let demoColorIndex = 0;
 
 // Initialize views (will be passed to createEditor)
 // Note: Global variables like geoMarkChangeListeners, createMarkerElement, and showFullscreenMap
@@ -238,7 +265,7 @@ function hideAvatarContextMenu() {
 }
 
 // Initialize Y.js document and WebRTC provider
-async function setupYjs(documentId: string, options: { disableSync?: boolean } = {}) {
+async function setupYjs(documentId: string, options: { disableSync?: boolean; usePublicSignaling?: boolean } = {}) {
   console.log('[Y.js] Setting up Y.js document:', documentId, options);
 
   // Create Y.js document
@@ -247,8 +274,8 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
   // Get the shared ProseMirror type
   const yXmlFragment = ydoc.getXmlFragment('prosemirror');
 
-  // If sync is disabled (e.g., for autoplay demos), skip WebRTC provider
-  if (options.disableSync) {
+  // If sync is disabled (e.g., for single-phone autoplay demos), skip WebRTC provider
+  if (options.disableSync && !options.usePublicSignaling) {
     console.log('[Y.js] Sync disabled - running in local-only mode');
 
     // Create a minimal local-only awareness for cursor plugin compatibility
@@ -336,7 +363,15 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
   const signalingBaseUrl = getSignalingBaseUrl();
   const signalingUrl = `${signalingBaseUrl}/${documentId}`;
 
-  console.log('[Y.js] Using signaling server:', signalingUrl);
+  // In offline mode with usePublicSignaling, use BroadcastChannel only (no signaling server)
+  // This works for iframes on same origin
+  const signalingServers = options.usePublicSignaling ? [] : [signalingUrl];
+
+  if (options.usePublicSignaling) {
+    console.log('[Y.js] Using BroadcastChannel only (no signaling server) - offline mode');
+  } else {
+    console.log('[Y.js] Using signaling server:', signalingUrl);
+  }
   console.log('[Y.js] Protocol:', window.location.protocol, 'Hostname:', window.location.hostname);
 
   // Start with fallback STUN servers
@@ -350,7 +385,8 @@ async function setupYjs(documentId: string, options: { disableSync?: boolean } =
   const provider = new WebrtcProvider(documentId, ydoc, {
     // WebSocket signaling server for cross-machine sync
     // BroadcastChannel will also handle local tab communication
-    signaling: [signalingUrl],
+    // Empty array = BroadcastChannel only (for same-origin iframes)
+    signaling: signalingServers,
     // Enable password for room isolation (optional)
     password: null,
     // Configure WebRTC peer connection with STUN and TURN servers
@@ -867,6 +903,37 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   viewSyncService.setEditorContainer(container);
   console.log('[Main] ViewSyncService initialized');
 
+  // In observeOnly mode (Bob), auto-follow Alice's scroll position
+  if (isObserveOnly) {
+    console.log('[Main] ObserveOnly mode - setting up auto-follow for Alice');
+
+    // Function to find Alice and start following her
+    const findAndFollowAlice = () => {
+      const states = awareness.getStates();
+      for (const [clientId, state] of states) {
+        if (state?.user?.name === 'Alice') {
+          console.log('[Main] Found Alice, starting to follow her scroll position', clientId);
+          viewSyncService?.followUser(clientId);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Try to find Alice immediately
+    if (!findAndFollowAlice()) {
+      // Alice not yet connected, listen for awareness changes
+      const awarenessHandler = () => {
+        if (findAndFollowAlice()) {
+          // Found Alice, remove the listener
+          awareness.off('change', awarenessHandler);
+        }
+      };
+      awareness.on('change', awarenessHandler);
+      console.log('[Main] Waiting for Alice to connect...');
+    }
+  }
+
   console.log('[Main] ProseMirror editor initialized with Y.js sync');
 
   // Send ready message to parent (WebView/iframe)
@@ -1272,8 +1339,10 @@ async function main() {
   // Set up Y.js and WebRTC provider (now async to fetch TURN credentials)
   // Disable sync for autoplay mode to prevent conflicts between multiple viewers
   // UNLESS enableSync=true is set (for dual phone demos that need to sync)
+  // For offline mode: use BroadcastChannel only (no signaling server) - works for same-origin iframes
   const { ydoc, yXmlFragment, provider, awareness } = await setupYjs(documentId, {
-    disableSync: isAutoplayMode && !enableSync
+    disableSync: isAutoplayMode && !enableSync && !isOfflineMode,
+    usePublicSignaling: isOfflineMode  // BroadcastChannel only, no server connection
   });
 
   updateStatus('Initializing editor...', 'connecting');
@@ -1335,12 +1404,17 @@ async function main() {
   }
 
   // Set up video chat (parallel WebSocket for video signaling)
-  // Use the same ICE servers as y-webrtc
-  const iceServers: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ];
-  setupVideoChat(awareness, iceServers);
+  // Skip in offline mode to avoid network errors
+  if (!isOfflineMode) {
+    // Use the same ICE servers as y-webrtc
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+    setupVideoChat(awareness, iceServers);
+  } else {
+    console.log('[Main] Offline mode - skipping video chat setup');
+  }
 
   // Initialize Animate mode for landing page demo
   // User tab: Creates scroll overlay and broadcasts position via awareness
@@ -2455,14 +2529,14 @@ async function main() {
         // Get selected text
         const selectedText = state.doc.textBetween(from, to);
 
-        // Create geoMark with provided coordinates
+        // Create geoMark with provided coordinates (deterministic colorIndex in demo mode)
         const geoMarkAttrs = {
-          geoId: `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          geoId: `geo-demo-${demoColorIndex}`,
           placeName: selectedText,
           lat: lat || 0,
           lng: lng || 0,
           coordSource: 'demo',
-          colorIndex: Math.floor(Math.random() * 8),
+          colorIndex: demoColorIndex++ % 10,
         };
 
         const geoMarkMark = customSchema.marks.geoMark.create(geoMarkAttrs);
@@ -2930,8 +3004,11 @@ async function main() {
     };
 
     // Wire up chapter state setup for independent/shuffleable chapters
-    player.onSetupChapterState = async (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content') => {
+    player.onSetupChapterState = async (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content') => {
       console.log(`[AutoplayDemo] Setting up chapter state: ${state}`);
+
+      // Reset deterministic color index for new chapter
+      demoColorIndex = 0;
 
       // Step 1: Clear the document
       const { tr } = editor.state;
@@ -2980,25 +3057,35 @@ async function main() {
         ));
         nodes.push(customSchema.nodes.paragraph.create());
       } else {
-        // saturday-with-map or full-content: include geomarks
+        // saturday-with-map, saturday-with-route, or full-content: include geomarks (deterministic IDs)
         const copenhagenMark = customSchema.marks.geoMark.create({
-          geoId: `geo-setup-copenhagen-${Date.now()}`,
+          geoId: 'geo-setup-copenhagen',
           displayText: 'Copenhagen',
           placeName: 'Copenhagen, Denmark',
           lat: 55.6761,
           lng: 12.5683,
           colorIndex: 0,
-          coordSource: 'setup'
+          coordSource: 'demo'
         });
-        const tivoliMark = customSchema.marks.geoMark.create({
-          geoId: `geo-setup-tivoli-${Date.now()}`,
+
+        // saturday-with-route includes transport config for the route
+        const tivoliMarkAttrs: any = {
+          geoId: 'geo-setup-tivoli',
           displayText: 'Tivoli Gardens',
           placeName: 'Tivoli Gardens, Copenhagen',
           lat: 55.6736,
           lng: 12.5681,
           colorIndex: 1,
-          coordSource: 'setup'
-        });
+          coordSource: 'demo'
+        };
+
+        // Add transport config only for saturday-with-route state
+        if (state === 'saturday-with-route') {
+          tivoliMarkAttrs.transportFrom = 'geo-setup-copenhagen';
+          tivoliMarkAttrs.transportProfile = 'walking';
+        }
+
+        const tivoliMark = customSchema.marks.geoMark.create(tivoliMarkAttrs);
 
         // Create text with geomarks: "Explore Copenhagen and visit Tivoli Gardens"
         const saturdayText = customSchema.nodes.paragraph.create(null, [
@@ -3023,15 +3110,15 @@ async function main() {
           customSchema.text('Sunday')
         ));
 
-        // Sunday description with Aarhus geomark
+        // Sunday description with Aarhus geomark (deterministic ID)
         const aarhusMark = customSchema.marks.geoMark.create({
-          geoId: `geo-setup-aarhus-${Date.now()}`,
+          geoId: 'geo-setup-aarhus',
           displayText: 'Aarhus',
           placeName: 'Aarhus, Denmark',
           lat: 56.1629,
           lng: 10.2039,
           colorIndex: 2,
-          coordSource: 'setup'
+          coordSource: 'demo'
         });
 
         const sundayText = customSchema.nodes.paragraph.create(null, [
@@ -3132,6 +3219,13 @@ async function main() {
       case 'scroll':
         // Scroll to a target in the editor
         console.log('[Main] Executing scroll command:', data.target);
+
+        // In observeOnly mode, skip scroll commands - we follow Alice's scroll position instead
+        if (isObserveOnly) {
+          console.log('[Main] Skipping scroll command in observeOnly mode (following Alice)');
+          break;
+        }
+
         const editorContainer = document.getElementById('editor-container');
         if (!editorContainer) return;
 
@@ -3526,7 +3620,25 @@ async function main() {
 }
 
 // Function to geocode a place name using Nominatim
+// In demo/autoplay mode, uses predefined locations for deterministic behavior
 async function geocodePlace(placeName: string) {
+  // In demo mode, use predefined locations (no API calls)
+  if (isAutoplayMode || isRemoteControlMode) {
+    const demoLocation = DEMO_LOCATIONS[placeName];
+    if (demoLocation) {
+      console.log(`[Main] Using predefined demo location for "${placeName}"`);
+      return {
+        placeName: demoLocation.placeName,
+        lat: demoLocation.lat,
+        lng: demoLocation.lng
+      };
+    }
+    // Location not in demo list - log warning but don't fail
+    console.warn(`[Main] Demo location not found for "${placeName}", no API call will be made`);
+    return null;
+  }
+
+  // Normal mode - call Nominatim API
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`;
 
   try {
@@ -3753,8 +3865,15 @@ async function createGeoMark(view: EditorView) {
     return;
   }
 
-  // Generate a unique ID
-  const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Generate a unique ID (deterministic in demo mode)
+  const geoId = (isAutoplayMode || isRemoteControlMode)
+    ? `geo-demo-${demoColorIndex}`
+    : `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // In demo mode, use deterministic color index; otherwise random
+  const colorIndex = (isAutoplayMode || isRemoteControlMode)
+    ? (demoColorIndex++ % 10)
+    : Math.floor(Math.random() * 10);
 
   // Create the geo mark
   const geoMarkType = customSchema.marks.geoMark;
@@ -3764,8 +3883,8 @@ async function createGeoMark(view: EditorView) {
     placeName: geocodeResult.placeName,
     lat: geocodeResult.lat,
     lng: geocodeResult.lng,
-    colorIndex: Math.floor(Math.random() * 10),
-    coordSource: 'nominatim'
+    colorIndex,
+    coordSource: (isAutoplayMode || isRemoteControlMode) ? 'demo' : 'nominatim'
   });
 
   // Apply the mark using current state (not the stale captured state)
@@ -3884,8 +4003,10 @@ async function createGeoMarkInSection(
     return false;
   }
 
-  // Create geo-mark
-  const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Create geo-mark (deterministic geoId in demo mode)
+  const geoId = (isAutoplayMode || isRemoteControlMode)
+    ? `geo-section-${colorIndex}`
+    : `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const mark = customSchema.marks.geoMark.create({
     geoId,
     displayText: locationName,
@@ -3893,7 +4014,7 @@ async function createGeoMarkInSection(
     lat: result.lat,
     lng: result.lng,
     colorIndex,
-    coordSource: 'nominatim'
+    coordSource: (isAutoplayMode || isRemoteControlMode) ? 'demo' : 'nominatim'
   });
 
   const tr = view.state.tr.addMark(newFrom, newTo, mark);

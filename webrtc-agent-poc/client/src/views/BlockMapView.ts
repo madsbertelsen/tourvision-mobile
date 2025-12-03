@@ -72,6 +72,7 @@ export class BlockMapView {
 
     let currentMap: mapboxgl.Map | null = null;
     let currentMarkers: mapboxgl.Marker[] = [];
+    let currentRouteIds: string[] = []; // Track route layer IDs for cleanup
 
     /**
      * Find the section boundaries for this map (between previous heading and map position)
@@ -233,6 +234,7 @@ export class BlockMapView {
                       }
                     });
 
+                    currentRouteIds.push(routeId); // Track for cleanup
                     console.log('[BlockMap] Route created:', routeId);
                   }
                 }
@@ -287,6 +289,23 @@ export class BlockMapView {
         // Remove old markers
         currentMarkers.forEach(marker => marker.remove());
         currentMarkers = [];
+
+        // Remove old route layers and sources
+        if (currentMap) {
+          currentRouteIds.forEach(routeId => {
+            try {
+              if (currentMap!.getLayer(routeId)) {
+                currentMap!.removeLayer(routeId);
+              }
+              if (currentMap!.getSource(routeId)) {
+                currentMap!.removeSource(routeId);
+              }
+            } catch (e) {
+              console.warn('[BlockMap] Error removing route:', routeId, e);
+            }
+          });
+        }
+        currentRouteIds = [];
 
         if (locations.length === 0) {
           if (currentMap) {
@@ -366,6 +385,7 @@ export class BlockMapView {
                         }
                       });
 
+                      currentRouteIds.push(routeId); // Track for cleanup
                       console.log('[BlockMap] Route created:', routeId);
                     }
                   }

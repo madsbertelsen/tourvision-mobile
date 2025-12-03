@@ -64,7 +64,7 @@ export type DemoAction =
   | { type: 'tapCopyUrl' } // Tap the copy button to copy the share URL
   | { type: 'hideShareModal' } // Hide the share modal
   // Chapter state setup (for independent chapters)
-  | { type: 'setupChapterState'; state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content'; step?: number }; // Setup document state for chapter
+  | { type: 'setupChapterState'; state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content'; step?: number }; // Setup document state for chapter
 
 export interface DemoScript {
   name: string;
@@ -315,8 +315,8 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 500 },
       { type: 'newline' },
 
-      // Step 4: Share - Alice shares a link with Bob
-      { type: 'setupChapterState', state: 'saturday-with-map', step: 4 },
+      // Step 4: Share - Alice shares a link with Bob (with route from Step 3)
+      { type: 'setupChapterState', state: 'saturday-with-route', step: 4 },
       // Tap the Share button to show the share modal
       { type: 'fingerTapButton', button: 'share' },
       { type: 'pause', duration: 300 },
@@ -376,17 +376,10 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
 
       // Bob pans right
       { type: 'bobPanMap', direction: 'right', distance: 100 },
-      { type: 'pause', duration: 800 },
+      { type: 'pause', duration: 3000 },
 
       // Bob closes fullscreen map
-      { type: 'bobFingerTap', selector: '#fullscreen-overlay .close-btn', fromSide: 'left' },
-      { type: 'bobCloseFullscreenMap' },
 
-      { type: 'pause', duration: 500 },
-      { type: 'hideCursor' },
-      { type: 'hideFinger' },
-      { type: 'pause', duration: 500 },
-      { type: 'clear' },
     ]
   },
 
@@ -527,7 +520,7 @@ export class AutoplayDemo {
   public onTapCopyUrl?: () => Promise<void>; // Tap copy button
   public onHideShareModal?: () => void; // Hide share modal
   // Chapter state setup callback
-  public onSetupChapterState?: (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'full-content') => Promise<void>; // Setup document state
+  public onSetupChapterState?: (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content') => Promise<void>; // Setup document state
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
