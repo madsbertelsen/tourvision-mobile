@@ -33,8 +33,9 @@ export interface DemoCommand {
 
 export interface DemoControl {
   type: 'demoControl';
-  command: 'start' | 'stop' | 'pause' | 'resume' | 'resumeFromAction';
+  command: 'start' | 'stop' | 'pause' | 'resume' | 'resumeFromAction' | 'goToStep';
   actionIndex?: number;  // Required for resumeFromAction command
+  step?: number;         // Required for goToStep command
 }
 
 // Messages received from Iframe
@@ -76,11 +77,17 @@ export class DemoPlayer {
   private sessionId: string;
   private currentStep: number = 0;
   private isPlaying: boolean = false;
+  private isPausedState: boolean = false;
   private iframesReady: boolean[] = [];
+  private keyboardHandler: ((event: KeyboardEvent) => void) | null = null;
+  private pauseButton: HTMLElement | null = null;
 
   // Chapter snapshots for navigation
   private snapshots: Map<number, StepSnapshot> = new Map();
   private currentActionIndex: number = 0;  // Track current action for snapshot capture
+
+  // Pending command to execute when comment overlay is dismissed
+  private pendingCommand: DemoControl | null = null;
 
   // Callbacks
   public onStepChange?: (step: number) => void;
@@ -94,6 +101,7 @@ export class DemoPlayer {
     console.log('[DemoPlayer] Session ID:', this.sessionId);
     this.createDOM();
     this.setupMessageListener();
+    this.setupKeyboardListener();
 
     if (options.autoStart !== false) {
       // Wait for iframe to be ready before starting
@@ -221,11 +229,28 @@ export class DemoPlayer {
       this.hideComment();
     });
 
+    // Create pause button (shows when paused)
+    this.pauseButton = document.createElement('div');
+    this.pauseButton.className = 'pause-button';
+    this.pauseButton.innerHTML = `
+      <svg class="play-icon" width="48" height="48" viewBox="0 0 24 24" fill="white">
+        <polygon points="5,3 19,12 5,21" />
+      </svg>
+      <svg class="pause-icon" width="48" height="48" viewBox="0 0 24 24" fill="white">
+        <rect x="6" y="4" width="4" height="16" />
+        <rect x="14" y="4" width="4" height="16" />
+      </svg>
+    `;
+    this.pauseButton.addEventListener('click', () => {
+      this.togglePause();
+    });
+
     // Create player content wrapper (frame + overlay)
     const playerContent = document.createElement('div');
     playerContent.className = 'player-content';
     playerContent.appendChild(playerFrame);
     playerContent.appendChild(this.overlayContainer);
+    playerContent.appendChild(this.pauseButton);
 
     // Assemble player - tabs above, then player content with overlay
     playerEl.appendChild(this.tabsContainer);
@@ -527,6 +552,51 @@ export class DemoPlayer {
           transform: translateY(-10px);
         }
       }
+
+      /* Pause button */
+      .pause-button {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 150;
+        transition: all 0.2s ease;
+        opacity: 0.6;
+      }
+
+      .pause-button:hover {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.8);
+        transform: scale(1.1);
+      }
+
+      .pause-button .play-icon {
+        display: none;
+      }
+
+      .pause-button .pause-icon {
+        display: block;
+      }
+
+      .pause-button.paused .play-icon {
+        display: block;
+      }
+
+      .pause-button.paused .pause-icon {
+        display: none;
+      }
+
+      .pause-button.paused {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.8);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -627,6 +697,22 @@ export class DemoPlayer {
       }
     };
     window.addEventListener('message', this.messageHandler);
+  }
+
+  /**
+   * Setup keyboard listener for pause/resume
+   */
+  private setupKeyboardListener(): void {
+    this.keyboardHandler = (event: KeyboardEvent) => {
+      // Space bar toggles pause (only if not typing in an input)
+      if (event.code === 'Space' &&
+          !(event.target instanceof HTMLInputElement) &&
+          !(event.target instanceof HTMLTextAreaElement)) {
+        event.preventDefault();
+        this.togglePause();
+      }
+    };
+    window.addEventListener('keydown', this.keyboardHandler);
   }
 
   /**
@@ -733,10 +819,17 @@ export class DemoPlayer {
     // Hide overlay
     this.overlayContainer.classList.remove('visible');
 
-    // Resume all iframes
-    this.iframes.forEach(iframe => {
-      iframe.contentWindow?.postMessage({ type: 'demoControl', command: 'resume' }, '*');
-    });
+    // Check if there's a pending command to execute (from goToStep navigation)
+    if (this.pendingCommand) {
+      console.log('[DemoPlayer] Executing pending command:', this.pendingCommand.command);
+      this.sendCommand(this.pendingCommand);
+      this.pendingCommand = null;
+    } else {
+      // Resume all iframes with generic resume
+      this.iframes.forEach(iframe => {
+        iframe.contentWindow?.postMessage({ type: 'demoControl', command: 'resume' }, '*');
+      });
+    }
   }
 
   /**
@@ -824,28 +917,27 @@ export class DemoPlayer {
         }, '*');
       });
 
-      // Show the step comment
-      this.showComment(stepDef.heading, stepDef.text);
-
-      // Resume playback from the action after the comment
-      // Small delay to let snapshot restore complete
-      setTimeout(() => {
-        this.sendCommand({
-          type: 'demoControl',
-          command: 'resumeFromAction',
-          actionIndex: snapshot.actionIndex
-        });
-      }, 100);
-    } else {
-      console.log(`[DemoPlayer] No snapshot for step ${step}, showing comment only`);
-      // No snapshot yet - just show the comment
-      this.showComment(stepDef.heading, stepDef.text);
-
-      // Start from beginning (demo hasn't played this step yet)
-      this.sendCommand({
+      // Store the pending command to be executed when comment is dismissed
+      this.pendingCommand = {
         type: 'demoControl',
-        command: 'start'
-      });
+        command: 'resumeFromAction',
+        actionIndex: snapshot.actionIndex
+      };
+
+      // Show the step comment - playback will resume when comment is dismissed
+      this.showComment(stepDef.heading, stepDef.text);
+    } else {
+      console.log(`[DemoPlayer] No snapshot for step ${step}, jumping to step`);
+
+      // Store the pending command to be executed when comment is dismissed
+      this.pendingCommand = {
+        type: 'demoControl',
+        command: 'goToStep',
+        step: step
+      };
+
+      // Show the step comment - playback will start when comment is dismissed
+      this.showComment(stepDef.heading, stepDef.text);
     }
   }
 
@@ -880,6 +972,60 @@ export class DemoPlayer {
   }
 
   /**
+   * Pause demo playback
+   */
+  public pause(): void {
+    if (this.isPausedState) return;
+
+    this.isPausedState = true;
+    console.log('[DemoPlayer] Pausing playback');
+
+    // Update pause button visual
+    this.pauseButton?.classList.add('paused');
+
+    this.sendCommand({
+      type: 'demoControl',
+      command: 'pause'
+    });
+  }
+
+  /**
+   * Resume demo playback
+   */
+  public resume(): void {
+    if (!this.isPausedState) return;
+
+    this.isPausedState = false;
+    console.log('[DemoPlayer] Resuming playback');
+
+    // Update pause button visual
+    this.pauseButton?.classList.remove('paused');
+
+    this.sendCommand({
+      type: 'demoControl',
+      command: 'resume'
+    });
+  }
+
+  /**
+   * Toggle pause/resume
+   */
+  public togglePause(): void {
+    if (this.isPausedState) {
+      this.resume();
+    } else {
+      this.pause();
+    }
+  }
+
+  /**
+   * Get pause state
+   */
+  public get isPaused(): boolean {
+    return this.isPausedState;
+  }
+
+  /**
    * Clean up resources
    */
   public destroy(): void {
@@ -899,6 +1045,12 @@ export class DemoPlayer {
     if (this.messageHandler) {
       window.removeEventListener('message', this.messageHandler);
       this.messageHandler = null;
+    }
+
+    // Remove keyboard listener
+    if (this.keyboardHandler) {
+      window.removeEventListener('keydown', this.keyboardHandler);
+      this.keyboardHandler = null;
     }
 
     // Clear iframe references

@@ -97,15 +97,22 @@
       align-items: center;
     }
 
-    /* Mobile: Hide format buttons until text is selected */
+    /* Mobile: Show different buttons based on selection state */
     @media (max-width: 768px) {
-      /* In show-toolbar mode, hide format buttons by default */
+      /* In show-toolbar mode, hide all format buttons by default */
       body.show-toolbar header .format-toolbar .format-btn {
         display: none;
       }
-      /* Show format buttons when text is selected */
-      body.show-toolbar.has-selection header .format-toolbar .format-btn {
-        display: flex;
+      /* No selection: show Share and Map buttons */
+      body.show-toolbar:not(.has-selection) header .format-toolbar #share-btn,
+      body.show-toolbar:not(.has-selection) header .format-toolbar #format-map-btn {
+        display: flex !important;
+      }
+      /* With selection: show H1, H2, Geo Mark buttons */
+      body.show-toolbar.has-selection header .format-toolbar #heading1-btn,
+      body.show-toolbar.has-selection header .format-toolbar #heading2-btn,
+      body.show-toolbar.has-selection header .format-toolbar #format-geomark-btn {
+        display: flex !important;
       }
       /* Keep avatars visible */
       body.show-toolbar header #avatars {
@@ -545,6 +552,10 @@
       /* Enable scrolling within iframe demos */
       overflow-y: auto;
       max-height: calc(100vh - 50px); /* Account for toolbar */
+    }
+    /* Hide mobile action bar in show-toolbar mode - we use header buttons instead */
+    body.show-toolbar #mobile-action-bar {
+      display: none !important;
     }
 
     /* Remote cursor for collaboration demo */
@@ -1246,6 +1257,15 @@
             <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
             <line x1="8" y1="2" x2="8" y2="18"></line>
             <line x1="16" y1="6" x2="16" y2="22"></line>
+          </svg>
+        </button>
+        <button id="share-btn" class="format-btn share-btn" aria-label="Share" title="Share">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
           </svg>
         </button>
       </div>

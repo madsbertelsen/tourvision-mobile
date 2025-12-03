@@ -55,7 +55,8 @@ export type DemoAction =
   | { type: 'dragSelectionHandle'; handle: 'start' | 'end'; toText: string } // Drag selection handle to expand/shrink
   // Context menu actions
   | { type: 'showContextMenu'; position?: 'above' | 'below' } // Show context menu at current selection
-  | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' } // Tap a context menu item
+  | { type: 'tapContextMenuItem'; item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' | 'share' } // Tap a context menu item
+  | { type: 'fingerTapButton'; button: 'geomark' | 'map' | 'h1' | 'h2' | 'share' } // Tap a toolbar button with finger animation
   | { type: 'fingerDoubleTap'; target: 'cursor' | 'endOfDoc'; fromSide?: 'left' | 'right' | 'bottom' } // Double-tap at cursor or end of document
   | { type: 'fingerScroll'; direction: 'up' | 'down'; distance?: number; fromSide?: 'left' | 'right' | 'bottom' }; // Scroll editor with finger swipe
 
@@ -280,17 +281,17 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
 
       // Tap Configure Transport (finger moves to button)
       { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right', persist: true },
-      { type: 'clickElement', selector: '#transport-config-btn' }, // Actually click to expand
+//      { type: 'clickElement', selector: '#transport-config-btn' }, // Actually click to expand
       { type: 'pause', duration: 1000 }, // Let it expand
 
       // Tap Copenhagen as the origin (finger moves to chip)
       { type: 'showFingerTap', selector: '.source-location-chip', fromSide: 'right', persist: true },
-      { type: 'clickElement', selector: '.source-location-chip' }, // Select Copenhagen
-      { type: 'pause', duration: 800 },
+//      { type: 'clickElement', selector: '.source-location-chip' }, // Select Copenhagen
+      { type: 'pause', duration: 1500 },
 
       // Tap Walking as the transport mode (finger moves to button)
       { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom', persist: true },
-      { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
+ //     { type: 'clickElement', selector: '.transport-mode-btn:first-of-type' }, // Select Walking
       { type: 'pause', duration: 1500 }, // Show the final result
 
       // Tap X button to dismiss location sheet
@@ -343,7 +344,10 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
 
       // Step 4: Share - real-time collaboration shown via dual phones (Alice/Bob)
       // The second phone (Bob) demonstrates live Y.js sync, so no fake "Marc" avatar needed
-      { type: 'comment', heading: 'Share', text: 'Invite friends to collaborate in real-time', duration: 2000, step: 4 },
+      // Tap the Share button to trigger the share action
+      { type: 'fingerTapButton', button: 'share' },
+      { type: 'pause', duration: 300 },
+      { type: 'comment', heading: 'Share', text: 'Send to Bob and collaborate in real-time', duration: 2000, step: 4 },
 
       { type: 'pause', duration: 1000 },
 
@@ -515,7 +519,7 @@ export class AutoplayDemo {
   public onDragSelectionHandle?: (handle: 'start' | 'end', toText: string) => Promise<void>; // Drag selection handle to expand/shrink
   // Context menu callbacks
   public onShowContextMenu?: (position: 'above' | 'below') => Promise<void>; // Show context menu at selection
-  public onTapContextMenuItem?: (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph') => Promise<void>; // Tap a context menu item
+  public onTapContextMenuItem?: (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' | 'share') => Promise<void>; // Tap a toolbar/menu item
   public onFingerDoubleTap?: (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap at position
   public onFingerScroll?: (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Scroll with finger swipe
 
@@ -578,6 +582,12 @@ export class AutoplayDemo {
             // Resume playback from a specific action index (for chapter navigation)
             if (typeof data.actionIndex === 'number') {
               this.resumeFromAction(data.actionIndex);
+            }
+            break;
+          case 'goToStep':
+            // Jump to a specific step (chapter navigation without snapshot)
+            if (typeof data.step === 'number') {
+              this.goToStep(data.step);
             }
             break;
         }
@@ -646,6 +656,62 @@ export class AutoplayDemo {
   }
 
   /**
+   * Go to a specific step by finding the comment action for that step
+   * and starting playback from there (clears document first)
+   */
+  goToStep(targetStep: number) {
+    // Stop any current playback
+    if (this.timeoutId !== null) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
+    console.log(`[AutoplayDemo] Going to step: ${targetStep}`);
+
+    // Find the action index for the first action with this step number
+    // Typically this is a 'comment' action with step: N
+    let actionIndex = 0;
+    for (let i = 0; i < this.script.actions.length; i++) {
+      const action = this.script.actions[i];
+      if (action.type === 'comment' && 'step' in action && action.step === targetStep) {
+        actionIndex = i;
+        break;
+      }
+    }
+
+    // Special handling for steps that require setup from earlier steps
+    // Step 2 (Fullscreen Map) and Step 3 (Transport) need content from Step 1
+    // (geomarks and map block), so we start from Step 1 to build up the state
+    if (targetStep === 2 || targetStep === 3) {
+      // Find the step 1 (Location Tagging) comment and start from there
+      for (let i = 0; i < this.script.actions.length; i++) {
+        const action = this.script.actions[i];
+        if (action.type === 'comment' && 'step' in action && action.step === 1) {
+          actionIndex = i;
+          console.log(`[AutoplayDemo] Step ${targetStep} requires content setup, starting from step 1 at action ${actionIndex}`);
+          break;
+        }
+      }
+    }
+
+    console.log(`[AutoplayDemo] Step ${targetStep} starts at action index: ${actionIndex}`);
+
+    // Clear document and demo state
+    this.clearDemoState();
+    this.clearDocument();
+
+    // Reset tracking
+    this.isPlaying = true;
+    this.isPaused = false;
+    this.currentActionIndex = actionIndex;
+    this.colorIndex = 0;
+    this.actionTypeCounts.clear();
+
+    // Start playback from that action
+    this.playNextAction();
+  }
+
+  /**
    * Clear all demo state from previous runs
    * This prevents ghost avatars, cursors, and map bounds from accumulating
    */
@@ -670,6 +736,11 @@ export class AutoplayDemo {
     // Hide finger animation
     if (this.onHideFinger) {
       this.onHideFinger();
+    }
+
+    // Close fullscreen map if open (also hides location sheet)
+    if (this.onCloseFullscreenMap) {
+      this.onCloseFullscreenMap();
     }
 
     // Remove any demo highlight overlays
@@ -1140,6 +1211,19 @@ export class AutoplayDemo {
           });
         } else {
           console.warn('[AutoplayDemo] onTapContextMenuItem not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'fingerTapButton':
+        // Tap a toolbar button with finger animation (reuses same callback as context menu)
+        if (this.onTapContextMenuItem) {
+          console.log(`[AutoplayDemo] Finger tapping toolbar button: ${action.button}`);
+          this.onTapContextMenuItem(action.button).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onTapContextMenuItem not configured for fingerTapButton');
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         }
         break;
