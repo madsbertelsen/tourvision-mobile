@@ -45,6 +45,7 @@ const isRemoteControlMode = params.get('remoteControl') === 'true'; // Controlle
 const enableSync = params.get('enableSync') === 'true'; // Force sync even in autoplay mode (for dual phone demos)
 const isObserveOnly = params.get('observeOnly') === 'true'; // Don't run demo, just observe synced content
 const isOfflineMode = params.get('offline') === 'true'; // No network connections (for landing page demo without server)
+const followUserId = params.get('follow'); // Auto-follow a specific user by clientId (for "View my screen" links)
 const autoplayScript = params.get('demo') || 'collab'; // Which demo script to play
 const composedDemo = params.get('composed'); // Composed demo name (e.g., 'fullDemo')
 
@@ -826,6 +827,15 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       const newState = this.state.apply(tr);
       this.updateState(newState);
 
+      // Track selection for toolbar context-sensitivity
+      const { from, to } = newState.selection;
+      const hasSelection = from !== to;
+      if (hasSelection) {
+        document.body.classList.add('has-selection');
+      } else {
+        document.body.classList.remove('has-selection');
+      }
+
       // Auto-scroll to keep cursor in view when document changes
       if (tr.docChanged) {
         const editorContainer = document.getElementById('editor-container');
@@ -931,6 +941,40 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       };
       awareness.on('change', awarenessHandler);
       console.log('[Main] Waiting for Alice to connect...');
+    }
+  }
+
+  // Handle ?follow=<clientId> URL parameter for "View my screen" links
+  if (followUserId) {
+    const targetClientId = parseInt(followUserId, 10);
+    if (!isNaN(targetClientId)) {
+      console.log('[Main] Auto-follow mode - will follow user:', targetClientId);
+
+      // Function to start following the target user
+      const startFollowingUser = () => {
+        const states = awareness.getStates();
+        if (states.has(targetClientId)) {
+          console.log('[Main] Target user found, starting to follow:', targetClientId);
+          viewSyncService?.followUser(targetClientId);
+          return true;
+        }
+        return false;
+      };
+
+      // Try to follow immediately
+      if (!startFollowingUser()) {
+        // Target user not yet connected, listen for awareness changes
+        const awarenessHandler = () => {
+          if (startFollowingUser()) {
+            // Found target user, remove the listener
+            awareness.off('change', awarenessHandler);
+          }
+        };
+        awareness.on('change', awarenessHandler);
+        console.log('[Main] Waiting for user', targetClientId, 'to connect...');
+      }
+    } else {
+      console.warn('[Main] Invalid follow parameter:', followUserId);
     }
   }
 
@@ -1630,6 +1674,10 @@ async function main() {
     // Wire up fullscreen map for autoplay
     player.onOpenFullscreenMap = () => {
       (window as any).showFullscreenMap();
+      // Show video thumbnail when fullscreen map opens (for collaborative map exploration)
+      if (fullscreenMapView) {
+        fullscreenMapView.showVideoThumbnail();
+      }
       console.log('[AutoplayDemo] Opened fullscreen map');
     };
 
@@ -1653,6 +1701,87 @@ async function main() {
       } else {
         console.warn('[AutoplayDemo] Fullscreen map overlay not found');
       }
+    };
+
+    // Wire up scroll for autoplay
+    player.onScroll = (to: 'top' | 'bottom' | 'firstMap' | 'secondMap') => {
+      const editorContainer = document.querySelector('.editor-container') as HTMLElement;
+      if (!editorContainer) {
+        console.warn('[AutoplayDemo] Editor container not found');
+        return;
+      }
+
+      switch (to) {
+        case 'top':
+          editorContainer.scrollTo({ top: 0, behavior: 'smooth' });
+          break;
+        case 'bottom':
+          editorContainer.scrollTo({ top: editorContainer.scrollHeight, behavior: 'smooth' });
+          break;
+        case 'firstMap':
+        case 'secondMap': {
+          const maps = editorContainer.querySelectorAll('.prosemirror-map');
+          const mapIndex = to === 'firstMap' ? 0 : 1;
+          if (maps.length > mapIndex) {
+            const map = maps[mapIndex] as HTMLElement;
+            map.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            console.warn(`[AutoplayDemo] Map ${to} not found (${maps.length} maps)`);
+          }
+          break;
+        }
+      }
+      console.log(`[AutoplayDemo] Scrolled to ${to}`);
+    };
+
+    // Wire up pan map for autoplay
+    player.onPanMap = (direction: 'up' | 'down' | 'left' | 'right', distance: number) => {
+      const map = fullscreenMapView?.getMap();
+      if (!map) {
+        console.warn('[AutoplayDemo] Fullscreen map not available for pan');
+        return;
+      }
+
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      // Convert pixel distance to degrees based on zoom level
+      const degreesPerPixel = 360 / (Math.pow(2, zoom) * 256);
+      const delta = distance * degreesPerPixel;
+
+      let newLng = center.lng;
+      let newLat = center.lat;
+
+      switch (direction) {
+        case 'left':
+          newLng -= delta;
+          break;
+        case 'right':
+          newLng += delta;
+          break;
+        case 'up':
+          newLat += delta;
+          break;
+        case 'down':
+          newLat -= delta;
+          break;
+      }
+
+      map.panTo([newLng, newLat], { duration: 500 });
+      console.log(`[AutoplayDemo] Panned map ${direction} by ${distance}px`);
+    };
+
+    // Wire up zoom map for autoplay
+    player.onZoomMap = (direction: 'in' | 'out', amount: number) => {
+      const map = fullscreenMapView?.getMap();
+      if (!map) {
+        console.warn('[AutoplayDemo] Fullscreen map not available for zoom');
+        return;
+      }
+
+      const currentZoom = map.getZoom();
+      const newZoom = direction === 'in' ? currentZoom + amount : currentZoom - amount;
+      map.zoomTo(newZoom, { duration: 500 });
+      console.log(`[AutoplayDemo] Zoomed map ${direction} to ${newZoom.toFixed(1)}`);
     };
 
     // Wire up finger tap animation for autoplay
@@ -2550,7 +2679,7 @@ async function main() {
         notifyGeoMarkChange();
 
         // Show visual feedback on toolbar button
-        const btn = document.getElementById('create-geomark-btn');
+        const btn = document.getElementById('format-geomark-btn');
         if (btn) {
           btn.classList.add('demo-click');
           setTimeout(() => btn.classList.remove('demo-click'), 300);
@@ -2564,7 +2693,7 @@ async function main() {
         console.log('[AutoplayDemo] Toolbar click: Inserted map');
 
         // Show visual feedback on toolbar button
-        const btn = document.getElementById('insert-map-btn');
+        const btn = document.getElementById('format-map-btn');
         if (btn) {
           btn.classList.add('demo-click');
           setTimeout(() => btn.classList.remove('demo-click'), 300);
@@ -2916,15 +3045,34 @@ async function main() {
     player.onShowShareModal = () => {
       const modal = document.getElementById('share-modal');
       if (modal) {
-        // Reset state
+        // Reset state for both copy buttons
         const copyBtn = document.getElementById('share-copy-btn');
         if (copyBtn) {
           copyBtn.classList.remove('copied', 'tapped');
+        }
+        const followCopyBtn = document.getElementById('follow-copy-btn');
+        if (followCopyBtn) {
+          followCopyBtn.classList.remove('copied', 'tapped');
         }
         const status = document.getElementById('share-status');
         if (status) {
           status.classList.remove('visible');
         }
+
+        // Populate the "View my screen" follow URL with current clientId
+        const followUrlText = document.getElementById('follow-url-text');
+        if (followUrlText && awareness) {
+          const myClientId = awareness.clientID;
+          const baseUrl = window.location.origin + window.location.pathname;
+          const docId = documentId || 'demo';
+          const followUrl = `${baseUrl}?doc=${docId}&follow=${myClientId}`;
+          // Show shortened version for display
+          followUrlText.textContent = `tourvision.com/...&follow=${myClientId}`;
+          // Store full URL in data attribute for copying
+          followUrlText.setAttribute('data-full-url', followUrl);
+          console.log('[AutoplayDemo] Follow URL set:', followUrl);
+        }
+
         // Show modal
         modal.classList.add('visible');
         console.log('[AutoplayDemo] Showing share modal');
@@ -2994,13 +3142,94 @@ async function main() {
       const modal = document.getElementById('share-modal');
       if (modal) {
         modal.classList.remove('visible');
-        // Reset copy button state
+        // Reset copy button states
         const copyBtn = document.getElementById('share-copy-btn');
         if (copyBtn) {
           copyBtn.classList.remove('copied');
         }
+        const followCopyBtn = document.getElementById('follow-copy-btn');
+        if (followCopyBtn) {
+          followCopyBtn.classList.remove('copied');
+        }
         console.log('[AutoplayDemo] Hiding share modal');
       }
+    };
+
+    // Wire up demo video call overlay
+    player.onShowVideoCall = () => {
+      const overlay = document.getElementById('demo-video-call-overlay');
+      if (overlay) {
+        overlay.classList.add('visible');
+        console.log('[AutoplayDemo] Showing demo video call overlay');
+      }
+    };
+
+    player.onHideVideoCall = () => {
+      const overlay = document.getElementById('demo-video-call-overlay');
+      if (overlay) {
+        overlay.classList.remove('visible');
+        console.log('[AutoplayDemo] Hiding demo video call overlay');
+      }
+    };
+
+    // Wire up tap on follow copy button (for "View my screen" link)
+    player.onTapFollowCopyUrl = () => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const copyBtn = document.getElementById('follow-copy-btn') as HTMLElement;
+
+        if (!finger || !copyBtn) {
+          console.warn(`[AutoplayDemo] Tap follow copy URL failed - finger: ${!!finger}, copyBtn: ${!!copyBtn}`);
+          resolve();
+          return;
+        }
+
+        // Get copy button position
+        const rect = copyBtn.getBoundingClientRect();
+        const targetX = rect.left + rect.width / 2;
+        const targetY = rect.top + rect.height / 2;
+
+        // Animate finger from right side to target
+        const startX = window.innerWidth + 60;
+        const startY = targetY;
+
+        // Position finger at start
+        finger.style.left = `${startX}px`;
+        finger.style.top = `${startY}px`;
+        finger.classList.add('visible');
+
+        // Animate to target
+        setTimeout(() => {
+          finger.style.transition = 'left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // Tap animation
+          setTimeout(() => {
+            finger.classList.add('tapping');
+            copyBtn.classList.add('tapped');
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+              copyBtn.classList.remove('tapped');
+              copyBtn.classList.add('copied');
+
+              // Show "Copied!" status
+              const status = document.getElementById('share-status');
+              if (status) {
+                status.classList.add('visible');
+              }
+
+              // Hide finger and resolve
+              setTimeout(() => {
+                finger.classList.remove('visible');
+                finger.style.transition = '';
+                resolve();
+              }, 400);
+            }, 200);
+          }, 450);
+        }, 50);
+      });
     };
 
     // Wire up chapter state setup for independent/shuffleable chapters
@@ -3306,6 +3535,24 @@ async function main() {
               }
             });
           }
+        }
+        break;
+
+      case 'showVideoCall':
+        // Show demo video call overlay on Bob's phone
+        console.log('[Main] Executing showVideoCall command');
+        const videoOverlay = document.getElementById('demo-video-call-overlay');
+        if (videoOverlay) {
+          videoOverlay.classList.add('visible');
+        }
+        break;
+
+      case 'hideVideoCall':
+        // Hide demo video call overlay on Bob's phone
+        console.log('[Main] Executing hideVideoCall command');
+        const videoOverlayHide = document.getElementById('demo-video-call-overlay');
+        if (videoOverlayHide) {
+          videoOverlayHide.classList.remove('visible');
         }
         break;
     }

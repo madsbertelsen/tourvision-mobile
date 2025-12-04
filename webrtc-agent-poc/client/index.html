@@ -660,6 +660,51 @@
       transform: scale(1.1);
     }
 
+    /* Video Thumbnail (top-left, small PiP-style) */
+    .video-thumbnail {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10003;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      border-radius: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      transform: scale(0.9) translateX(-10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .video-thumbnail.visible {
+      display: flex;
+      opacity: 1;
+      transform: scale(1) translateX(0);
+    }
+
+    .thumbnail-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #10B981; /* Bob's green */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .thumbnail-name {
+      color: white;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
     /* Video Call Overlay */
     .video-call-overlay {
       position: absolute;
@@ -1730,6 +1775,12 @@
       <div id="fullscreen-map"></div>
     </div>
     <button class="close-btn">✕</button>
+
+    <!-- Small Video Thumbnail (top-left, shows collaborator during map exploration) -->
+    <div id="video-thumbnail" class="video-thumbnail">
+      <div class="thumbnail-avatar">B</div>
+      <span class="thumbnail-name">Bob</span>
+    </div>
 
     <!-- Video Call Overlay (avatars on fullscreen map) -->
     <div id="video-call-overlay" class="video-call-overlay">

@@ -744,6 +744,9 @@ export class FullscreenMapView {
     // Hide video call overlay if visible
     this.hideVideoCallOverlay();
 
+    // Hide video thumbnail if visible
+    this.hideVideoThumbnail();
+
     // Notify parent that fullscreen map is closing
     WebViewBridge.sendFullscreenMapClosed();
     console.log('[Fullscreen] Sent fullscreenMapClosed message to parent');
@@ -825,6 +828,36 @@ export class FullscreenMapView {
   isVideoCallOverlayVisible(): boolean {
     const overlay = document.getElementById('video-call-overlay');
     return overlay?.classList.contains('visible') ?? false;
+  }
+
+  /**
+   * Show the video thumbnail (small PiP in top-left)
+   */
+  showVideoThumbnail(): void {
+    const thumbnail = document.getElementById('video-thumbnail');
+    if (thumbnail) {
+      thumbnail.classList.add('visible');
+      console.log('[Fullscreen] Video thumbnail shown');
+    }
+  }
+
+  /**
+   * Hide the video thumbnail
+   */
+  hideVideoThumbnail(): void {
+    const thumbnail = document.getElementById('video-thumbnail');
+    if (thumbnail) {
+      thumbnail.classList.remove('visible');
+      console.log('[Fullscreen] Video thumbnail hidden');
+    }
+  }
+
+  /**
+   * Check if the video thumbnail is visible
+   */
+  isVideoThumbnailVisible(): boolean {
+    const thumbnail = document.getElementById('video-thumbnail');
+    return thumbnail?.classList.contains('visible') ?? false;
   }
 
   /**
