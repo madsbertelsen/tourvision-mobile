@@ -31,14 +31,28 @@ export class LocationExtractor {
     const locations: Location[] = [];
     const seenGeoIds = new Set<string>(); // Prevent duplicates
 
+    console.log('[LocationExtractor] Starting extraction from document...');
+    let geoMarkCount = 0;
+
     editorView.state.doc.descendants((node, pos) => {
       if (node.isText && node.marks.length > 0) {
         for (const mark of node.marks) {
           if (mark.type.name === 'geoMark' && mark.attrs.lat && mark.attrs.lng) {
+            geoMarkCount++;
             const geoId = mark.attrs.geoId;
+            const hasWaypoints = mark.attrs.waypoints && mark.attrs.waypoints.length > 0;
+
+            console.log(`[LocationExtractor] Found geo-mark #${geoMarkCount}:`, {
+              geoId,
+              placeName: mark.attrs.placeName,
+              waypointsCount: mark.attrs.waypoints?.length || 0,
+              waypoints: mark.attrs.waypoints,
+              alreadySeen: seenGeoIds.has(geoId)
+            });
 
             // Skip if already seen (same geo-mark can span multiple text nodes)
             if (seenGeoIds.has(geoId)) {
+              console.log(`[LocationExtractor] Skipping duplicate geoId: ${geoId}`);
               continue;
             }
             seenGeoIds.add(geoId);
@@ -61,7 +75,12 @@ export class LocationExtractor {
       }
     });
 
-    console.log(`[LocationExtractor] Extracted ${locations.length} locations`);
+    console.log(`[LocationExtractor] Extraction complete. Found ${geoMarkCount} total geo-marks, extracted ${locations.length} unique locations`);
+    console.log('[LocationExtractor] Final locations:', locations.map(loc => ({
+      geoId: loc.geoId,
+      placeName: loc.placeName,
+      waypointsCount: loc.waypoints?.length || 0
+    })));
     return locations;
   }
 

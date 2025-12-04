@@ -1557,16 +1557,45 @@ export class FullscreenMapView {
       return null;
     }
 
-    // Extract destGeoId from route layer ID (format: route-{fromGeoId}-{toGeoId})
-    const parts = routeLayer.id.split('-');
-    const destGeoId = parts[parts.length - 1];
-
-    // Get current locations to find waypoints
+    // Get current locations first to match destGeoId from route layer ID
     const currentLocations = this.deps.extractLocationsForFullscreen();
+
+    // Extract destGeoId from route layer ID using endsWith() to handle hyphens in geoIds
+    // (geoIds like "geo-setup-tivoli" contain hyphens, so we can't just split by '-')
+    let destGeoId: string | null = null;
+    for (const loc of currentLocations) {
+      if (loc.geoId && routeLayer.id.endsWith(loc.geoId)) {
+        destGeoId = loc.geoId;
+        break;
+      }
+    }
+
+    if (!destGeoId) {
+      console.warn('[FullscreenMap] Could not find destination geoId in route layer ID:', routeLayer.id);
+      return null;
+    }
+    console.log('[FullscreenMap] Extracted locations:', currentLocations.map(loc => ({
+      geoId: loc.geoId,
+      placeName: loc.placeName,
+      waypointsCount: loc.waypoints?.length || 0,
+      waypoints: loc.waypoints
+    })));
+    console.log('[FullscreenMap] Looking for destGeoId:', destGeoId);
     const destLocation = currentLocations.find(loc => loc.geoId === destGeoId);
+    console.log('[FullscreenMap] Found destLocation:', destLocation ? {
+      geoId: destLocation.geoId,
+      placeName: destLocation.placeName,
+      waypointsCount: destLocation.waypoints?.length || 0,
+      waypoints: destLocation.waypoints
+    } : 'NOT FOUND');
 
     if (!destLocation || !destLocation.waypoints || waypointIndex >= destLocation.waypoints.length) {
-      console.warn('[FullscreenMap] Waypoint not found:', waypointIndex);
+      console.warn('[FullscreenMap] Waypoint not found:', waypointIndex, {
+        destLocation: !!destLocation,
+        hasWaypoints: !!destLocation?.waypoints,
+        waypointsLength: destLocation?.waypoints?.length || 0,
+        requestedIndex: waypointIndex
+      });
       return null;
     }
 
@@ -1604,9 +1633,25 @@ export class FullscreenMapView {
       return null;
     }
 
-    // Extract destGeoId from route layer ID (format: route-{fromGeoId}-{toGeoId})
-    const parts = routeLayer.id.split('-');
-    const destGeoId = parts[parts.length - 1];
+    // Get current locations first to match destGeoId from route layer ID
+    const currentLocations = this.deps.extractLocationsForFullscreen();
+
+    // Extract destGeoId from route layer ID using endsWith() to handle hyphens in geoIds
+    // (geoIds like "geo-setup-tivoli" contain hyphens, so we can't just split by '-')
+    let destGeoId: string | null = null;
+    for (const loc of currentLocations) {
+      if (loc.geoId && routeLayer.id.endsWith(loc.geoId)) {
+        destGeoId = loc.geoId;
+        break;
+      }
+    }
+
+    if (!destGeoId) {
+      console.warn('[FullscreenMap] Could not find destination geoId in route layer ID:', routeLayer.id);
+      return null;
+    }
+
+    console.log('[FullscreenMap] Updating waypoint', waypointIndex, 'for destination:', destGeoId);
 
     // Update waypoint position via WaypointController
     const success = this.deps.waypointController.updateWaypoint(destGeoId, waypointIndex, newPoint.lat, newPoint.lng);
