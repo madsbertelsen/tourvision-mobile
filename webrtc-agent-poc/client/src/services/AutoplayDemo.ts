@@ -37,6 +37,7 @@ export type DemoAction =
   | { type: 'addWaypoint'; destGeoId: string; lat: number; lng: number } // Add a waypoint to a route
   | { type: 'fingerTapMapCoords'; lat: number; lng: number; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Finger tap on map at lat/lng coordinates
   | { type: 'fingerTapRoute'; fraction?: number; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Finger tap on route at fraction (0-1, default 0.5)
+  | { type: 'fingerDragWaypoint'; waypointIndex: number; toFraction: number; fromSide?: 'left' | 'right' | 'bottom' } // Drag waypoint to new position on route
   | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Show finger animation tapping on element
   | { type: 'hideFinger' } // Hide the finger (for ending persisted finger sequences)
   | { type: 'clickElement'; selector: string } // Click an element by selector
@@ -508,7 +509,11 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       // Tap on the route to add a waypoint (at midpoint of route geometry)
       // Uses fingerTapRoute to get coordinates dynamically from the route line
       { type: 'fingerTapRoute', fraction: 0.5, fromSide: 'bottom', persist: true },
-      { type: 'pause', duration: 2000 }, // Show the route with waypoint on full map
+      { type: 'pause', duration: 1500 }, // Show the route with waypoint
+
+      // Now Alice drags the waypoint to a new position on the route
+      { type: 'fingerDragWaypoint', waypointIndex: 0, toFraction: 0.3, fromSide: 'bottom' },
+      { type: 'pause', duration: 2000 }, // Show Bob seeing the waypoint move
     ]
   }
 };
@@ -564,6 +569,7 @@ export class AutoplayDemo {
   public onAddWaypoint?: (destGeoId: string, lat: number, lng: number) => void; // Add a waypoint to a route
   public onFingerTapMapCoords?: (lat: number, lng: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Finger tap on map at lat/lng
   public onFingerTapRoute?: (fraction: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Finger tap on route at fraction (gets coords from route geometry)
+  public onFingerDragWaypoint?: (waypointIndex: number, toFraction: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Drag waypoint to new position
   public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Show finger tap animation
   public onHideFinger?: () => void; // Hide the finger (for ending persisted sequences)
   public onClickElement?: (selector: string) => void; // Click an element by selector
@@ -1575,6 +1581,18 @@ export class AutoplayDemo {
           const persist = action.persist || false;
           console.log(`[AutoplayDemo] Finger tap on route at fraction ${fraction} from ${fromSide}${persist ? ' (persist)' : ''}`);
           this.onFingerTapRoute(fraction, fromSide, persist).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'fingerDragWaypoint':
+        if (this.onFingerDragWaypoint) {
+          const fromSide = action.fromSide || 'right';
+          console.log(`[AutoplayDemo] Dragging waypoint ${action.waypointIndex} to fraction ${action.toFraction} from ${fromSide}`);
+          this.onFingerDragWaypoint(action.waypointIndex, action.toFraction, fromSide).then(() => {
             this.playNextAction();
           });
         } else {
