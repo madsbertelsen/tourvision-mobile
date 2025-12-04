@@ -142,6 +142,7 @@ let demoColorIndex = 0;
 let awarenessOverlayRenderer: AwarenessOverlayRenderer;
 let blockMapView: BlockMapView;
 let fullscreenMapView: FullscreenMapView;
+let fullscreenMapRefreshListener: (() => void) | null = null; // Listener for waypoint changes
 
 // Demo clients map for simulating remote users with awareness-like state
 // This allows follow mode to work with simulated users like Marc in autoplay demos
@@ -754,6 +755,17 @@ function extractLocationsForFullscreen() {
       fullscreenMapView.showVideoThumbnail('Alice', '#3b82f6');
     }
 
+    // Register listener for waypoint changes
+    // When waypoints are added via Y.js sync, this triggers a refresh of the fullscreen map
+    if (!fullscreenMapRefreshListener) {
+      fullscreenMapRefreshListener = () => {
+        console.log('[Main] Waypoint change detected, refreshing fullscreen map');
+        fullscreenMapView.refresh();
+      };
+      geoMarkChangeListeners.add(fullscreenMapRefreshListener);
+      console.log('[Main] Registered fullscreen map refresh listener');
+    }
+
     // Notify ViewSyncService if presenting (not when following)
     if (viewSyncService && !viewSyncService.isFollowing()) {
       viewSyncService.setFullscreenMapOpen(true);
@@ -765,6 +777,13 @@ function extractLocationsForFullscreen() {
 (window as any).hideFullscreenMap = () => {
   if (fullscreenMapView) {
     fullscreenMapView.hide();
+
+    // Unregister listener for waypoint changes
+    if (fullscreenMapRefreshListener) {
+      geoMarkChangeListeners.delete(fullscreenMapRefreshListener);
+      fullscreenMapRefreshListener = null;
+      console.log('[Main] Unregistered fullscreen map refresh listener');
+    }
 
     // Notify ViewSyncService if presenting
     if (viewSyncService) {
@@ -2292,13 +2311,9 @@ async function main() {
           }
         };
 
-        // If point is visible, tap directly
-        if (isVisible) {
-          console.log(`[FingerTapRoute] Point is visible, tapping directly`);
-          performTap(targetX, targetY);
-        } else {
-          // Point is off-screen - pan the map to bring it into view using finger drag
-          console.log(`[FingerTapRoute] Point is OFF-SCREEN, panning map to bring into view`);
+        // Always show finger panning animation for visual feedback
+        // If point is visible, pan the map to bring it into view using finger drag
+        console.log(`[FingerTapRoute] Panning map to show finger animation (point ${isVisible ? 'is visible' : 'is OFF-SCREEN'})`);
 
           // Calculate how much to pan to bring the point near center
           const panX = targetX - centerX;
@@ -2373,7 +2388,6 @@ async function main() {
               performTap(newTargetX, newTargetY);
             }, 200);
           }, duration + 100);
-        }
       });
     };
 

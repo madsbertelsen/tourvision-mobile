@@ -709,6 +709,19 @@ export class FullscreenMapView {
                       geometry: route.geometry
                     });
                     console.log('[Routes] Route updated:', routeId);
+
+                    // Re-render waypoint markers if waypoints exist
+                    if (toLocation.waypoints && toLocation.waypoints.length > 0) {
+                      this.deps.waypointController.renderWaypointMarkers(
+                        this.fullscreenMap,
+                        toLocation.geoId!,
+                        toLocation.waypoints,
+                        toLocation.color || '#3B82F6'
+                      );
+                    } else {
+                      // Clear waypoint markers if no waypoints
+                      this.deps.waypointController.clearMarkersForDestination(toLocation.geoId!);
+                    }
                   } else {
                     // Add new source and layer
                     this.fullscreenMap.addSource(routeId, {
@@ -1518,5 +1531,23 @@ export class FullscreenMapView {
 
     const success = this.addWaypointAtCoords(point.lat, point.lng);
     return { ...point, success };
+  }
+
+  /**
+   * Refresh the map to show updated routes and waypoints
+   * Called when waypoints are added via Y.js sync
+   */
+  refresh(): void {
+    if (!this.fullscreenMap) {
+      return;
+    }
+
+    console.log('[FullscreenMap] Refreshing routes and waypoints');
+
+    // Re-extract locations from document using provided callback
+    const currentLocations = this.deps.extractLocationsForFullscreen();
+
+    // Re-render all routes and markers with updated waypoints
+    this.renderMarkersAndRoutes(currentLocations);
   }
 }
