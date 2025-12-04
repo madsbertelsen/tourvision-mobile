@@ -1621,7 +1621,10 @@ export class DemoPlayer {
    * This fast-forwards through previous actions to reach the target
    */
   public async startFromAction(actionIndex: number): Promise<void> {
-    if (this.isPlaying) return;
+    // Stop current playback if playing
+    if (this.isPlaying) {
+      this.stop();
+    }
 
     this.isPlaying = true;
     this.iframeAcknowledgedStart = false;
@@ -1722,6 +1725,8 @@ export class DemoPlayer {
         return 1000; // Location sheet needs time to appear and attach listeners
       case 'showFingerTap':
         return 500; // UI needs time to respond to click
+      case 'fingerTapRoute':
+        return 300; // Waypoint needs to be added to document before next action can read it
       case 'addWaypoint':
         return 300;
       case 'fingerDrag':
