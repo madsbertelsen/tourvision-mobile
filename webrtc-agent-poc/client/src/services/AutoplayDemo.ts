@@ -30,7 +30,13 @@ export type DemoAction =
   | { type: 'comment'; text: string; heading?: string; duration?: number; step?: number } // Product explainer commentary with typewriter effect
   | { type: 'openFullscreenMap' } // Open fullscreen map view
   | { type: 'closeFullscreenMap' } // Close fullscreen map view
+  | { type: 'scroll'; to: 'top' | 'bottom' | 'firstMap' | 'secondMap' } // Scroll Alice's editor
+  | { type: 'panMap'; direction: 'up' | 'down' | 'left' | 'right'; distance?: number } // Pan Alice's fullscreen map
+  | { type: 'zoomMap'; direction: 'in' | 'out'; amount?: number } // Zoom Alice's fullscreen map
   | { type: 'clickMapMarker'; markerIndex: number } // Click a marker on the fullscreen map (0-based index)
+  | { type: 'addWaypoint'; destGeoId: string; lat: number; lng: number } // Add a waypoint to a route
+  | { type: 'fingerTapMapCoords'; lat: number; lng: number; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Finger tap on map at lat/lng coordinates
+  | { type: 'fingerTapRoute'; fraction?: number; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Finger tap on route at fraction (0-1, default 0.5)
   | { type: 'showFingerTap'; selector: string; fromSide?: 'left' | 'right' | 'bottom'; persist?: boolean } // Show finger animation tapping on element
   | { type: 'hideFinger' } // Hide the finger (for ending persisted finger sequences)
   | { type: 'clickElement'; selector: string } // Click an element by selector
@@ -62,9 +68,17 @@ export type DemoAction =
   // Share modal actions
   | { type: 'showShareModal' } // Show the share modal with URL
   | { type: 'tapCopyUrl' } // Tap the copy button to copy the share URL
+  | { type: 'tapFollowCopyUrl' } // Tap the copy button for "View my screen" follow URL
   | { type: 'hideShareModal' } // Hide the share modal
   // Chapter state setup (for independent chapters)
-  | { type: 'setupChapterState'; state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content'; step?: number }; // Setup document state for chapter
+  | { type: 'setupChapterState'; state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content'; step?: number } // Setup document state for chapter
+  // Video call actions
+  | { type: 'showVideoCall' } // Show simulated video call overlay (Alice's phone)
+  | { type: 'hideVideoCall' } // Hide video call overlay
+  | { type: 'bobShowVideoCall' } // Show video call on Bob's phone
+  | { type: 'bobHideVideoCall' } // Hide video call on Bob's phone
+  // Debug/test actions
+  | { type: 'drawTestLines'; startX: number; startY: number; endX: number; endY: number; duration?: number }; // Draw red line (screen coords) and blue line (geo coords)
 
 export interface DemoScript {
   name: string;
@@ -315,7 +329,7 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 500 },
       { type: 'newline' },
 
-      // Step 4: Share - Alice shares a link with Bob (with route from Step 3)
+      // Step 4: Share - Alice shares her screen with Bob (with route from Step 3)
       { type: 'setupChapterState', state: 'saturday-with-route', step: 4 },
       // Tap the Share button to show the share modal
       { type: 'fingerTapButton', button: 'share' },
@@ -323,62 +337,66 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'showShareModal' },
       { type: 'pause', duration: 800 },
 
-      // Tap the copy button to copy the URL
-      { type: 'tapCopyUrl' },
+      // Tap the "View my screen" copy button
+      { type: 'tapFollowCopyUrl' },
       { type: 'pause', duration: 1500 },
 
       // Hide the share modal
       { type: 'hideShareModal' },
       { type: 'pause', duration: 400 },
 
-      // Show the step comment - Bob joined via the shared link
-      { type: 'comment', heading: 'Share', text: 'Bob joined via shared link', duration: 2000, step: 4 },
+      // Show the step comment - Bob is now following Alice's screen
+      { type: 'comment', heading: 'Share', text: 'Bob is following your screen', duration: 2000, step: 4 },
       { type: 'pause', duration: 400 },
 
-      // Bob's avatar appears in Alice's toolbar (he joined!)
+      // Bob's avatar appears in Alice's toolbar (he joined via follow link!)
       { type: 'showAvatar', name: 'Bob', color: '#3b82f6' },
-      { type: 'pause', duration: 800 },
-
-      // Alice taps Bob's avatar to see options
-      { type: 'showFingerTap', selector: '.avatar[data-name="Bob"]', fromSide: 'right', persist: true },
-      { type: 'clickElement', selector: '.avatar[data-name="Bob"]' },
-      { type: 'pause', duration: 500 },
-
-      // Alice taps "Follow" in the context menu
-      { type: 'showFingerTap', selector: '#follow-user-btn', fromSide: 'right' },
-      { type: 'clickElement', selector: '#follow-user-btn' },
-      { type: 'pause', duration: 600 },
-
       { type: 'pause', duration: 1000 },
 
-      // Bob scrolls down to the first map
-      { type: 'bobScroll', target: 'firstMap' },
-      { type: 'pause', duration: 500 },
-
-      // Bob taps on the map to open fullscreen
-      { type: 'bobFingerTap', selector: '.prosemirror-map', fromSide: 'right' },
-      { type: 'bobOpenFullscreenMap' },
+      // Alice scrolls down to the first map - Bob's view follows automatically
+      { type: 'scroll', to: 'firstMap' },
       { type: 'pause', duration: 800 },
 
-      // Bob zooms in
-      { type: 'bobZoomMap', direction: 'in' },
+      // Alice taps on the map to open fullscreen - Bob sees it too
+      { type: 'showFingerTap', selector: '.prosemirror-map', fromSide: 'right' },
+      { type: 'openFullscreenMap' },
+      { type: 'pause', duration: 1000 },
+
+      // Alice zooms in - Bob's map follows
+      { type: 'zoomMap', direction: 'in' },
       { type: 'pause', duration: 600 },
 
-      // Bob pans around
-      { type: 'bobPanMap', direction: 'left', distance: 80 },
+      // Alice pans around - Bob sees the same view
+      { type: 'panMap', direction: 'left', distance: 80 },
       { type: 'pause', duration: 500 },
-      { type: 'bobPanMap', direction: 'up', distance: 60 },
+      { type: 'panMap', direction: 'up', distance: 60 },
       { type: 'pause', duration: 500 },
 
-      // Bob zooms in more
-      { type: 'bobZoomMap', direction: 'in' },
+      // Alice zooms in more
+      { type: 'zoomMap', direction: 'in' },
       { type: 'pause', duration: 600 },
 
-      // Bob pans right
-      { type: 'bobPanMap', direction: 'right', distance: 100 },
-      { type: 'pause', duration: 3000 },
+      // Alice pans right
+      { type: 'panMap', direction: 'right', distance: 100 },
+      { type: 'pause', duration: 1500 },
 
-      // Bob closes fullscreen map
+      // Close fullscreen map before video call
+      { type: 'closeFullscreenMap' },
+      { type: 'pause', duration: 500 },
+
+      // Step 5: Video Call - Alice and Bob discuss the trip
+      { type: 'setupChapterState', state: 'saturday-with-route', step: 5 },
+      { type: 'comment', heading: 'Video Call', text: 'Discuss your trip together', duration: 2000, step: 5 },
+
+      // Show video call overlay on both phones
+      { type: 'showVideoCall' },
+      { type: 'bobShowVideoCall' },
+      { type: 'pause', duration: 4000 },
+
+      // Hide video call to end the demo
+      { type: 'hideVideoCall' },
+      { type: 'bobHideVideoCall' },
+      { type: 'pause', duration: 1000 },
 
     ]
   },
@@ -449,6 +467,57 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'pause', duration: 500 },
       { type: 'clear' },
     ]
+  },
+
+  // Collaboration demo that starts with a document containing a block map
+  // Used for landing-collab.html with dual phones showing Alice and Bob
+  collabMap: {
+    name: 'Collaborative Map Demo',
+    loopDelay: 3000,
+    userName: 'Alice',
+    userColor: '#EC4899',
+    actions: [
+      // Start with document containing geomarks and map
+      { type: 'setupChapterState', state: 'saturday-with-map', step: 0 },
+
+      // Open fullscreen map immediately
+      { type: 'openFullscreenMap' },
+      { type: 'pause', duration: 800 },
+
+      // Draw test lines (red=screen coords, blue=geo coords) - vertical line test
+      { type: 'drawTestLines', startX: 50, startY: 100, endX: 50, endY: 250, duration: 999999 },
+      { type: 'pause', duration: 500 },
+
+      // Finger drag downward (same path as test line)
+      { type: 'fingerDrag', selector: '#fullscreen-map', direction: 'down', distance: 150 },
+      { type: 'pause', duration: 500 },
+
+      // Click Tivoli marker to open location sheet
+      { type: 'clickMapMarker', markerIndex: 1 },
+      { type: 'pause', duration: 1000 }, // Wait for location sheet to appear
+
+      // Tap Configure Transport button (showFingerTap triggers click)
+      { type: 'showFingerTap', selector: '#transport-config-btn', fromSide: 'right', persist: true },
+      { type: 'pause', duration: 800 }, // Wait for transport config to expand
+
+      // Tap source location (Copenhagen - first chip)
+      { type: 'showFingerTap', selector: '.source-location-chip', fromSide: 'bottom', persist: true },
+      { type: 'pause', duration: 800 },
+
+      // Tap Walking transport mode (first button)
+      { type: 'showFingerTap', selector: '.transport-mode-btn:first-of-type', fromSide: 'bottom', persist: true },
+      { type: 'pause', duration: 1500 }, // Show the walking route result
+
+      // Hide finger and close the location sheet to see the full map
+      { type: 'hideFinger' },
+      { type: 'showFingerTap', selector: '#location-sheet-close-btn', fromSide: 'left', persist: false },
+      { type: 'pause', duration: 800 }, // Wait for sheet to close
+
+      // Tap on the route to add a waypoint (at midpoint of route geometry)
+      // Uses fingerTapRoute to get coordinates dynamically from the route line
+      { type: 'fingerTapRoute', fraction: 0.5, fromSide: 'bottom', persist: true },
+      { type: 'pause', duration: 2000 }, // Show the route with waypoint on full map
+    ]
   }
 };
 
@@ -480,6 +549,8 @@ export class AutoplayDemo {
   private options: PlaybackOptions;
   private actionTypeCounts: Map<string, number> = new Map(); // Track occurrences of each action type
   private remoteControlMode = false; // When true, parent controls overlay display
+  private stepMode = false; // When true, pause after each action (for manual stepping)
+  private stepModeCallback: (() => void) | null = null; // Callback to call after action completes in step mode
 
   // Callbacks for custom actions
   public onGeoMark?: (placeName: string, lat: number, lng: number, colorIndex: number) => void;
@@ -494,10 +565,17 @@ export class AutoplayDemo {
   public onPlaybackStopped?: () => void; // Called when playback stops due to stopAt/stopAfter
   public onOpenFullscreenMap?: () => void; // Open fullscreen map view
   public onCloseFullscreenMap?: () => void; // Close fullscreen map view
+  public onScroll?: (to: 'top' | 'bottom' | 'firstMap' | 'secondMap') => void; // Scroll Alice's editor
+  public onPanMap?: (direction: 'up' | 'down' | 'left' | 'right', distance: number) => void; // Pan Alice's fullscreen map
+  public onZoomMap?: (direction: 'in' | 'out', amount: number) => void; // Zoom Alice's fullscreen map
   public onClickMapMarker?: (markerIndex: number) => void; // Click a marker on fullscreen map
+  public onAddWaypoint?: (destGeoId: string, lat: number, lng: number) => void; // Add a waypoint to a route
+  public onFingerTapMapCoords?: (lat: number, lng: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Finger tap on map at lat/lng
+  public onFingerTapRoute?: (fraction: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Finger tap on route at fraction (gets coords from route geometry)
   public onShowFingerTap?: (selector: string, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => Promise<void>; // Show finger tap animation
   public onHideFinger?: () => void; // Hide the finger (for ending persisted sequences)
   public onClickElement?: (selector: string) => void; // Click an element by selector
+  public onFastClick?: (selector: string) => void; // Fast click without animation (for fast-forward mode)
   public onFingerDrag?: (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => Promise<void>; // Drag finger on element
   public onShowAvatar?: (name: string, color: string) => void; // Show a user avatar
   public onClearAvatars?: () => void; // Clear all demo avatars
@@ -515,12 +593,17 @@ export class AutoplayDemo {
   public onTapContextMenuItem?: (item: 'geomark' | 'map' | 'h1' | 'h2' | 'paragraph' | 'share') => Promise<void>; // Tap a toolbar/menu item
   public onFingerDoubleTap?: (target: 'cursor' | 'endOfDoc', fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Double-tap at position
   public onFingerScroll?: (direction: 'up' | 'down', distance: number, fromSide: 'left' | 'right' | 'bottom') => Promise<void>; // Scroll with finger swipe
+  public onDrawTestLines?: (startX: number, startY: number, endX: number, endY: number, duration?: number) => Promise<void>; // Draw test lines (red screen coords, blue geo coords)
   // Share modal callbacks
   public onShowShareModal?: () => void; // Show share modal
-  public onTapCopyUrl?: () => Promise<void>; // Tap copy button
+  public onTapCopyUrl?: () => Promise<void>; // Tap copy button (trip link)
+  public onTapFollowCopyUrl?: () => Promise<void>; // Tap copy button for "View my screen" follow URL
   public onHideShareModal?: () => void; // Hide share modal
   // Chapter state setup callback
   public onSetupChapterState?: (state: 'empty' | 'saturday-content' | 'saturday-with-map' | 'saturday-with-route' | 'full-content') => Promise<void>; // Setup document state
+  // Video call callbacks
+  public onShowVideoCall?: () => void; // Show video call overlay
+  public onHideVideoCall?: () => void; // Hide video call overlay
 
   constructor(view: EditorView, scriptName: string = 'collab', awareness?: any, options?: PlaybackOptions) {
     this.view = view;
@@ -589,6 +672,27 @@ export class AutoplayDemo {
               this.goToStep(data.step);
             }
             break;
+          case 'nextAction':
+            // Execute just one action (for step mode)
+            this.executeNextActionOnly();
+            break;
+          case 'setStepMode':
+            // Enable/disable step mode
+            this.stepMode = data.enabled === true;
+            console.log(`[AutoplayDemo] Step mode ${this.stepMode ? 'enabled' : 'disabled'}`);
+            break;
+          case 'startFromAction':
+            // Start playback from a specific action index (skipping previous actions)
+            if (typeof data.actionIndex === 'number') {
+              this.startFromAction(data.actionIndex);
+            }
+            break;
+          case 'executeAction':
+            // Execute a single action from the host (for host-controlled fast-forward)
+            if (data.action && typeof data.actionIndex === 'number') {
+              this.executeActionFromHost(data.action, data.actionIndex, data.fastForward === true);
+            }
+            break;
         }
       }
     });
@@ -601,6 +705,32 @@ export class AutoplayDemo {
     if (window.parent !== window) {
       window.parent.postMessage(message, '*');
     }
+  }
+
+  /**
+   * Execute a single action from the host (for host-controlled fast-forward)
+   * This allows the DemoPlayer to control fast-forward timing
+   */
+  private executeActionFromHost(action: DemoAction, actionIndex: number, fastForward: boolean): void {
+    console.log(`[AutoplayDemo] Executing action from host: ${actionIndex} (${action.type}), fastForward=${fastForward}`);
+
+    // Update currentActionIndex so subsequent nextAction commands continue from correct position
+    // The next action to execute will be actionIndex + 1
+    this.currentActionIndex = actionIndex + 1;
+
+    // For setupChapterState, use the onSetupChapterState callback
+    if (action.type === 'setupChapterState' && this.onSetupChapterState) {
+      this.onSetupChapterState(action.state).then(() => {
+        console.log(`[AutoplayDemo] setupChapterState ${action.state} complete`);
+        this.notifyParent({ type: 'actionExecuted', actionIndex });
+      });
+      return;
+    }
+
+    // Use fast-forward execution (no animations) and notify host when complete
+    this.executeFastForwardAction(action, () => {
+      this.notifyParent({ type: 'actionExecuted', actionIndex });
+    });
   }
 
   /**
@@ -620,6 +750,19 @@ export class AutoplayDemo {
     this.clearDemoState();
 
     this.clearDocument();
+
+    // In step mode, don't auto-start - wait for user to click "Next"
+    if (this.stepMode) {
+      console.log('[AutoplayDemo] Step mode: ready at action 0, waiting for user to click Next');
+      // Notify parent that we're ready at action 0
+      this.notifyParent({
+        type: 'demoActionComplete',
+        actionIndex: -1, // Report -1 so button shows #0
+        isLastAction: false
+      });
+      return;
+    }
+
     this.playNextAction();
   }
 
@@ -652,6 +795,309 @@ export class AutoplayDemo {
 
     // Continue playback
     this.playNextAction();
+  }
+
+  /**
+   * Start playback from a specific action index (for URL-based deep linking)
+   * Finds and executes the most recent setupChapterState before the target action,
+   * then fast-forwards through intermediate actions to restore UI state
+   */
+  startFromAction(actionIndex: number) {
+    // Stop any current playback
+    if (this.timeoutId !== null) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
+    console.log(`[AutoplayDemo] Starting from action index: ${actionIndex}`);
+
+    // Find the most recent setupChapterState action at or before the target index
+    let setupAction = null;
+    let setupIndex = -1;
+    for (let i = actionIndex; i >= 0; i--) {
+      const action = this.script.actions[i];
+      if (action.type === 'setupChapterState') {
+        setupAction = action;
+        setupIndex = i;
+        break;
+      }
+    }
+
+    // Clear previous demo state
+    this.clearDemoState();
+    this.clearDocument();
+
+    // Fast-forward through actions from setupIndex+1 to actionIndex-1 to restore UI state
+    const fastForwardActions = async (fromIndex: number, toIndex: number) => {
+      console.log(`[AutoplayDemo] Fast-forwarding actions ${fromIndex} to ${toIndex - 1}`);
+
+      // Enable fast-forward mode - skip pauses and use minimal delays
+      const originalStepMode = this.stepMode;
+      this.stepMode = false; // Disable step mode during fast-forward
+
+      for (let i = fromIndex; i < toIndex; i++) {
+        const action = this.script.actions[i];
+
+        // Skip pause actions and comments during fast-forward
+        if (action.type === 'pause' || action.type === 'comment') {
+          continue;
+        }
+
+        // Skip setupChapterState - we already ran it
+        if (action.type === 'setupChapterState') {
+          continue;
+        }
+
+        console.log(`[AutoplayDemo] Fast-forward action ${i}: ${action.type}`);
+
+        // Execute the action and wait for it to complete
+        await this.executeActionAsync(action, i);
+
+        // Small delay between actions to let UI settle
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // Restore step mode
+      this.stepMode = originalStepMode;
+      console.log(`[AutoplayDemo] Fast-forward complete, now at action ${toIndex}`);
+    };
+
+    // Helper to continue after setup and fast-forward
+    const continueAfterSetup = async () => {
+      // If there are intermediate actions to fast-forward through
+      const startFastForward = setupIndex >= 0 ? setupIndex + 1 : 0;
+      if (startFastForward < actionIndex) {
+        await fastForwardActions(startFastForward, actionIndex);
+      }
+
+      // Now set up playback state
+      this.isPlaying = true;
+      this.isPaused = false;
+      this.currentActionIndex = actionIndex;
+      this.colorIndex = 0;
+
+      // Count action types up to this point (for stopAfter tracking)
+      this.actionTypeCounts.clear();
+      for (let i = 0; i < actionIndex; i++) {
+        const action = this.script.actions[i];
+        const count = (this.actionTypeCounts.get(action.type) || 0) + 1;
+        this.actionTypeCounts.set(action.type, count);
+      }
+
+      // In step mode, don't auto-start - wait for user to click "Next"
+      if (this.stepMode) {
+        console.log(`[AutoplayDemo] Step mode: ready at action ${actionIndex}, waiting for user to click Next`);
+        // Notify parent that we're ready at this action
+        this.notifyParent({
+          type: 'demoActionComplete',
+          actionIndex: actionIndex - 1, // Report previous action as complete so button shows correct next action
+          isLastAction: false
+        });
+        return;
+      }
+
+      // Continue playback from the target action (auto mode only)
+      this.playNextAction();
+    };
+
+    // If we found a setupChapterState, execute it via callback
+    if (setupAction) {
+      console.log(`[AutoplayDemo] Found setupChapterState at index ${setupIndex}: ${setupAction.state}`);
+      // Execute the setup action to initialize document state
+      if (this.onSetupChapterState) {
+        this.onSetupChapterState(setupAction.state).then(async () => {
+          console.log(`[AutoplayDemo] setupChapterState ${setupAction.state} complete, waiting for render...`);
+          // Wait for document to fully render before fast-forwarding
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`[AutoplayDemo] Fast-forwarding to action ${actionIndex}`);
+          continueAfterSetup();
+        });
+      } else {
+        console.warn('[AutoplayDemo] onSetupChapterState not configured, continuing without setup');
+        continueAfterSetup();
+      }
+    } else {
+      console.log('[AutoplayDemo] No setupChapterState found, starting with empty document');
+      continueAfterSetup();
+    }
+  }
+
+  /**
+   * Execute a single action asynchronously (for fast-forward mode)
+   * Returns a promise that resolves when the action is complete
+   */
+  private async executeActionAsync(action: DemoAction, actionIndex: number): Promise<void> {
+    return new Promise((resolve) => {
+      // Store current index and set to action index temporarily
+      const originalIndex = this.currentActionIndex;
+      this.currentActionIndex = actionIndex;
+
+      // Execute the action using fast-forward logic with completion callback
+      this.executeFastForwardAction(action, () => {
+        this.currentActionIndex = originalIndex;
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Execute an action with a completion callback (for fast-forward)
+   */
+  private executeFastForwardAction(action: DemoAction, onComplete: () => void) {
+    // Handle different action types for fast-forward mode
+    switch (action.type) {
+      case 'openFullscreenMap':
+        if (this.onOpenFullscreenMap) {
+          this.onOpenFullscreenMap();
+        }
+        // Fullscreen map needs time to render - wait longer
+        setTimeout(onComplete, 800);
+        break;
+
+      case 'closeFullscreenMap':
+        if (this.onCloseFullscreenMap) {
+          this.onCloseFullscreenMap();
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'clickMapMarker':
+        if (this.onClickMapMarker && 'markerIndex' in action) {
+          this.onClickMapMarker(action.markerIndex);
+        }
+        // Location sheet needs time to appear and render
+        setTimeout(onComplete, 600);
+        break;
+
+      case 'addWaypoint':
+        if (this.onAddWaypoint && 'destGeoId' in action && 'lat' in action && 'lng' in action) {
+          this.onAddWaypoint(action.destGeoId, action.lat, action.lng);
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'fingerTapMapCoords':
+        // In fast-forward mode, call onAddWaypoint directly (the tap would trigger addWaypoint)
+        // This is handled in the callback implementation
+        if (this.onFingerTapMapCoords && 'lat' in action && 'lng' in action) {
+          // Call synchronously with short delay
+          const fromSide = action.fromSide || 'right';
+          const persist = action.persist || false;
+          this.onFingerTapMapCoords(action.lat, action.lng, fromSide, persist).then(() => {
+            onComplete();
+          });
+        } else {
+          setTimeout(onComplete, 100);
+        }
+        break;
+
+      case 'fingerTapRoute':
+        // Finger tap on route - gets coordinates from route geometry
+        if (this.onFingerTapRoute) {
+          const fraction = action.fraction ?? 0.5;
+          const fromSide = action.fromSide || 'right';
+          const persist = action.persist || false;
+          this.onFingerTapRoute(fraction, fromSide, persist).then(() => {
+            onComplete();
+          });
+        } else {
+          setTimeout(onComplete, 100);
+        }
+        break;
+
+      case 'showVideoCall':
+        if (this.onShowVideoCall) {
+          this.onShowVideoCall();
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'hideVideoCall':
+        if (this.onHideVideoCall) {
+          this.onHideVideoCall();
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'showFingerTap':
+        // Use fast click without animation for fast-forward mode
+        if (this.onFastClick && 'selector' in action) {
+          this.onFastClick(action.selector);
+        }
+        // Wait for UI to respond to the click
+        setTimeout(onComplete, 300);
+        break;
+
+      case 'hideFinger':
+        if (this.onHideFinger) {
+          this.onHideFinger();
+        }
+        setTimeout(onComplete, 50);
+        break;
+
+      case 'showAvatar':
+        if (this.onShowAvatar && 'name' in action) {
+          this.onShowAvatar(action.name, action.color);
+        }
+        setTimeout(onComplete, 50);
+        break;
+
+      case 'clearAvatars':
+        if (this.onClearAvatars) {
+          this.onClearAvatars();
+        }
+        setTimeout(onComplete, 50);
+        break;
+
+      case 'showCursor':
+        // showCursor maps to onShowRemoteCursor
+        if (this.onShowRemoteCursor && 'userName' in action) {
+          this.onShowRemoteCursor(action.userName, action.color, 'start');
+        }
+        setTimeout(onComplete, 50);
+        break;
+
+      case 'fingerDrag':
+        if (this.onFingerDrag && 'selector' in action && 'direction' in action && action.distance !== undefined) {
+          this.onFingerDrag(action.selector, action.direction, action.distance);
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'clickElement':
+        if (this.onClickElement && 'selector' in action) {
+          this.onClickElement(action.selector);
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'showShareModal':
+        if (this.onShowShareModal) {
+          this.onShowShareModal();
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'hideShareModal':
+        if (this.onHideShareModal) {
+          this.onHideShareModal();
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      case 'fingerScroll':
+        if (this.onFingerScroll && 'direction' in action && action.distance !== undefined) {
+          const scrollSide = action.fromSide || 'right';
+          this.onFingerScroll(action.direction, action.distance, scrollSide);
+        }
+        setTimeout(onComplete, 100);
+        break;
+
+      default:
+        // For actions not explicitly handled, complete immediately
+        setTimeout(onComplete, 10);
+        break;
+    }
   }
 
   /**
@@ -711,6 +1157,63 @@ export class AutoplayDemo {
 
     // Start playback from that action
     this.playNextAction();
+  }
+
+  /**
+   * Execute just the next action and then pause (for step mode)
+   * This allows manual stepping through the demo action by action
+   */
+  executeNextActionOnly() {
+    // If we've finished all actions, do nothing
+    if (this.currentActionIndex >= this.script.actions.length) {
+      console.log('[AutoplayDemo] No more actions to execute');
+      this.notifyParent({
+        type: 'demoActionComplete',
+        actionIndex: this.currentActionIndex,
+        isLastAction: true
+      });
+      return;
+    }
+
+    const action = this.script.actions[this.currentActionIndex];
+    const actionIndex = this.currentActionIndex;
+    this.currentActionIndex++;
+
+    // Track action type occurrences
+    const count = (this.actionTypeCounts.get(action.type) || 0) + 1;
+    this.actionTypeCounts.set(action.type, count);
+
+    console.log(`[AutoplayDemo] Step mode: executing action ${actionIndex}: ${action.type}`);
+
+    // Set up step mode to pause after this action
+    this.stepMode = true;
+    this.isPlaying = true;
+    this.isPaused = false;
+
+    // Execute the action with a callback that pauses and notifies parent
+    this.executeActionWithCallback(action, () => {
+      console.log(`[AutoplayDemo] Step mode: action ${actionIndex} complete`);
+      this.isPaused = true;
+      this.notifyParent({
+        type: 'demoActionComplete',
+        actionIndex: actionIndex,
+        actionType: action.type,
+        isLastAction: this.currentActionIndex >= this.script.actions.length
+      });
+    });
+  }
+
+  /**
+   * Execute an action with a custom completion callback (for step mode)
+   */
+  private executeActionWithCallback(action: DemoAction, onComplete: () => void) {
+    // Store the callback to be called when action completes
+    this.stepModeCallback = onComplete;
+
+    // Execute the action using the normal method
+    // The action will call playNextAction(), which will check stepMode
+    // and call stepModeCallback instead of continuing playback
+    this.executeAction(action);
   }
 
   /**
@@ -784,6 +1287,14 @@ export class AutoplayDemo {
    * Play the next action in the script
    */
   private playNextAction() {
+    // In step mode with callback, call the callback instead of continuing
+    if (this.stepMode && this.stepModeCallback) {
+      const callback = this.stepModeCallback;
+      this.stepModeCallback = null;
+      callback();
+      return;
+    }
+
     if (!this.isPlaying || this.isPaused) return;
 
     // Loop back to start if we've finished
@@ -1010,12 +1521,73 @@ export class AutoplayDemo {
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
         break;
 
+      case 'scroll':
+        if (this.onScroll) {
+          this.onScroll(action.to);
+          console.log(`[AutoplayDemo] Scrolling to ${action.to}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'panMap':
+        if (this.onPanMap) {
+          const distance = action.distance || 50;
+          this.onPanMap(action.direction, distance);
+          console.log(`[AutoplayDemo] Panning map ${action.direction} ${distance}px`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'zoomMap':
+        if (this.onZoomMap) {
+          const amount = action.amount || 1;
+          this.onZoomMap(action.direction, amount);
+          console.log(`[AutoplayDemo] Zooming map ${action.direction}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
       case 'clickMapMarker':
         if (this.onClickMapMarker) {
           this.onClickMapMarker(action.markerIndex);
           console.log(`[AutoplayDemo] Clicking map marker ${action.markerIndex}`);
         }
         this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'addWaypoint':
+        if (this.onAddWaypoint) {
+          this.onAddWaypoint(action.destGeoId, action.lat, action.lng);
+          console.log(`[AutoplayDemo] Adding waypoint to ${action.destGeoId} at ${action.lat}, ${action.lng}`);
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'fingerTapMapCoords':
+        if (this.onFingerTapMapCoords) {
+          const fromSide = action.fromSide || 'right';
+          const persist = action.persist || false;
+          console.log(`[AutoplayDemo] Finger tap on map at (${action.lat}, ${action.lng}) from ${fromSide}${persist ? ' (persist)' : ''}`);
+          this.onFingerTapMapCoords(action.lat, action.lng, fromSide, persist).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'fingerTapRoute':
+        if (this.onFingerTapRoute) {
+          const fraction = action.fraction ?? 0.5;
+          const fromSide = action.fromSide || 'right';
+          const persist = action.persist || false;
+          console.log(`[AutoplayDemo] Finger tap on route at fraction ${fraction} from ${fromSide}${persist ? ' (persist)' : ''}`);
+          this.onFingerTapRoute(fraction, fromSide, persist).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
         break;
 
       case 'showFingerTap':
@@ -1052,6 +1624,18 @@ export class AutoplayDemo {
           const distance = action.distance || 150;
           console.log(`[AutoplayDemo] Dragging finger on ${action.selector} ${action.direction} ${distance}px`);
           this.onFingerDrag(action.selector, action.direction, distance).then(() => {
+            this.playNextAction();
+          });
+        } else {
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
+      case 'drawTestLines':
+        if (this.onDrawTestLines) {
+          const duration = action.duration || 2000;
+          console.log(`[AutoplayDemo] Drawing test lines from (${action.startX},${action.startY}) to (${action.endX},${action.endY})`);
+          this.onDrawTestLines(action.startX, action.startY, action.endX, action.endY, duration).then(() => {
             this.playNextAction();
           });
         } else {
@@ -1283,6 +1867,18 @@ export class AutoplayDemo {
         }
         break;
 
+      case 'tapFollowCopyUrl':
+        if (this.onTapFollowCopyUrl) {
+          console.log('[AutoplayDemo] Tapping follow copy URL button');
+          this.onTapFollowCopyUrl().then(() => {
+            this.playNextAction();
+          });
+        } else {
+          console.warn('[AutoplayDemo] onTapFollowCopyUrl not configured');
+          this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        }
+        break;
+
       case 'hideShareModal':
         if (this.onHideShareModal) {
           this.onHideShareModal();
@@ -1301,6 +1897,43 @@ export class AutoplayDemo {
           console.warn('[AutoplayDemo] onSetupChapterState not configured');
           this.timeoutId = window.setTimeout(() => this.playNextAction(), 100);
         }
+        break;
+
+      // Video call actions
+      case 'showVideoCall':
+        if (this.remoteControlMode) {
+          // Notify parent (DemoPlayer) to show the video call overlay
+          this.notifyParent({ type: 'showVideoCall' });
+          console.log('[AutoplayDemo] Notifying parent to show video call overlay');
+        } else if (this.onShowVideoCall) {
+          this.onShowVideoCall();
+          console.log('[AutoplayDemo] Showing video call overlay');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'hideVideoCall':
+        if (this.remoteControlMode) {
+          // Notify parent (DemoPlayer) to hide the video call overlay
+          this.notifyParent({ type: 'hideVideoCall' });
+          console.log('[AutoplayDemo] Notifying parent to hide video call overlay');
+        } else if (this.onHideVideoCall) {
+          this.onHideVideoCall();
+          console.log('[AutoplayDemo] Hiding video call overlay');
+        }
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
+        break;
+
+      case 'bobShowVideoCall':
+        console.log('[AutoplayDemo] Sending bobShowVideoCall to parent');
+        this.notifyParent({ type: 'bobCommand', command: 'showVideoCall' });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 500);
+        break;
+
+      case 'bobHideVideoCall':
+        console.log('[AutoplayDemo] Sending bobHideVideoCall to parent');
+        this.notifyParent({ type: 'bobCommand', command: 'hideVideoCall' });
+        this.timeoutId = window.setTimeout(() => this.playNextAction(), 300);
         break;
 
       default:
