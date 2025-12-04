@@ -2391,6 +2391,88 @@ async function main() {
       });
     };
 
+    // Wire up finger drag waypoint for autoplay (for dragging waypoints along routes)
+    player.onFingerDragWaypoint = (waypointIndex: number, toFraction: number, fromSide: 'left' | 'right' | 'bottom') => {
+      return new Promise<void>((resolve) => {
+        const fullscreenMap = fullscreenMapView?.getMap();
+        const finger = document.getElementById('demo-finger');
+
+        if (!fullscreenMap || !finger) {
+          console.warn(`[FingerDragWaypoint] Fullscreen map or finger not available`);
+          resolve();
+          return;
+        }
+
+        console.log(`[FingerDragWaypoint] Dragging waypoint ${waypointIndex} to fraction ${toFraction} from ${fromSide}`);
+
+        // Get current waypoint position
+        const waypointCoords = fullscreenMapView?.getWaypointCoords?.(waypointIndex);
+        if (!waypointCoords) {
+          console.warn(`[FingerDragWaypoint] Could not get waypoint ${waypointIndex} coordinates`);
+          resolve();
+          return;
+        }
+
+        // Get new position on route at toFraction
+        const newRoutePoint = fullscreenMapView?.getPointOnRoute?.(toFraction);
+        if (!newRoutePoint) {
+          console.warn(`[FingerDragWaypoint] Could not get point on route at fraction ${toFraction}`);
+          resolve();
+          return;
+        }
+
+        // Convert current waypoint position to screen coordinates
+        const startPoint = fullscreenMap.project([waypointCoords.lng, waypointCoords.lat]);
+        const startX = startPoint.x;
+        const startY = startPoint.y;
+
+        // Convert new waypoint position to screen coordinates
+        const endPoint = fullscreenMap.project([newRoutePoint.lng, newRoutePoint.lat]);
+        const endX = endPoint.x;
+        const endY = endPoint.y;
+
+        console.log(`[FingerDragWaypoint] Animating from (${startX.toFixed(0)}, ${startY.toFixed(0)}) to (${endX.toFixed(0)}, ${endY.toFixed(0)})`);
+
+        // Position finger at start position (or move to it if already visible)
+        if (!finger.classList.contains('visible')) {
+          // Finger not visible, position at start
+          finger.style.transition = 'none';
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.classList.add('visible');
+          finger.offsetHeight; // Force reflow
+        } else {
+          // Finger already visible, animate to start position first
+          finger.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+        }
+
+        // After positioning at start, animate drag to end position
+        setTimeout(() => {
+          finger.classList.add('tapping');
+
+          // Animate finger to end position
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${endX}px`;
+          finger.style.top = `${endY}px`;
+
+          // After drag animation completes, update waypoint position
+          setTimeout(() => {
+            // Update waypoint position in document
+            const updateResult = fullscreenMapView?.updateWaypointPosition?.(waypointIndex, toFraction);
+            console.log(`[FingerDragWaypoint] Waypoint update result:`, updateResult);
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+              fingerPersisted = true; // Keep finger visible
+              resolve();
+            }, 300);
+          }, 600);
+        }, finger.classList.contains('visible') ? 300 : 100);
+      });
+    };
+
     // Wire up finger drag for autoplay (for panning maps)
     player.onFingerDrag = (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => {
       return new Promise<void>((resolve) => {

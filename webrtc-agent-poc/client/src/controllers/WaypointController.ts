@@ -202,6 +202,65 @@ export class WaypointController {
   }
 
   /**
+   * Update an existing waypoint's position
+   *
+   * @param destGeoId - Destination geo-mark ID
+   * @param waypointIndex - Index of the waypoint to update
+   * @param lat - New latitude
+   * @param lng - New longitude
+   * @returns true if waypoint was updated, false otherwise
+   */
+  updateWaypoint(destGeoId: string, waypointIndex: number, lat: number, lng: number): boolean {
+    if (!this.editorView) {
+      console.error('[Waypoint] Editor view is null');
+      return false;
+    }
+
+    let waypointUpdated = false;
+
+    this.editorView.state.doc.descendants((node, pos) => {
+      if (waypointUpdated) return false;
+
+      if (node.isText && node.marks.length > 0) {
+        const geoMark = node.marks.find(m => m.type.name === 'geoMark');
+        if (geoMark && geoMark.attrs.geoId === destGeoId) {
+          console.log('[Waypoint] Found destination geo-mark, updating waypoint', waypointIndex);
+          const currentWaypoints = [...(geoMark.attrs.waypoints || [])];
+
+          if (waypointIndex < currentWaypoints.length) {
+            // Update the existing waypoint
+            currentWaypoints[waypointIndex] = { lat, lng };
+
+            const updatedMark = this.editorView!.state.schema.marks.geoMark.create({
+              ...geoMark.attrs,
+              waypoints: currentWaypoints
+            });
+
+            const tr = this.editorView!.state.tr
+              .removeMark(pos, pos + node.nodeSize, this.editorView!.state.schema.marks.geoMark)
+              .addMark(pos, pos + node.nodeSize, updatedMark);
+
+            this.editorView!.dispatch(tr);
+            console.log('[Waypoint] Updated waypoint', waypointIndex, 'to:', { lat, lng });
+
+            // Notify change listeners
+            this.callbacks.notifyChange?.();
+
+            waypointUpdated = true;
+            return false;
+          }
+        }
+      }
+    });
+
+    if (!waypointUpdated) {
+      console.warn('[Waypoint] Could not find waypoint to update:', destGeoId, waypointIndex);
+    }
+
+    return waypointUpdated;
+  }
+
+  /**
    * Remove all waypoint markers from the map
    */
   clearAllMarkers(): void {

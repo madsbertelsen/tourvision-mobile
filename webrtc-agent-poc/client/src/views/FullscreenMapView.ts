@@ -1534,6 +1534,87 @@ export class FullscreenMapView {
   }
 
   /**
+   * Get the geographic coordinates of a waypoint by index
+   * Returns null if waypoint not found
+   */
+  getWaypointCoords(waypointIndex: number): { lat: number; lng: number; destGeoId: string } | null {
+    if (!this.fullscreenMap) {
+      console.warn('[FullscreenMap] Cannot get waypoint coords - map not available');
+      return null;
+    }
+
+    // Find route layer via map style
+    const style = this.fullscreenMap.getStyle();
+    if (!style || !style.layers) {
+      console.warn('[FullscreenMap] No style or layers available');
+      return null;
+    }
+
+    // Route layers are named like "route-{fromGeoId}-{toGeoId}"
+    const routeLayer = style.layers.find(l => l.id.startsWith('route-'));
+    if (!routeLayer) {
+      console.warn('[FullscreenMap] No route layer found in map style');
+      return null;
+    }
+
+    // Extract destGeoId from route layer ID (format: route-{fromGeoId}-{toGeoId})
+    const parts = routeLayer.id.split('-');
+    const destGeoId = parts[parts.length - 1];
+
+    // Get current locations to find waypoints
+    const currentLocations = this.deps.extractLocationsForFullscreen();
+    const destLocation = currentLocations.find(loc => loc.geoId === destGeoId);
+
+    if (!destLocation || !destLocation.waypoints || waypointIndex >= destLocation.waypoints.length) {
+      console.warn('[FullscreenMap] Waypoint not found:', waypointIndex);
+      return null;
+    }
+
+    const waypoint = destLocation.waypoints[waypointIndex];
+    return { lat: waypoint.lat, lng: waypoint.lng, destGeoId };
+  }
+
+  /**
+   * Update a waypoint's position to a new fraction along the route
+   * Returns the new coordinates if successful
+   */
+  updateWaypointPosition(waypointIndex: number, newFraction: number): { lat: number; lng: number; success: boolean } | null {
+    // Get the new position on the route
+    const newPoint = this.getPointOnRoute(newFraction);
+    if (!newPoint) {
+      console.warn('[FullscreenMap] Could not get point on route at fraction', newFraction);
+      return null;
+    }
+
+    // Find the destination geoId
+    if (!this.fullscreenMap) {
+      console.warn('[FullscreenMap] Cannot update waypoint - map not available');
+      return null;
+    }
+
+    const style = this.fullscreenMap.getStyle();
+    if (!style || !style.layers) {
+      console.warn('[FullscreenMap] No style or layers available');
+      return null;
+    }
+
+    const routeLayer = style.layers.find(l => l.id.startsWith('route-'));
+    if (!routeLayer) {
+      console.warn('[FullscreenMap] No route layer found');
+      return null;
+    }
+
+    // Extract destGeoId from route layer ID (format: route-{fromGeoId}-{toGeoId})
+    const parts = routeLayer.id.split('-');
+    const destGeoId = parts[parts.length - 1];
+
+    // Update waypoint position via WaypointController
+    const success = this.deps.waypointController.updateWaypoint(destGeoId, waypointIndex, newPoint.lat, newPoint.lng);
+
+    return { ...newPoint, success };
+  }
+
+  /**
    * Refresh the map to show updated routes and waypoints
    * Called when waypoints are added via Y.js sync
    */
