@@ -8,6 +8,8 @@
  * 4. Sends commands to iframe to execute demo actions
  */
 
+import { DEMO_SCRIPTS, type DemoAction } from '../services/AutoplayDemo';
+
 export interface StepDefinition {
   label: string;
   heading: string;
@@ -23,6 +25,8 @@ export interface DemoPlayerOptions {
   dualPhone?: boolean; // Show two phones side by side for collab demos
   enableSync?: boolean; // Enable Y.js sync from the start (needed for addSecondPhone)
   sessionId?: string; // Unique session ID for state isolation (auto-generated if not provided)
+  offlineMode?: boolean; // Disable all network connections (for landing page without server)
+  stepMode?: boolean; // Manual step mode - user must click "Next" to advance (no auto-countdown)
 }
 
 // Messages sent from Player to Iframe
@@ -33,9 +37,12 @@ export interface DemoCommand {
 
 export interface DemoControl {
   type: 'demoControl';
-  command: 'start' | 'stop' | 'pause' | 'resume' | 'resumeFromAction' | 'goToStep';
-  actionIndex?: number;  // Required for resumeFromAction command
+  command: 'start' | 'stop' | 'pause' | 'resume' | 'resumeFromAction' | 'goToStep' | 'nextAction' | 'setStepMode' | 'startFromAction' | 'executeAction';
+  actionIndex?: number;  // Required for resumeFromAction and startFromAction commands
   step?: number;         // Required for goToStep command
+  enabled?: boolean;     // Required for setStepMode command
+  action?: DemoAction;   // Required for executeAction command
+  fastForward?: boolean; // When true, action is executed in fast-forward mode (no animations)
 }
 
 // Messages received from Iframe
@@ -79,8 +86,13 @@ export class DemoPlayer {
   private isPlaying: boolean = false;
   private isPausedState: boolean = false;
   private iframesReady: boolean[] = [];
+  private iframeAcknowledgedStart: boolean = false; // Tracks if iframe has acknowledged startFromAction
   private keyboardHandler: ((event: KeyboardEvent) => void) | null = null;
   private pauseButton: HTMLElement | null = null;
+  private videoCallOverlay: HTMLElement | null = null;
+  private stepModeNextButton: HTMLElement | null = null;
+  private actionListContainer: HTMLElement | null = null;
+  private demoActions: DemoAction[] = [];
 
   // Chapter snapshots for navigation
   private snapshots: Map<number, StepSnapshot> = new Map();
@@ -103,18 +115,64 @@ export class DemoPlayer {
     this.setupMessageListener();
     this.setupKeyboardListener();
 
+    // Check for initial action from URL hash
+    const initialAction = this.parseUrlHash();
+    if (initialAction !== null) {
+      console.log('[DemoPlayer] Starting from URL hash action:', initialAction);
+      this.currentActionIndex = initialAction;
+    }
+
     if (options.autoStart !== false) {
       // Wait for iframe to be ready before starting
-      this.waitForReady().then(() => this.start());
+      this.waitForReady().then(() => {
+        if (initialAction !== null) {
+          this.startFromAction(initialAction);
+        } else {
+          this.start();
+        }
+      });
     }
+  }
+
+  /**
+   * Parse URL hash for action index (e.g., #action=26)
+   */
+  private parseUrlHash(): number | null {
+    const hash = window.location.hash;
+    if (!hash) return null;
+
+    // Parse #action=N format
+    const match = hash.match(/action=(\d+)/);
+    if (match) {
+      const actionIndex = parseInt(match[1], 10);
+      if (!isNaN(actionIndex) && actionIndex >= 0) {
+        return actionIndex;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Update URL hash with current action index
+   */
+  private updateUrlHash(actionIndex: number): void {
+    // Only update in step mode to avoid polluting history during auto-play
+    if (!this.options.stepMode) return;
+
+    const newHash = `#action=${actionIndex}`;
+    // Use replaceState to avoid adding to browser history
+    const url = new URL(window.location.href);
+    url.hash = newHash;
+    window.history.replaceState(null, '', url.toString());
   }
 
   /**
    * Create the DOM structure for the demo player
    */
   private createDOM(): void {
-    const { steps, editorUrl, demoScript, dualPhone, enableSync } = this.options;
+    const { steps, editorUrl, demoScript, dualPhone, enableSync, offlineMode } = this.options;
     const phoneCount = dualPhone ? 2 : 1;
+    const offlineParam = offlineMode ? '&offline=true' : '';
 
     // Create main wrapper
     const playerEl = document.createElement('div');
@@ -144,6 +202,9 @@ export class DemoPlayer {
       { name: 'Bob', color: '#10b981' },    // Green
     ];
 
+    // Store reference to Alice's phone screen for video call overlay
+    let alicePhoneScreen: HTMLElement | null = null;
+
     // Create phone mockup(s)
     for (let i = 0; i < phoneCount; i++) {
       // Wrap phone in container for label positioning
@@ -155,6 +216,11 @@ export class DemoPlayer {
 
       const phoneScreen = document.createElement('div');
       phoneScreen.className = 'phone-screen';
+
+      // Store Alice's phone screen (first phone)
+      if (i === 0) {
+        alicePhoneScreen = phoneScreen;
+      }
 
       // Create iframe
       // Include autoplay=true so AutoplayDemo is initialized in main.ts
@@ -170,7 +236,7 @@ export class DemoPlayer {
         // Single phone with sync enabled (for later addSecondPhone)
         syncParams = `&enableSync=true&demoUser=1`;
       }
-      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true${syncParams}`;
+      iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true${syncParams}${offlineParam}`;
       iframe.setAttribute('frameborder', '0');
       iframe.setAttribute('allowfullscreen', 'true');
 
@@ -208,32 +274,29 @@ export class DemoPlayer {
       }
     }
 
-    // Create comment overlay with presenter/paused UX
+    // Create floating speech bubble overlay (positioned inside player)
     this.overlayContainer = document.createElement('div');
-    this.overlayContainer.className = 'comment-overlay';
+    this.overlayContainer.className = 'speech-bubble-overlay';
     this.overlayContainer.innerHTML = `
-      <div class="pause-indicator">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="#9ca3af">
-          <rect x="6" y="4" width="4" height="16" rx="1" />
-          <rect x="14" y="4" width="4" height="16" rx="1" />
-        </svg>
-      </div>
-      <div class="comment-card">
-        <div class="presenter-badge">
-          <div class="presenter-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22l-.75-12.07A4 4 0 0 1 12 2z"/>
-              <circle cx="12" cy="6" r="1.5" fill="currentColor"/>
-            </svg>
-          </div>
-          <span class="presenter-name">Guide</span>
+      <div class="speech-bubble">
+        <div class="bubble-content">
+          <div class="comment-heading"></div>
+          <div class="comment-text"></div>
         </div>
-        <div class="comment-heading"></div>
-        <div class="comment-text"></div>
+        <div class="bubble-footer">
+          <div class="countdown-ring">
+            <svg viewBox="0 0 36 36">
+              <circle class="countdown-bg" cx="18" cy="18" r="16" />
+              <circle class="countdown-progress" cx="18" cy="18" r="16" />
+            </svg>
+            <span class="tap-hint">Tap</span>
+          </div>
+        </div>
+        <div class="bubble-tail"></div>
       </div>
     `;
 
-    // Add click handler to dismiss overlay and resume playback
+    // Add click handler to dismiss and resume playback
     this.overlayContainer.addEventListener('click', () => {
       this.hideComment();
     });
@@ -254,16 +317,83 @@ export class DemoPlayer {
       this.togglePause();
     });
 
-    // Create player content wrapper (frame + overlay)
+    // Create step mode Next button (large, prominent button for manual advancement)
+    if (this.options.stepMode) {
+      this.stepModeNextButton = document.createElement('button');
+      this.stepModeNextButton.className = 'step-mode-next-button';
+      this.stepModeNextButton.innerHTML = `
+        <span class="step-next-icon">→</span>
+        <span class="step-next-text">Next Action</span>
+        <span class="step-next-index">#${this.currentActionIndex}</span>
+      `;
+      this.stepModeNextButton.addEventListener('click', () => {
+        // If iframe hasn't acknowledged start yet, re-send startFromAction
+        // This handles cases where the initial command wasn't received
+        if (!this.iframeAcknowledgedStart && this.currentActionIndex > 0) {
+          console.log('[DemoPlayer] Iframe not yet acknowledged, re-sending startFromAction:', this.currentActionIndex);
+          // Re-send the commands to ensure iframe is in sync
+          this.sendCommand({
+            type: 'demoControl',
+            command: 'setStepMode',
+            enabled: true
+          });
+          this.sendCommand({
+            type: 'demoControl',
+            command: 'startFromAction',
+            actionIndex: this.currentActionIndex
+          });
+          return;
+        }
+
+        // Send nextAction command to iframe - execute just one action
+        this.sendCommand({
+          type: 'demoControl',
+          command: 'nextAction'
+        });
+      });
+    }
+
+    // Create video call overlay (FaceTime-style floating thumbnails)
+    this.videoCallOverlay = document.createElement('div');
+    this.videoCallOverlay.className = 'demo-video-call-overlay';
+    this.videoCallOverlay.innerHTML = `
+      <div class="video-call-container">
+        <div class="video-thumbnail bob">
+          <div class="video-avatar-circle">B</div>
+          <span class="video-name">Bob</span>
+        </div>
+        <div class="video-thumbnail self">
+          <div class="video-avatar-circle self">A</div>
+        </div>
+      </div>
+    `;
+
+    // Add video call overlay to Alice's phone screen (so it appears on top of the map)
+    if (alicePhoneScreen) {
+      alicePhoneScreen.appendChild(this.videoCallOverlay);
+    }
+
+    // Create player content wrapper (frame + pause button + speech bubble overlay)
     const playerContent = document.createElement('div');
     playerContent.className = 'player-content';
     playerContent.appendChild(playerFrame);
-    playerContent.appendChild(this.overlayContainer);
     playerContent.appendChild(this.pauseButton);
+    playerContent.appendChild(this.overlayContainer);  // Speech bubble overlay inside player
+    if (this.stepModeNextButton) {
+      playerContent.appendChild(this.stepModeNextButton);
+    }
 
-    // Assemble player - tabs above, then player content with overlay
+    // Create action list (only in step mode)
+    if (this.options.stepMode) {
+      this.createActionList(demoScript);
+    }
+
+    // Assemble player - tabs, then player content
     playerEl.appendChild(this.tabsContainer);
     playerEl.appendChild(playerContent);
+    if (this.actionListContainer) {
+      playerEl.appendChild(this.actionListContainer);
+    }
 
     // Add styles
     this.injectStyles();
@@ -353,10 +483,10 @@ export class DemoPlayer {
 
       .phone-mockup {
         position: relative;
-        width: 280px;
+        width: 340px;
         background: #1a1a1a;
-        border-radius: 40px;
-        padding: 12px;
+        border-radius: 44px;
+        padding: 14px;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       }
 
@@ -375,118 +505,175 @@ export class DemoPlayer {
         border: none;
       }
 
-      .comment-overlay {
+      /* Speech bubble overlay - cartoonish floating bubble */
+      .speech-bubble-overlay {
         position: absolute;
-        inset: 0;
-     #   background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
+        bottom: 20%;
+        right: 5%;
+        z-index: 100;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.3s ease-in-out, backdrop-filter 0.3s ease-in-out;
-        z-index: 100;
-        border-radius: 16px;
+        transition: opacity 0.2s ease-out;
       }
 
-      .comment-overlay.visible {
+      .speech-bubble-overlay.visible {
         opacity: 1;
         pointer-events: auto;
         cursor: pointer;
       }
 
-      /* Pause indicator - flashes then fades */
-      .pause-indicator {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        opacity: 0;
-        animation: none;
-      }
-
-      .comment-overlay.visible .pause-indicator {
-        animation: pauseFlash 0.8s ease-out forwards;
-      }
-
-      @keyframes pauseFlash {
-        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-        20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-        40% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
-      }
-
-      /* Presenter card */
-      .comment-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        text-align: center;
-        padding: 24px 32px;
+      .speech-bubble {
+        position: relative;
         background: white;
-        border-radius: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-        max-width: 280px;
+        /* Asymmetric border-radius for organic hand-drawn feel */
+        border-radius: 24px 28px 8px 26px;
+        padding: 14px 18px;
+        min-width: 160px;
+        max-width: 200px;
+        /* Comic-style border */
+        border: 2.5px solid #1f2937;
+        /* Playful shadow offset */
+        box-shadow: 4px 4px 0 #1f2937;
+        transform: scale(0.8) rotate(-2deg);
         opacity: 0;
-        transform: translateY(10px);
         animation: none;
       }
 
-      .comment-overlay.visible .comment-card {
-        animation: cardSlideIn 0.4s ease-out 0.3s forwards;
+      .speech-bubble-overlay.visible .speech-bubble {
+        animation: bubblePopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
       }
 
-      @keyframes cardSlideIn {
-        0% { opacity: 0; transform: translateY(10px); }
-        100% { opacity: 1; transform: translateY(0); }
+      @keyframes bubblePopIn {
+        0% { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+        60% { transform: scale(1.05) rotate(1deg); }
+        100% { opacity: 1; transform: scale(1) rotate(-2deg); }
       }
 
-      /* Presenter badge */
-      .presenter-badge {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px 6px 8px;
-        background: rgba(59, 130, 246, 0.9);
-        border-radius: 20px;
-        margin-bottom: 4px;
+      /* Bubble tail - curved comic style pointing to bottom-left */
+      .bubble-tail {
+        position: absolute;
+        bottom: -18px;
+        left: 25px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-left: 2.5px solid #1f2937;
+        border-bottom: 2.5px solid #1f2937;
+        transform: rotate(-45deg) skewX(-10deg);
+        transform-origin: top left;
       }
 
-      .presenter-avatar {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
+      /* Shadow for tail */
+      .bubble-tail::after {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: #1f2937;
+        left: 4px;
+        top: 4px;
+        z-index: -1;
+        border-radius: 0 0 0 2px;
       }
 
-      .presenter-name {
-        font-size: 13px;
-        font-weight: 600;
-        color: white;
-        letter-spacing: 0.3px;
+      .bubble-content {
+        text-align: left;
+        margin-bottom: 10px;
       }
 
       .comment-heading {
-        font-size: 22px;
-        font-weight: 600;
-        color: #111827;
-        line-height: 1.3;
+        font-size: 15px;
+        font-weight: 700;
+        color: #1f2937;
+        line-height: 1.2;
+        margin-bottom: 4px;
       }
 
       .comment-text {
-        font-size: 16px;
-        font-weight: 400;
+        font-size: 12px;
+        font-weight: 500;
         color: #4b5563;
-        line-height: 1.5;
+        line-height: 1.4;
+      }
+
+      .bubble-footer {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      /* Countdown ring - smaller for compact bubble */
+      .countdown-ring {
+        position: relative;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .countdown-ring svg {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+      }
+
+      .countdown-bg {
+        fill: none;
+        stroke: #e5e7eb;
+        stroke-width: 3;
+      }
+
+      .countdown-progress {
+        fill: none;
+        stroke: #3b82f6;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 100.53;
+        stroke-dashoffset: 100.53;
+        transition: stroke-dashoffset 0.1s linear;
+      }
+
+      .speech-bubble-overlay.visible .countdown-progress {
+        animation: countdownFill var(--countdown-duration, 5s) linear forwards;
+      }
+
+      @keyframes countdownFill {
+        0% { stroke-dashoffset: 100.53; }
+        100% { stroke-dashoffset: 0; }
+      }
+
+      .tap-hint {
+        font-size: 9px;
+        color: #6b7280;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        z-index: 1;
+      }
+
+      /* Step mode - hide countdown animation, show button style */
+      .countdown-ring.step-mode svg {
+        display: none;
+      }
+
+      .countdown-ring.step-mode {
+        background: #3b82f6;
+        border-radius: 6px;
+        width: auto;
+        height: auto;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .countdown-ring.step-mode:hover {
+        background: #2563eb;
+      }
+
+      .countdown-ring.step-mode .tap-hint {
+        color: white;
+        font-size: 11px;
       }
 
       .comment-heading .cursor,
@@ -494,7 +681,7 @@ export class DemoPlayer {
         display: inline-block;
         width: 2px;
         height: 1em;
-        background: white;
+        background: #3b82f6;
         margin-left: 2px;
         animation: cursor-blink 0.8s step-end infinite;
       }
@@ -664,6 +851,313 @@ export class DemoPlayer {
         opacity: 1;
         background: rgba(0, 0, 0, 0.8);
       }
+
+      /* Step mode Next button - large, prominent button */
+      .step-mode-next-button {
+        position: absolute;
+        bottom: 20px;
+        right: 100px;
+        padding: 16px 32px;
+        font-size: 18px;
+        font-weight: 600;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        transition: all 0.2s ease;
+      }
+
+      .step-mode-next-button:hover {
+        background: #2563eb;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+      }
+
+      .step-mode-next-button:active {
+        transform: translateY(0);
+      }
+
+      .step-next-icon {
+        font-size: 24px;
+      }
+
+      .step-next-text {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .step-next-index {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-family: monospace;
+      }
+
+      .step-mode-next-button:disabled {
+        background: #22c55e;
+        cursor: default;
+      }
+
+      .step-mode-next-button:disabled:hover {
+        background: #22c55e;
+        transform: none;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+      }
+
+      /* Responsive scaling - use viewport-based sizing for dual phones */
+      @media (max-width: 768px) {
+        .player-frame {
+          min-width: unset;
+          width: 100%;
+          padding: 20px;
+          gap: 20px;
+        }
+
+        .player-frame.dual-phone {
+          min-width: unset;
+          gap: 16px;
+          padding: 16px;
+        }
+
+        /* Single phone stays large on tablet */
+        .phone-mockup {
+          width: 300px;
+        }
+
+        /* Dual phone: each phone takes ~45% of container width minus gap */
+        .player-frame.dual-phone .phone-mockup {
+          width: calc(45vw - 20px);
+          max-width: 240px;
+          min-width: 140px;
+        }
+      }
+
+      /* Narrow screens - tighter layout */
+      @media (max-width: 550px) {
+        .player-frame {
+          padding: 12px;
+          gap: 12px;
+        }
+
+        .player-frame.dual-phone {
+          gap: 10px;
+          padding: 8px;
+        }
+
+        /* Single phone: take most of screen width */
+        .phone-mockup {
+          width: min(280px, 85vw);
+        }
+
+        /* Dual phone: maximize available width */
+        .player-frame.dual-phone .phone-mockup {
+          width: calc(48vw - 12px);
+          max-width: 200px;
+          min-width: 120px;
+        }
+      }
+
+      /* Very narrow devices (iPhone SE, small phones) */
+      @media (max-width: 400px) {
+        /* Single phone: nearly full width */
+        .phone-mockup {
+          width: min(260px, 90vw);
+        }
+
+        .player-frame.dual-phone {
+          gap: 6px;
+          padding: 4px;
+        }
+
+        .player-frame.dual-phone .phone-mockup {
+          width: calc(49vw - 8px);
+          max-width: 180px;
+          min-width: 100px;
+        }
+      }
+
+      /* Video call overlay - FaceTime-style floating thumbnails inside phone */
+      .demo-video-call-overlay {
+        position: absolute;
+        top: 50px;
+        right: 8px;
+        z-index: 200;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+      }
+
+      .demo-video-call-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .video-call-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-end;
+      }
+
+      .video-thumbnail {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 6px 10px 6px 6px;
+        border-radius: 20px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .video-thumbnail.self {
+        background: rgba(0, 0, 0, 0.4);
+        padding: 4px;
+        border-radius: 12px;
+      }
+
+      .video-avatar-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #10b981;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .video-avatar-circle.self {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+        background: #3b82f6;
+        border: 2px solid rgba(255, 255, 255, 0.5);
+      }
+
+      .video-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: white;
+      }
+
+      /* Pop-in animation for video call */
+      .demo-video-call-overlay.visible .video-thumbnail {
+        animation: thumbnailPopIn 0.3s ease-out forwards;
+        opacity: 0;
+      }
+
+      .demo-video-call-overlay.visible .video-thumbnail.self {
+        animation-delay: 0.15s;
+      }
+
+      @keyframes thumbnailPopIn {
+        0% {
+          opacity: 0;
+          transform: scale(0.7) translateX(20px);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) translateX(0);
+        }
+      }
+
+      /* Action list panel */
+      .action-list-container {
+        width: 100%;
+        max-width: 600px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 24px;
+      }
+
+      .action-list-header {
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .action-list {
+        max-height: 400px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .action-list-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-size: 13px;
+      }
+
+      .action-list-item:hover {
+        border-color: #cbd5e1;
+        background: #f1f5f9;
+      }
+
+      .action-list-item.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: white;
+      }
+
+      .action-list-item.active .action-index,
+      .action-list-item.active .action-type,
+      .action-list-item.active .action-detail {
+        color: white;
+      }
+
+      .action-list-item.completed {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+      }
+
+      .action-list-item.completed .action-index {
+        color: #16a34a;
+      }
+
+      .action-index {
+        font-family: monospace;
+        font-size: 11px;
+        color: #94a3b8;
+        min-width: 28px;
+      }
+
+      .action-type {
+        font-weight: 600;
+        color: #334155;
+        min-width: 140px;
+      }
+
+      .action-detail {
+        color: #64748b;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -692,6 +1186,37 @@ export class DemoPlayer {
           // Track current action index for snapshot capture
           if (iframeIndex === 0 && typeof data.actionIndex === 'number') {
             this.currentActionIndex = data.actionIndex;
+            // Mark that iframe has acknowledged and is ready for nextAction commands
+            this.iframeAcknowledgedStart = true;
+
+            // Update URL hash with next action index (the action we'll execute next)
+            const nextIndex = data.actionIndex + 1;
+            this.updateUrlHash(nextIndex);
+
+            // Update action list highlighting
+            this.updateActionListHighlight(nextIndex);
+
+            // In step mode, update the button to show the next action info
+            if (this.options.stepMode && this.stepModeNextButton) {
+              const actionType = data.actionType || 'unknown';
+              const isLastAction = data.isLastAction === true;
+
+              if (isLastAction) {
+                this.stepModeNextButton.innerHTML = `
+                  <span class="step-next-icon">✓</span>
+                  <span class="step-next-text">Demo Complete</span>
+                `;
+                this.stepModeNextButton.disabled = true;
+              } else {
+                this.stepModeNextButton.innerHTML = `
+                  <span class="step-next-icon">→</span>
+                  <span class="step-next-text">Next Action</span>
+                  <span class="step-next-index">#${nextIndex}</span>
+                `;
+              }
+
+              console.log(`[DemoPlayer] Step mode: action ${data.actionIndex} (${actionType}) complete, next: ${nextIndex}`);
+            }
           }
           break;
 
@@ -745,6 +1270,18 @@ export class DemoPlayer {
             actionIndex: data.actionIndex,
             stateVector: data.stateVector
           });
+          break;
+
+        case 'showVideoCall':
+          // Show video call overlay
+          console.log('[DemoPlayer] Showing video call overlay');
+          this.showVideoCallOverlay();
+          break;
+
+        case 'hideVideoCall':
+          // Hide video call overlay
+          console.log('[DemoPlayer] Hiding video call overlay');
+          this.hideVideoCallOverlay();
           break;
 
         case 'bobCommand':
@@ -839,10 +1376,11 @@ export class DemoPlayer {
   }
 
   /**
-   * Show comment overlay and pause playback
-   * Features: pause indicator animation, presenter badge, blur background
+   * Show speech bubble overlay with countdown animation
+   * When countdown completes (or user taps), bubble dismisses and demo resumes
+   * In stepMode, no auto-countdown - user must click to advance
    */
-  public async showComment(heading: string, text: string, duration: number = 3000): Promise<void> {
+  public async showComment(heading: string, text: string, duration: number = 5000): Promise<void> {
     if (!this.overlayContainer) return;
 
     // Clear any existing dismiss timer
@@ -853,24 +1391,49 @@ export class DemoPlayer {
 
     const headingEl = this.overlayContainer.querySelector('.comment-heading') as HTMLElement;
     const textEl = this.overlayContainer.querySelector('.comment-text') as HTMLElement;
-    const pauseIndicator = this.overlayContainer.querySelector('.pause-indicator') as HTMLElement;
-    const commentCard = this.overlayContainer.querySelector('.comment-card') as HTMLElement;
+    const bubble = this.overlayContainer.querySelector('.speech-bubble') as HTMLElement;
+    const countdownProgress = this.overlayContainer.querySelector('.countdown-progress') as SVGCircleElement;
+    const countdownRing = this.overlayContainer.querySelector('.countdown-ring') as HTMLElement;
+    const tapHint = this.overlayContainer.querySelector('.tap-hint') as HTMLElement;
 
-    // Set text directly (no typewriter effect)
+    // Set text directly
     headingEl.textContent = heading;
     textEl.textContent = text;
 
-    // Reset animations by removing and re-adding animation class
-    // This ensures animations play every time
-    if (pauseIndicator) {
-      pauseIndicator.style.animation = 'none';
-      pauseIndicator.offsetHeight; // Force reflow
-      pauseIndicator.style.animation = '';
+    // Handle step mode vs auto mode
+    const isStepMode = this.options.stepMode === true;
+
+    if (isStepMode) {
+      // Step mode: hide countdown, show "Next" button
+      if (countdownRing) {
+        countdownRing.classList.add('step-mode');
+      }
+      if (tapHint) {
+        tapHint.textContent = 'Next';
+      }
+    } else {
+      // Auto mode: show countdown
+      if (countdownRing) {
+        countdownRing.classList.remove('step-mode');
+      }
+      if (tapHint) {
+        tapHint.textContent = 'Tap';
+      }
+      // Set countdown duration as CSS variable
+      this.overlayContainer.style.setProperty('--countdown-duration', `${duration}ms`);
     }
-    if (commentCard) {
-      commentCard.style.animation = 'none';
-      commentCard.offsetHeight; // Force reflow
-      commentCard.style.animation = '';
+
+    // Reset animations by removing and re-adding visible class
+    this.overlayContainer.classList.remove('visible');
+    if (bubble) {
+      bubble.style.animation = 'none';
+      bubble.offsetHeight; // Force reflow
+      bubble.style.animation = '';
+    }
+    if (countdownProgress && !isStepMode) {
+      countdownProgress.style.animation = 'none';
+      void countdownProgress.getBoundingClientRect(); // Force reflow for SVG
+      countdownProgress.style.animation = '';
     }
 
     // Pause all iframes
@@ -878,13 +1441,15 @@ export class DemoPlayer {
       iframe.contentWindow?.postMessage({ type: 'demoControl', command: 'pause' }, '*');
     });
 
-    // Show overlay
+    // Show bubble
     this.overlayContainer.classList.add('visible');
 
-    // Auto-dismiss after duration
-    this.commentDismissTimer = setTimeout(() => {
-      this.hideComment();
-    }, duration);
+    // Auto-dismiss when countdown completes (only in auto mode)
+    if (!isStepMode) {
+      this.commentDismissTimer = setTimeout(() => {
+        this.hideComment();
+      }, duration);
+    }
   }
 
   /**
@@ -1031,13 +1596,170 @@ export class DemoPlayer {
     if (this.isPlaying) return;
 
     this.isPlaying = true;
+    this.iframeAcknowledgedStart = false; // Reset acknowledgement flag
     console.log('[DemoPlayer] Starting playback');
+
+    // Sync step mode to iframe if enabled
+    if (this.options.stepMode) {
+      this.sendCommand({
+        type: 'demoControl',
+        command: 'setStepMode',
+        enabled: true
+      });
+    }
 
     // Tell iframe to start - it will send step changes via postMessage
     // which will trigger showComment() in the message handler
     this.sendCommand({
       type: 'demoControl',
       command: 'start'
+    });
+  }
+
+  /**
+   * Start demo playback from a specific action index
+   * This fast-forwards through previous actions to reach the target
+   */
+  public async startFromAction(actionIndex: number): Promise<void> {
+    if (this.isPlaying) return;
+
+    this.isPlaying = true;
+    this.iframeAcknowledgedStart = false;
+    console.log('[DemoPlayer] Starting from action:', actionIndex);
+
+    // Update URL hash
+    this.updateUrlHash(actionIndex);
+
+    // First, sync step mode to iframe if enabled
+    if (this.options.stepMode) {
+      this.sendCommand({
+        type: 'demoControl',
+        command: 'setStepMode',
+        enabled: true
+      });
+    }
+
+    // Fast-forward to the target action from the host
+    await this.fastForwardToAction(actionIndex);
+
+    // Update current action index and UI
+    this.currentActionIndex = actionIndex;
+    this.iframeAcknowledgedStart = true;
+
+    // Update step mode button if present
+    if (this.options.stepMode && this.stepModeNextButton) {
+      this.stepModeNextButton.innerHTML = `
+        <span class="step-next-icon">→</span>
+        <span class="step-next-text">Next Action</span>
+        <span class="step-next-index">#${actionIndex}</span>
+      `;
+    }
+
+    // Update action list highlight
+    this.updateActionListHighlight(actionIndex);
+
+    console.log('[DemoPlayer] Fast-forward complete, ready at action:', actionIndex);
+  }
+
+  /**
+   * Fast-forward through actions from setupChapterState to target action
+   * Executed from host with full control over timing
+   */
+  private async fastForwardToAction(targetIndex: number): Promise<void> {
+    const actions = this.demoActions;
+    if (actions.length === 0) {
+      console.warn('[DemoPlayer] No demo actions loaded, cannot fast-forward');
+      return;
+    }
+
+    // Find the most recent setupChapterState action at or before target
+    let setupIndex = -1;
+    for (let i = targetIndex; i >= 0; i--) {
+      if (actions[i].type === 'setupChapterState') {
+        setupIndex = i;
+        break;
+      }
+    }
+
+    console.log(`[DemoPlayer] Fast-forwarding: setupIndex=${setupIndex}, targetIndex=${targetIndex}`);
+
+    // Execute setupChapterState first if found
+    if (setupIndex >= 0) {
+      await this.executeActionAndWait(actions[setupIndex], setupIndex, true);
+      // Wait for document to update after setup
+      await this.delay(200);
+    }
+
+    // Fast-forward through intermediate actions (setupIndex+1 to targetIndex-1)
+    const startFrom = setupIndex >= 0 ? setupIndex + 1 : 0;
+    for (let i = startFrom; i < targetIndex; i++) {
+      const action = actions[i];
+
+      // Skip pause and comment actions during fast-forward
+      if (action.type === 'pause' || action.type === 'comment') {
+        continue;
+      }
+
+      console.log(`[DemoPlayer] Fast-forward executing action ${i}: ${action.type}`);
+      await this.executeActionAndWait(action, i, true);
+
+      // Add delay based on action type to let UI settle
+      const delay = this.getFastForwardDelay(action);
+      if (delay > 0) {
+        await this.delay(delay);
+      }
+    }
+  }
+
+  /**
+   * Get the delay to use after an action during fast-forward
+   */
+  private getFastForwardDelay(action: DemoAction): number {
+    switch (action.type) {
+      case 'openFullscreenMap':
+        return 800; // Map needs time to render
+      case 'clickMapMarker':
+        return 1000; // Location sheet needs time to appear and attach listeners
+      case 'showFingerTap':
+        return 500; // UI needs time to respond to click
+      case 'addWaypoint':
+        return 300;
+      case 'fingerDrag':
+        return 200;
+      default:
+        return 100;
+    }
+  }
+
+  /**
+   * Execute a single action and wait for completion
+   */
+  private executeActionAndWait(action: DemoAction, actionIndex: number, fastForward: boolean): Promise<void> {
+    return new Promise((resolve) => {
+      // Set up one-time listener for action completion
+      const handler = (event: MessageEvent) => {
+        const data = event.data;
+        if (data?.type === 'actionExecuted' && data.actionIndex === actionIndex) {
+          window.removeEventListener('message', handler);
+          resolve();
+        }
+      };
+      window.addEventListener('message', handler);
+
+      // Send the action to iframe
+      this.sendCommand({
+        type: 'demoControl',
+        command: 'executeAction',
+        action: action,
+        actionIndex: actionIndex,
+        fastForward: fastForward
+      });
+
+      // Timeout fallback in case iframe doesn't respond
+      setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve();
+      }, 3000);
     });
   }
 
@@ -1106,6 +1828,116 @@ export class DemoPlayer {
    */
   public get isPaused(): boolean {
     return this.isPausedState;
+  }
+
+  /**
+   * Show video call overlay
+   */
+  public showVideoCallOverlay(): void {
+    if (this.videoCallOverlay) {
+      this.videoCallOverlay.classList.add('visible');
+    }
+  }
+
+  /**
+   * Hide video call overlay
+   */
+  public hideVideoCallOverlay(): void {
+    if (this.videoCallOverlay) {
+      this.videoCallOverlay.classList.remove('visible');
+    }
+  }
+
+  /**
+   * Create the action list panel showing all demo actions
+   */
+  private createActionList(demoScriptName: string): void {
+    const script = DEMO_SCRIPTS[demoScriptName];
+    if (!script) {
+      console.warn(`[DemoPlayer] Demo script '${demoScriptName}' not found`);
+      return;
+    }
+
+    this.demoActions = script.actions;
+
+    this.actionListContainer = document.createElement('div');
+    this.actionListContainer.className = 'action-list-container';
+
+    const header = document.createElement('div');
+    header.className = 'action-list-header';
+    header.textContent = `Actions (${this.demoActions.length})`;
+    this.actionListContainer.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'action-list';
+
+    this.demoActions.forEach((action, index) => {
+      const item = document.createElement('div');
+      item.className = 'action-list-item';
+      item.dataset.index = String(index);
+
+      // Format action description
+      const actionDesc = this.formatActionDescription(action);
+
+      item.innerHTML = `
+        <span class="action-index">#${index}</span>
+        <span class="action-type">${action.type}</span>
+        <span class="action-detail">${actionDesc}</span>
+      `;
+
+      // Click to jump to action
+      item.addEventListener('click', () => {
+        this.startFromAction(index);
+      });
+
+      list.appendChild(item);
+    });
+
+    this.actionListContainer.appendChild(list);
+
+    // Highlight initial action
+    this.updateActionListHighlight(this.currentActionIndex);
+  }
+
+  /**
+   * Format action description for display
+   */
+  private formatActionDescription(action: DemoAction): string {
+    switch (action.type) {
+      case 'pause':
+        return `${action.duration}ms`;
+      case 'fingerDrag':
+        return `${action.direction} ${action.distance}px`;
+      case 'clickMapMarker':
+        return `marker #${action.markerIndex}`;
+      case 'showFingerTap':
+        return action.selector || '';
+      case 'setupChapterState':
+        return action.state;
+      case 'addWaypoint':
+        return `${action.destGeoId}`;
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * Update the action list to highlight the current action
+   */
+  private updateActionListHighlight(actionIndex: number): void {
+    if (!this.actionListContainer) return;
+
+    const items = this.actionListContainer.querySelectorAll('.action-list-item');
+    items.forEach((item, index) => {
+      item.classList.remove('active', 'completed');
+      if (index < actionIndex) {
+        item.classList.add('completed');
+      } else if (index === actionIndex) {
+        item.classList.add('active');
+        // Scroll item into view
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
   }
 
   /**
@@ -1189,8 +2021,10 @@ export class DemoPlayer {
     // - enableSync=true for Y.js sync
     // - demoUser=2 for Bob identity
     // - observeOnly=true so Bob doesn't run the demo script
+    // - offline=true if parent is in offline mode
     const iframe = document.createElement('iframe');
-    iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true&enableSync=true&demoUser=2&observeOnly=true`;
+    const offlineParam = this.options.offlineMode ? '&offline=true' : '';
+    iframe.src = `${editorUrl}?autoplay=true&remoteControl=true&demo=${demoScript}&showToolbar=true&enableSync=true&demoUser=2&observeOnly=true${offlineParam}`;
     iframe.setAttribute('frameborder', '0');
     iframe.setAttribute('allowfullscreen', 'true');
 

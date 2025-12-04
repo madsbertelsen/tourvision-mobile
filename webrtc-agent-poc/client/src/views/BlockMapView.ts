@@ -48,9 +48,21 @@ export class BlockMapView {
     dom.className = 'prosemirror-map';
     dom.style.cssText = `height: ${node.attrs.height}px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; margin: 16px 0; position: relative; overflow: hidden;`;
 
-    const mapContainer = document.createElement('div');
-    mapContainer.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden;';
-    dom.appendChild(mapContainer);
+    // Create wrapper for both maps
+    const mapWrapper = document.createElement('div');
+    mapWrapper.style.cssText = 'width: 100%; height: 100%; border-radius: 8px; overflow: hidden; position: relative;';
+    dom.appendChild(mapWrapper);
+
+    // Colored map container (behind, z-index: 1) - pre-loads streets style
+    const coloredMapContainer = document.createElement('div');
+    coloredMapContainer.style.cssText = 'position: absolute; inset: 0; z-index: 1;';
+    mapWrapper.appendChild(coloredMapContainer);
+
+    // Light map container (on top, z-index: 2) - visible by default
+    const lightMapContainer = document.createElement('div');
+    lightMapContainer.className = 'block-map-light-layer';
+    lightMapContainer.style.cssText = 'position: absolute; inset: 0; z-index: 2; transition: opacity 300ms ease-out;';
+    mapWrapper.appendChild(lightMapContainer);
 
     // Create clickable overlay for fullscreen
     const clickOverlay = document.createElement('div');
@@ -70,9 +82,12 @@ export class BlockMapView {
     });
     dom.appendChild(clickOverlay);
 
-    let currentMap: mapboxgl.Map | null = null;
-    let currentMarkers: mapboxgl.Marker[] = [];
-    let currentRouteIds: string[] = []; // Track route layer IDs for cleanup
+    // Two map instances: light (visible) and colored (pre-loading behind)
+    let lightMap: mapboxgl.Map | null = null;
+    let coloredMap: mapboxgl.Map | null = null;
+    let lightMarkers: mapboxgl.Marker[] = [];
+    let coloredMarkers: mapboxgl.Marker[] = [];
+    let currentRouteIds: string[] = []; // Track route layer IDs for cleanup (on colored map)
 
     /**
      * Find the section boundaries for this map (between previous heading and map position)
@@ -130,20 +145,24 @@ export class BlockMapView {
       const locations = extractLocations();
 
       if (locations.length === 0) {
-        mapContainer.innerHTML = `
+        lightMapContainer.innerHTML = `
           <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
             🗺️ No locations found
           </div>
         `;
-        if (currentMap) {
-          currentMap.remove();
-          currentMap = null;
+        if (lightMap) {
+          lightMap.remove();
+          lightMap = null;
+        }
+        if (coloredMap) {
+          coloredMap.remove();
+          coloredMap = null;
         }
         return;
       }
 
-      if (!currentMap) {
-        // Initialize Mapbox map
+      if (!lightMap) {
+        // Initialize Mapbox maps
         (window as any).mapboxgl.accessToken = deps.mapboxToken;
 
         let initialCenter: [number, number] = [0, 0];
@@ -161,9 +180,8 @@ export class BlockMapView {
           ];
         }
 
-        currentMap = new (window as any).mapboxgl.Map({
-          container: mapContainer,
-          style: 'mapbox://styles/mapbox/light-v11',
+        // Common map options (no interaction - block map is read-only)
+        const commonMapOptions = {
           center: initialCenter,
           zoom: initialZoom,
           dragPan: false,
@@ -173,22 +191,73 @@ export class BlockMapView {
           keyboard: false,
           doubleClickZoom: false,
           touchZoomRotate: false,
+        };
+
+        // Create LIGHT map (visible on top)
+        lightMap = new (window as any).mapboxgl.Map({
+          container: lightMapContainer,
+          style: 'mapbox://styles/mapbox/light-v11',
+          ...commonMapOptions,
         });
 
-        // Store map instance on DOM for fullscreen transition
-        (dom as any)._mapInstance = currentMap;
+        // Create COLORED map (pre-loading behind)
+        coloredMap = new (window as any).mapboxgl.Map({
+          container: coloredMapContainer,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          ...commonMapOptions,
+        });
 
-        currentMap.once('style.load', () => {
-          // Add markers
+        // Store both map instances on DOM for fullscreen transition
+        (dom as any)._lightMapInstance = lightMap;
+        (dom as any)._coloredMapInstance = coloredMap;
+        (dom as any)._lightMapContainer = lightMapContainer;
+        // Keep backward compatibility
+        (dom as any)._mapInstance = lightMap;
+
+        // Add markers and fit bounds on LIGHT map
+        lightMap.once('style.load', () => {
+          // Add markers to light map
           locations.forEach((location: Location) => {
             const el = deps.createMarkerElement(location.colorIndex);
             const marker = new (window as any).mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
-              .addTo(currentMap!);
-            currentMarkers.push(marker);
+              .addTo(lightMap!);
+            lightMarkers.push(marker);
           });
 
-          // Render routes for locations with transport configuration
+          // Fit bounds on light map
+          if (locations.length === 1) {
+            lightMap!.jumpTo({
+              center: [locations[0].lng, locations[0].lat],
+              zoom: 12
+            });
+          } else if (locations.length > 1) {
+            const lngs = locations.map((l: Location) => l.lng);
+            const lats = locations.map((l: Location) => l.lat);
+            const bounds = new (window as any).mapboxgl.LngLatBounds(
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            );
+            lightMap!.fitBounds(bounds, {
+              padding: 50,
+              maxZoom: 15,
+              duration: 0
+            });
+          }
+        });
+
+        // Add markers, routes, and fit bounds on COLORED map
+        coloredMap.once('style.load', () => {
+          // Add markers to colored map
+          locations.forEach((location: Location) => {
+            const el = deps.createMarkerElement(location.colorIndex);
+            const marker = new (window as any).mapboxgl.Marker(el)
+              .setLngLat([location.lng, location.lat])
+              .addTo(coloredMap!);
+            coloredMarkers.push(marker);
+          });
+
+          // Render routes on colored map (not on light map for cleaner look)
           locations.forEach(async (toLocation: Location) => {
             if (toLocation.transportFrom && toLocation.transportProfile) {
               const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
@@ -209,8 +278,8 @@ export class BlockMapView {
                   const route = data.routes[0];
                   const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
 
-                  if (currentMap && !currentMap.getSource(routeId)) {
-                    currentMap.addSource(routeId, {
+                  if (coloredMap && !coloredMap.getSource(routeId)) {
+                    coloredMap.addSource(routeId, {
                       type: 'geojson',
                       data: {
                         type: 'Feature',
@@ -219,7 +288,7 @@ export class BlockMapView {
                       }
                     });
 
-                    currentMap.addLayer({
+                    coloredMap.addLayer({
                       id: routeId,
                       type: 'line',
                       source: routeId,
@@ -235,7 +304,7 @@ export class BlockMapView {
                     });
 
                     currentRouteIds.push(routeId); // Track for cleanup
-                    console.log('[BlockMap] Route created:', routeId);
+                    console.log('[BlockMap] Route created on colored map:', routeId);
                   }
                 }
               } catch (error) {
@@ -244,9 +313,9 @@ export class BlockMapView {
             }
           });
 
-          // Fit bounds to show all locations
+          // Fit bounds on colored map (same as light map)
           if (locations.length === 1) {
-            currentMap!.jumpTo({
+            coloredMap!.jumpTo({
               center: [locations[0].lng, locations[0].lat],
               zoom: 12
             });
@@ -257,12 +326,14 @@ export class BlockMapView {
               [Math.min(...lngs), Math.min(...lats)],
               [Math.max(...lngs), Math.max(...lats)]
             );
-            currentMap!.fitBounds(bounds, {
+            coloredMap!.fitBounds(bounds, {
               padding: 50,
               maxZoom: 15,
               duration: 0
             });
           }
+
+          console.log('[BlockMap] Colored map pre-loaded and ready');
         });
       }
     };
@@ -286,19 +357,21 @@ export class BlockMapView {
       if (locationsHash !== previousLocationsHash) {
         previousLocationsHash = locationsHash;
 
-        // Remove old markers
-        currentMarkers.forEach(marker => marker.remove());
-        currentMarkers = [];
+        // Remove old markers from both maps
+        lightMarkers.forEach(marker => marker.remove());
+        lightMarkers = [];
+        coloredMarkers.forEach(marker => marker.remove());
+        coloredMarkers = [];
 
-        // Remove old route layers and sources
-        if (currentMap) {
+        // Remove old route layers and sources from colored map
+        if (coloredMap) {
           currentRouteIds.forEach(routeId => {
             try {
-              if (currentMap!.getLayer(routeId)) {
-                currentMap!.removeLayer(routeId);
+              if (coloredMap!.getLayer(routeId)) {
+                coloredMap!.removeLayer(routeId);
               }
-              if (currentMap!.getSource(routeId)) {
-                currentMap!.removeSource(routeId);
+              if (coloredMap!.getSource(routeId)) {
+                coloredMap!.removeSource(routeId);
               }
             } catch (e) {
               console.warn('[BlockMap] Error removing route:', routeId, e);
@@ -308,101 +381,125 @@ export class BlockMapView {
         currentRouteIds = [];
 
         if (locations.length === 0) {
-          if (currentMap) {
-            currentMap.remove();
-            currentMap = null;
+          if (lightMap) {
+            lightMap.remove();
+            lightMap = null;
+          }
+          if (coloredMap) {
+            coloredMap.remove();
+            coloredMap = null;
           }
           return;
         }
 
-        if (!currentMap) {
+        if (!lightMap) {
           updateMap();
         } else {
-          // Add new markers
+          // Add new markers to LIGHT map
           locations.forEach((location: Location) => {
             const el = deps.createMarkerElement(location.colorIndex);
             const marker = new (window as any).mapboxgl.Marker(el)
               .setLngLat([location.lng, location.lat])
-              .addTo(currentMap!);
-            currentMarkers.push(marker);
+              .addTo(lightMap!);
+            lightMarkers.push(marker);
           });
 
-          // Update routes
-          locations.forEach(async (toLocation: Location) => {
-            if (toLocation.transportFrom && toLocation.transportProfile) {
-              const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
-              if (!fromLocation) return;
+          // Add new markers to COLORED map
+          if (coloredMap) {
+            locations.forEach((location: Location) => {
+              const el = deps.createMarkerElement(location.colorIndex);
+              const marker = new (window as any).mapboxgl.Marker(el)
+                .setLngLat([location.lng, location.lat])
+                .addTo(coloredMap!);
+              coloredMarkers.push(marker);
+            });
+          }
 
-              const profile = toLocation.transportProfile === 'walking' ? 'walking' :
-                             toLocation.transportProfile === 'cycling' ? 'cycling' :
-                             'driving-traffic';
+          // Update routes on COLORED map
+          if (coloredMap) {
+            locations.forEach(async (toLocation: Location) => {
+              if (toLocation.transportFrom && toLocation.transportProfile) {
+                const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
+                if (!fromLocation) return;
 
-              const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
-              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
+                const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                               toLocation.transportProfile === 'cycling' ? 'cycling' :
+                               'driving-traffic';
 
-              try {
-                const response = await fetch(url);
-                const data = await response.json();
+                const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
+                const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
 
-                if (data.routes && data.routes.length > 0) {
-                  const route = data.routes[0];
-                  const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+                try {
+                  const response = await fetch(url);
+                  const data = await response.json();
 
-                  if (currentMap) {
-                    const existingSource = currentMap.getSource(routeId);
+                  if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
 
-                    if (existingSource) {
-                      // Update existing source data
-                      (existingSource as mapboxgl.GeoJSONSource).setData({
-                        type: 'Feature',
-                        properties: {},
-                        geometry: route.geometry
-                      });
-                      console.log('[BlockMap] Route source updated:', routeId);
-                    } else {
-                      // Add new source and layer
-                      currentMap.addSource(routeId, {
-                        type: 'geojson',
-                        data: {
+                    if (coloredMap) {
+                      const existingSource = coloredMap.getSource(routeId);
+
+                      if (existingSource) {
+                        // Update existing source data
+                        (existingSource as mapboxgl.GeoJSONSource).setData({
                           type: 'Feature',
                           properties: {},
                           geometry: route.geometry
-                        }
-                      });
+                        });
+                        console.log('[BlockMap] Route source updated on colored map:', routeId);
+                      } else {
+                        // Add new source and layer
+                        coloredMap.addSource(routeId, {
+                          type: 'geojson',
+                          data: {
+                            type: 'Feature',
+                            properties: {},
+                            geometry: route.geometry
+                          }
+                        });
 
-                      currentMap.addLayer({
-                        id: routeId,
-                        type: 'line',
-                        source: routeId,
-                        layout: {
-                          'line-join': 'round',
-                          'line-cap': 'round'
-                        },
-                        paint: {
-                          'line-color': toLocation.color || '#3B82F6',
-                          'line-width': 3,
-                          'line-opacity': 0.7
-                        }
-                      });
+                        coloredMap.addLayer({
+                          id: routeId,
+                          type: 'line',
+                          source: routeId,
+                          layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                          },
+                          paint: {
+                            'line-color': toLocation.color || '#3B82F6',
+                            'line-width': 3,
+                            'line-opacity': 0.7
+                          }
+                        });
 
-                      currentRouteIds.push(routeId); // Track for cleanup
-                      console.log('[BlockMap] Route created:', routeId);
+                        currentRouteIds.push(routeId); // Track for cleanup
+                        console.log('[BlockMap] Route created on colored map:', routeId);
+                      }
                     }
                   }
+                } catch (error) {
+                  console.error('[BlockMap] Error updating route:', error);
                 }
-              } catch (error) {
-                console.error('[BlockMap] Error updating route:', error);
               }
-            }
-          });
+            });
+          }
 
-          // Re-fit bounds to show all locations
+          // Re-fit bounds on BOTH maps
           if (locations.length === 1) {
-            currentMap.flyTo({
+            lightMap.flyTo({
               center: [locations[0].lng, locations[0].lat],
               zoom: 12,
               duration: 1500
             });
+            if (coloredMap) {
+              coloredMap.flyTo({
+                center: [locations[0].lng, locations[0].lat],
+                zoom: 12,
+                duration: 1500
+              });
+            }
           } else if (locations.length > 1) {
             const lngs = locations.map((l: Location) => l.lng);
             const lats = locations.map((l: Location) => l.lat);
@@ -410,11 +507,18 @@ export class BlockMapView {
               [Math.min(...lngs), Math.min(...lats)],
               [Math.max(...lngs), Math.max(...lats)]
             );
-            currentMap.fitBounds(bounds, {
+            lightMap.fitBounds(bounds, {
               padding: 50,
               maxZoom: 15,
               duration: 1500
             });
+            if (coloredMap) {
+              coloredMap.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: 15,
+                duration: 1500
+              });
+            }
           }
         }
       }
@@ -433,8 +537,11 @@ export class BlockMapView {
       destroy() {
         // Remove geo-mark change listener (use deps from closure, not this.deps)
         deps.geoMarkChangeListeners.delete(updateMapIfChanged);
-        if (currentMap) {
-          currentMap.remove();
+        if (lightMap) {
+          lightMap.remove();
+        }
+        if (coloredMap) {
+          coloredMap.remove();
         }
       }
     };

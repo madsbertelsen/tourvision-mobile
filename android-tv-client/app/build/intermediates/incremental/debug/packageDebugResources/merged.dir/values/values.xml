@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TourVision TV</string>
+    <string name="qr_code_description">QR code to join document</string>
     <style name="Theme.TourVisionTV" parent="@style/Theme.Leanback">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowFullscreen">true</item>

@@ -665,9 +665,11 @@
         { label: 'Location Tagging', heading: 'Location Tagging', text: 'Double-tap text to create geo-marks' },
         { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
         { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
-        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' }
+        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' },
+        { label: 'Video Call', heading: 'Video Call', text: 'Discuss your trip together' }
       ],
-      autoStart: true
+      autoStart: true,
+      offlineMode: true  // No server dependency - prevents failed network requests
     });
 
     // Add second phone (Bob) when reaching the Share step

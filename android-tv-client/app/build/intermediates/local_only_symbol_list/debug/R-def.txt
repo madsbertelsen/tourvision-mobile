@@ -1,7 +1,9 @@
 R_DEF: Internal format may change without notice
 local
 drawable ic_launcher
+id qrCodeImage
 id webView
 layout activity_main
 string app_name
+string qr_code_description
 style Theme.TourVisionTV

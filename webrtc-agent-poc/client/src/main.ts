@@ -26,6 +26,7 @@ import { AnimateAgent, AnimatePlayback } from './services/AnimatePlayback';
 import { AutoplayDemo, ComposedDemoPlayer } from './services/AutoplayDemo';
 import { GeocodingService } from './services/GeocodingService';
 import { LocationExtractor } from './services/LocationExtractor';
+import { MapInteractionService } from './services/MapInteractionService';
 import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
 import { VideoChatService } from './services/VideoChatService';
@@ -692,6 +693,9 @@ let globalAwareness: any = null;
 // Global ViewSyncService for collaborative view synchronization
 let viewSyncService: ViewSyncService | null = null;
 
+// Global MapInteractionService for collaborative finger tracking on fullscreen map
+let mapInteractionService: MapInteractionService | null = null;
+
 // Global AnimatePlayback/AnimateAgent for landing page demo mode
 let animatePlayback: AnimatePlayback | null = null;
 let animateAgent: AnimateAgent | null = null;
@@ -741,6 +745,14 @@ function extractLocationsForFullscreen() {
 (window as any).showFullscreenMap = (targetBounds?: { north: number; south: number; east: number; west: number }) => {
   if (fullscreenMapView) {
     fullscreenMapView.show(targetBounds);
+
+    // Show video thumbnail with the OTHER user's avatar
+    // This shows the collaborator's presence during map exploration
+    if (userName === 'Alice') {
+      fullscreenMapView.showVideoThumbnail('Bob', '#10b981');
+    } else if (userName === 'Bob') {
+      fullscreenMapView.showVideoThumbnail('Alice', '#3b82f6');
+    }
 
     // Notify ViewSyncService if presenting (not when following)
     if (viewSyncService && !viewSyncService.isFollowing()) {
@@ -912,6 +924,10 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   viewSyncService = new ViewSyncService(awareness);
   viewSyncService.setEditorContainer(container);
   console.log('[Main] ViewSyncService initialized');
+
+  // Initialize MapInteractionService for collaborative finger tracking on fullscreen map
+  mapInteractionService = new MapInteractionService(awareness);
+  console.log('[Main] MapInteractionService initialized');
 
   // In observeOnly mode (Bob), auto-follow Alice's scroll position
   if (isObserveOnly) {
@@ -1426,7 +1442,9 @@ async function main() {
       const isFollowing = viewSyncService.isFollowing();
       const isUpdating = viewSyncService.isUpdating();
       return !isFollowing && !isUpdating;
-    }
+    },
+    // MapInteractionService for collaborative finger tracking
+    mapInteractionService: mapInteractionService ?? undefined
   });
   console.log('[Main] FullscreenMapView initialized with awareness');
 
@@ -1673,12 +1691,15 @@ async function main() {
 
     // Wire up fullscreen map for autoplay
     player.onOpenFullscreenMap = () => {
-      (window as any).showFullscreenMap();
-      // Show video thumbnail when fullscreen map opens (for collaborative map exploration)
-      if (fullscreenMapView) {
-        fullscreenMapView.showVideoThumbnail();
+      console.log('[Main] onOpenFullscreenMap called');
+      console.log('[Main] window.showFullscreenMap exists?', typeof (window as any).showFullscreenMap);
+      console.log('[Main] fullscreenMapView exists?', !!fullscreenMapView);
+      if ((window as any).showFullscreenMap) {
+        (window as any).showFullscreenMap();
+        console.log('[Main] showFullscreenMap() called');
+      } else {
+        console.warn('[Main] showFullscreenMap function not found on window!');
       }
-      console.log('[AutoplayDemo] Opened fullscreen map');
     };
 
     player.onCloseFullscreenMap = () => {
@@ -1689,18 +1710,75 @@ async function main() {
     player.onClickMapMarker = (markerIndex: number) => {
       // Find markers in the fullscreen map overlay
       const fullscreenOverlay = document.getElementById('fullscreen-overlay');
+      const finger = document.getElementById('demo-finger');
+
       if (fullscreenOverlay) {
         const markers = fullscreenOverlay.querySelectorAll('.mapboxgl-marker');
         if (markers.length > markerIndex) {
           const marker = markers[markerIndex] as HTMLElement;
-          marker.click();
-          console.log(`[AutoplayDemo] Clicked marker ${markerIndex} of ${markers.length}`);
+
+          // Show finger animation moving to and tapping the marker
+          if (finger) {
+            const rect = marker.getBoundingClientRect();
+            const targetX = rect.left + rect.width / 2;
+            const targetY = rect.top + rect.height / 2;
+
+            // Check if finger is already visible (persisted from previous action)
+            if (finger.classList.contains('visible')) {
+              // Animate to marker position
+              finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+              finger.style.left = `${targetX}px`;
+              finger.style.top = `${targetY}px`;
+
+              // After reaching marker, do tap animation and click
+              setTimeout(() => {
+                finger.classList.add('tapping');
+                setTimeout(() => {
+                  marker.click();
+                  finger.classList.remove('tapping');
+                  console.log(`[AutoplayDemo] Clicked marker ${markerIndex} of ${markers.length} with finger`);
+                }, 300);
+              }, 400);
+            } else {
+              // Entry animation from bottom
+              finger.style.left = `${targetX}px`;
+              finger.style.top = `${window.innerHeight + 60}px`;
+              finger.style.transition = 'none';
+              finger.classList.add('visible');
+              finger.offsetHeight; // Force reflow
+
+              // Animate to marker
+              finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+              finger.style.top = `${targetY}px`;
+
+              // After reaching marker, do tap animation and click
+              setTimeout(() => {
+                finger.classList.add('tapping');
+                setTimeout(() => {
+                  marker.click();
+                  finger.classList.remove('tapping');
+                  // Keep finger visible (persisted) after marker click
+                  console.log(`[AutoplayDemo] Clicked marker ${markerIndex} of ${markers.length} with finger`);
+                }, 300);
+              }, 600);
+            }
+          } else {
+            // No finger element, just click
+            marker.click();
+            console.log(`[AutoplayDemo] Clicked marker ${markerIndex} of ${markers.length}`);
+          }
         } else {
           console.warn(`[AutoplayDemo] Marker ${markerIndex} not found (${markers.length} markers)`);
         }
       } else {
         console.warn('[AutoplayDemo] Fullscreen map overlay not found');
       }
+    };
+
+    // Wire up addWaypoint for autoplay
+    player.onAddWaypoint = (destGeoId: string, lat: number, lng: number) => {
+      waypointController.addWaypoint(destGeoId, lat, lng);
+      console.log(`[AutoplayDemo] Added waypoint to ${destGeoId} at ${lat}, ${lng}`);
     };
 
     // Wire up scroll for autoplay
@@ -1782,6 +1860,32 @@ async function main() {
       const newZoom = direction === 'in' ? currentZoom + amount : currentZoom - amount;
       map.zoomTo(newZoom, { duration: 500 });
       console.log(`[AutoplayDemo] Zoomed map ${direction} to ${newZoom.toFixed(1)}`);
+    };
+
+    // Fast click callback for fast-forward mode (no animation)
+    // Polls for element existence with timeout, then clicks
+    player.onFastClick = (selector: string) => {
+      const startTime = Date.now();
+      const maxWait = 2000; // Max 2 seconds to wait for element
+      const pollInterval = 50; // Check every 50ms
+
+      const tryClick = () => {
+        const target = document.querySelector(selector) as HTMLElement;
+        if (target) {
+          target.click();
+          console.log(`[AutoplayDemo] Fast-clicked ${selector} (found after ${Date.now() - startTime}ms)`);
+          return;
+        }
+
+        // Element not found yet - keep polling if within timeout
+        if (Date.now() - startTime < maxWait) {
+          setTimeout(tryClick, pollInterval);
+        } else {
+          console.warn(`[AutoplayDemo] Fast-click target not found after ${maxWait}ms: ${selector}`);
+        }
+      };
+
+      tryClick();
     };
 
     // Wire up finger tap animation for autoplay
@@ -1947,6 +2051,332 @@ async function main() {
       document.querySelectorAll('.demo-selection-overlay').forEach(el => el.remove());
     };
 
+    // Wire up finger tap on map at specific coordinates (lat/lng)
+    player.onFingerTapMapCoords = (lat: number, lng: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const fullscreenMap = fullscreenMapView?.getMap?.();
+
+        if (!finger) {
+          console.warn(`[FingerTapMapCoords] Finger element not found`);
+          resolve();
+          return;
+        }
+
+        if (!fullscreenMap) {
+          console.warn(`[FingerTapMapCoords] Fullscreen map not available`);
+          resolve();
+          return;
+        }
+
+        // Convert lat/lng to screen coordinates
+        const point = fullscreenMap.project([lng, lat]);
+        const targetX = point.x;
+        const targetY = point.y;
+
+        console.log(`[FingerTapMapCoords] Tapping at (${lat}, ${lng}) -> screen (${targetX}, ${targetY})`);
+
+        // Calculate start position based on fromSide (for entry animation)
+        let startX: number, startY: number;
+        switch (fromSide) {
+          case 'left':
+            startX = -60;
+            startY = targetY;
+            break;
+          case 'bottom':
+            startX = targetX;
+            startY = window.innerHeight + 60;
+            break;
+          case 'right':
+          default:
+            startX = window.innerWidth + 60;
+            startY = targetY;
+            break;
+        }
+
+        lastFingerFromSide = fromSide;
+
+        // If finger is already visible (persisted), just animate to new target
+        if (fingerPersisted && finger.classList.contains('visible')) {
+          // Animate directly to new target
+          finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // After reaching target, do tap animation and fire map click
+          setTimeout(() => {
+            finger.classList.add('tapping');
+
+            // Add waypoint at the tapped coordinates
+            // This queries for route layers and adds a waypoint if found
+            const waypointAdded = fullscreenMapView?.addWaypointAtCoords?.(lat, lng);
+            console.log(`[FingerTapMapCoords] Waypoint at (${lat}, ${lng}): ${waypointAdded ? 'added' : 'not added (no route found)'}`);
+
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+              fingerPersisted = !!persist;
+              resolve();
+            }, 500);
+          }, 400);
+        } else {
+          // Full entry animation from off-screen
+          finger.style.left = `${startX}px`;
+          finger.style.top = `${startY}px`;
+          finger.style.transition = 'none';
+          finger.classList.add('visible');
+
+          // Force reflow
+          finger.offsetHeight;
+
+          // Animate to target
+          finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+          finger.style.left = `${targetX}px`;
+          finger.style.top = `${targetY}px`;
+
+          // After reaching target, do tap animation and add waypoint
+          setTimeout(() => {
+            finger.classList.add('tapping');
+
+            // Add waypoint at the tapped coordinates
+            // This queries for route layers and adds a waypoint if found
+            const waypointAdded = fullscreenMapView?.addWaypointAtCoords?.(lat, lng);
+            console.log(`[FingerTapMapCoords] Waypoint at (${lat}, ${lng}): ${waypointAdded ? 'added' : 'not added (no route found)'}`);
+
+            setTimeout(() => {
+              finger.classList.remove('tapping');
+
+              if (persist) {
+                fingerPersisted = true;
+                resolve();
+              } else {
+                fingerPersisted = false;
+                finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
+                finger.style.left = `${startX}px`;
+                finger.style.top = `${startY}px`;
+
+                setTimeout(() => {
+                  finger.classList.remove('visible');
+                  resolve();
+                }, 400);
+              }
+            }, 500);
+          }, 600);
+        }
+      });
+    };
+
+    // Wire up finger tap on route - gets coordinates dynamically from route geometry
+    player.onFingerTapRoute = (fraction: number, fromSide: 'left' | 'right' | 'bottom', persist?: boolean) => {
+      return new Promise<void>((resolve) => {
+        const finger = document.getElementById('demo-finger');
+        const fullscreenMap = fullscreenMapView?.getMap?.();
+
+        if (!finger) {
+          console.warn(`[FingerTapRoute] Finger element not found`);
+          resolve();
+          return;
+        }
+
+        if (!fullscreenMap) {
+          console.warn(`[FingerTapRoute] Fullscreen map not available`);
+          resolve();
+          return;
+        }
+
+        // Get actual coordinates from route geometry
+        const routePoint = fullscreenMapView?.getPointOnRoute?.(fraction);
+        if (!routePoint) {
+          console.warn(`[FingerTapRoute] Could not get point on route at fraction ${fraction}`);
+          resolve();
+          return;
+        }
+
+        const { lat, lng } = routePoint;
+
+        // Get map container dimensions
+        const mapContainer = fullscreenMap.getContainer();
+        const mapRect = mapContainer.getBoundingClientRect();
+        const mapWidth = mapRect.width;
+        const mapHeight = mapRect.height;
+        const margin = 50; // Keep margin from edges
+        const centerX = mapWidth / 2;
+        const centerY = mapHeight / 2;
+
+        // Convert lat/lng to screen coordinates
+        let point = fullscreenMap.project([lng, lat]);
+        let targetX = point.x;
+        let targetY = point.y;
+
+        console.log(`[FingerTapRoute] Point at fraction ${fraction} -> (${lat.toFixed(5)}, ${lng.toFixed(5)}) -> screen (${targetX.toFixed(0)}, ${targetY.toFixed(0)}), map size: ${mapWidth}x${mapHeight}`);
+
+        // Check if the point is visible (within map viewport with margin)
+        const isVisible = targetX >= margin && targetX <= mapWidth - margin &&
+                         targetY >= margin && targetY <= mapHeight - margin;
+
+        // Helper function to perform the tap animation
+        const performTap = (tapX: number, tapY: number) => {
+          // Calculate start position based on fromSide
+          let startX: number, startY: number;
+          switch (fromSide) {
+            case 'left':
+              startX = -60;
+              startY = tapY;
+              break;
+            case 'bottom':
+              startX = tapX;
+              startY = mapHeight + 60;
+              break;
+            case 'right':
+            default:
+              startX = mapWidth + 60;
+              startY = tapY;
+              break;
+          }
+
+          lastFingerFromSide = fromSide;
+
+          // If finger is already visible (persisted), animate to new target
+          if (fingerPersisted && finger.classList.contains('visible')) {
+            finger.style.transition = 'left 0.4s ease-out, top 0.4s ease-out';
+            finger.style.left = `${tapX}px`;
+            finger.style.top = `${tapY}px`;
+
+            setTimeout(() => {
+              finger.classList.add('tapping');
+              const waypointResult = fullscreenMapView?.addWaypointOnRoute?.(fraction);
+              console.log(`[FingerTapRoute] Waypoint at fraction ${fraction}: ${waypointResult?.success ? 'added' : 'not added'}`);
+
+              setTimeout(() => {
+                finger.classList.remove('tapping');
+                fingerPersisted = !!persist;
+                resolve();
+              }, 500);
+            }, 400);
+          } else {
+            // Full entry animation
+            finger.style.left = `${startX}px`;
+            finger.style.top = `${startY}px`;
+            finger.style.transition = 'none';
+            finger.classList.add('visible');
+            finger.offsetHeight; // Force reflow
+
+            finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+            finger.style.left = `${tapX}px`;
+            finger.style.top = `${tapY}px`;
+
+            setTimeout(() => {
+              finger.classList.add('tapping');
+              const waypointResult = fullscreenMapView?.addWaypointOnRoute?.(fraction);
+              console.log(`[FingerTapRoute] Waypoint at fraction ${fraction}: ${waypointResult?.success ? 'added' : 'not added'}`);
+
+              setTimeout(() => {
+                finger.classList.remove('tapping');
+
+                if (persist) {
+                  fingerPersisted = true;
+                  resolve();
+                } else {
+                  fingerPersisted = false;
+                  finger.style.transition = 'left 0.4s ease-in, top 0.4s ease-in, opacity 0.3s ease';
+                  finger.style.left = `${startX}px`;
+                  finger.style.top = `${startY}px`;
+
+                  setTimeout(() => {
+                    finger.classList.remove('visible');
+                    resolve();
+                  }, 400);
+                }
+              }, 500);
+            }, 600);
+          }
+        };
+
+        // If point is visible, tap directly
+        if (isVisible) {
+          console.log(`[FingerTapRoute] Point is visible, tapping directly`);
+          performTap(targetX, targetY);
+        } else {
+          // Point is off-screen - pan the map to bring it into view using finger drag
+          console.log(`[FingerTapRoute] Point is OFF-SCREEN, panning map to bring into view`);
+
+          // Calculate how much to pan to bring the point near center
+          const panX = targetX - centerX;
+          const panY = targetY - centerY;
+
+          // Position finger at start (center of map)
+          finger.style.transition = 'none';
+          finger.style.left = `${centerX}px`;
+          finger.style.top = `${centerY}px`;
+          finger.classList.add('visible');
+          finger.offsetHeight; // Force reflow
+
+          // Get the geographic point under the finger's starting position
+          // This is the point the finger will "track" during the drag
+          const referenceGeoPoint = fullscreenMap.unproject([centerX, centerY]);
+          console.log(`[FingerTapRoute] Reference geo point: [${referenceGeoPoint.lng.toFixed(6)}, ${referenceGeoPoint.lat.toFixed(6)}]`);
+
+          // Show pressing state
+          finger.classList.add('tapping');
+
+          // Start the pan animation
+          const startTime = Date.now();
+          const duration = 600;
+          let animationFrame: number;
+
+          // Function to update finger position based on where the reference point now is on screen
+          const updateFingerPosition = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Project the reference geographic point to get its current screen position
+            const screenPoint = fullscreenMap.project(referenceGeoPoint);
+
+            // Clamp to stay within map bounds with margin
+            const clampedX = Math.max(30, Math.min(mapWidth - 30, screenPoint.x));
+            const clampedY = Math.max(30, Math.min(mapHeight - 30, screenPoint.y));
+
+            // Update finger position to track the geographic point
+            finger.style.left = `${clampedX}px`;
+            finger.style.top = `${clampedY}px`;
+
+            // Continue animation if not complete
+            if (progress < 1) {
+              animationFrame = requestAnimationFrame(updateFingerPosition);
+            }
+          };
+
+          // Start tracking the reference point
+          animationFrame = requestAnimationFrame(updateFingerPosition);
+
+          // Pan the map to center on the target point
+          fullscreenMap.panBy([panX, panY], { duration, easing: (t: number) => t * (2 - t) });
+          console.log(`[FingerTapRoute] Panning map by [${panX.toFixed(0)}, ${panY.toFixed(0)}], finger tracking geo point`);
+
+          // After pan completes, clean up and tap
+          setTimeout(() => {
+            // Cancel animation frame if still running
+            if (animationFrame) {
+              cancelAnimationFrame(animationFrame);
+            }
+
+            finger.classList.remove('tapping');
+
+            // Re-project the target point after pan
+            const newPoint = fullscreenMap.project([lng, lat]);
+            const newTargetX = newPoint.x;
+            const newTargetY = newPoint.y;
+            console.log(`[FingerTapRoute] After pan, target point is now at (${newTargetX.toFixed(0)}, ${newTargetY.toFixed(0)})`);
+
+            // Small pause before tapping
+            setTimeout(() => {
+              performTap(newTargetX, newTargetY);
+            }, 200);
+          }, duration + 100);
+        }
+      });
+    };
+
     // Wire up finger drag for autoplay (for panning maps)
     player.onFingerDrag = (selector: string, direction: 'up' | 'down' | 'left' | 'right', distance: number) => {
       return new Promise<void>((resolve) => {
@@ -2017,9 +2447,43 @@ async function main() {
           // Use Mapbox's panBy for smooth map panning (if this is the fullscreen map)
           const map = fullscreenMapView?.getMap();
           if (map) {
-            // panBy takes [x, y] offset in pixels, with duration option
+            // Pan the map with the same duration and easing
             map.panBy([panX, panY], { duration: 600, easing: (t: number) => t * (2 - t) });
             console.log(`[AutoplayDemo] Panning map by [${panX}, ${panY}]`);
+
+            // Broadcast finger position during drag for remote users to see
+            if (mapInteractionService) {
+              const mapContainer = map.getContainer();
+              const mapRect = mapContainer.getBoundingClientRect();
+
+              // Broadcast finger position periodically during the 600ms animation
+              let frameCount = 0;
+              const totalFrames = 12; // ~50ms intervals over 600ms
+              const broadcastInterval = setInterval(() => {
+                frameCount++;
+                if (frameCount > totalFrames) {
+                  clearInterval(broadcastInterval);
+                  mapInteractionService?.broadcastGestureEnd();
+                  return;
+                }
+
+                // Get current finger position from CSS (interpolated by browser)
+                const fingerRect = finger.getBoundingClientRect();
+                const fingerCenterX = fingerRect.left + fingerRect.width / 2;
+                const fingerCenterY = fingerRect.top + fingerRect.height / 2;
+
+                // Convert to map-relative coordinates
+                const mapX = fingerCenterX - mapRect.left;
+                const mapY = fingerCenterY - mapRect.top;
+
+                // Unproject to get geographic coordinates
+                const lngLat = map.unproject([mapX, mapY]);
+                mapInteractionService?.broadcastFingerPosition(
+                  { lng: lngLat.lng, lat: lngLat.lat },
+                  'pan'
+                );
+              }, 50);
+            }
           }
 
           // After animation completes
@@ -2117,6 +2581,121 @@ async function main() {
             resolve();
           }, 550);
         }, 200);
+      });
+    };
+
+    // Wire up drawTestLines for autoplay (visualize screen vs geo coordinates)
+    player.onDrawTestLines = (startX: number, startY: number, endX: number, endY: number, duration?: number) => {
+      return new Promise<void>((resolve) => {
+        const map = fullscreenMapView?.getMap();
+        if (!map) {
+          console.warn('[AutoplayDemo] drawTestLines failed - no fullscreen map');
+          resolve();
+          return;
+        }
+
+        const animDuration = duration || 2000;
+        console.log(`[AutoplayDemo] Drawing test lines from (${startX},${startY}) to (${endX},${endY})`);
+
+        // Get map container for screen coordinates
+        const mapContainer = map.getContainer();
+        const rect = mapContainer.getBoundingClientRect();
+
+        // Convert screen positions to map-relative coordinates
+        const mapStartX = startX - rect.left;
+        const mapStartY = startY - rect.top;
+        const mapEndX = endX - rect.left;
+        const mapEndY = endY - rect.top;
+
+        // Unproject to get geographic coordinates
+        const startLngLat = map.unproject([mapStartX, mapStartY]);
+        const endLngLat = map.unproject([mapEndX, mapEndY]);
+
+        console.log(`[AutoplayDemo] Screen line: (${startX},${startY}) -> (${endX},${endY})`);
+        console.log(`[AutoplayDemo] Geo line: (${startLngLat.lng.toFixed(4)},${startLngLat.lat.toFixed(4)}) -> (${endLngLat.lng.toFixed(4)},${endLngLat.lat.toFixed(4)})`);
+
+        // Create SVG overlay for screen-space red line
+        let svg = mapContainer.querySelector('.test-lines-overlay') as SVGElement;
+        if (!svg) {
+          svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.classList.add('test-lines-overlay');
+          svg.style.position = 'absolute';
+          svg.style.top = '0';
+          svg.style.left = '0';
+          svg.style.width = '100%';
+          svg.style.height = '100%';
+          svg.style.pointerEvents = 'none';
+          svg.style.zIndex = '1000';
+          mapContainer.appendChild(svg);
+        } else {
+          // Clear previous lines
+          svg.innerHTML = '';
+        }
+
+        // Draw red line in screen coordinates
+        const redLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        redLine.setAttribute('x1', mapStartX.toString());
+        redLine.setAttribute('y1', mapStartY.toString());
+        redLine.setAttribute('x2', mapEndX.toString());
+        redLine.setAttribute('y2', mapEndY.toString());
+        redLine.setAttribute('stroke', '#ff0000');
+        redLine.setAttribute('stroke-width', '3');
+        redLine.setAttribute('stroke-linecap', 'round');
+        svg.appendChild(redLine);
+
+        // Add blue line as GeoJSON source on the map (moves with map)
+        const lineId = 'test-line-geo';
+        const sourceId = `${lineId}-source`;
+
+        // Remove existing line if any
+        if (map.getLayer(lineId)) {
+          map.removeLayer(lineId);
+        }
+        if (map.getSource(sourceId)) {
+          map.removeSource(sourceId);
+        }
+
+        // Add GeoJSON source with the line
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [startLngLat.lng, startLngLat.lat],
+                [endLngLat.lng, endLngLat.lat]
+              ]
+            },
+            properties: {}
+          }
+        });
+
+        // Add layer to render the line
+        map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: sourceId,
+          paint: {
+            'line-color': '#0000ff',
+            'line-width': 3
+          }
+        });
+
+        // Clean up after duration
+        setTimeout(() => {
+          console.log('[AutoplayDemo] Removing test lines');
+          if (map.getLayer(lineId)) {
+            map.removeLayer(lineId);
+          }
+          if (map.getSource(sourceId)) {
+            map.removeSource(sourceId);
+          }
+          if (svg) {
+            svg.remove();
+          }
+          resolve();
+        }, animDuration);
       });
     };
 
@@ -3483,11 +4062,9 @@ async function main() {
         break;
 
       case 'openFullscreenMap':
-        // Open fullscreen map on Bob's phone
+        // Open fullscreen map on Bob's phone (video thumbnail is shown via showFullscreenMap)
         console.log('[Main] Executing openFullscreenMap command');
-        if (fullscreenMapView) {
-          fullscreenMapView.show();
-        }
+        (window as any).showFullscreenMap?.();
         break;
 
       case 'closeFullscreenMap':

@@ -112,8 +112,17 @@ export class GeoMarkingService {
     for (const match of matches) {
       const candidate = match[1];
 
-      // Filter out common non-location words
-      const blacklist = ['The', 'A', 'An', 'This', 'That', 'These', 'Those', 'I', 'We', 'You', 'He', 'She', 'It', 'They'];
+      // Filter out common non-location words (pronouns, articles, common verbs)
+      const blacklist = [
+        // Articles and pronouns
+        'The', 'A', 'An', 'This', 'That', 'These', 'Those', 'I', 'We', 'You', 'He', 'She', 'It', 'They',
+        // Common verbs that might start a sentence
+        'Drive', 'Walk', 'Go', 'Visit', 'See', 'Take', 'Get', 'Make', 'Have', 'Do', 'Be', 'Start', 'Stop',
+        'Travel', 'Fly', 'Stay', 'Arrive', 'Leave', 'Return', 'Explore', 'Discover', 'Find', 'Meet',
+        // Days and common words
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+        'Today', 'Tomorrow', 'Yesterday', 'Morning', 'Afternoon', 'Evening', 'Night'
+      ];
       if (!blacklist.includes(candidate) && candidate.length > 2) {
         // Avoid duplicates
         if (!locations.includes(candidate)) {

@@ -25,7 +25,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Resolve paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const clientDistPath = join(__dirname, '../../client/dist');
+const clientDistPath = join(__dirname, '../../client/dist-public');
 
 // Create Express app
 const app = express();
@@ -288,7 +288,8 @@ if (existsSync(clientDistPath)) {
   });
 
   // Serve static assets (JS, CSS, images, etc.)
-  app.use(express.static(clientDistPath));
+  // index: false prevents auto-serving index.html for "/" - we handle that explicitly below
+  app.use(express.static(clientDistPath, { index: false }));
 
   // Landing page at root
   app.get('/', (req, res) => {

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Finger Drag Direction</title>
+  <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css' rel='stylesheet' />
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #map {
+      width: 100%;
+      height: 500px;
+      position: relative;
+      border: 2px solid #333;
+    }
+
+    #finger {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(200, 200, 200, 0.8));
+      border-radius: 50%;
+      border: 3px solid rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      transform: translate(-50%, -50%);
+    }
+
+    #finger.visible {
+      display: block;
+    }
+
+    #finger.tapping {
+      transform: translate(-50%, -50%) scale(0.9);
+    }
+
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #f0f0f0;
+    }
+
+    button:active {
+      background: #e0e0e0;
+    }
+
+    .info {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      background: #e3f2fd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Finger Drag Direction</h1>
+
+  <div class="info">
+    <strong>Problem:</strong> When finger drags UP, does the map content move UP with it (like real touch)?<br>
+    <strong>Expected:</strong> Finger and map content should move in the SAME direction.
+  </div>
+
+  <div class="controls">
+    <button onclick="testDrag('up')">Drag UP 100px</button>
+    <button onclick="testDrag('down')">Drag DOWN 100px</button>
+    <button onclick="testDrag('left')">Drag LEFT 100px</button>
+    <button onclick="testDrag('right')">Drag RIGHT 100px</button>
+    <button onclick="resetMap()">Reset Map</button>
+  </div>
+
+  <div class="status" id="status">Ready</div>
+
+  <div id="map">
+    <div id="finger"></div>
+  </div>
+
+  <script>
+    // Initialize map
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [12.5683, 55.6761], // Copenhagen
+      zoom: 13
+    });
+
+    // Add a marker at the center to track map movement
+    const marker = new mapboxgl.Marker({ color: '#FF0000' })
+      .setLngLat([12.5683, 55.6761])
+      .addTo(map);
+
+    const finger = document.getElementById('finger');
+    const statusEl = document.getElementById('status');
+
+    function log(message) {
+      console.log(message);
+      statusEl.textContent = message;
+    }
+
+    function resetMap() {
+      map.flyTo({
+        center: [12.5683, 55.6761],
+        zoom: 13,
+        duration: 1000
+      });
+      finger.classList.remove('visible', 'tapping');
+      log('Map reset to center');
+    }
+
+    function testDrag(direction) {
+      const mapContainer = map.getContainer();
+      const rect = mapContainer.getBoundingClientRect();
+
+      // Start at center
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+
+      const distance = 100; // pixels
+      let endX = centerX;
+      let endY = centerY;
+      let panX = 0;
+      let panY = 0;
+
+      // Calculate end position and pan amount based on direction
+      switch (direction) {
+        case 'up':
+          // Finger moves UP (y decreases)
+          endY = centerY - distance;
+          // Map should pan so content moves UP (north)
+          // In Mapbox: panBy([0, positive]) moves camera DOWN (south), content moves UP (north)
+          panY = distance;
+          log(`Drag UP: Finger ${centerY}→${endY}, Pan [0, ${panY}]`);
+          break;
+        case 'down':
+          // Finger moves DOWN (y increases)
+          endY = centerY + distance;
+          // Map should pan so content moves DOWN (south)
+          // In Mapbox: panBy([0, negative]) moves camera UP (north), content moves DOWN (south)
+          panY = -distance;
+          log(`Drag DOWN: Finger ${centerY}→${endY}, Pan [0, ${panY}]`);
+          break;
+        case 'left':
+          // Finger moves LEFT (x decreases)
+          endX = centerX - distance;
+          // Map should pan so content moves LEFT (west)
+          // In Mapbox: panBy([positive, 0]) moves camera RIGHT (east), content moves LEFT (west)
+          panX = distance;
+          log(`Drag LEFT: Finger ${centerX}→${endX}, Pan [${panX}, 0]`);
+          break;
+        case 'right':
+          // Finger moves RIGHT (x increases)
+          endX = centerX + distance;
+          // Map should pan so content moves RIGHT (east)
+          // In Mapbox: panBy([negative, 0]) moves camera LEFT (west), content moves RIGHT (east)
+          panX = -distance;
+          log(`Drag RIGHT: Finger ${centerX}→${endX}, Pan [${panX}, 0]`);
+          break;
+      }
+
+      // Position finger at start
+      finger.style.transition = 'none';
+      finger.style.left = `${centerX}px`;
+      finger.style.top = `${centerY}px`;
+      finger.classList.add('visible');
+      finger.offsetHeight; // Force reflow
+
+      // Start animation after a short delay
+      setTimeout(() => {
+        finger.classList.add('tapping');
+
+        // Animate finger
+        finger.style.transition = 'left 0.6s ease-out, top 0.6s ease-out';
+        finger.style.left = `${endX}px`;
+        finger.style.top = `${endY}px`;
+
+        // Pan map
+        map.panBy([panX, panY], {
+          duration: 600,
+          easing: (t) => t * (2 - t) // ease-out quad
+        });
+
+        // Clean up after animation
+        setTimeout(() => {
+          finger.classList.remove('tapping');
+          log(`Animation complete. Watch: did map content move ${direction.toUpperCase()} with the finger?`);
+        }, 650);
+      }, 100);
+    }
+  </script>
+</body>
+</html>

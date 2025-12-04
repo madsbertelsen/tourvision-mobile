@@ -484,14 +484,6 @@ export const DEMO_SCRIPTS: Record<string, DemoScript> = {
       { type: 'openFullscreenMap' },
       { type: 'pause', duration: 800 },
 
-      // Draw test lines (red=screen coords, blue=geo coords) - vertical line test
-      { type: 'drawTestLines', startX: 50, startY: 100, endX: 50, endY: 250, duration: 999999 },
-      { type: 'pause', duration: 500 },
-
-      // Finger drag downward (same path as test line)
-      { type: 'fingerDrag', selector: '#fullscreen-map', direction: 'down', distance: 150 },
-      { type: 'pause', duration: 500 },
-
       // Click Tivoli marker to open location sheet
       { type: 'clickMapMarker', markerIndex: 1 },
       { type: 'pause', duration: 1000 }, // Wait for location sheet to appear

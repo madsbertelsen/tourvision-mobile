@@ -496,6 +496,8 @@
       }
     }
   </style>
+  <script type="module" crossorigin src="/assets/landing-C9ak4iXO.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
 </head>
 <body>
   <header>
@@ -531,44 +533,14 @@
       <div class="feature-header">
         <div class="feature-label">Location Tagging</div>
         <h2>Tag places, see them on the map</h2>
-        <p>Select any text and turn it into a geo-mark. Locations automatically appear on your embedded map.</p>
+        <p>Double-tap any text and create a geo-mark. Insert maps to visualize your locations.</p>
       </div>
-      <div class="feature-tabs" id="maps-demo-tabs">
-        <button class="feature-tab active" data-step="0">Writing</button>
-        <button class="feature-tab" data-step="1">Location Tagging</button>
-        <button class="feature-tab" data-step="2">Fullscreen Map</button>
-        <button class="feature-tab" data-step="3">Transport</button>
-      </div>
-      <div class="phone-mockup">
-        <div class="phone-screen">
-          <iframe
-            id="maps-demo-iframe"
-            src="/doc/demo-maps?autoplay=true&demo=maps"
-            loading="lazy"
-          ></iframe>
-        </div>
-      </div>
-    </section>
-
-    <!-- Feature 2: Real-time Collaboration -->
-    <section class="feature-section alt" id="features">
-      <div class="feature-header">
-        <div class="feature-label">Real-time Collaboration</div>
-        <h2>Write together, plan together</h2>
-        <p>See your travel companions' cursors in real-time. Every edit syncs instantly across all devices.</p>
-      </div>
-      <div class="phone-mockup">
-        <div class="phone-screen">
-          <iframe
-            src="/doc/demo-collab?hideHeader=true&autoplay=true&demo=collab"
-            loading="lazy"
-          ></iframe>
-        </div>
-      </div>
+      <!-- DemoPlayer mounts here -->
+      <div id="maps-demo-container"></div>
     </section>
 
     <!-- Additional Features Grid -->
-    <section class="feature-section alt">
+    <section class="feature-section alt" id="features">
       <div class="feature-header">
         <div class="feature-label">More Features</div>
         <h2>Everything you need to plan</h2>
@@ -667,28 +639,8 @@
       window.location.href = '/doc/' + randomId;
     }
 
-    // Demo tabs - listen for step changes from iframe
-    window.addEventListener('message', function(event) {
-      if (event.data && event.data.type === 'demoStep') {
-        const step = event.data.step;
-        const demoId = event.data.demoId;
-
-        // Find the tabs container for this demo
-        const tabsId = demoId === 'maps' ? 'maps-demo-tabs' : 'collab-demo-tabs';
-        const tabsContainer = document.getElementById(tabsId);
-        if (!tabsContainer) return;
-
-        const tabs = tabsContainer.querySelectorAll('.feature-tab');
-        tabs.forEach((tab, index) => {
-          tab.classList.remove('active', 'completed');
-          if (index < step) {
-            tab.classList.add('completed');
-          } else if (index === step) {
-            tab.classList.add('active');
-          }
-        });
-      }
-    });
   </script>
+
+  <!-- DemoPlayer for maps demo with dynamic second phone for collaboration -->
 </body>
 </html>

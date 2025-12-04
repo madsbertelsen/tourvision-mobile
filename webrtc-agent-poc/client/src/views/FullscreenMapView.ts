@@ -11,10 +11,37 @@
  */
 
 import type mapboxgl from 'mapbox-gl';
-import type { Location } from '../types';
+import type { Location, MapInteractionState } from '../types';
 import type { WaypointController } from '../controllers/WaypointController';
 import type { AwarenessOverlayRenderer } from './AwarenessOverlayRenderer';
+import type { MapInteractionService } from '../services/MapInteractionService';
 import { WebViewBridge } from '../controllers/WebViewBridge';
+
+// Throttle utility - limits function calls to once per `wait` ms
+function throttle<T extends (...args: any[]) => void>(fn: T, wait: number): T {
+  let lastTime = 0;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  return ((...args: Parameters<T>) => {
+    const now = Date.now();
+    const remaining = wait - (now - lastTime);
+
+    if (remaining <= 0) {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+      lastTime = now;
+      fn(...args);
+    } else if (!timeout) {
+      timeout = setTimeout(() => {
+        lastTime = Date.now();
+        timeout = null;
+        fn(...args);
+      }, remaining);
+    }
+  }) as T;
+}
 
 export interface FullscreenMapViewDependencies {
   waypointController: WaypointController;
@@ -26,6 +53,7 @@ export interface FullscreenMapViewDependencies {
   showLocationSheet: (location: any, allLocations: Location[]) => void;
   globalAwareness: any;
   shouldBroadcastBounds?: () => boolean; // Optional check for follow mode
+  mapInteractionService?: MapInteractionService; // Optional for collaborative finger tracking
 }
 
 // Map style definitions
@@ -48,6 +76,26 @@ export class FullscreenMapView {
   private fullscreenMapUpdateListener: (() => void) | null = null;
   private currentStyle: string = DEFAULT_FULLSCREEN_STYLE;
   private currentLocations: Location[] = []; // Store for style change re-render
+
+  // Pointer event tracking for collaborative finger sync
+  private pointerEventHandlers: {
+    pointerdown: (e: PointerEvent) => void;
+    pointermove: (e: PointerEvent) => void;
+    pointerup: (e: PointerEvent) => void;
+    pointercancel: (e: PointerEvent) => void;
+  } | null = null;
+  private isPointerDown = false;
+
+  // Remote finger overlay elements (keyed by clientId)
+  private remoteFingerElements = new Map<number, HTMLElement>();
+  // SVG line elements connecting avatar badge to finger (keyed by clientId)
+  private remoteFingerLines = new Map<number, SVGSVGElement>();
+  private remoteInteractionCallback: ((
+    clientId: number,
+    userName: string,
+    userColor: string,
+    state: MapInteractionState | null
+  ) => void) | null = null;
 
   constructor(deps: FullscreenMapViewDependencies) {
     this.deps = deps;
@@ -354,6 +402,10 @@ export class FullscreenMapView {
       console.log('[Fullscreen] Initial map load complete');
       this.renderMarkersAndRoutes(currentLocations);
       this.setupReactiveUpdates(currentLocations);
+
+      // Setup pointer event listeners for collaborative finger tracking
+      this.setupPointerEventListeners();
+      this.setupRemoteFingerOverlay();
     });
 
     // Re-render markers when style changes (e.g., user switches map style via style switcher)
@@ -363,7 +415,7 @@ export class FullscreenMapView {
       this.renderMarkersAndRoutes(this.currentLocations);
     });
 
-    // Listen for map movement to update awareness
+    // Listen for map movement to update awareness (final position)
     this.fullscreenMap.on('moveend', () => {
       // Skip broadcasting if we're following someone (to avoid conflicts)
       if (this.deps.shouldBroadcastBounds && !this.deps.shouldBroadcastBounds()) {
@@ -375,6 +427,19 @@ export class FullscreenMapView {
         this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
       }
     });
+
+    // Real-time map position sync during drag (throttled ~50ms for follow mode)
+    const throttledMoveBroadcast = throttle(() => {
+      // Skip broadcasting if we're following someone (to avoid feedback loops)
+      if (this.deps.shouldBroadcastBounds && !this.deps.shouldBroadcastBounds()) {
+        return;
+      }
+      if (this.deps.globalAwareness && this.fullscreenMap) {
+        this.deps.awarenessOverlayRenderer.updateMapBoundsAwareness(this.deps.globalAwareness, this.fullscreenMap);
+      }
+    }, 50);
+
+    this.fullscreenMap.on('move', throttledMoveBroadcast);
 
     // Update awareness once after initial load
     this.fullscreenMap.once('idle', () => {
@@ -741,6 +806,10 @@ export class FullscreenMapView {
   hide(): void {
     console.log('[Fullscreen] Hiding fullscreen map');
 
+    // Cleanup pointer event listeners and remote finger overlays
+    this.cleanupPointerEventListeners();
+    this.cleanupRemoteFingerOverlay();
+
     // Hide video call overlay if visible
     this.hideVideoCallOverlay();
 
@@ -801,6 +870,95 @@ export class FullscreenMapView {
   }
 
   /**
+   * Add a waypoint at the given coordinates by finding route layers via map style
+   * This doesn't require clicking exactly on the route line - it finds route layers
+   * from the style and adds a waypoint at the specified coordinates
+   * Returns true if a waypoint was successfully added
+   */
+  addWaypointAtCoords(lat: number, lng: number): boolean {
+    if (!this.fullscreenMap) {
+      console.warn('[FullscreenMap] Cannot add waypoint - map not available');
+      return false;
+    }
+
+    // Find route layers via map style (not queryRenderedFeatures which requires pixel-perfect coords)
+    const style = this.fullscreenMap.getStyle();
+    if (!style || !style.layers) {
+      console.warn('[FullscreenMap] No style or layers available');
+      return false;
+    }
+
+    // Route layers are named like "route-{fromGeoId}-{toGeoId}"
+    const routeLayer = style.layers.find(l => l.id.startsWith('route-'));
+
+    if (!routeLayer) {
+      console.warn('[FullscreenMap] No route layer found in map style');
+      return false;
+    }
+
+    console.log('[FullscreenMap] Found route layer via style:', routeLayer.id);
+
+    // Log the route GeoJSON for debugging
+    const source = this.fullscreenMap.getSource(routeLayer.id) as mapboxgl.GeoJSONSource;
+    if (source && source._data) {
+      console.log('[FullscreenMap] Route GeoJSON:', JSON.stringify(source._data, null, 2));
+    } else {
+      // Try querySourceFeatures instead
+      const features = this.fullscreenMap.querySourceFeatures(routeLayer.id);
+      console.log('[FullscreenMap] Route features from querySourceFeatures:', JSON.stringify(features, null, 2));
+    }
+    console.log('[FullscreenMap] Tap coordinates:', { lat, lng });
+
+    return this.addWaypointToRoute(routeLayer.id, lat, lng);
+  }
+
+  /**
+   * Add a waypoint to a specific route
+   */
+  private addWaypointToRoute(routeLayerId: string, lat: number, lng: number): boolean {
+    // Parse the route layer ID to get the destination geoId
+    // Format: "route-{fromGeoId}-{toGeoId}" (no "-to-" separator)
+    // Since geoIds contain hyphens, we need to match against known locations
+    const currentLocations = this.deps.extractLocationsForFullscreen();
+
+    // Find which location's geoId is the destination (at the end of the route ID)
+    let destGeoId: string | null = null;
+    for (const loc of currentLocations) {
+      if (loc.geoId && routeLayerId.endsWith(loc.geoId)) {
+        destGeoId = loc.geoId;
+        break;
+      }
+    }
+
+    if (!destGeoId) {
+      console.warn('[FullscreenMap] Could not find destination geoId in route layer ID:', routeLayerId);
+      return false;
+    }
+    console.log('[FullscreenMap] Adding waypoint to route:', routeLayerId, 'destGeoId:', destGeoId, 'at:', lat, lng);
+
+    // Add the waypoint
+    const success = this.deps.waypointController.addWaypoint(destGeoId, lat, lng);
+
+    if (success && this.fullscreenMap) {
+      // Extract updated location to get the new waypoints array
+      const updatedLocations = this.deps.extractLocationsForFullscreen();
+      const updatedLocation = updatedLocations.find(loc => loc.geoId === destGeoId);
+
+      if (updatedLocation && updatedLocation.waypoints) {
+        this.deps.waypointController.renderWaypointMarkers(
+          this.fullscreenMap,
+          destGeoId,
+          updatedLocation.waypoints,
+          updatedLocation.color || '#3B82F6'
+        );
+      }
+      console.log('[FullscreenMap] Waypoint added successfully');
+    }
+
+    return success;
+  }
+
+  /**
    * Show the video call overlay on the fullscreen map
    */
   showVideoCallOverlay(): void {
@@ -832,12 +990,28 @@ export class FullscreenMapView {
 
   /**
    * Show the video thumbnail (small PiP in top-left)
+   * @param name - Name of the user to show (e.g., "Bob" or "Alice")
+   * @param color - Background color for the avatar (e.g., "#10B981" or "#EC4899")
    */
-  showVideoThumbnail(): void {
+  showVideoThumbnail(name?: string, color?: string): void {
     const thumbnail = document.getElementById('video-thumbnail');
     if (thumbnail) {
+      // Update the avatar and name if provided
+      if (name) {
+        const avatarEl = thumbnail.querySelector('.thumbnail-avatar');
+        const nameEl = thumbnail.querySelector('.thumbnail-name');
+        if (avatarEl) {
+          avatarEl.textContent = name.charAt(0).toUpperCase();
+          if (color) {
+            (avatarEl as HTMLElement).style.background = color;
+          }
+        }
+        if (nameEl) {
+          nameEl.textContent = name;
+        }
+      }
       thumbnail.classList.add('visible');
-      console.log('[Fullscreen] Video thumbnail shown');
+      console.log('[Fullscreen] Video thumbnail shown for', name || 'default');
     }
   }
 
@@ -886,13 +1060,12 @@ export class FullscreenMapView {
         bearing: cameraData.bearing
       });
 
-      this.fullscreenMap.flyTo({
+      // Use jumpTo for instant sync (real-time follow mode)
+      this.fullscreenMap.jumpTo({
         center: [cameraData.center.lng, cameraData.center.lat],
         zoom: cameraData.zoom,
         pitch: cameraData.pitch ?? 0,
-        bearing: cameraData.bearing ?? 0,
-        duration: 300,
-        essential: true
+        bearing: cameraData.bearing ?? 0
       });
     } else {
       // Fallback to bounds-based approach (for backwards compatibility)
@@ -902,11 +1075,448 @@ export class FullscreenMapView {
         [cameraData.east, cameraData.north]
       );
 
+      // Use instant transition for real-time follow mode
       this.fullscreenMap.fitBounds(bounds, {
         padding: 0,
-        animate: true,
-        duration: 300
+        animate: false,
+        duration: 0
       });
     }
+  }
+
+  // ==================== Pointer Event Handling for Collaborative Finger Sync ====================
+
+  /**
+   * Setup pointer event listeners to broadcast finger position
+   */
+  private setupPointerEventListeners(): void {
+    const mapInteractionService = this.deps.mapInteractionService;
+    if (!mapInteractionService || !this.fullscreenMap) {
+      return;
+    }
+
+    // Set the map instance on the service for coordinate conversion
+    mapInteractionService.setMap(this.fullscreenMap);
+
+    const canvas = this.fullscreenMap.getCanvas();
+
+    // Create event handlers
+    this.pointerEventHandlers = {
+      pointerdown: (e: PointerEvent) => {
+        this.isPointerDown = true;
+        const lngLat = this.fullscreenMap?.unproject([e.clientX, e.clientY]);
+        if (lngLat) {
+          mapInteractionService.broadcastFingerPosition(
+            { lng: lngLat.lng, lat: lngLat.lat },
+            'pan'
+          );
+        }
+      },
+
+      pointermove: (e: PointerEvent) => {
+        if (!this.isPointerDown) return;
+        const lngLat = this.fullscreenMap?.unproject([e.clientX, e.clientY]);
+        if (lngLat) {
+          mapInteractionService.broadcastFingerPosition(
+            { lng: lngLat.lng, lat: lngLat.lat },
+            'pan'
+          );
+        }
+      },
+
+      pointerup: (_e: PointerEvent) => {
+        if (this.isPointerDown) {
+          this.isPointerDown = false;
+          mapInteractionService.broadcastGestureEnd();
+        }
+      },
+
+      pointercancel: (_e: PointerEvent) => {
+        if (this.isPointerDown) {
+          this.isPointerDown = false;
+          mapInteractionService.broadcastGestureEnd();
+        }
+      },
+    };
+
+    // Attach listeners
+    canvas.addEventListener('pointerdown', this.pointerEventHandlers.pointerdown);
+    canvas.addEventListener('pointermove', this.pointerEventHandlers.pointermove);
+    canvas.addEventListener('pointerup', this.pointerEventHandlers.pointerup);
+    canvas.addEventListener('pointercancel', this.pointerEventHandlers.pointercancel);
+    // Also listen on window for pointerup in case user drags outside canvas
+    window.addEventListener('pointerup', this.pointerEventHandlers.pointerup);
+
+    console.log('[Fullscreen] Pointer event listeners attached for finger sync');
+  }
+
+  /**
+   * Cleanup pointer event listeners
+   */
+  private cleanupPointerEventListeners(): void {
+    if (!this.pointerEventHandlers || !this.fullscreenMap) {
+      return;
+    }
+
+    const canvas = this.fullscreenMap.getCanvas();
+    canvas.removeEventListener('pointerdown', this.pointerEventHandlers.pointerdown);
+    canvas.removeEventListener('pointermove', this.pointerEventHandlers.pointermove);
+    canvas.removeEventListener('pointerup', this.pointerEventHandlers.pointerup);
+    canvas.removeEventListener('pointercancel', this.pointerEventHandlers.pointercancel);
+    window.removeEventListener('pointerup', this.pointerEventHandlers.pointerup);
+
+    this.pointerEventHandlers = null;
+    this.isPointerDown = false;
+
+    // Clear any active interaction when closing
+    this.deps.mapInteractionService?.broadcastGestureEnd();
+
+    console.log('[Fullscreen] Pointer event listeners removed');
+  }
+
+  /**
+   * Setup remote finger overlay rendering
+   */
+  private setupRemoteFingerOverlay(): void {
+    const mapInteractionService = this.deps.mapInteractionService;
+    if (!mapInteractionService) {
+      return;
+    }
+
+    // Create callback for remote interactions
+    this.remoteInteractionCallback = (
+      clientId: number,
+      userName: string,
+      userColor: string,
+      state: MapInteractionState | null
+    ) => {
+      this.updateRemoteFingerOverlay(clientId, userName, userColor, state);
+    };
+
+    mapInteractionService.onRemoteInteraction(this.remoteInteractionCallback);
+    console.log('[Fullscreen] Remote finger overlay listener attached');
+  }
+
+  /**
+   * Cleanup remote finger overlay
+   */
+  private cleanupRemoteFingerOverlay(): void {
+    // Remove callback from service
+    if (this.remoteInteractionCallback && this.deps.mapInteractionService) {
+      this.deps.mapInteractionService.offRemoteInteraction(this.remoteInteractionCallback);
+      this.remoteInteractionCallback = null;
+    }
+
+    // Remove all finger elements
+    this.remoteFingerElements.forEach((element) => {
+      element.remove();
+    });
+    this.remoteFingerElements.clear();
+
+    console.log('[Fullscreen] Remote finger overlay cleaned up');
+  }
+
+  /**
+   * Update remote finger overlay for a specific user
+   */
+  private updateRemoteFingerOverlay(
+    clientId: number,
+    userName: string,
+    userColor: string,
+    state: MapInteractionState | null
+  ): void {
+    if (!state || !state.fingerPosition || state.gestureType === 'idle') {
+      // Remove finger element and line if interaction ended
+      const existingElement = this.remoteFingerElements.get(clientId);
+      if (existingElement) {
+        existingElement.remove();
+        this.remoteFingerElements.delete(clientId);
+      }
+      this.removeFingerLine(clientId);
+      return;
+    }
+
+    // Get or create finger element
+    let fingerElement = this.remoteFingerElements.get(clientId);
+    if (!fingerElement) {
+      fingerElement = this.createRemoteFingerElement(userName, userColor, clientId);
+      this.remoteFingerElements.set(clientId, fingerElement);
+    }
+
+    // Project geographic coordinates to screen position
+    if (!this.fullscreenMap) return;
+
+    const screenPos = this.fullscreenMap.project([
+      state.fingerPosition.lng,
+      state.fingerPosition.lat
+    ]);
+
+    // Update element position (center touch indicator at the position)
+    fingerElement.style.transform = `translate(${screenPos.x - 14}px, ${screenPos.y - 14}px)`;
+    fingerElement.style.display = 'block';
+
+    // Update the connecting line from avatar to finger
+    this.updateFingerLine(clientId, screenPos.x - 14, screenPos.y - 14);
+  }
+
+  /**
+   * Create DOM element for remote finger overlay with clean touch indicator
+   */
+  private createRemoteFingerElement(userName: string, userColor: string, clientId: number): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'remote-finger';
+    container.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 10005;
+      transition: transform 50ms ease-out;
+      display: none;
+    `;
+
+    // Clean circular touch indicator (replaces emoji)
+    const touchIndicator = document.createElement('div');
+    touchIndicator.className = 'remote-touch-indicator';
+    touchIndicator.style.cssText = `
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: ${userColor}40;
+      border: 2px solid ${userColor};
+      position: relative;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      animation: pulse-ring 1.5s ease-out infinite;
+    `;
+
+    // Inner dot
+    const innerDot = document.createElement('div');
+    innerDot.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: ${userColor};
+    `;
+    touchIndicator.appendChild(innerDot);
+
+    // Name label (positioned to the right of touch indicator)
+    const label = document.createElement('div');
+    label.className = 'remote-finger-label';
+    label.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 36px;
+      transform: translateY(-50%);
+      background: ${userColor};
+      color: white;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    `;
+    label.textContent = userName;
+
+    container.appendChild(touchIndicator);
+    container.appendChild(label);
+
+    // Create SVG line connecting avatar badge to finger
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'remote-finger-line');
+    svg.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10004;
+    `;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('stroke', userColor);
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-dasharray', '6,4');
+    line.setAttribute('stroke-opacity', '0.6');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+
+    // Add to fullscreen overlay
+    const overlay = document.getElementById('fullscreen-overlay');
+    if (overlay) {
+      overlay.appendChild(svg);
+      overlay.appendChild(container);
+    }
+
+    // Store SVG reference for later updates
+    this.remoteFingerLines.set(clientId, svg);
+
+    return container;
+  }
+
+  /**
+   * Update the SVG line connecting avatar badge to finger position
+   */
+  private updateFingerLine(clientId: number, fingerX: number, fingerY: number): void {
+    const svg = this.remoteFingerLines.get(clientId);
+    if (!svg) return;
+
+    const line = svg.querySelector('line');
+    if (!line) return;
+
+    // Find the avatar badge (video thumbnail) position
+    const thumbnail = document.getElementById('video-thumbnail');
+    if (!thumbnail) {
+      // Hide line if avatar badge not found
+      svg.style.display = 'none';
+      return;
+    }
+
+    const thumbRect = thumbnail.getBoundingClientRect();
+    const thumbCenterX = thumbRect.left + thumbRect.width / 2;
+    const thumbCenterY = thumbRect.top + thumbRect.height / 2;
+
+    // Update line coordinates (from avatar center to finger position + offset for indicator center)
+    line.setAttribute('x1', String(thumbCenterX));
+    line.setAttribute('y1', String(thumbCenterY));
+    line.setAttribute('x2', String(fingerX + 14)); // Center of 28px touch indicator
+    line.setAttribute('y2', String(fingerY + 14));
+
+    svg.style.display = 'block';
+  }
+
+  /**
+   * Remove SVG line for a client
+   */
+  private removeFingerLine(clientId: number): void {
+    const svg = this.remoteFingerLines.get(clientId);
+    if (svg) {
+      svg.remove();
+      this.remoteFingerLines.delete(clientId);
+    }
+  }
+
+  /**
+   * Get a point on the route at a given fraction (0-1) along the line
+   * fraction=0 is the start, fraction=1 is the end, fraction=0.5 is the midpoint
+   */
+  getPointOnRoute(fraction: number = 0.5): { lat: number; lng: number } | null {
+    if (!this.fullscreenMap) {
+      console.warn('[FullscreenMap] Cannot get point on route - map not available');
+      return null;
+    }
+
+    // Find route layer via map style
+    const style = this.fullscreenMap.getStyle();
+    if (!style || !style.layers) {
+      console.warn('[FullscreenMap] No style or layers available');
+      return null;
+    }
+
+    // Route layers are named like "route-{fromGeoId}-{toGeoId}"
+    const routeLayer = style.layers.find(l => l.id.startsWith('route-'));
+
+    if (!routeLayer) {
+      console.warn('[FullscreenMap] No route layer found in map style');
+      return null;
+    }
+
+    // Get the route GeoJSON source
+    const source = this.fullscreenMap.getSource(routeLayer.id) as mapboxgl.GeoJSONSource;
+    if (!source) {
+      console.warn('[FullscreenMap] Route source not found:', routeLayer.id);
+      return null;
+    }
+
+    // Access the internal _data property (GeoJSON)
+    const data = (source as any)._data as GeoJSON.Feature | GeoJSON.FeatureCollection | null;
+    if (!data) {
+      console.warn('[FullscreenMap] Route source has no data');
+      return null;
+    }
+
+    // Handle both Feature and FeatureCollection
+    let geometry: GeoJSON.Geometry | null = null;
+    if (data.type === 'Feature') {
+      geometry = data.geometry;
+    } else if (data.type === 'FeatureCollection' && data.features.length > 0) {
+      geometry = data.features[0].geometry;
+    }
+
+    if (!geometry || geometry.type !== 'LineString') {
+      console.warn('[FullscreenMap] Route geometry is not a LineString');
+      return null;
+    }
+
+    const coords = geometry.coordinates as [number, number][];
+    if (coords.length < 2) {
+      console.warn('[FullscreenMap] Route has less than 2 coordinates');
+      return null;
+    }
+
+    // Calculate total line length and find point at fraction
+    const targetDistance = this.calculateLineLength(coords) * Math.max(0, Math.min(1, fraction));
+    let accumulatedDistance = 0;
+
+    for (let i = 0; i < coords.length - 1; i++) {
+      const segmentLength = this.distanceBetween(coords[i], coords[i + 1]);
+
+      if (accumulatedDistance + segmentLength >= targetDistance) {
+        // Found the segment - interpolate within it
+        const remainingDistance = targetDistance - accumulatedDistance;
+        const t = segmentLength > 0 ? remainingDistance / segmentLength : 0;
+
+        const lng = coords[i][0] + t * (coords[i + 1][0] - coords[i][0]);
+        const lat = coords[i][1] + t * (coords[i + 1][1] - coords[i][1]);
+
+        console.log(`[FullscreenMap] Point on route at fraction ${fraction}: lat=${lat}, lng=${lng}`);
+        return { lat, lng };
+      }
+
+      accumulatedDistance += segmentLength;
+    }
+
+    // If we get here, return the last point
+    const lastCoord = coords[coords.length - 1];
+    return { lat: lastCoord[1], lng: lastCoord[0] };
+  }
+
+  /**
+   * Calculate total length of a line (in coordinate units, not meters)
+   */
+  private calculateLineLength(coords: [number, number][]): number {
+    let length = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      length += this.distanceBetween(coords[i], coords[i + 1]);
+    }
+    return length;
+  }
+
+  /**
+   * Calculate distance between two points (Euclidean in coordinate space)
+   */
+  private distanceBetween(a: [number, number], b: [number, number]): number {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Add a waypoint at a specific fraction along the route
+   * Returns the coordinates used and whether the waypoint was successfully added
+   */
+  addWaypointOnRoute(fraction: number = 0.5): { lat: number; lng: number; success: boolean } | null {
+    const point = this.getPointOnRoute(fraction);
+    if (!point) {
+      return null;
+    }
+
+    const success = this.addWaypointAtCoords(point.lat, point.lng);
+    return { ...point, success };
   }
 }

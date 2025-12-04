@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TourVision - Collaborative Trip Planning</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #fafafa;
+      color: #111;
+      line-height: 1.6;
+    }
+
+    /* Header */
+    header {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: inherit;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .logo-icon {
+      font-size: 24px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .header-link:hover {
+      color: #111;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #111;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #333;
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: #111;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      border-color: #111;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 60px 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .highlight {
+      background: #111;
+      color: #fff;
+      padding: 0 12px;
+      font-style: italic;
+      display: inline-block;
+      transform: rotate(-1deg);
+    }
+
+    .hero h1 .italic {
+      font-style: italic;
+      color: #666;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #666;
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    /* Feature Sections */
+    .feature-section {
+      padding: 60px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .feature-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .feature-header h2 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .feature-header p {
+      font-size: 18px;
+      color: #666;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      text-align: center;
+      padding: 60px 24px;
+      background: linear-gradient(180deg, #f0f9ff 0%, #fef3f2 50%, #fefce8 100%);
+    }
+
+    .cta-section h2 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 32px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    /* Footer */
+    footer {
+      padding: 24px;
+      text-align: center;
+      border-top: 1px solid rgba(0,0,0,0.05);
+    }
+
+    footer a {
+      color: #999;
+      text-decoration: none;
+      font-size: 13px;
+      margin: 0 12px;
+    }
+
+    footer a:hover {
+      color: #666;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      width: 400px;
+      max-width: 90vw;
+    }
+
+    .modal h2 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+
+    .modal input:focus {
+      border-color: #111;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-buttons .btn {
+      flex: 1;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 32px;
+        letter-spacing: -1px;
+      }
+
+      .feature-header h2 {
+        font-size: 24px;
+      }
+
+      .header-right .header-link {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span class="logo-icon">🗺️</span>
+      <span>TourVision</span>
+    </a>
+    <div class="header-right">
+      <a href="#features" class="header-link">Features</a>
+      <a href="#demo" class="header-link">Demo</a>
+      <a href="#" class="btn btn-primary" onclick="quickStart(); return false;">Get Started</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1>
+        Plan trips <span class="highlight">together</span><br>
+        in <span class="italic">real-time</span>
+      </h1>
+      <p>
+        Alice and Bob explore locations on the map together. Watch them collaborate in real-time.
+      </p>
+      <div class="hero-buttons">
+        <button class="btn btn-primary" onclick="quickStart()">Start Planning</button>
+        <button class="btn btn-secondary" onclick="showCreateModal()">Create Named Trip</button>
+      </div>
+    </section>
+
+    <!-- Collaboration Demo -->
+    <section class="feature-section" id="demo">
+      <div class="feature-header">
+        <div class="feature-label">Real-time Collaboration</div>
+        <h2>Two travelers, one document</h2>
+        <p>Alice and Bob plan their trip together, seeing each other's cursors and map views.</p>
+      </div>
+      <!-- DemoPlayer mounts here -->
+      <div id="collab-demo-container"></div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+      <h2>Ready to plan your adventure?</h2>
+      <p>Start collaborating with your travel companions in seconds.</p>
+      <div class="cta-buttons">
+        <button class="btn btn-primary" onclick="quickStart()">Start Planning Free</button>
+        <button class="btn btn-secondary" onclick="showCreateModal()">Create Named Trip</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="/health">Server Status</a>
+    <a href="/api">API</a>
+  </footer>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" onclick="hideCreateModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <h2>Create a new trip</h2>
+      <p>Give your trip a name. This will be part of the shareable URL.</p>
+      <input
+        type="text"
+        id="trip-name"
+        placeholder="e.g., japan-summer-2025"
+        onkeypress="handleEnter(event)"
+      >
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="hideCreateModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createTrip()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Modal functions
+    function showCreateModal() {
+      document.getElementById('modal-backdrop').classList.add('visible');
+      setTimeout(() => document.getElementById('trip-name').focus(), 100);
+    }
+
+    function hideCreateModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('modal-backdrop').classList.remove('visible');
+    }
+
+    function handleEnter(event) {
+      if (event.key === 'Enter') createTrip();
+    }
+
+    function createTrip() {
+      const input = document.getElementById('trip-name');
+      let tripId = input.value.trim();
+      if (!tripId) { input.focus(); return; }
+
+      tripId = tripId.toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      if (!tripId) { alert('Please enter a valid trip name'); return; }
+      window.location.href = '/doc/' + tripId;
+    }
+
+    function quickStart() {
+      const randomId = 'trip-' + Math.random().toString(36).substring(2, 10);
+      window.location.href = '/doc/' + randomId;
+    }
+
+  </script>
+
+  <!-- DemoPlayer for collaboration demo with both phones from start -->
+  <script type="module">
+    import { DemoPlayer } from './src/components/DemoPlayer.js';
+
+    // Generate unique session ID for this landing page instance
+    const sessionId = Math.random().toString(36).substring(2, 10);
+    const demoDocId = `demo-collab-${sessionId}`;
+    console.log('[Landing Collab] Session ID:', sessionId, 'Doc ID:', demoDocId);
+
+    // Check for step mode query parameter (?stepMode=true)
+    const urlParams = new URLSearchParams(window.location.search);
+    const stepMode = urlParams.get('stepMode') === 'true';
+    if (stepMode) {
+      console.log('[Landing Collab] Step mode enabled - click Next to advance');
+    }
+
+    // Store reference for cleanup
+    let demoPlayer = null;
+
+    demoPlayer = new DemoPlayer({
+      container: document.getElementById('collab-demo-container'),
+      demoScript: 'collabMap',  // Uses collabMap demo which starts with document containing block map
+      editorUrl: `/doc/${demoDocId}`,
+      sessionId: sessionId,
+      dualPhone: true,  // Start with both Alice and Bob phones
+      steps: [
+        { label: 'Planning', heading: 'Planning Together', text: 'Alice and Bob explore locations on the same document' },
+        { label: 'Exploring', heading: 'Exploring the Map', text: 'Alice pans the map to see all locations' },
+        { label: 'Transport', heading: 'Walking to Tivoli', text: 'Alice configures walking directions to Tivoli Gardens' },
+        { label: 'Route', heading: 'Route Configured', text: 'The walking route is now visible on the map' }
+      ],
+      autoStart: true,
+      offlineMode: true,  // No server dependency
+      stepMode: stepMode  // Manual step mode - user must click Next to advance
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      console.log('[Landing Collab] Page unloading - destroying demo player');
+      if (demoPlayer) {
+        demoPlayer.destroy();
+        demoPlayer = null;
+      }
+    });
+  </script>
+</body>
+</html>

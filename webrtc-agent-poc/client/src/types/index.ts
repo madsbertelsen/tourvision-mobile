@@ -96,6 +96,19 @@ export interface AwarenessState {
 }
 
 /**
+ * Map interaction state for collaborative finger/gesture tracking
+ * Uses geographic coordinates so position is correct regardless of viewport size/zoom
+ */
+export interface MapInteractionState {
+  fingerPosition?: {
+    lat: number;
+    lng: number;
+  };
+  gestureType: 'idle' | 'pan' | 'pinch' | 'tap' | null;
+  timestamp: number;  // For ordering/staleness detection
+}
+
+/**
  * Editor controller interface (for dependency injection)
  */
 export interface IEditorController {

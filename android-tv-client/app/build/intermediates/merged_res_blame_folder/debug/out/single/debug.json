@@ -4,7 +4,11 @@
         "source": "com.tourvision.tv.app-main-14:/layout/activity_main.xml"
     },
     {
-        "merged": "com.tourvision.tv.app-merged_res-12:/drawable_ic_launcher.xml.flat",
-        "source": "com.tourvision.tv.app-main-14:/drawable/ic_launcher.xml"
+        "merged": "/Users/mads/.gradle/daemon/8.14.3/com.tourvision.tv.app-merged_res-12:/layout_activity_main.xml.flat",
+        "source": "/Users/mads/.gradle/daemon/8.14.3/com.tourvision.tv.app-main-14:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/Users/mads/.gradle/daemon/8.14.3/com.tourvision.tv.app-merged_res-12:/drawable_ic_launcher.xml.flat",
+        "source": "/Users/mads/.gradle/daemon/8.14.3/com.tourvision.tv.app-main-14:/drawable/ic_launcher.xml"
     }
 ]

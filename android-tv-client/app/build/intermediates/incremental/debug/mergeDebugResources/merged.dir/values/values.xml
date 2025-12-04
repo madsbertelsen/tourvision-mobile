@@ -506,6 +506,7 @@
     <string name="lb_search_bar_hint_with_title">Search <ns1:g id="search context">%1$s</ns1:g></string>
     <string name="lb_search_bar_hint_with_title_speech">Speak to search <ns1:g id="search context">%1$s</ns1:g></string>
     <string name="orb_search_action">Search Action</string>
+    <string name="qr_code_description">QR code to join document</string>
     <string name="status_bar_notification_info_overflow">999+</string>
     <style name="TextAppearance.Compat.Notification" parent="@android:style/TextAppearance.StatusBar.EventContent"/>
     <style name="TextAppearance.Compat.Notification.Info">
@@ -1376,76 +1377,70 @@
 
         
         <attr name="layout_anchorGravity">
-            <!-- Push object to the top of its container, not changing its size. -->
+            
             <flag name="top" value="0x30"/>
-            <!-- Push object to the bottom of its container, not changing its size. -->
+            
             <flag name="bottom" value="0x50"/>
-            <!-- Push object to the left of its container, not changing its size. -->
+            
             <flag name="left" value="0x03"/>
-            <!-- Push object to the right of its container, not changing its size. -->
+            
             <flag name="right" value="0x05"/>
-            <!-- Place object in the vertical center of its container, not changing its size. -->
+            
             <flag name="center_vertical" value="0x10"/>
-            <!-- Grow the vertical size of the object if needed so it completely fills its container. -->
+            
             <flag name="fill_vertical" value="0x70"/>
-            <!-- Place object in the horizontal center of its container, not changing its size. -->
+            
             <flag name="center_horizontal" value="0x01"/>
-            <!-- Grow the horizontal size of the object if needed so it completely fills its container. -->
+            
             <flag name="fill_horizontal" value="0x07"/>
-            <!-- Place the object in the center of its container in both the vertical and horizontal axis, not changing its size. -->
+            
             <flag name="center" value="0x11"/>
-            <!-- Grow the horizontal and vertical size of the object if needed so it completely fills its container. -->
+            
             <flag name="fill" value="0x77"/>
-            <!-- Additional option that can be set to have the top and/or bottom edges of
-                 the child clipped to its container's bounds.
-                 The clip will be based on the vertical gravity: a top gravity will clip the bottom
-                 edge, a bottom gravity will clip the top edge, and neither will clip both edges. -->
+            
             <flag name="clip_vertical" value="0x80"/>
-            <!-- Additional option that can be set to have the left and/or right edges of
-                 the child clipped to its container's bounds.
-                 The clip will be based on the horizontal gravity: a left gravity will clip the right
-                 edge, a right gravity will clip the left edge, and neither will clip both edges. -->
+            
             <flag name="clip_horizontal" value="0x08"/>
-            <!-- Push object to the beginning of its container, not changing its size. -->
+            
             <flag name="start" value="0x00800003"/>
-            <!-- Push object to the end of its container, not changing its size. -->
+            
             <flag name="end" value="0x00800005"/>
         </attr>
 
         
         <attr format="enum" name="layout_insetEdge">
-            <!-- Don't inset. -->
+            
             <enum name="none" value="0x0"/>
-            <!-- Inset the top edge. -->
+            
             <enum name="top" value="0x30"/>
-            <!-- Inset the bottom edge. -->
+            
             <enum name="bottom" value="0x50"/>
-            <!-- Inset the left edge. -->
+            
             <enum name="left" value="0x03"/>
-            <!-- Inset the right edge. -->
+            
             <enum name="right" value="0x05"/>
-            <!-- Inset the start edge. -->
+            
             <enum name="start" value="0x00800003"/>
-            <!-- Inset the end edge. -->
+            
             <enum name="end" value="0x00800005"/>
         </attr>
         
         <attr name="layout_dodgeInsetEdges">
-            <!-- Don't dodge any edges -->
+            
             <flag name="none" value="0x0"/>
-            <!-- Dodge the top inset edge. -->
+            
             <flag name="top" value="0x30"/>
-            <!-- Dodge the bottom inset edge. -->
+            
             <flag name="bottom" value="0x50"/>
-            <!-- Dodge the left inset edge. -->
+            
             <flag name="left" value="0x03"/>
-            <!-- Dodge the right inset edge. -->
+            
             <flag name="right" value="0x05"/>
-            <!-- Dodge the start inset edge. -->
+            
             <flag name="start" value="0x00800003"/>
-            <!-- Dodge the end inset edge. -->
+            
             <flag name="end" value="0x00800005"/>
-            <!-- Dodge all the inset edges. -->
+            
             <flag name="all" value="0x77"/>
         </attr>
     </declare-styleable>
@@ -1460,23 +1455,14 @@
         <attr format="reference" name="fontProviderCerts"/>
         
         <attr name="fontProviderFetchStrategy">
-            <!-- The blocking font fetch works as follows.
-              First, check the local cache, then if the requested font is not cached, request the
-              font from the provider and wait until it is finished.  You can change the length of
-              the timeout by modifying fontProviderFetchTimeout.  If the timeout happens, the
-              default typeface will be used instead. -->
+            
             <enum name="blocking" value="0"/>
-            <!-- The async font fetch works as follows.
-              First, check the local cache, then if the requeted font is not cached, trigger a
-              request the font and continue with layout inflation. Once the font fetch succeeds, the
-              target text view will be refreshed with the downloaded font data. The
-              fontProviderFetchTimeout will be ignored if async loading is specified. -->
+            
             <enum name="async" value="1"/>
         </attr>
         
         <attr format="integer" name="fontProviderFetchTimeout">
-            <!-- A special value for the timeout. In this case, the blocking font fetching will not
-              timeout and wait until a reply is received from the font provider. -->
+            
             <enum name="forever" value="-1"/>
         </attr>
         
@@ -1860,38 +1846,31 @@
         <attr format="reference|color" name="cardBackground"/>
         
         <attr format="enum" name="cardType">
-            <!-- A simple card layout with a single layout region. -->
+            
             <enum name="mainOnly" value="0"/>
-            <!-- A card layout with two layout regions: a main area which is
-                 always visible, and an info region that appears over the lower
-                 area of the main region. -->
+            
             <enum name="infoOver" value="1"/>
-            <!-- A card layout with two layout regions: a main area which is
-                 always visible, and an info region that appears below the main
-                 region. -->
+            
             <enum name="infoUnder" value="2"/>
-            <!-- A card layout with three layout regions: a main area which is
-                 always visible, an info region that appears below the main
-                 region, and an extra region that appears below the info region
-                 after a small delay. -->
+            
             <enum name="infoUnderWithExtra" value="3"/>
         </attr>
         
         <attr format="enum" name="infoVisibility">
-            <!-- Always display the info region. -->
+            
             <enum name="always" value="0"/>
-            <!-- Display the info region only when activated. -->
+            
             <enum name="activated" value="1"/>
-            <!-- Display the info region only when selected. -->
+            
             <enum name="selected" value="2"/>
         </attr>
         
         <attr format="enum" name="extraVisibility">
-            <!-- Always display the extra region. -->
+            
             <enum name="always" value="0"/>
-            <!-- Display the extra region only when activated. -->
+            
             <enum name="activated" value="1"/>
-            <!-- Display the extra region only when selected. -->
+            
             <enum name="selected" value="2"/>
         </attr>
         
@@ -1904,11 +1883,11 @@
     <declare-styleable name="lbBaseCardView_Layout">
         
         <attr format="enum" name="layout_viewType">
-            <!-- The main region of the card. -->
+            
             <enum name="main" value="0"/>
-            <!-- The info region of the card. -->
+            
             <enum name="info" value="1"/>
-            <!-- The extra region of the card. -->
+            
             <enum name="extra" value="2"/>
         </attr>
     </declare-styleable>
@@ -1955,7 +1934,7 @@
             <flag name="Content" value="2"/>
             <flag name="IconOnRight" value="4"/>
             <flag name="IconOnLeft" value="8"/>
-            <!-- Only display the main image. -->
+            
             <flag name="ImageOnly" value="0"/>
         </attr>
     </declare-styleable>
@@ -1980,7 +1959,7 @@
     <declare-styleable name="lbResizingTextView">
         
         <attr name="resizeTrigger">
-            <!-- Resize text whenever it lays out into the maximum number of lines -->
+            
             <flag name="maxLines" value="0x01"/>
         </attr>
         
@@ -2005,17 +1984,17 @@
     <declare-styleable name="lbSlide">
         
         <attr name="lb_slideEdge">
-            <!-- Slide to and from the left edge of the Scene. -->
+            
             <enum name="left" value="0x03"/>
-            <!-- Slide to and from the top edge of the Scene. -->
+            
             <enum name="top" value="0x30"/>
-            <!-- Slide to and from the right edge of the Scene. -->
+            
             <enum name="right" value="0x05"/>
-            <!-- Slide to and from the bottom edge of the Scene. -->
+            
             <enum name="bottom" value="0x50"/>
-            <!-- Slide to and from the x-axis position at the start of the Scene root. -->
+            
             <enum name="start" value="0x00800003"/>
-            <!-- Slide to and from the x-axis position at the end of the Scene root. -->
+            
             <enum name="end" value="0x00800005"/>
         </attr>
         <attr name="android:duration"/>

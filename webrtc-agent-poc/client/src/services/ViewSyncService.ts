@@ -50,6 +50,18 @@ export class ViewSyncService {
 
   constructor(awareness: any) {
     this.awareness = awareness;
+
+    // Listen for awareness changes to sync when following
+    awareness.on('change', () => {
+      // Only sync if we're following someone and not updating from remote
+      if (this.followingUserId !== null && !this.isUpdatingFromRemote) {
+        const state = awareness.getStates().get(this.followingUserId);
+        if (state?.user?.viewState) {
+          this.applyRemoteViewState(state.user.viewState, state.user.mapBounds);
+        }
+      }
+    });
+
     console.log('[ViewSyncService] Initialized');
   }
 

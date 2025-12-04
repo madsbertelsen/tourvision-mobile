@@ -886,6 +886,7 @@ id playback_fragment_background
 id playback_fragment_root
 id playback_progress
 id playing
+id qrCodeImage
 id right
 id right_icon
 id right_side
@@ -1098,6 +1099,7 @@ string lb_search_bar_hint_speech
 string lb_search_bar_hint_with_title
 string lb_search_bar_hint_with_title_speech
 string orb_search_action
+string qr_code_description
 string status_bar_notification_info_overflow
 style TextAppearance_Compat_Notification
 style TextAppearance_Compat_Notification_Info

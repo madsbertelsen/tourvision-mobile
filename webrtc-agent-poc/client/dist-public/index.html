@@ -48,6 +48,7 @@
     }
 
     .ProseMirror h1 {
+      display: block; /* Override global h1 { display: none } */
       font-size: 1.75em;
       font-weight: 700;
       margin: 0 0 0.5em 0;
@@ -96,6 +97,39 @@
       align-items: center;
     }
 
+    /* Show different buttons based on selection state */
+    /* In show-toolbar mode, hide all format buttons by default */
+    body.show-toolbar header .format-toolbar .format-btn {
+      display: none;
+    }
+    /* No selection: show H1, H2, Map buttons */
+    body.show-toolbar:not(.has-selection) header .format-toolbar #heading1-btn,
+    body.show-toolbar:not(.has-selection) header .format-toolbar #heading2-btn,
+    body.show-toolbar:not(.has-selection) header .format-toolbar #format-map-btn {
+      display: flex !important;
+    }
+    /* With selection: show Geo Mark button */
+    body.show-toolbar.has-selection header .format-toolbar #format-geomark-btn {
+      display: flex !important;
+    }
+    /* Keep avatars visible */
+    body.show-toolbar header #avatars {
+      display: flex !important;
+    }
+
+    /* Mobile: Hide header in normal mode (not show-toolbar) */
+    @media (max-width: 768px) {
+      body:not(.show-toolbar) header {
+        display: none !important;
+      }
+      body:not(.show-toolbar) #app {
+        padding-top: 10px;
+      }
+      body:not(.show-toolbar) #mobile-action-bar {
+        top: 0;
+      }
+    }
+
     .toolbar button {
       width: 40px;
       height: 40px;
@@ -139,6 +173,31 @@
       background: transparent;
       filter: grayscale(100%);
       opacity: 0.3;
+    }
+
+    /* Format toolbar buttons (H1, H2, P) - hidden by default, use context menu instead */
+    .format-toolbar {
+      display: none;
+      margin-left: 8px;
+      border-left: 1px solid #ddd;
+      padding-left: 8px;
+    }
+    .format-btn {
+      min-width: 32px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .format-btn .format-label {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .format-btn.active,
+    body.show-toolbar header .format-toolbar .format-btn.active {
+      background: rgba(59, 130, 246, 0.4) !important;
+      color: #3b82f6 !important;
+      transform: scale(0.95);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+      filter: grayscale(0) !important;
+      opacity: 1 !important;
     }
 
     /* Demo click animation for autoplay */
@@ -258,6 +317,92 @@
       background: #e8e8e8;
     }
 
+    /* iOS Safari: Suppress native callout menu */
+    @supports (-webkit-touch-callout: none) {
+      .ProseMirror {
+        -webkit-touch-callout: none;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+    }
+
+    /* Mobile Action Bar - Fixed at bottom for touch devices */
+    #mobile-action-bar {
+      display: none; /* Hidden by default, shown via JS on touch devices */
+      position: fixed;
+      top: 64px; /* Below the sticky header */
+      left: 0;
+      right: 0;
+      z-index: 999; /* Below header (1000) */
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 8px 16px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: opacity 0.2s ease-out, transform 0.2s ease-out, visibility 0.2s;
+    }
+
+    #mobile-action-bar.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .mobile-action-bar-content {
+      display: flex;
+      justify-content: space-around;
+      gap: 8px;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .mobile-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      font-size: 10px;
+      color: #333;
+      cursor: pointer;
+      min-width: 60px;
+      touch-action: manipulation;
+      transition: all 0.15s ease;
+    }
+
+    .mobile-action-btn svg {
+      color: #555;
+      transition: color 0.15s ease;
+    }
+
+    .mobile-action-btn .label {
+      font-weight: 500;
+      color: #666;
+    }
+
+    .mobile-action-btn:active {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .mobile-action-btn:active svg {
+      color: #007AFF;
+    }
+
+    .mobile-action-btn .icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .mobile-action-btn .label {
+      font-weight: 500;
+    }
+
     /* Ensure ProseMirror has proper white-space handling */
     .ProseMirror {
       white-space: pre-wrap;
@@ -315,18 +460,22 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* Hide scrollbar in autoplay mode (for landing page iframe demos) */
+    /* Hide scrollbar in autoplay/show-toolbar modes (for landing page iframe demos) */
     html.autoplay-mode,
     html.autoplay-mode body,
     body.autoplay-mode,
-    body.autoplay-mode * {
+    body.autoplay-mode *,
+    body.show-toolbar,
+    body.show-toolbar * {
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
     html.autoplay-mode::-webkit-scrollbar,
     html.autoplay-mode *::-webkit-scrollbar,
     body.autoplay-mode::-webkit-scrollbar,
-    body.autoplay-mode *::-webkit-scrollbar {
+    body.autoplay-mode *::-webkit-scrollbar,
+    body.show-toolbar::-webkit-scrollbar,
+    body.show-toolbar *::-webkit-scrollbar {
       display: none;
     }
 
@@ -339,6 +488,9 @@
       border: none !important;
       border-radius: 0 !important;
       box-shadow: none !important;
+      /* Enable scrolling within iframe demos */
+      overflow-y: auto;
+      max-height: calc(100vh - 50px); /* Account for toolbar */
     }
     body.autoplay-mode header {
       padding: 8px 12px !important;
@@ -353,6 +505,91 @@
       padding: 8px 4px !important;
     }
 
+    /* Compact toolbar mode - shows format buttons and avatars */
+    body.show-toolbar header {
+      padding: 6px 12px !important;
+      margin-bottom: 0 !important;
+      box-shadow: none !important;
+      border-bottom: 1px solid #eee;
+      min-height: auto !important;
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+    }
+    body.show-toolbar header h1,
+    body.show-toolbar header #mode-indicator,
+    body.show-toolbar header #doc-info,
+    body.show-toolbar header #status,
+    body.show-toolbar header .toolbar:not(.format-toolbar),
+    body.show-toolbar header .spacer {
+      display: none !important;
+    }
+    body.show-toolbar header .format-toolbar {
+      display: flex !important;
+      margin-left: 0;
+      border-left: none;
+      padding-left: 0;
+      gap: 2px;
+    }
+    body.show-toolbar header .format-toolbar .format-btn {
+      padding: 4px 8px;
+      min-width: 28px;
+      height: 28px;
+      font-size: 11px;
+    }
+    body.show-toolbar header #avatars {
+      display: flex !important;
+      margin-left: auto;
+    }
+    body.show-toolbar #app {
+      padding: 0 !important;
+    }
+    body.show-toolbar #editor-container {
+      padding: 12px !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      /* Enable scrolling within iframe demos */
+      overflow-y: auto;
+      max-height: calc(100vh - 50px); /* Account for toolbar */
+    }
+    /* Hide mobile action bar in show-toolbar mode - we use header buttons instead */
+    body.show-toolbar #mobile-action-bar {
+      display: none !important;
+    }
+
+    /* Remote cursor for collaboration demo */
+    .remote-cursor {
+      position: absolute;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .remote-cursor-caret {
+      width: 2px;
+      height: 18px;
+      border-radius: 1px;
+      animation: cursor-blink 1s ease-in-out infinite;
+    }
+
+    @keyframes cursor-blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.3; }
+    }
+
+    .remote-cursor-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      margin-top: -2px;
+    }
+
     /* Fullscreen Map Overlay */
     #fullscreen-overlay {
       position: fixed;
@@ -364,6 +601,8 @@
       display: none;
       opacity: 0;
       transition: opacity 300ms ease-in-out;
+      /* Solid background to prevent editor from showing through during map style transition */
+      background-color: #e5e7eb;
     }
 
     #fullscreen-overlay.visible {
@@ -380,7 +619,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.3);
+      background-color: transparent;
       z-index: 10001;
     }
 
@@ -394,8 +633,8 @@
     }
 
     #fullscreen-map {
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
     }
 
     .close-btn {
@@ -435,6 +674,11 @@
       padding: 6px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    /* Hide style switcher in autoplay/demo mode */
+    body.autoplay-mode .map-style-switcher {
+      display: none;
     }
 
     .map-style-btn {
@@ -789,36 +1033,453 @@
     }
 
     /* Demo Finger/Tap Cursor */
-    #demo-finger {
+    #demo-finger,
+    .demo-finger {
       position: fixed;
       z-index: 20000;
       pointer-events: none;
       opacity: 0;
-      transform: translate(-50%, -50%) scale(1);
-      transition: opacity 0.2s ease;
+      transform: scale(1);
+      transition: opacity 0.2s ease, transform 0.15s ease;
     }
 
-    #demo-finger.visible {
+    #demo-finger.visible,
+    .demo-finger.visible {
       opacity: 1;
     }
 
-    #demo-finger.tapping {
+    #demo-finger.tapping,
+    .demo-finger.tapping {
       animation: finger-tap 0.3s ease-out;
     }
 
-    @keyframes finger-tap {
-      0% { transform: translate(-50%, -50%) scale(1); }
-      50% { transform: translate(-50%, -50%) scale(0.85); }
-      100% { transform: translate(-50%, -50%) scale(1); }
+    /* Pressed state for drag/pinch gestures */
+    #demo-finger.pressing,
+    .demo-finger.pressing {
+      transform: scale(0.85);
     }
 
-    #demo-finger svg {
+    @keyframes finger-tap {
+      0% { transform: scale(1); }
+      50% { transform: scale(0.85); }
+      100% { transform: scale(1); }
+    }
+
+    #demo-finger svg,
+    .demo-finger svg,
+    .demo-finger img {
       width: 48px;
       height: 48px;
       filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
     }
+
+    /* Double-tap animation for text selection */
+    #demo-finger.double-tapping,
+    .demo-finger.double-tapping {
+      animation: finger-double-tap 0.5s ease-out;
+    }
+
+    @keyframes finger-double-tap {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      15% { transform: translate(-50%, -50%) scale(0.85); }
+      30% { transform: translate(-50%, -50%) scale(1); }
+      45% { transform: translate(-50%, -50%) scale(0.85); }
+      60% { transform: translate(-50%, -50%) scale(1); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* Selection Handles for Demo */
+    .selection-handle {
+      position: fixed;
+      width: 16px;
+      height: 16px;
+      background: #3b82f6;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 19999;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .selection-handle.visible {
+      opacity: 1;
+    }
+
+    /* Start handle - circle above with stem going down */
+    .selection-handle-start::after {
+      content: '';
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background: #3b82f6;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 100%;
+    }
+
+    /* End handle - circle below with stem going up */
+    .selection-handle-end::after {
+      content: '';
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background: #3b82f6;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 100%;
+    }
+
+    /* Demo selection highlight */
+    .demo-selection-highlight {
+      position: absolute;
+      background: rgba(59, 130, 246, 0.35);
+      pointer-events: none;
+      z-index: 99;
+      border-radius: 2px;
+    }
+
+    /* Share Modal - iOS-style bottom sheet */
+    #share-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 15000;
+    }
+
+    #share-modal.visible {
+      display: block;
+    }
+
+    .share-modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #share-modal.visible .share-modal-backdrop {
+      opacity: 1;
+    }
+
+    .share-modal-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-radius: 16px 16px 0 0;
+      padding: 12px 20px 32px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    #share-modal.visible .share-modal-sheet {
+      transform: translateY(0);
+    }
+
+    .share-modal-handle {
+      width: 36px;
+      height: 5px;
+      background: #d1d5db;
+      border-radius: 3px;
+      margin: 0 auto 12px;
+    }
+
+    .share-modal-header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .share-modal-header h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .share-section {
+      margin-bottom: 16px;
+    }
+
+    .share-section-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .share-section-description {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+
+    .share-url-container {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0 4px;
+    }
+
+    .share-url-field {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: #f3f4f6;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .share-url-icon {
+      flex-shrink: 0;
+      color: #6b7280;
+    }
+
+    .share-url-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .share-copy-btn {
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #3b82f6;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      color: white;
+      transition: all 0.15s ease;
+    }
+
+    .share-copy-btn:hover {
+      background: #2563eb;
+    }
+
+    .share-copy-btn:active,
+    .share-copy-btn.tapped {
+      transform: scale(0.95);
+      background: #1d4ed8;
+    }
+
+    .share-copy-btn.copied {
+      background: #10b981;
+    }
+
+    .share-copy-btn .check-icon {
+      display: none;
+    }
+
+    .share-copy-btn.copied .copy-icon {
+      display: none;
+    }
+
+    .share-copy-btn.copied .check-icon {
+      display: block;
+    }
+
+    .share-modal-status {
+      text-align: center;
+      margin-top: 12px;
+      min-height: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #10b981;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .share-modal-status.visible {
+      opacity: 1;
+    }
+
+    /* Demo Video Call Overlay - FaceTime-style fullscreen video call */
+    #demo-video-call-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20000;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    #demo-video-call-overlay.visible {
+      display: block;
+      opacity: 1;
+    }
+
+    .demo-video-call-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Main video area - shows remote participant (Bob) */
+    .demo-video-main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .demo-video-avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 600;
+      color: white;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .demo-video-avatar.remote {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .demo-video-avatar.local {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      width: 60px;
+      height: 60px;
+      font-size: 24px;
+    }
+
+    .demo-video-name {
+      color: white;
+      font-size: 20px;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Speaking indicator - animated dots */
+    .demo-video-speaking-indicator {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .demo-video-speaking-indicator .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: speaking-dot 1.4s ease-in-out infinite;
+    }
+
+    .demo-video-speaking-indicator .dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .demo-video-speaking-indicator .dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes speaking-dot {
+      0%, 80%, 100% {
+        transform: scale(0.6);
+        opacity: 0.4;
+      }
+      40% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* Picture-in-picture for local participant */
+    .demo-video-pip {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Control buttons at bottom */
+    .demo-video-controls {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+    }
+
+    .demo-video-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, background 0.2s;
+      color: white;
+    }
+
+    .demo-video-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .demo-video-btn.mute-btn,
+    .demo-video-btn.camera-btn {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .demo-video-btn.end-btn {
+      background: #ef4444;
+    }
+
+    /* Call status indicator */
+    .demo-call-status {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 185, 129, 0.9);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
   </style>
-  <script type="module" crossorigin src="/assets/main-BSKqBZRz.js"></script>
+  <script type="module" crossorigin src="/assets/main-TZ7QO1tE.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
   <link rel="stylesheet" crossorigin href="/assets/main-Cvej7Dwr.css">
 </head>
 <body>
@@ -827,6 +1488,12 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get('hideHeader') === 'true') {
       document.body.classList.add('hide-header');
+    }
+    // showToolbar shows compact header with only avatars (for demo phone frames)
+    if (params.get('showToolbar') === 'true') {
+      document.body.classList.add('show-toolbar');
+      document.body.classList.add('autoplay-mode'); // Also apply autoplay styles
+      document.documentElement.classList.add('autoplay-mode');
     }
     if (params.get('autoplay') === 'true') {
       document.body.classList.add('autoplay-mode');
@@ -898,30 +1565,24 @@
       <div id="mode-indicator"></div>
       <div id="doc-info" class="doc-info"></div>
       <div id="status" class="status connecting">Initializing...</div>
-      <div class="toolbar">
-        <button id="new-doc-btn" aria-label="New Document">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
+      <div class="toolbar format-toolbar">
+        <button id="heading1-btn" class="format-btn" aria-label="Heading 1" title="Heading 1">
+          <span class="format-label">H1</span>
         </button>
-        <button id="create-geomark-btn" aria-label="Create Geo Mark">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="heading2-btn" class="format-btn" aria-label="Heading 2" title="Heading 2">
+          <span class="format-label">H2</span>
+        </button>
+        <button id="format-geomark-btn" class="format-btn" aria-label="Create Geo Mark" title="Geo Mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
         </button>
-        <button id="insert-map-btn" aria-label="Insert Map">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="format-map-btn" class="format-btn" aria-label="Insert Map" title="Insert Map">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
             <line x1="8" y1="2" x2="8" y2="18"></line>
             <line x1="16" y1="6" x2="16" y2="22"></line>
-          </svg>
-        </button>
-        <button id="join-video-btn" aria-label="Join Video Call">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="23 7 16 12 23 17 23 7"></polygon>
-            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
           </svg>
         </button>
       </div>
@@ -973,6 +1634,45 @@
     <button id="follow-user-btn">Follow</button>
   </div>
 
+  <!-- Mobile Selection Action Bar (fixed at bottom for touch devices) -->
+  <div id="mobile-action-bar">
+    <div class="mobile-action-bar-content">
+      <button id="mobile-geomark-btn" class="mobile-action-btn" aria-label="Create Geo Mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+        <span class="label">Geo Mark</span>
+      </button>
+      <button id="mobile-map-btn" class="mobile-action-btn" aria-label="Insert Map">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+          <line x1="8" y1="2" x2="8" y2="18"></line>
+          <line x1="16" y1="6" x2="16" y2="22"></line>
+        </svg>
+        <span class="label">Map</span>
+      </button>
+      <button id="mobile-h1-btn" class="mobile-action-btn" aria-label="Heading 1">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h8"></path>
+          <path d="M4 6v12"></path>
+          <path d="M12 6v12"></path>
+          <path d="M17 12l3-2v8"></path>
+        </svg>
+        <span class="label">H1</span>
+      </button>
+      <button id="mobile-h2-btn" class="mobile-action-btn" aria-label="Heading 2">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h8"></path>
+          <path d="M4 6v12"></path>
+          <path d="M12 6v12"></path>
+          <path d="M21 18h-4c0-4 4-3 4-6 0-1.5-2-2.5-4-1"></path>
+        </svg>
+        <span class="label">H2</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Video Chat Container (hidden by default) -->
   <div id="video-chat-container">
     <div id="video-chat-header">
@@ -1004,6 +1704,65 @@
         <span class="video-label">You</span>
       </div>
       <!-- Remote videos added dynamically -->
+    </div>
+  </div>
+
+  <!-- Share Modal (hidden by default) -->
+  <div id="share-modal">
+    <div class="share-modal-backdrop"></div>
+    <div class="share-modal-sheet">
+      <div class="share-modal-handle"></div>
+      <div class="share-modal-header">
+        <h3>Share this trip</h3>
+      </div>
+      <!-- Share trip link -->
+      <div class="share-section">
+        <div class="share-section-label">Trip Link</div>
+        <div class="share-url-container">
+          <div class="share-url-field">
+            <svg class="share-url-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <span class="share-url-text" id="share-url-text">tourvision.com/trip/dk-weekend</span>
+          </div>
+          <button class="share-copy-btn" id="share-copy-btn">
+            <svg class="copy-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg class="check-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- View my screen link -->
+      <div class="share-section">
+        <div class="share-section-label">View My Screen</div>
+        <div class="share-section-description">Others can follow along as you navigate</div>
+        <div class="share-url-container">
+          <div class="share-url-field">
+            <svg class="share-url-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span class="share-url-text" id="follow-url-text">Loading...</span>
+          </div>
+          <button class="share-copy-btn" id="follow-copy-btn">
+            <svg class="copy-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg class="check-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="share-modal-status" id="share-status">Copied to clipboard!</div>
     </div>
   </div>
 
@@ -1043,6 +1802,49 @@
     </div>
   </div>
 
+  <!-- Demo Video Call Overlay (for autoplay demo) -->
+  <div id="demo-video-call-overlay">
+    <div class="demo-video-call-container">
+      <div class="demo-video-main">
+        <div class="demo-video-avatar remote">
+          <span class="avatar-initial">B</span>
+        </div>
+        <div class="demo-video-name remote-name">Bob</div>
+        <div class="demo-video-speaking-indicator">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+      <div class="demo-video-pip">
+        <div class="demo-video-avatar local">
+          <span class="avatar-initial">A</span>
+        </div>
+      </div>
+      <div class="demo-video-controls">
+        <button class="demo-video-btn mute-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          </svg>
+        </button>
+        <button class="demo-video-btn end-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 17.5c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2v-1c0-1.1.9-2 2-2h18c1.1 0 2 .9 2 2v1z"></path>
+            <path d="M6 14.5v-4c0-3.3 2.7-6 6-6s6 2.7 6 6v4"></path>
+          </svg>
+        </button>
+        <button class="demo-video-btn camera-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+        </button>
+      </div>
+      <div class="demo-call-status">Connected</div>
+    </div>
+  </div>
+
   <!-- Demo Finger Cursor (hidden by default) -->
   <div id="demo-finger">
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1051,6 +1853,10 @@
       <circle cx="12" cy="7" r="2" fill="#333333"/>
     </svg>
   </div>
+
+  <!-- Selection Handles for Demo (hidden by default) -->
+  <div id="selection-handle-start" class="selection-handle selection-handle-start"></div>
+  <div id="selection-handle-end" class="selection-handle selection-handle-end"></div>
 
 </body>
 </html>
