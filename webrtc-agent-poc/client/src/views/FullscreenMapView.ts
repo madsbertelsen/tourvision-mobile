@@ -34,7 +34,11 @@ const MAP_STYLES: Record<string, string> = {
   dark: 'mapbox://styles/mapbox/dark-v11',
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
   streets: 'mapbox://styles/mapbox/streets-v12',
+  colorful: 'mapbox://styles/madsbertelsen/cmgz1s4y7005r01sbdkexgi5j',
 };
+
+// Default style for fullscreen map
+const DEFAULT_FULLSCREEN_STYLE = 'streets';
 
 const MAP_STYLE_STORAGE_KEY = 'tourvision-map-style';
 
@@ -42,7 +46,7 @@ export class FullscreenMapView {
   private deps: FullscreenMapViewDependencies;
   private fullscreenMap: mapboxgl.Map | null = null;
   private fullscreenMapUpdateListener: (() => void) | null = null;
-  private currentStyle: string = 'light';
+  private currentStyle: string = DEFAULT_FULLSCREEN_STYLE;
   private currentLocations: Location[] = []; // Store for style change re-render
 
   constructor(deps: FullscreenMapViewDependencies) {
@@ -128,7 +132,7 @@ export class FullscreenMapView {
    * Get current map style URL
    */
   private getMapStyleUrl(): string {
-    return MAP_STYLES[this.currentStyle] || MAP_STYLES.light;
+    return MAP_STYLES[this.currentStyle] || MAP_STYLES[DEFAULT_FULLSCREEN_STYLE];
   }
 
   /**
@@ -177,6 +181,13 @@ export class FullscreenMapView {
     console.log('[Fullscreen] Container rect:', rect);
     console.log('[Fullscreen] Alignment padding:', padding);
 
+    // Fade out the light map layer to reveal the pre-loaded colored map
+    const lightMapContainer = blockMapElement._lightMapContainer as HTMLElement | undefined;
+    if (lightMapContainer) {
+      console.log('[Fullscreen] Fading out light map layer');
+      lightMapContainer.style.opacity = '0';
+    }
+
     // Use target camera (follow mode) or calculate from block map
     let adjustedBounds: any = null;
     let initialCenter: { lng: number; lat: number } | undefined;
@@ -198,8 +209,10 @@ export class FullscreenMapView {
         console.log('[Fullscreen] Using target bounds from followed user (fallback):', targetCamera);
       }
     } else {
-      // Normal mode: calculate bounds from block map
-      const blockMap = blockMapElement._mapInstance;
+      // Normal mode: calculate bounds from colored map (already visible behind light map)
+      // Prefer the colored map instance for bounds calculation (same coordinates, but it's the one that will be visible)
+      const coloredMap = blockMapElement._coloredMapInstance;
+      const blockMap = coloredMap || blockMapElement._mapInstance;
       if (!blockMap) {
         console.error('[Fullscreen] Block map instance not found');
         return;
@@ -299,9 +312,11 @@ export class FullscreenMapView {
 
     // Create fullscreen map
     // Use center/zoom for follow mode (more accurate with pitch), otherwise use bounds
+    // Always use 'streets' style initially to match the pre-loaded colored map behind the block map
+    // This ensures seamless transition: light fades → colored revealed → fullscreen appears with same style
     const mapOptions: any = {
       container: 'fullscreen-map',
-      style: this.getMapStyleUrl(),
+      style: MAP_STYLES['streets'],
       interactive: true,
       trackResize: true,
       fadeDuration: 0
@@ -334,13 +349,14 @@ export class FullscreenMapView {
     // Store locations for style change re-renders
     this.currentLocations = currentLocations;
 
-    // Add markers on initial load
+    // Add markers on initial load (light style)
     this.fullscreenMap.on('load', () => {
+      console.log('[Fullscreen] Initial map load complete');
       this.renderMarkersAndRoutes(currentLocations);
       this.setupReactiveUpdates(currentLocations);
     });
 
-    // Re-render markers when style changes (e.g., user switches map style)
+    // Re-render markers when style changes (e.g., user switches map style via style switcher)
     this.fullscreenMap.on('style.load', () => {
       console.log('[Fullscreen] Style loaded, re-rendering markers');
       // Re-render markers with current locations
@@ -725,6 +741,9 @@ export class FullscreenMapView {
   hide(): void {
     console.log('[Fullscreen] Hiding fullscreen map');
 
+    // Hide video call overlay if visible
+    this.hideVideoCallOverlay();
+
     // Notify parent that fullscreen map is closing
     WebViewBridge.sendFullscreenMapClosed();
     console.log('[Fullscreen] Sent fullscreenMapClosed message to parent');
@@ -746,6 +765,17 @@ export class FullscreenMapView {
       console.log('[Fullscreen] Removed geo-mark change listener');
     }
 
+    // Restore the light map layer opacity on the block map
+    const mapContainers = document.querySelectorAll('.prosemirror-map');
+    if (mapContainers.length > 0) {
+      const blockMapElement = mapContainers[0] as any;
+      const lightMapContainer = blockMapElement._lightMapContainer as HTMLElement | undefined;
+      if (lightMapContainer) {
+        console.log('[Fullscreen] Restoring light map layer');
+        lightMapContainer.style.opacity = '1';
+      }
+    }
+
     const overlay = document.getElementById('fullscreen-overlay');
     if (overlay) {
       overlay.classList.remove('fade-in');
@@ -765,6 +795,36 @@ export class FullscreenMapView {
    */
   getMap(): mapboxgl.Map | null {
     return this.fullscreenMap;
+  }
+
+  /**
+   * Show the video call overlay on the fullscreen map
+   */
+  showVideoCallOverlay(): void {
+    const overlay = document.getElementById('video-call-overlay');
+    if (overlay) {
+      overlay.classList.add('visible');
+      console.log('[Fullscreen] Video call overlay shown');
+    }
+  }
+
+  /**
+   * Hide the video call overlay
+   */
+  hideVideoCallOverlay(): void {
+    const overlay = document.getElementById('video-call-overlay');
+    if (overlay) {
+      overlay.classList.remove('visible');
+      console.log('[Fullscreen] Video call overlay hidden');
+    }
+  }
+
+  /**
+   * Check if the video call overlay is visible
+   */
+  isVideoCallOverlayVisible(): boolean {
+    const overlay = document.getElementById('video-call-overlay');
+    return overlay?.classList.contains('visible') ?? false;
   }
 
   /**
