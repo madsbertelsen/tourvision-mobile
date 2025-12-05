@@ -747,6 +747,14 @@ function extractLocationsForFullscreen() {
   if (fullscreenMapView) {
     fullscreenMapView.show(targetBounds);
 
+    // Opening fullscreen map is an interaction - take control if not following
+    if (!targetBounds && (window as any).takeControl) {
+      console.log('[Main] Opening fullscreen map - taking control');
+      (window as any).takeControl('openFullscreenMap');
+    } else if (targetBounds) {
+      console.log('[Main] Opening fullscreen map with targetBounds - not taking control (following mode)');
+    }
+
     // Show video thumbnail with the OTHER user's avatar
     // This shows the collaborator's presence during map exploration
     if (userName === 'Alice') {
@@ -948,65 +956,219 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   mapInteractionService = new MapInteractionService(awareness);
   console.log('[Main] MapInteractionService initialized');
 
-  // In observeOnly mode (Bob), auto-follow Alice's scroll position
-  if (isObserveOnly) {
-    console.log('[Main] ObserveOnly mode - setting up auto-follow for Alice');
+  // Bidirectional screen following with control token
+  // Whoever last interacted gets control, the other user follows them
+  let isActiveController = false;
+  let currentFollowedUser: number | null = null;
+  let controlReleaseTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    // Function to find Alice and start following her
-    const findAndFollowAlice = () => {
-      const states = awareness.getStates();
-      for (const [clientId, state] of states) {
-        if (state?.user?.name === 'Alice') {
-          console.log('[Main] Found Alice, starting to follow her scroll position', clientId);
-          viewSyncService?.followUser(clientId);
-          return true;
-        }
+  // Create visual indicator for when being controlled
+  const followingBanner = document.createElement('div');
+  followingBanner.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 20px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10000;
+    animation: slideDown 0.3s ease-out;
+  `;
+
+  const bannerText = document.createElement('span');
+  bannerText.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  `;
+
+  const takeControlBtn = document.createElement('button');
+  takeControlBtn.textContent = 'Take control';
+  takeControlBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+  `;
+  takeControlBtn.onmouseover = () => {
+    takeControlBtn.style.background = 'rgba(255,255,255,0.3)';
+  };
+  takeControlBtn.onmouseout = () => {
+    takeControlBtn.style.background = 'rgba(255,255,255,0.2)';
+  };
+
+  followingBanner.appendChild(bannerText);
+  followingBanner.appendChild(takeControlBtn);
+  document.body.appendChild(followingBanner);
+
+  // Add keyframe animation
+  const bannerStyle = document.createElement('style');
+  bannerStyle.textContent = `
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
       }
-      return false;
-    };
-
-    // Try to find Alice immediately
-    if (!findAndFollowAlice()) {
-      // Alice not yet connected, listen for awareness changes
-      const awarenessHandler = () => {
-        if (findAndFollowAlice()) {
-          // Found Alice, remove the listener
-          awareness.off('change', awarenessHandler);
-        }
-      };
-      awareness.on('change', awarenessHandler);
-      console.log('[Main] Waiting for Alice to connect...');
-    }
-  } else {
-    // In normal mode (Alice), auto-follow Bob's scroll position for bidirectional following
-    console.log('[Main] Normal mode - setting up auto-follow for Bob');
-
-    // Function to find Bob and start following him
-    const findAndFollowBob = () => {
-      const states = awareness.getStates();
-      for (const [clientId, state] of states) {
-        if (state?.user?.name === 'Bob') {
-          console.log('[Main] Found Bob, starting to follow his scroll position', clientId);
-          viewSyncService?.followUser(clientId);
-          return true;
-        }
+      to {
+        transform: translateY(0);
+        opacity: 1;
       }
-      return false;
-    };
-
-    // Try to find Bob immediately
-    if (!findAndFollowBob()) {
-      // Bob not yet connected, listen for awareness changes
-      const awarenessHandler = () => {
-        if (findAndFollowBob()) {
-          // Found Bob, remove the listener
-          awareness.off('change', awarenessHandler);
-        }
-      };
-      awareness.on('change', awarenessHandler);
-      console.log('[Main] Waiting for Bob to connect...');
     }
-  }
+  `;
+  document.head.appendChild(bannerStyle);
+
+  // Function to update the following banner
+  const updateFollowingBanner = () => {
+    if (currentFollowedUser !== null) {
+      const states = awareness.getStates();
+      const userState = states.get(currentFollowedUser);
+
+      // Defensive check: Only show banner if the followed user actually has control
+      if (userState?.isActiveController !== true) {
+        console.warn('[Main] Following user who doesn\'t have control, stopping follow');
+        currentFollowedUser = null;
+        viewSyncService?.followUser(null);
+        followingBanner.style.display = 'none';
+        return;
+      }
+
+      const userName = userState?.user?.name || `User ${currentFollowedUser}`;
+      const userColor = userState?.user?.color || '#667eea';
+
+      bannerText.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink: 0;">
+          <circle cx="8" cy="8" r="7" fill="rgba(255,255,255,0.3)"/>
+          <circle cx="8" cy="8" r="4" fill="white"/>
+        </svg>
+        <span>Following <strong style="text-decoration: underline; text-decoration-color: ${userColor};">${userName}</strong>'s view</span>
+      `;
+      followingBanner.style.display = 'flex';
+    } else {
+      followingBanner.style.display = 'none';
+    }
+  };
+
+  // Wire up the button to takeControl (will be defined below)
+  takeControlBtn.onclick = () => {
+    takeControl('manual');
+  };
+
+  // Function to release control after inactivity
+  const releaseControl = () => {
+    if (!isActiveController) return; // Not in control anyway
+
+    console.log('[Main] Releasing control due to inactivity');
+    isActiveController = false;
+
+    // Broadcast that we're no longer the active controller
+    awareness.setLocalStateField('isActiveController', false);
+  };
+
+  // Function to take control when local user interacts
+  const takeControl = (eventType?: string) => {
+    console.log('[Main] takeControl called', { eventType, isActiveController, currentFollowedUser });
+
+    // Clear any existing release timeout
+    if (controlReleaseTimeout) {
+      clearTimeout(controlReleaseTimeout);
+      console.log('[Main] Cleared existing timeout');
+    }
+
+    if (!isActiveController) {
+      console.log('[Main] Taking control of shared view');
+      isActiveController = true;
+
+      // Stop following others
+      if (currentFollowedUser !== null) {
+        console.log('[Main] Stopping follow of user:', currentFollowedUser);
+        viewSyncService?.followUser(null);
+        currentFollowedUser = null;
+        // Update visual indicator - hide banner
+        updateFollowingBanner();
+      }
+
+      // Broadcast that we're the active controller
+      awareness.setLocalStateField('isActiveController', true);
+      awareness.setLocalStateField('lastInteractionTime', Date.now());
+    }
+
+    // Set timeout to release control after 2 seconds of inactivity
+    console.log('[Main] Setting 2s release timeout');
+    controlReleaseTimeout = setTimeout(releaseControl, 2000);
+  };
+
+  // Store takeControl function for use in other parts of the code
+  (window as any).takeControl = takeControl;
+
+  // Function to release control and follow another user
+  const followOtherUser = (clientId: number) => {
+    if (currentFollowedUser === clientId) return; // Already following this user
+
+    console.log('[Main] Releasing control, following user', clientId);
+    isActiveController = false;
+    currentFollowedUser = clientId;
+
+    // Mark ourselves as not active
+    awareness.setLocalStateField('isActiveController', false);
+
+    // Follow the active user
+    viewSyncService?.followUser(clientId);
+
+    // Update visual indicator
+    updateFollowingBanner();
+  };
+
+  // Listen for awareness changes to detect when someone else takes control
+  awareness.on('change', () => {
+    const states = awareness.getStates();
+
+    // Find if someone else is the active controller
+    let otherActiveController: number | null = null;
+    for (const [clientId, state] of states) {
+      if (clientId !== awareness.clientID && state?.isActiveController === true) {
+        otherActiveController = clientId;
+        break;
+      }
+    }
+
+    // If someone else has control and we don't, follow them
+    if (otherActiveController !== null && !isActiveController && currentFollowedUser !== otherActiveController) {
+      console.log('[Main] Someone else took control, following user:', otherActiveController);
+      followOtherUser(otherActiveController);
+    }
+
+    // Update banner to ensure it's in sync with actual awareness state
+    updateFollowingBanner();
+  });
+
+  // Listen for local interactions to take control
+  // Use capture phase to intercept before ViewSyncService sees the events
+  // Note: Excluding 'scroll' as it fires passively and would prevent timeout from expiring
+  const interactionEvents = ['mousedown', 'touchstart', 'wheel', 'keydown'];
+  interactionEvents.forEach(eventType => {
+    const handler = (e: Event) => {
+      console.log(`[Main] Event captured: ${eventType}`, e.target);
+      takeControl(eventType);
+    };
+    container.addEventListener(eventType, handler, { capture: true });
+    console.log(`[Main] Registered ${eventType} listener on container`);
+  });
+
+  // Nobody has control initially - whoever interacts first will take control
+  console.log('[Main] Bidirectional following ready - no initial control, first interaction wins');
 
   // Handle ?follow=<clientId> URL parameter for "View my screen" links
   if (followUserId) {
@@ -1492,7 +1654,9 @@ async function main() {
       return !isFollowing && !isUpdating;
     },
     // MapInteractionService for collaborative finger tracking
-    mapInteractionService: mapInteractionService ?? undefined
+    mapInteractionService: mapInteractionService ?? undefined,
+    // Callback for when user interacts with fullscreen map
+    onInteraction: takeControl
   });
   console.log('[Main] FullscreenMapView initialized with awareness');
 

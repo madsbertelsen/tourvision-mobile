@@ -54,6 +54,7 @@ export interface FullscreenMapViewDependencies {
   globalAwareness: any;
   shouldBroadcastBounds?: () => boolean; // Optional check for follow mode
   mapInteractionService?: MapInteractionService; // Optional for collaborative finger tracking
+  onInteraction?: () => void; // Optional callback when user interacts with map
 }
 
 // Map style definitions
@@ -1117,6 +1118,10 @@ export class FullscreenMapView {
     this.pointerEventHandlers = {
       pointerdown: (e: PointerEvent) => {
         this.isPointerDown = true;
+
+        // Notify that user is interacting (for control takeover in bidirectional following)
+        this.deps.onInteraction?.();
+
         const lngLat = this.fullscreenMap?.unproject([e.clientX, e.clientY]);
         if (lngLat) {
           mapInteractionService.broadcastFingerPosition(
