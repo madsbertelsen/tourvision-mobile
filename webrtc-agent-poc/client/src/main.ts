@@ -977,6 +977,35 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       awareness.on('change', awarenessHandler);
       console.log('[Main] Waiting for Alice to connect...');
     }
+  } else {
+    // In normal mode (Alice), auto-follow Bob's scroll position for bidirectional following
+    console.log('[Main] Normal mode - setting up auto-follow for Bob');
+
+    // Function to find Bob and start following him
+    const findAndFollowBob = () => {
+      const states = awareness.getStates();
+      for (const [clientId, state] of states) {
+        if (state?.user?.name === 'Bob') {
+          console.log('[Main] Found Bob, starting to follow his scroll position', clientId);
+          viewSyncService?.followUser(clientId);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Try to find Bob immediately
+    if (!findAndFollowBob()) {
+      // Bob not yet connected, listen for awareness changes
+      const awarenessHandler = () => {
+        if (findAndFollowBob()) {
+          // Found Bob, remove the listener
+          awareness.off('change', awarenessHandler);
+        }
+      };
+      awareness.on('change', awarenessHandler);
+      console.log('[Main] Waiting for Bob to connect...');
+    }
   }
 
   // Handle ?follow=<clientId> URL parameter for "View my screen" links
