@@ -983,11 +983,27 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     animation: slideDown 0.3s ease-out;
   `;
 
+  // Create mock video avatar for the controlling user
+  const videoAvatar = document.createElement('div');
+  videoAvatar.style.cssText = `
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    border: 2px solid rgba(255,255,255,0.3);
+    flex-shrink: 0;
+  `;
+
   const bannerText = document.createElement('span');
   bannerText.style.cssText = `
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
   `;
 
   const takeControlBtn = document.createElement('button');
@@ -1047,14 +1063,21 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
       const userName = userState?.user?.name || `User ${currentFollowedUser}`;
       const userColor = userState?.user?.color || '#667eea';
+      const userInitial = userName.charAt(0).toUpperCase();
 
-      bannerText.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink: 0;">
-          <circle cx="8" cy="8" r="7" fill="rgba(255,255,255,0.3)"/>
-          <circle cx="8" cy="8" r="4" fill="white"/>
-        </svg>
-        <span>Following <strong style="text-decoration: underline; text-decoration-color: ${userColor};">${userName}</strong>'s view</span>
-      `;
+      // Update video avatar with user's color and initial
+      videoAvatar.style.background = userColor;
+      videoAvatar.textContent = userInitial;
+
+      // Update text content
+      const textSpan = document.createElement('span');
+      textSpan.innerHTML = `Following <strong style="text-decoration: underline; text-decoration-color: ${userColor};">${userName}</strong>'s view`;
+
+      // Clear and rebuild banner text
+      bannerText.innerHTML = '';
+      bannerText.appendChild(videoAvatar);
+      bannerText.appendChild(textSpan);
+
       followingBanner.style.display = 'flex';
     } else {
       followingBanner.style.display = 'none';
