@@ -14,7 +14,24 @@ export interface GeocodedLocation {
 
 export class GeocodingService {
   private readonly baseUrl = 'https://nominatim.openstreetmap.org';
-  private readonly userAgent = 'WebRTC-Agent-POC/1.0';
+  private readonly userAgent = 'TourVision/1.0 (https://tourvision.com; contact@tourvision.com)';
+  private lastRequestTime = 0;
+  private readonly minRequestInterval = 1000; // 1 second rate limit per Nominatim policy
+
+  /**
+   * Rate limit requests to respect Nominatim's 1 request per second policy
+   */
+  private async rateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      const waitTime = this.minRequestInterval - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.lastRequestTime = Date.now();
+  }
 
   /**
    * Geocode a place name to geographic coordinates
@@ -23,12 +40,15 @@ export class GeocodingService {
    * @returns Geocoded location or null if not found
    */
   async geocode(placeName: string): Promise<GeocodedLocation | null> {
+    await this.rateLimit();
+
     const url = `${this.baseUrl}/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`;
 
     try {
       const response = await fetch(url, {
         headers: {
-          'User-Agent': this.userAgent
+          'User-Agent': this.userAgent,
+          'Referer': window.location.origin
         }
       });
 
@@ -63,12 +83,15 @@ export class GeocodingService {
    * @returns Place name or null if not found
    */
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
+    await this.rateLimit();
+
     const url = `${this.baseUrl}/reverse?lat=${lat}&lon=${lng}&format=json`;
 
     try {
       const response = await fetch(url, {
         headers: {
-          'User-Agent': this.userAgent
+          'User-Agent': this.userAgent,
+          'Referer': window.location.origin
         }
       });
 

@@ -108,6 +108,37 @@ export class VideoChatService {
   }
 
   /**
+   * Join the video call in passive mode (receive only, no camera/mic)
+   * This allows receiving video streams from other participants without sharing own video
+   */
+  joinPassive(): void {
+    if (this.isActive) {
+      console.log('[VideoChatService] Already in call');
+      return;
+    }
+
+    console.log('[VideoChatService] Joining in passive mode (receive only)');
+
+    this.isActive = true;
+    this.audioOnly = true; // Mark as audio-only (no video sharing)
+
+    // Update awareness to show we're in video call (passive mode)
+    this.updateAwarenessVideoState();
+
+    // Announce join to other participants (they will send offers)
+    this.publish({
+      type: 'video-join',
+      from: this.clientId,
+      audioOnly: true, // Indicate we're not sharing video
+      userName: this.userName
+    });
+
+    // Check for existing participants via awareness and wait for their offers
+    // We don't send offers since we have no local stream, just wait to receive theirs
+    console.log('[VideoChatService] Passive join complete, waiting for incoming streams');
+  }
+
+  /**
    * Leave the video call
    */
   leave(): void {

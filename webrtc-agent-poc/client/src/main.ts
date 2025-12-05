@@ -84,7 +84,7 @@ import { BlockMapView } from './views/BlockMapView';
 import { FullscreenMapView } from './views/FullscreenMapView';
 
 // Location Sheet
-import { initializeLocationSheet, setLocationSheetDependencies, showLocationSheet } from './location-sheet';
+import { initializeLocationSheet, setLocationSheetDependencies, showLocationSheet, hideLocationSheet } from './location-sheet';
 
 // Get document ID from URL path (e.g., /doc/tv-session -> tv-session)
 // Path format: /doc/{id}, fallback to query param for backwards compatibility
@@ -744,6 +744,12 @@ function extractLocationsForFullscreen() {
 // Delegates to FullscreenMapView class
 // Optional targetBounds for follow mode (uses followed user's bounds instead of calculating)
 (window as any).showFullscreenMap = (targetBounds?: { north: number; south: number; east: number; west: number }) => {
+  // Dismiss keyboard on mobile by blurring the active element
+  if (document.activeElement && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+    console.log('[Main] Blurred active element to dismiss keyboard');
+  }
+
   if (fullscreenMapView) {
     fullscreenMapView.show(targetBounds);
 
@@ -944,8 +950,31 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   container.addEventListener('focus', () => console.log('[Debug] Container FOCUS'), true);
   container.addEventListener('blur', () => console.log('[Debug] Container BLUR'), true);
 
+  // Location sheet awareness callback - tracks which location sheet is open
+  const onLocationSheetChange = (location: any | null) => {
+    console.log('[Main] Location sheet changed:', location);
+
+    // Update awareness with active location sheet
+    const currentState = awareness.getLocalState();
+    awareness.setLocalStateField('user', {
+      ...currentState?.user,
+      activeLocationSheet: location ? {
+        geoId: location.geoId,
+        displayText: location.displayText,
+        placeName: location.placeName,
+        lat: location.lat,
+        lng: location.lng,
+        colorIndex: location.colorIndex,
+        color: location.color,
+        transportFrom: location.transportFrom,
+        transportProfile: location.transportProfile,
+        waypoints: location.waypoints
+      } : null
+    });
+  };
+
   // Set location sheet dependencies (with change notification callback)
-  setLocationSheetDependencies(view, MAPBOX_TOKEN, notifyGeoMarkChange);
+  setLocationSheetDependencies(view, MAPBOX_TOKEN, notifyGeoMarkChange, onLocationSheetChange);
 
   // Initialize ViewSyncService for collaborative view synchronization
   viewSyncService = new ViewSyncService(awareness);
@@ -983,21 +1012,33 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     animation: slideDown 0.3s ease-out;
   `;
 
-  // Create mock video avatar for the controlling user
-  const videoAvatar = document.createElement('div');
-  videoAvatar.style.cssText = `
+  // Create container for video/avatar (will hold either video element or mock avatar)
+  const videoContainer = document.createElement('div');
+  videoContainer.style.cssText = `
     width: 40px;
     height: 40px;
     border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.3);
+    flex-shrink: 0;
+  `;
+
+  // Create mock avatar div (used as fallback when no video available)
+  const mockAvatar = document.createElement('div');
+  mockAvatar.style.cssText = `
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 16px;
     font-weight: 600;
     color: white;
-    border: 2px solid rgba(255,255,255,0.3);
-    flex-shrink: 0;
   `;
+
+  // Track current video element and stream to avoid recreating
+  let currentBannerVideoElement: HTMLVideoElement | null = null;
+  let currentBannerStream: MediaStream | null = null;
 
   const bannerText = document.createElement('span');
   bannerText.style.cssText = `
@@ -1065,9 +1106,97 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
       const userColor = userState?.user?.color || '#667eea';
       const userInitial = userName.charAt(0).toUpperCase();
 
-      // Update video avatar with user's color and initial
-      videoAvatar.style.background = userColor;
-      videoAvatar.textContent = userInitial;
+      // Try to get video stream from VideoChatService
+      const peerId = String(currentFollowedUser);
+      const hasVideoService = videoChatService && videoChatService.isInCall();
+
+      console.log('[Banner] Updating following banner:', {
+        currentFollowedUser,
+        peerId,
+        hasVideoService,
+        videoChatServiceExists: !!videoChatService
+      });
+
+      // Check if we have a remote video stream for this user
+      if (hasVideoService) {
+        // Access the private remoteStreams map via a type assertion
+        // This is safe because we control both the service and this code
+        const remoteStreams = (videoChatService as any).remoteStreams as Map<string, MediaStream>;
+
+        console.log('[Banner] Remote streams available:', {
+          remoteStreamsSize: remoteStreams?.size || 0,
+          availablePeerIds: remoteStreams ? Array.from(remoteStreams.keys()) : [],
+          lookingForPeerId: peerId
+        });
+
+        const stream = remoteStreams?.get(peerId);
+
+        if (stream) {
+          console.log('[Banner] Found video stream for followed user:', peerId);
+
+          // Reuse existing video element if stream hasn't changed
+          if (currentBannerVideoElement && currentBannerStream === stream) {
+            console.log('[Banner] Reusing existing video element (stream unchanged)');
+            // Video already set up, no need to recreate
+          } else {
+            console.log('[Banner] Creating new video element (stream changed or first time)');
+            // Clear container
+            videoContainer.innerHTML = '';
+
+            // Create new video element
+            const videoElement = document.createElement('video');
+            videoElement.srcObject = stream;
+            videoElement.autoplay = true;
+            videoElement.muted = true; // Mute to avoid audio feedback
+            videoElement.playsInline = true;
+            videoElement.style.cssText = `
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+            `;
+
+            videoContainer.appendChild(videoElement);
+
+            // Track current video element and stream
+            currentBannerVideoElement = videoElement;
+            currentBannerStream = stream;
+          }
+        } else {
+          console.log('[Banner] No video stream found for followed user:', peerId, '- using mock avatar');
+
+          // Clear video tracking if switching to avatar
+          if (currentBannerVideoElement) {
+            videoContainer.innerHTML = '';
+            currentBannerVideoElement = null;
+            currentBannerStream = null;
+          }
+
+          // Fall back to mock avatar
+          mockAvatar.style.background = userColor;
+          mockAvatar.textContent = userInitial;
+          if (videoContainer.firstChild !== mockAvatar) {
+            videoContainer.innerHTML = '';
+            videoContainer.appendChild(mockAvatar);
+          }
+        }
+      } else {
+        console.log('[Banner] Video chat service not available - using mock avatar');
+
+        // Clear video tracking if switching to avatar
+        if (currentBannerVideoElement) {
+          videoContainer.innerHTML = '';
+          currentBannerVideoElement = null;
+          currentBannerStream = null;
+        }
+
+        // Fall back to mock avatar
+        mockAvatar.style.background = userColor;
+        mockAvatar.textContent = userInitial;
+        if (videoContainer.firstChild !== mockAvatar) {
+          videoContainer.innerHTML = '';
+          videoContainer.appendChild(mockAvatar);
+        }
+      }
 
       // Update text content
       const textSpan = document.createElement('span');
@@ -1075,7 +1204,7 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
       // Clear and rebuild banner text
       bannerText.innerHTML = '';
-      bannerText.appendChild(videoAvatar);
+      bannerText.appendChild(videoContainer);
       bannerText.appendChild(textSpan);
 
       followingBanner.style.display = 'flex';
@@ -1175,6 +1304,39 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
 
     // Update banner to ensure it's in sync with actual awareness state
     updateFollowingBanner();
+
+    // Sync location sheet with followed user
+    if (currentFollowedUser !== null) {
+      const followedState = states.get(currentFollowedUser);
+      const followedLocationSheet = followedState?.user?.activeLocationSheet;
+
+      console.log('[Main] Followed user location sheet:', followedLocationSheet);
+
+      // Show location sheet if followed user has one open
+      if (followedLocationSheet) {
+        // Get all locations to pass to showLocationSheet
+        const allLocations = LocationExtractor.extractAll(view);
+
+        // Only show if it's a different location than currently shown
+        // (to avoid re-showing the same sheet repeatedly)
+        const backdrop = document.getElementById('location-sheet-backdrop');
+        const isSheetCurrentlyOpen = backdrop?.classList.contains('visible');
+
+        if (!isSheetCurrentlyOpen) {
+          console.log('[Main] Following user opened location sheet, showing:', followedLocationSheet.placeName);
+          showLocationSheet(followedLocationSheet, allLocations);
+        }
+      } else {
+        // Followed user closed their sheet, hide ours
+        const backdrop = document.getElementById('location-sheet-backdrop');
+        const isSheetCurrentlyOpen = backdrop?.classList.contains('visible');
+
+        if (isSheetCurrentlyOpen) {
+          console.log('[Main] Followed user closed location sheet, hiding ours');
+          hideLocationSheet();
+        }
+      }
+    }
   });
 
   // Listen for local interactions to take control
@@ -1365,6 +1527,88 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
   return view;
 }
 
+// Video notification banner (shown when someone else is sharing video)
+let videoNotificationBanner: HTMLDivElement | null = null;
+
+// Define hide function first so it's available for the button onclick
+const hideVideoNotification = () => {
+  if (videoNotificationBanner) {
+    videoNotificationBanner.style.display = 'none';
+  }
+};
+
+const showVideoNotification = (sharingUserName: string) => {
+  // Create banner if it doesn't exist
+  if (!videoNotificationBanner) {
+    videoNotificationBanner = document.createElement('div');
+    videoNotificationBanner.style.cssText = `
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(59, 130, 246, 0.95);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    `;
+
+    const textSpan = document.createElement('span');
+    textSpan.id = 'video-notification-text';
+    videoNotificationBanner.appendChild(textSpan);
+
+    const joinButton = document.createElement('button');
+    joinButton.textContent = 'Join Call';
+    joinButton.style.cssText = `
+      background: white;
+      color: rgb(59, 130, 246);
+      border: none;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    `;
+    joinButton.onmouseover = () => {
+      joinButton.style.background = 'rgba(255, 255, 255, 0.9)';
+      joinButton.style.transform = 'scale(1.05)';
+    };
+    joinButton.onmouseout = () => {
+      joinButton.style.background = 'white';
+      joinButton.style.transform = 'scale(1)';
+    };
+    joinButton.onclick = async () => {
+      if (videoChatService && !videoChatService.isInCall()) {
+        console.log('[VideoNotification] User clicked Join Call');
+        try {
+          await videoChatService.join(false);
+          hideVideoNotification();
+        } catch (error) {
+          console.error('[VideoNotification] Failed to join call:', error);
+        }
+      }
+    };
+    videoNotificationBanner.appendChild(joinButton);
+
+    document.body.appendChild(videoNotificationBanner);
+  }
+
+  // Update text
+  const textSpan = document.getElementById('video-notification-text');
+  if (textSpan) {
+    textSpan.innerHTML = `<strong>${sharingUserName}</strong> is sharing video`;
+  }
+
+  videoNotificationBanner.style.display = 'flex';
+};
+
 // Auto-open agent tab (user mode only)
 function openAgentTab(awareness: any) {
   if (isAgent) {
@@ -1516,11 +1760,17 @@ function setupVideoChat(awareness: any, iceServers: RTCIceServer[]) {
   videoChatService.onRemoteStream = (peerId: string, stream: MediaStream, peerName: string) => {
     console.log('[VideoChat] Remote stream from:', peerId, peerName);
     addRemoteVideo(peerId, stream, peerName);
+    // Show video container when receiving remote stream (even if not sharing own video)
+    showVideoContainer();
+    // Update following banner in case we're following this user - show their video
+    updateFollowingBanner();
   };
 
   videoChatService.onPeerDisconnect = (peerId: string) => {
     console.log('[VideoChat] Peer disconnected:', peerId);
     removeRemoteVideo(peerId);
+    // Update following banner in case we were following this user - fall back to avatar
+    updateFollowingBanner();
   };
 
   videoChatService.onParticipantsChange = (count: number) => {
@@ -1709,6 +1959,41 @@ async function main() {
       { urls: 'stun:stun1.l.google.com:19302' },
     ];
     setupVideoChat(awareness, iceServers);
+
+    // Set up awareness listener to notify when others are sharing video
+    awareness.on('change', () => {
+      if (!videoChatService) return;
+
+      // Check if we're already in a call - no need to notify
+      if (videoChatService.isInCall()) return;
+
+      // Check if any other user is in a video call
+      const states = awareness.getStates();
+      let someoneSharingVideo = false;
+      let sharingUserName = '';
+
+      for (const [clientId, state] of states.entries()) {
+        const peerId = String(clientId);
+
+        // Skip ourselves
+        if (peerId === awareness.clientID.toString()) continue;
+
+        // Check if this user is in a video call
+        const videoState = state?.user?.videoState;
+        if (videoState && videoState.inCall) {
+          someoneSharingVideo = true;
+          sharingUserName = state?.user?.name || `User ${clientId}`;
+          break;
+        }
+      }
+
+      // Show or hide video notification banner
+      if (someoneSharingVideo) {
+        showVideoNotification(sharingUserName);
+      } else {
+        hideVideoNotification();
+      }
+    });
   } else {
     console.log('[Main] Offline mode - skipping video chat setup');
   }
@@ -5510,11 +5795,11 @@ function setupToolbarButtons(view: EditorView) {
   const isMobile = window.innerWidth <= 768 || isTouchDevice;
   console.log('[Selection] iOS:', isIOS, 'Touch device:', isTouchDevice, 'Mobile:', isMobile, 'Width:', window.innerWidth);
 
-  // Enable mobile action bar on touch devices or narrow screens
-  if (isMobile && mobileActionBar) {
-    mobileActionBar.style.display = 'block';
-    console.log('[MobileActionBar] Enabled for mobile/touch device');
-  }
+  // Mobile action bar disabled - toolbar provides all functionality
+  // if (isMobile && mobileActionBar) {
+  //   mobileActionBar.style.display = 'block';
+  //   console.log('[MobileActionBar] Enabled for mobile/touch device');
+  // }
 
   // Mobile Action Bar show/hide
   const showMobileActionBar = () => {

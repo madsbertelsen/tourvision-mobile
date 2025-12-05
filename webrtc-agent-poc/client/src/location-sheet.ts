@@ -40,6 +40,7 @@ let isTransportExpanded = false;
 let editorView: any = null;
 let mapboxToken: string = '';
 let notifyChange: (() => void) | null = null;
+let onLocationSheetChange: ((location: LocationData | null) => void) | null = null;
 
 /**
  * Initialize location sheet functionality
@@ -84,10 +85,16 @@ export function initializeLocationSheet() {
 /**
  * Set dependencies (call from main.ts on initialization)
  */
-export function setLocationSheetDependencies(view: any, token: string, changeCallback?: () => void) {
+export function setLocationSheetDependencies(
+  view: any,
+  token: string,
+  changeCallback?: () => void,
+  locationSheetChangeCallback?: (location: LocationData | null) => void
+) {
   editorView = view;
   mapboxToken = token;
   notifyChange = changeCallback || null;
+  onLocationSheetChange = locationSheetChangeCallback || null;
   console.log('[LocationSheet] Dependencies set');
 }
 
@@ -141,6 +148,11 @@ export function showLocationSheet(location: LocationData, locations: LocationDat
     if (isMobileDevice()) {
       document.body.style.overflow = 'hidden';
     }
+
+    // Notify awareness of location sheet state
+    if (onLocationSheetChange) {
+      onLocationSheetChange(location);
+    }
   });
 }
 
@@ -163,6 +175,11 @@ export function hideLocationSheet() {
 
   // Restore body scroll
   document.body.style.overflow = '';
+
+  // Notify awareness that location sheet is closed
+  if (onLocationSheetChange) {
+    onLocationSheetChange(null);
+  }
 }
 
 /**

@@ -94,7 +94,7 @@ server.on('upgrade', (request, socket, head) => {
 // API Routes (must be defined before static file serving)
 
 // Server info endpoint
-app.get('/api', (req, res) => {
+app.get('/api', (_req, res) => {
   const info: ServerInfoResponse = {
     status: 'ok',
     service: 'WebRTC Signaling Server',
@@ -106,13 +106,13 @@ app.get('/api', (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   const health = signaling.getHealthStats();
   res.json(health);
 });
 
 // Detailed health check with statistics
-app.get('/health/detailed', (req, res) => {
+app.get('/health/detailed', (_req, res) => {
   const health = signaling.getHealthStats();
   const detailed = {
     ...health,
@@ -124,7 +124,7 @@ app.get('/health/detailed', (req, res) => {
 });
 
 // Get active topics
-app.get('/api/topics', (req, res) => {
+app.get('/api/topics', (_req, res) => {
   res.json({
     topics: signaling.getTopics(),
     count: signaling.getTopics().length
@@ -132,21 +132,21 @@ app.get('/api/topics', (req, res) => {
 });
 
 // Get topic details with subscriber counts
-app.get('/api/topics/details', (req, res) => {
+app.get('/api/topics/details', (_req, res) => {
   res.json({
     topics: signaling.getTopicCounts()
   });
 });
 
 // Get active connections count
-app.get('/api/connections', (req, res) => {
+app.get('/api/connections', (_req, res) => {
   res.json({
     connections: signaling.getSessionCount()
   });
 });
 
 // TURN credentials endpoint for WebRTC
-app.get('/api/turn-credentials', async (req, res) => {
+app.get('/api/turn-credentials', async (_req, res) => {
   const TURN_KEY_ID = process.env.TURN_KEY_ID;
   const TURN_KEY_API_TOKEN = process.env.TURN_KEY_API_TOKEN;
 
@@ -181,7 +181,7 @@ app.get('/api/turn-credentials', async (req, res) => {
       });
     }
 
-    const turnData = await turnResponse.json();
+    const turnData: any = await turnResponse.json();
 
     // Filter out port 53 (blocked by browsers)
     if (turnData.iceServers && Array.isArray(turnData.iceServers)) {
@@ -195,10 +195,10 @@ app.get('/api/turn-credentials', async (req, res) => {
       );
     }
 
-    res.json(turnData);
+    return res.json(turnData);
   } catch (error) {
     console.error('[Server] Error fetching TURN credentials:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : String(error)
     });
@@ -208,7 +208,7 @@ app.get('/api/turn-credentials', async (req, res) => {
 // Debug API Routes
 
 // Get detailed connection information
-app.get('/api/debug/connections', (req, res) => {
+app.get('/api/debug/connections', (_req, res) => {
   res.json({
     connections: signaling.getConnectionDetails()
   });
@@ -235,13 +235,13 @@ app.post('/api/debug/inject', (req, res) => {
 
   try {
     signaling.injectTestMessage(documentId, topic, data || { type: 'test', message: 'Test message from admin' });
-    res.json({
+    return res.json({
       success: true,
       message: `Test message injected to document ${documentId} on topic ${topic}`
     });
   } catch (error) {
     console.error('[Server] Error injecting test message:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Internal Server Error',
       message: error instanceof Error ? error.message : 'Failed to inject test message'
     });
@@ -249,7 +249,7 @@ app.post('/api/debug/inject', (req, res) => {
 });
 
 // Debug dashboard route (served separately from client app)
-app.get('/debug', (req, res) => {
+app.get('/debug', (_req, res) => {
   // Will serve debug.html from server/public directory
   const debugHtmlPath = join(__dirname, '../public/debug.html');
   if (existsSync(debugHtmlPath)) {
@@ -280,7 +280,7 @@ if (existsSync(clientDistPath)) {
   console.log(`[Server] Serving static files from: ${clientDistPath}`);
 
   // Disable caching for all static files (prevent Cloudflare and browser caching)
-  app.use((req, res, next) => {
+  app.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
@@ -292,7 +292,7 @@ if (existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath, { index: false }));
 
   // Landing page at root
-  app.get('/', (req, res) => {
+  app.get('/', (_req, res) => {
     const landingPath = join(clientDistPath, 'landing.html');
     if (existsSync(landingPath)) {
       res.sendFile(landingPath);
@@ -304,7 +304,7 @@ if (existsSync(clientDistPath)) {
 
   // Document routes - serve the editor app
   // Matches /doc/:documentId and /?doc=:documentId for backwards compatibility
-  app.get('/doc/*', (req, res) => {
+  app.get('/doc/*', (_req, res) => {
     res.sendFile(join(clientDistPath, 'index.html'));
   });
 
@@ -323,7 +323,7 @@ if (existsSync(clientDistPath)) {
   console.warn(`[Server] Run 'npm run build' in the client directory to build the frontend`);
 
   // Landing page placeholder
-  app.get('/', (req, res) => {
+  app.get('/', (_req, res) => {
     res.status(503).send(`
       <html>
         <head><title>TourVision - Not Built</title></head>
@@ -356,7 +356,7 @@ app.use((req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Server] Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',

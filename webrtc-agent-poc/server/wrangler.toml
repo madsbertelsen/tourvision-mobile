@@ -1,0 +1,30 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "tourvision-server"
+main = "src/worker.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object binding for SignalingServer
+[[durable_objects.bindings]]
+name = "SIGNALING"
+class_name = "SignalingDurableObject"
+script_name = "tourvision-server"
+
+# Durable Object migration (SQLite-backed for free plan)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalingDurableObject"]
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+
+# Assets binding for serving static files
+[assets]
+directory = "./client/dist-public"
+binding = "ASSETS"
+
+# Development configuration
+[dev]
+port = 8787
+ip = "0.0.0.0"

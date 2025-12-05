@@ -243,7 +243,7 @@ export class SignalingServer {
   /**
    * Handle publish message
    */
-  private handlePublish(ws: WebSocket, message: SignalingMessage, documentId: string): void {
+  private handlePublish(_ws: WebSocket, message: SignalingMessage, documentId: string): void {
     if (!message.topic) {
       return;
     }

@@ -91,13 +91,13 @@
     /* Hero */
     .hero {
       text-align: center;
-      padding: 80px 24px;
+      padding: 60px 24px;
       max-width: 900px;
       margin: 0 auto;
     }
 
     .hero h1 {
-      font-size: 56px;
+      font-size: 48px;
       font-weight: 700;
       line-height: 1.1;
       letter-spacing: -2px;
@@ -133,22 +133,14 @@
 
     /* Feature Sections */
     .feature-section {
-      padding: 80px 24px;
+      padding: 60px 24px;
       max-width: 1200px;
       margin: 0 auto;
     }
 
-    .feature-section:nth-child(even) {
-      background: #fff;
-    }
-
-    .feature-section.alt {
-      background: #fff;
-    }
-
     .feature-header {
       text-align: center;
-      margin-bottom: 48px;
+      margin-bottom: 32px;
     }
 
     .feature-label {
@@ -161,7 +153,7 @@
     }
 
     .feature-header h2 {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 700;
       letter-spacing: -1px;
       margin-bottom: 16px;
@@ -174,203 +166,15 @@
       margin: 0 auto;
     }
 
-    /* Demo Container */
-    .demo-container {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow:
-        0 0 0 1px rgba(0,0,0,0.05),
-        0 4px 16px rgba(0,0,0,0.08),
-        0 12px 48px rgba(0,0,0,0.06);
-      overflow: hidden;
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    .demo-toolbar {
-      display: flex;
-      align-items: center;
-      padding: 8px 12px;
-      border-bottom: 1px solid #eee;
-      gap: 8px;
-      background: #fafafa;
-    }
-
-    .demo-dots {
-      display: flex;
-      gap: 6px;
-    }
-
-    .demo-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #ddd;
-    }
-
-    .demo-dot.red { background: #ff5f56; }
-    .demo-dot.yellow { background: #ffbd2e; }
-    .demo-dot.green { background: #27c93f; }
-
-    .toolbar-divider {
-      width: 1px;
-      height: 20px;
-      background: #e0e0e0;
-      margin: 0 8px;
-    }
-
-    .demo-title {
-      font-size: 13px;
-      color: #666;
-      flex: 1;
-      text-align: center;
-    }
-
-    .demo-iframe-container {
-      height: 500px;
-      position: relative;
-    }
-
-    .demo-iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    /* Feature Tabs */
-    .feature-tabs {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
-    .feature-tab {
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 500;
-      color: #999;
-      background: transparent;
-      border: 1px solid #e0e0e0;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .feature-tab:hover {
-      color: #666;
-      border-color: #ccc;
-    }
-
-    .feature-tab.active {
-      color: #111;
-      background: #f5f5f5;
-      border-color: #111;
-    }
-
-    .feature-tab.completed {
-      color: #10B981;
-      border-color: #10B981;
-    }
-
-    /* Phone Mockup */
-    .phone-mockup {
-      position: relative;
-      background: #1a1a1a;
-      border-radius: 40px;
-      padding: 12px;
-      box-shadow:
-        0 0 0 2px #333,
-        0 20px 50px rgba(0,0,0,0.3);
-      max-width: 320px;
-      margin: 0 auto;
-    }
-
-    .phone-mockup::after {
-      /* Home indicator */
-      content: '';
-      position: absolute;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100px;
-      height: 4px;
-      background: #666;
-      border-radius: 2px;
-      z-index: 10;
-    }
-
-    .phone-screen {
-      background: #fff;
-      border-radius: 28px;
-      overflow: hidden;
-      aspect-ratio: 9/19.5;
-      position: relative;
-    }
-
-    .phone-screen iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    /* Hide scrollbar in phone screen */
-    .phone-screen::-webkit-scrollbar {
-      display: none;
-    }
-    .phone-screen {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .phone-screen iframe {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .phone-screen iframe::-webkit-scrollbar {
-      display: none;
-    }
-
-    /* Feature Grid (for smaller feature cards) */
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 24px;
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    .feature-card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 32px;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.05);
-    }
-
-    .feature-card-icon {
-      font-size: 32px;
-      margin-bottom: 16px;
-    }
-
-    .feature-card h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .feature-card p {
-      font-size: 14px;
-      color: #666;
-    }
-
     /* CTA Section */
     .cta-section {
       text-align: center;
-      padding: 80px 24px;
+      padding: 60px 24px;
       background: linear-gradient(180deg, #f0f9ff 0%, #fef3f2 50%, #fefce8 100%);
     }
 
     .cta-section h2 {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 700;
       letter-spacing: -1px;
       margin-bottom: 16px;
@@ -468,27 +272,12 @@
 
     @media (max-width: 768px) {
       .hero h1 {
-        font-size: 36px;
+        font-size: 32px;
         letter-spacing: -1px;
       }
 
       .feature-header h2 {
-        font-size: 28px;
-      }
-
-      .phone-mockup {
-        max-width: 280px;
-        border-radius: 32px;
-        padding: 10px;
-      }
-
-      .phone-mockup::after {
-        width: 80px;
-        bottom: 6px;
-      }
-
-      .phone-screen {
-        border-radius: 22px;
+        font-size: 24px;
       }
 
       .header-right .header-link {
@@ -514,11 +303,11 @@
     <!-- Hero Section -->
     <section class="hero">
       <h1>
-        Plan <span class="highlight">collaborative</span><br>
-        trips <span class="italic">together</span>
+        Plan trips <span class="highlight">together</span><br>
+        in <span class="italic">real-time</span>
       </h1>
       <p>
-        Create documents with interactive maps. Tag locations, share itineraries, and see each other's cursors live.
+        Alice and Bob explore locations on the map together. Watch them collaborate in real-time.
       </p>
       <div class="hero-buttons">
         <button class="btn btn-primary" onclick="quickStart()">Start Planning</button>
@@ -526,45 +315,15 @@
       </div>
     </section>
 
-    <!-- Feature 1: Interactive Maps (Location Tagging + Map) -->
+    <!-- Collaboration Demo -->
     <section class="feature-section" id="demo">
       <div class="feature-header">
-        <div class="feature-label">Location Tagging</div>
-        <h2>Tag places, see them on the map</h2>
-        <p>Double-tap any text and create a geo-mark. Insert maps to visualize your locations.</p>
+        <div class="feature-label">Real-time Collaboration</div>
+        <h2>Two travelers, one document</h2>
+        <p>Alice and Bob plan their trip together, seeing each other's cursors and map views.</p>
       </div>
       <!-- DemoPlayer mounts here -->
-      <div id="maps-demo-container"></div>
-    </section>
-
-    <!-- Additional Features Grid -->
-    <section class="feature-section alt" id="features">
-      <div class="feature-header">
-        <div class="feature-label">More Features</div>
-        <h2>Everything you need to plan</h2>
-      </div>
-      <div class="feature-grid">
-        <div class="feature-card">
-          <div class="feature-card-icon">👥</div>
-          <h3>Follow Mode</h3>
-          <p>Follow a friend's view and see exactly what they're looking at on the map.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card-icon">🎨</div>
-          <h3>Map Styles</h3>
-          <p>Choose from multiple map styles including satellite, streets, and terrain views.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card-icon">📱</div>
-          <h3>Mobile Ready</h3>
-          <p>Plan on any device. Full touch support for tablets and phones.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-card-icon">🔗</div>
-          <h3>Easy Sharing</h3>
-          <p>Share your trip with a simple link. No account required to collaborate.</p>
-        </div>
-      </div>
+      <div id="collab-demo-container"></div>
     </section>
 
     <!-- CTA Section -->
@@ -639,53 +398,45 @@
 
   </script>
 
-  <!-- DemoPlayer for maps demo with dynamic second phone for collaboration -->
+  <!-- DemoPlayer for collaboration demo with both phones from start -->
   <script type="module">
     import { DemoPlayer } from './src/components/DemoPlayer.js';
 
-    const SHARE_STEP = 4; // Step index when to add second phone
-
     // Generate unique session ID for this landing page instance
-    // This prevents ghost states when multiple tabs view the landing page
     const sessionId = Math.random().toString(36).substring(2, 10);
-    const demoDocId = `demo-maps-${sessionId}`;
-    console.log('[Landing] Session ID:', sessionId, 'Doc ID:', demoDocId);
+    const demoDocId = `demo-collab-${sessionId}`;
+    console.log('[Landing Collab] Session ID:', sessionId, 'Doc ID:', demoDocId);
+
+    // Check for step mode query parameter (?stepMode=true)
+    const urlParams = new URLSearchParams(window.location.search);
+    const stepMode = urlParams.get('stepMode') === 'true';
+    if (stepMode) {
+      console.log('[Landing Collab] Step mode enabled - click Next to advance');
+    }
 
     // Store reference for cleanup
     let demoPlayer = null;
 
     demoPlayer = new DemoPlayer({
-      container: document.getElementById('maps-demo-container'),
-      demoScript: 'maps',
-      editorUrl: `/doc/${demoDocId}`, // Unique per session
+      container: document.getElementById('collab-demo-container'),
+      demoScript: 'collabMap',  // Uses collabMap demo which starts with document containing block map
+      editorUrl: `/doc/${demoDocId}`,
       sessionId: sessionId,
-      enableSync: true, // Enable Y.js sync from the start for addSecondPhone
+      dualPhone: true,  // Start with both Alice and Bob phones
       steps: [
-        { label: 'Writing', heading: 'Writing', text: 'Just type - like any other doc' },
-        { label: 'Location Tagging', heading: 'Location Tagging', text: 'Double-tap text to create geo-marks' },
-        { label: 'Fullscreen Map', heading: 'Fullscreen Map', text: 'Click any map to expand and explore' },
-        { label: 'Transport', heading: 'Transport', text: 'Add routes between locations' },
-        { label: 'Share', heading: 'Share', text: 'Invite friends to collaborate in real-time' },
-        { label: 'Video Call', heading: 'Video Call', text: 'Discuss your trip together' }
+        { label: 'Planning', heading: 'Planning Together', text: 'Alice and Bob explore locations on the same document' },
+        { label: 'Exploring', heading: 'Exploring the Map', text: 'Alice pans the map to see all locations' },
+        { label: 'Transport', heading: 'Walking to Tivoli', text: 'Alice configures walking directions to Tivoli Gardens' },
+        { label: 'Route', heading: 'Route Configured', text: 'The walking route is now visible on the map' }
       ],
       autoStart: true,
-      offlineMode: true  // No server dependency - prevents failed network requests
+      offlineMode: true,  // No server dependency
+      stepMode: stepMode  // Manual step mode - user must click Next to advance
     });
 
-    // Add second phone (Bob) when reaching the Share step
-    demoPlayer.onStepChange = (step) => {
-      console.log('[Landing] Step changed:', step);
-      if (step === SHARE_STEP) {
-        // Add Bob's phone after the overlay finishes
-        setTimeout(() => {
-          demoPlayer.addSecondPhone();
-        }, 2500);
-      }
-    };
-
-    // Cleanup on page unload to prevent ghost states
+    // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
-      console.log('[Landing] Page unloading - destroying demo player');
+      console.log('[Landing Collab] Page unloading - destroying demo player');
       if (demoPlayer) {
         demoPlayer.destroy();
         demoPlayer = null;
