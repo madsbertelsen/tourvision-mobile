@@ -11,9 +11,9 @@ function routingPlugin(): Plugin {
         if (req.url === '/' || req.url === '/index.html') {
           req.url = '/landing.html';
         }
-        // Rewrite /doc/* requests to index.html for SPA routing (editor app)
+        // Rewrite /doc/* requests to editor.html for SPA routing (editor app)
         else if (req.url?.startsWith('/doc/')) {
-          req.url = '/index.html';
+          req.url = '/editor.html';
         }
         next();
       });
@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
           landing: resolve(__dirname, 'landing.html'),
+          editor: resolve(__dirname, 'editor.html'),
         },
       },
     },
