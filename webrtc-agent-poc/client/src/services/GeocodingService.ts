@@ -13,10 +13,9 @@ export interface GeocodedLocation {
 }
 
 export class GeocodingService {
-  private readonly baseUrl = 'https://nominatim.openstreetmap.org';
-  private readonly userAgent = 'TourVision/1.0 (https://tourvision.com; contact@tourvision.com)';
+  private readonly proxyUrl = `${window.location.protocol}//${window.location.hostname}:8787/api`;
   private lastRequestTime = 0;
-  private readonly minRequestInterval = 1000; // 1 second rate limit per Nominatim policy
+  private readonly minRequestInterval = 100; // Relaxed rate limit for local Nominatim instance
 
   /**
    * Rate limit requests to respect Nominatim's 1 request per second policy
@@ -42,18 +41,13 @@ export class GeocodingService {
   async geocode(placeName: string): Promise<GeocodedLocation | null> {
     await this.rateLimit();
 
-    const url = `${this.baseUrl}/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`;
+    const url = `${this.proxyUrl}/geocode?q=${encodeURIComponent(placeName)}`;
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': this.userAgent,
-          'Referer': window.location.origin
-        }
-      });
+      const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(`Nominatim API error: ${response.status}`);
+        throw new Error(`Geocoding API error: ${response.status}`);
       }
 
       const data: GeocodingResult[] = await response.json();
@@ -85,18 +79,13 @@ export class GeocodingService {
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
     await this.rateLimit();
 
-    const url = `${this.baseUrl}/reverse?lat=${lat}&lon=${lng}&format=json`;
+    const url = `${this.proxyUrl}/reverse-geocode?lat=${lat}&lon=${lng}`;
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': this.userAgent,
-          'Referer': window.location.origin
-        }
-      });
+      const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(`Nominatim API error: ${response.status}`);
+        throw new Error(`Reverse geocoding API error: ${response.status}`);
       }
 
       const data = await response.json();

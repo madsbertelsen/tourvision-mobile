@@ -503,6 +503,7 @@ export class DemoPlayer {
         width: 100%;
         height: 100%;
         border: none;
+        overflow: hidden;
       }
 
       /* Speech bubble overlay - cartoonish floating bubble */

@@ -205,6 +205,74 @@ app.get('/api/turn-credentials', async (_req, res) => {
   }
 });
 
+// Geocoding proxy to local Nominatim service
+app.get('/api/geocode', async (req, res) => {
+  const { q } = req.query;
+
+  if (!q || typeof q !== 'string') {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Query parameter "q" is required'
+    });
+  }
+
+  try {
+    const url = `http://localhost:8080/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: 'Geocoding failed',
+        message: `Local Nominatim returned ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error('[Server] Geocoding error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Reverse geocoding proxy to local Nominatim service
+app.get('/api/reverse-geocode', async (req, res) => {
+  const { lat, lon } = req.query;
+
+  if (!lat || !lon || typeof lat !== 'string' || typeof lon !== 'string') {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Query parameters "lat" and "lon" are required'
+    });
+  }
+
+  try {
+    const url = `http://localhost:8080/reverse?lat=${lat}&lon=${lon}&format=json`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: 'Reverse geocoding failed',
+        message: `Local Nominatim returned ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error('[Server] Reverse geocoding error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 // Debug API Routes
 
 // Get detailed connection information
