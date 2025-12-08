@@ -242,8 +242,8 @@ async function startLocationDetection(text: string): Promise<void> {
           currentDraft.detectedLocations[index] = {
             ...currentDraft.detectedLocations[index],
             status: 'found',
-            lat: result.lat,
-            lng: result.lng,
+            lat: Number(result.lat),
+            lng: Number(result.lng),
             geoId,
             colorIndex
           };
@@ -431,7 +431,7 @@ function renderLocationItem(location: DetectedLocation): string {
   } else if (status === 'found') {
     const color = colorIndex !== undefined ? GEO_MARK_COLORS[colorIndex] : '#ccc';
     statusHtml = `<div class="voice-draft-location-status found" style="background-color: ${color};"></div>`;
-    detailsHtml = `<div class="voice-draft-location-coords">${lat?.toFixed(4)}, ${lng?.toFixed(4)}</div>`;
+    detailsHtml = `<div class="voice-draft-location-coords">${Number(lat)?.toFixed(4)}, ${Number(lng)?.toFixed(4)}</div>`;
   } else if (status === 'error') {
     statusHtml = '<div class="voice-draft-location-status error"></div>';
     detailsHtml = `<div class="voice-draft-location-error-msg">${errorMessage || 'Error'}</div>`;
