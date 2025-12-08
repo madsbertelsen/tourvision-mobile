@@ -66,10 +66,13 @@ export async function generatePlan(
       }
     ];
 
-    // Call Ollama with JSON format (not function calling)
-    const response = await callOllama(messages);
+    // Get tool definitions for Ollama function calling
+    const toolDefinitions = getToolDefinitions();
 
-    // Parse tool calls from JSON response
+    // Call Ollama with native tool calling
+    const response = await callOllama(messages, toolDefinitions);
+
+    // Parse tool calls from response
     const tools = parseToolCalls(response);
 
     // Execute geocode tools during planning and resolve coordinates
@@ -247,13 +250,16 @@ async function callOllama(
     const requestBody: any = {
       model: OLLAMA_MODEL,
       messages,
-      stream: false,
-      format: 'json'
+      stream: false
     };
 
-    // Only add tools if provided (for function calling mode)
+    // Add tools for native function calling
     if (tools && tools.length > 0) {
       requestBody.tools = tools;
+      // Don't use format: 'json' when using native tool calling
+    } else {
+      // Only force JSON format if not using tool calling
+      requestBody.format = 'json';
     }
 
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -285,19 +291,51 @@ async function callOllama(
 }
 
 /**
- * Parse tool calls from Ollama response (expects JSON format)
+ * Parse tool calls from Ollama response (supports both native tool calling and JSON format)
  */
 function parseToolCalls(response: OllamaResponse): ToolCall[] {
   const tools: ToolCall[] = [];
-  const content = response.message.content;
 
-  console.log('[OllamaAgentService] Raw LLM response:', content);
+  console.log('[OllamaAgentService] Parsing tool calls from response');
+  console.log('[OllamaAgentService] Has tool_calls:', !!response.message.tool_calls);
+  console.log('[OllamaAgentService] Content:', response.message.content);
+
+  // Method 1: Native Ollama tool calling (preferred)
+  if (response.message.tool_calls && response.message.tool_calls.length > 0) {
+    console.log('[OllamaAgentService] Using native Ollama tool calls');
+
+    for (const toolCall of response.message.tool_calls) {
+      if (toolCall.type !== 'function') continue;
+
+      const tool: ToolCall = {
+        name: toolCall.function.name as any,
+        parameters: toolCall.function.arguments,
+        status: 'pending'
+      };
+
+      // Validate tool call
+      if (!validateToolCall(tool)) {
+        console.warn('[OllamaAgentService] Invalid tool call, skipping:', tool);
+        continue;
+      }
+
+      tools.push(tool);
+      console.log('[OllamaAgentService] Parsed tool:', tool.name, tool.parameters);
+    }
+
+    return tools;
+  }
+
+  // Method 2: JSON format fallback (for models that don't support native tool calling)
+  const content = response.message.content;
+  if (!content || content.trim().length === 0) {
+    console.warn('[OllamaAgentService] Empty content, no tools to parse');
+    return [];
+  }
 
   try {
-    // Parse JSON response
+    console.log('[OllamaAgentService] Trying JSON format fallback');
     const parsed = JSON.parse(content);
-
-    console.log('[OllamaAgentService] Parsed JSON:', parsed);
 
     if (!parsed.tools || !Array.isArray(parsed.tools)) {
       console.warn('[OllamaAgentService] No tools array in JSON response');
@@ -325,6 +363,7 @@ function parseToolCalls(response: OllamaResponse): ToolCall[] {
       }
 
       tools.push(tool);
+      console.log('[OllamaAgentService] Parsed tool:', tool.name, tool.parameters);
     }
 
     return tools;
