@@ -242,8 +242,9 @@ async function callOllama(
     const options: any = {
       model: OLLAMA_MODEL,
       messages,
-      stream: false,
-      think: true  // Enable thinking/reasoning for better results
+      stream: false
+      // Note: think: true is only supported by some models (deepseek-r1, qwen2.5, etc.)
+      // ministral-3:8b does not support it
     };
 
     // Add tools for native function calling
