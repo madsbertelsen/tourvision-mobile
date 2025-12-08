@@ -333,6 +333,16 @@ function renderDraftContent(): void {
 
   let html = '';
 
+  // Conversational Message Section
+  html += `
+    <div class="voice-draft-assistant-message">
+      <div class="voice-draft-assistant-avatar">🤖</div>
+      <div class="voice-draft-assistant-bubble">
+        ${escapeHtml(generateConfirmationMessage())}
+      </div>
+    </div>
+  `;
+
   // Processing indicator
   if (isProcessing) {
     html += `
@@ -373,6 +383,47 @@ function renderDraftContent(): void {
   }
 
   contentDiv.innerHTML = html;
+}
+
+function generateConfirmationMessage(): string {
+  const { transcript, detectedLocations, isProcessing } = currentDraft;
+
+  // Part 1: Transcript readback
+  const transcriptPart = `You said: "${transcript}"`;
+
+  // Part 2: Location status
+  let locationPart = '';
+
+  if (isProcessing) {
+    // Still detecting
+    locationPart = `I'm detecting locations...`;
+  } else {
+    // Detection complete
+    const foundLocations = detectedLocations.filter(loc => loc.status === 'found');
+    const errorLocations = detectedLocations.filter(loc => loc.status === 'error');
+
+    if (foundLocations.length === 0) {
+      locationPart = `I didn't find any locations.`;
+    } else if (foundLocations.length === 1) {
+      const name = foundLocations[0].locationName;
+      locationPart = `I found 1 location: ${name}.`;
+    } else {
+      const names = foundLocations.map(loc => loc.locationName).join(', ');
+      const lastComma = names.lastIndexOf(',');
+      const formattedNames = lastComma > 0
+        ? names.substring(0, lastComma) + ' and' + names.substring(lastComma + 1)
+        : names;
+      locationPart = `I found ${foundLocations.length} locations: ${formattedNames}.`;
+    }
+
+    // Add error note if some failed
+    if (errorLocations.length > 0) {
+      const errorNames = errorLocations.map(loc => loc.locationName).join(', ');
+      locationPart += ` I couldn't find: ${errorNames}.`;
+    }
+  }
+
+  return `${transcriptPart} ${locationPart}`;
 }
 
 function highlightLocationsInText(text: string, locations: DetectedLocation[]): string {
