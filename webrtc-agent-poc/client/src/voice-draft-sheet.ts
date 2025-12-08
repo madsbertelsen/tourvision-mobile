@@ -265,8 +265,12 @@ function renderToolPlan(tools: ToolCall[]): string {
       html += `<div class="voice-draft-tool-icon">📝</div>`;
       html += `<div class="voice-draft-tool-desc">Replace "${escapeHtml(tool.parameters.targetText)}" → "${escapeHtml(tool.parameters.replacementText)}"</div>`;
     } else if (tool.name === 'insertText') {
-      const preview = tool.parameters.text.substring(0, 50);
-      const hasMore = tool.parameters.text.length > 50 ? '...' : '';
+      // Support both html (new) and text (old) parameters
+      const content = tool.parameters.html || tool.parameters.text || '';
+      // Strip HTML tags for preview
+      const textOnly = content.replace(/<[^>]*>/g, '');
+      const preview = textOnly.substring(0, 50);
+      const hasMore = textOnly.length > 50 ? '...' : '';
       html += `<div class="voice-draft-tool-icon">➕</div>`;
       html += `<div class="voice-draft-tool-desc">Insert text: "${escapeHtml(preview)}${hasMore}"</div>`;
     } else if (tool.name === 'insertMap') {
