@@ -6,6 +6,7 @@
 import type { AgentPlan, ToolCall, ExecutionContext, ExecutionResult } from '../types/agent';
 import type { DetectedLocation } from '../types';
 import { TextSelection } from 'prosemirror-state';
+import { DOMParser } from 'prosemirror-model';
 import { describeToolCall } from './ToolRegistry';
 
 /**
@@ -139,16 +140,20 @@ function executeReplaceText(
 
 /**
  * Tool 2: insertText
- * Insert text at cursor or end of document (does NOT auto-create geo-marks)
+ * Insert rich HTML content with geo-marks at cursor or end of document
  */
 function executeInsertText(
-  params: { text: string; position?: 'cursor' | 'end' },
+  params: { html?: string; text?: string; position?: 'cursor' | 'end' },
   context: ExecutionContext
 ): ExecutionResult {
-  const { editorView, schema } = context;
+  const { editorView, schema, detectedLocations } = context;
   const { state } = editorView;
 
-  console.log('[ToolExecutor] insertText at', params.position || 'cursor');
+  // Support both html (new) and text (backward compatibility)
+  const content = params.html || params.text || '';
+  const isHtml = !!params.html;
+
+  console.log('[ToolExecutor] insertText at', params.position || 'cursor', isHtml ? '(HTML mode)' : '(plain text mode)');
 
   const insertPos = params.position === 'end'
     ? state.doc.content.size
@@ -156,19 +161,41 @@ function executeInsertText(
 
   try {
     let tr = state.tr;
+    let insertedLength = 0;
 
-    // Just insert text - DON'T auto-create geo-marks
-    // The LLM will use createGeoMark separately if needed
-    tr = tr.insertText(params.text + ' ', insertPos);
+    if (isHtml) {
+      // Parse HTML and enrich geo-marks with generated attributes
+      const enrichedHtml = enrichGeoMarks(content, detectedLocations);
+
+      console.log('[ToolExecutor] Enriched HTML:', enrichedHtml);
+
+      // Create a temporary DOM element to parse HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = enrichedHtml;
+
+      // Use ProseMirror's DOMParser to convert HTML to ProseMirror nodes
+      const parser = DOMParser.fromSchema(schema);
+      const parsedDoc = parser.parse(tempDiv);
+
+      // Insert the parsed content
+      tr = tr.insert(insertPos, parsedDoc.content);
+      insertedLength = parsedDoc.content.size;
+
+      console.log('[ToolExecutor] Inserted', insertedLength, 'nodes from HTML');
+    } else {
+      // Plain text mode (backward compatibility)
+      tr = tr.insertText(content + ' ', insertPos);
+      insertedLength = content.length;
+    }
 
     // Track the insertion range for subsequent createGeoMark calls
-    const textEnd = insertPos + params.text.length;
+    const textEnd = insertPos + insertedLength;
     context.lastInsertedRange = { from: insertPos, to: textEnd };
 
     console.log('[ToolExecutor] Tracked insertion range:', context.lastInsertedRange);
 
-    // Move cursor to end of inserted text (includes space)
-    const cursorPos = textEnd + 1;
+    // Move cursor to end of inserted content
+    const cursorPos = textEnd;
     tr = tr.setSelection(TextSelection.create(tr.doc, cursorPos));
 
     editorView.dispatch(tr);
@@ -176,9 +203,10 @@ function executeInsertText(
     return {
       toolName: 'insertText',
       success: true,
-      message: `Inserted text at ${params.position || 'cursor'}`
+      message: `Inserted ${isHtml ? 'HTML' : 'text'} at ${params.position || 'cursor'}`
     };
   } catch (error) {
+    console.error('[ToolExecutor] insertText error:', error);
     return {
       toolName: 'insertText',
       success: false,
@@ -461,6 +489,56 @@ function findTextPosition(
   });
 
   return foundPosition;
+}
+
+/**
+ * Enrich geo-mark spans in HTML with generated attributes
+ * Adds: data-geo-id, data-color-index, data-coord-source, data-created-at, data-created-by
+ */
+function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): string {
+  // Parse HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  // Find all geo-mark spans
+  const geoMarkSpans = tempDiv.querySelectorAll('span.geo-mark');
+
+  geoMarkSpans.forEach((span, index) => {
+    const placeName = span.getAttribute('data-place-name');
+    const lat = span.getAttribute('data-lat');
+    const lng = span.getAttribute('data-lng');
+
+    if (!placeName || !lat || !lng) {
+      console.warn('[ToolExecutor] Skipping invalid geo-mark:', span.innerHTML);
+      return;
+    }
+
+    // Generate attributes
+    const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const colorIndex = detectedLocations.length + index;
+
+    // Add to detectedLocations for reference by other tools
+    detectedLocations.push({
+      locationName: placeName,
+      geoId,
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      colorIndex: colorIndex % 10,
+      status: 'found',
+      ranges: [] // Ranges will be set after insertion
+    });
+
+    // Set attributes on span
+    span.setAttribute('data-geo-id', geoId);
+    span.setAttribute('data-color-index', String(colorIndex % 10));
+    span.setAttribute('data-coord-source', 'nominatim');
+    span.setAttribute('data-created-at', new Date().toISOString());
+    span.setAttribute('data-created-by', 'voice-agent');
+
+    console.log('[ToolExecutor] Enriched geo-mark:', placeName, geoId);
+  });
+
+  return tempDiv.innerHTML;
 }
 
 /**

@@ -37,25 +37,29 @@ const replaceTextTool: ToolDefinition = {
 
 /**
  * Tool 2: insertText
- * Purpose: Insert text at the cursor position or end of document
+ * Purpose: Insert rich text with geo-marks at the cursor position or end of document
  */
 const insertTextTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'insertText',
-    description: 'Insert text at the cursor position or at the end of the document. Use this when adding new content that doesn\'t replace anything.',
+    description: `Insert HTML content with geo-marks. Wrap location names in: <span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
+
+Example: I want to visit <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span> and <span class="geo-mark" data-place-name="Stockholm" data-lat="59.3333" data-lng="18.0271">Stockholm</span>
+
+Do NOT include data-geo-id or data-color-index - these will be generated automatically.`,
     parameters: {
       type: 'object',
-      required: ['text'],
+      required: ['html'],
       properties: {
-        text: {
+        html: {
           type: 'string',
-          description: 'The text to insert into the document'
+          description: 'HTML content with geo-marks as <span class="geo-mark" data-place-name="..." data-lat="..." data-lng="...">Text</span>'
         },
         position: {
           type: 'string',
           enum: ['cursor', 'end'],
-          description: 'Where to insert the text: at cursor position (default) or at the end of the document'
+          description: 'Where to insert: at cursor position (default) or at the end of the document'
         }
       }
     }
@@ -125,12 +129,15 @@ const geocodeTool: ToolDefinition = {
 /**
  * Tool 5: createGeoMark
  * Purpose: Mark existing text as a geographic location with pre-resolved coordinates
+ *
+ * DEPRECATED: Use insertText with HTML geo-marks instead.
+ * This tool is kept for backward compatibility only.
  */
 const createGeoMarkTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'createGeoMark',
-    description: 'Mark text with coordinates (requires geocode first). The coordinates will be automatically populated from the geocode tool results.',
+    description: '[DEPRECATED - Use insertText with HTML geo-marks instead] Mark text with coordinates (requires geocode first). The coordinates will be automatically populated from the geocode tool results.',
     parameters: {
       type: 'object',
       required: ['text', 'placeName'],
@@ -256,8 +263,11 @@ export function describeToolCall(toolCall: ToolCall): string {
 
     case 'insertText':
       const pos = toolCall.parameters.position || 'cursor';
-      const preview = toolCall.parameters.text.substring(0, 50);
-      return `Insert text at ${pos}: "${preview}${toolCall.parameters.text.length > 50 ? '...' : ''}"`;
+      // Strip HTML tags for preview
+      const html = toolCall.parameters.html || toolCall.parameters.text || '';
+      const textOnly = html.replace(/<[^>]*>/g, '');
+      const preview = textOnly.substring(0, 50);
+      return `Insert text at ${pos}: "${preview}${textOnly.length > 50 ? '...' : ''}"`;
 
     case 'insertMap':
       return `Insert map (will auto-discover geo-marks from context)`;

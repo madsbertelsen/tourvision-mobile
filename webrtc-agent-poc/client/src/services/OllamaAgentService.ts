@@ -150,16 +150,15 @@ DETECTED LOCATIONS: ${locationNames || 'None'}
 
 AVAILABLE TOOLS:
 1. replaceText(targetText, replacementText) - Replace existing text in the document
-2. insertText(text) - Insert new text at cursor (does NOT auto-create geo-marks)
+2. insertText(html) - Insert HTML with embedded geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
-4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (call this FIRST for locations)
-5. createGeoMark(text, placeName, lat, lng) - Mark text with coordinates (requires geocode first)
-6. setTransportation(toLocation, fromLocation, mode) - Set transportation between locations (mode: cycling/driving/walking/flying)
+4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (call this FIRST to get lat/lng)
+5. setTransportation(toLocation, fromLocation, mode) - Set transportation between locations (mode: cycling/driving/walking/flying)
 
 WORKFLOW FOR LOCATIONS:
-1. If user mentions a location (e.g., "Copenhagen"), first call geocode with qualification parameters
+1. If user mentions a location, first call geocode with qualification parameters to get coordinates
 2. Use document context to provide hints: country, proximity to other locations, etc.
-3. Then call createGeoMark with the resolved coordinates
+3. Then embed the coordinates directly in insertText HTML as geo-mark spans
 
 QUALIFICATION PARAMETERS:
 - country: Use when you know the country from context (e.g., document mentions "Denmark")
@@ -175,9 +174,9 @@ IMPORTANT RULES:
 - ALWAYS provide qualification parameters (country, proximity) when you have context hints
 
 Examples:
-- "I want to visit Copenhagen" → geocode (city) → createGeoMark
-- "I want to see The Little Mermaid" → geocode (landmark in Copenhagen) → createGeoMark
-- "I want to visit the Louvre Museum" → geocode (museum in Paris) → createGeoMark
+- "I want to visit Copenhagen" → geocode (city) → insertText with HTML geo-mark
+- "I want to see The Little Mermaid" → geocode (landmark in Copenhagen) → insertText with HTML geo-mark
+- "I want to visit the Louvre Museum" → geocode (museum in Paris) → insertText with HTML geo-mark
 - "I want to go shopping" → insertText only (no specific location)
 - "I want to attend a concert" → insertText only (no venue specified)
 
@@ -191,45 +190,39 @@ You must respond with valid JSON in this exact format:
   ]
 }
 
-IMPORTANT: ALWAYS insert the COMPLETE text first in ONE insertText call, then create geo-marks afterward.
-NEVER break up text into fragments like "from " + location + " to " + location.
+IMPORTANT: Embed geo-marks DIRECTLY in the HTML - ONE insertText call with all locations marked.
+
+HTML GEO-MARK FORMAT:
+<span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
 
 Examples:
 - "I want to visit Copenhagen" (document mentions Denmark):
   {"tools": [
-    {"name": "insertText", "parameters": {"text": "I want to visit Copenhagen"}},
     {"name": "geocode", "parameters": {"placeName": "Copenhagen", "country": "Denmark"}},
-    {"name": "createGeoMark", "parameters": {"text": "Copenhagen", "placeName": "Copenhagen"}}
+    {"name": "insertText", "parameters": {"html": "I want to visit <span class=\"geo-mark\" data-place-name=\"Copenhagen\" data-lat=\"55.6867\" data-lng=\"12.5701\">Copenhagen</span>"}}
   ]}
 
-- "I might also go to visit The Little Mermaid" (document has Copenhagen at 55.68, 12.57):
+- "I want to drive from Copenhagen to Stockholm" (European context):
   {"tools": [
-    {"name": "insertText", "parameters": {"text": "I might also go to visit The Little Mermaid"}},
-    {"name": "geocode", "parameters": {"placeName": "The Little Mermaid", "country": "Denmark", "proximity": {"lat": 55.68, "lng": 12.57}}},
-    {"name": "createGeoMark", "parameters": {"text": "The Little Mermaid", "placeName": "The Little Mermaid"}}
-  ]}
-
-- "I want to drive my car from Copenhagen to Stockholm" (European context):
-  {"tools": [
-    {"name": "insertText", "parameters": {"text": "I want to drive my car from Copenhagen to Stockholm"}},
     {"name": "geocode", "parameters": {"placeName": "Copenhagen", "country": "Denmark"}},
-    {"name": "createGeoMark", "parameters": {"text": "Copenhagen", "placeName": "Copenhagen"}},
     {"name": "geocode", "parameters": {"placeName": "Stockholm", "country": "Sweden"}},
-    {"name": "createGeoMark", "parameters": {"text": "Stockholm", "placeName": "Stockholm"}},
+    {"name": "insertText", "parameters": {"html": "I want to drive from <span class=\"geo-mark\" data-place-name=\"Copenhagen\" data-lat=\"55.6867\" data-lng=\"12.5701\">Copenhagen</span> to <span class=\"geo-mark\" data-place-name=\"Stockholm\" data-lat=\"59.3333\" data-lng=\"18.0271\">Stockholm</span>"}},
     {"name": "setTransportation", "parameters": {"fromLocation": "Copenhagen", "toLocation": "Stockholm", "mode": "driving"}}
   ]}
 
-- "then to Paris by train" (document already has Berlin at 52.52, 13.40):
+- "then to Paris" (document has Berlin at 52.52, 13.40):
   {"tools": [
-    {"name": "insertText", "parameters": {"text": "then to Paris by train"}},
     {"name": "geocode", "parameters": {"placeName": "Paris", "country": "France", "proximity": {"lat": 52.52, "lng": 13.40}}},
-    {"name": "createGeoMark", "parameters": {"text": "Paris", "placeName": "Paris"}}
+    {"name": "insertText", "parameters": {"html": "then to <span class=\"geo-mark\" data-place-name=\"Paris\" data-lat=\"48.8566\" data-lng=\"2.3522\">Paris</span>"}}
   ]}
+
+- "I want to go shopping" (no specific location):
+  {"tools": [{"name": "insertText", "parameters": {"html": "I want to go shopping"}}]}
 
 - Execute command "insert map": {"tools": [{"name": "insertMap", "parameters": {}}]}
 - Replace text: {"tools": [{"name": "replaceText", "parameters": {"targetText": "old", "replacementText": "new"}}]}
 
-NOTE: Do NOT include lat/lng in createGeoMark - they will be automatically populated from the geocode results!
+NOTE: Do NOT include data-geo-id or data-color-index - these will be generated automatically!
 
 Select appropriate tools and parameters to fulfill the user's intent.`;
 }
