@@ -259,8 +259,8 @@ async function callOllama(
     // Use the SDK's chat method
     const response = await ollama.chat(options);
 
-    // The SDK returns the response directly, no need to parse JSON
-    return response as OllamaResponse;
+    // The SDK returns the response directly, convert to our type
+    return response as any as OllamaResponse;
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Ollama error: ${error.message}`);
