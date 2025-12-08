@@ -130,3 +130,6 @@ export type RouteClickHandler = (destGeoId: string, coordinates: [number, number
  * Waypoint drag handler callback
  */
 export type WaypointDragHandler = (destGeoId: string, waypointIndex: number, lngLat: mapboxgl.LngLat) => void;
+
+// Voice input types
+export * from './voice';

@@ -25,12 +25,14 @@ import * as Y from 'yjs';
 import { AnimateAgent, AnimatePlayback } from './services/AnimatePlayback';
 import { AutoplayDemo, ComposedDemoPlayer } from './services/AutoplayDemo';
 import { GeocodingService } from './services/GeocodingService';
+import { GeoMarkingService } from './services/GeoMarkingService';
 import { LocationExtractor } from './services/LocationExtractor';
 import { MapInteractionService } from './services/MapInteractionService';
 import { MarkerFactory } from './services/MarkerFactory';
 import { RouteService } from './services/RouteService';
 import { VideoChatService } from './services/VideoChatService';
 import { ViewSyncService } from './services/ViewSyncService';
+import { voiceInputService } from './services/VoiceInputService';
 import { setupYjs, customCursorBuilder, type YjsSetupDependencies } from './services/YjsSetupService';
 
 // Conditionally import agent module
@@ -4178,10 +4180,31 @@ async function main() {
     }
   }
 
+  // Initialize location detection services for voice input
+  const geocodingService = new GeocodingService();
+  const geoMarkingService = new GeoMarkingService(
+    editor,
+    customSchema,
+    geocodingService,
+    {
+      onLocationExtracted: (locations) => {
+        console.log(`[Main] 📍 Voice input detected ${locations.length} locations:`, locations);
+      },
+      onGeoMarkCreated: (geoId, locationName) => {
+        console.log(`[Main] ✅ Created geo-mark from voice: ${locationName} (${geoId})`);
+      },
+      onError: (error) => {
+        console.error('[Main] ❌ Error during voice location detection:', error);
+      }
+    }
+  );
+
   // Set up toolbar button handlers
   initToolbar({
     view: editor,
     videoChatService,
+    voiceInputService,
+    geoMarkingService,
     createGeoMark,
     insertMapWithAutoGeoMark,
     hideVideoContainer,

@@ -6,6 +6,9 @@
 
 import type { EditorView } from 'prosemirror-view';
 import type { VideoChatService } from '../services/VideoChatService';
+import type { VoiceInputService } from '../services/VoiceInputService';
+import type { GeoMarkingService } from '../services/GeoMarkingService';
+import { TextSelection } from 'prosemirror-state';
 
 /**
  * Dependencies required by the ToolbarController
@@ -13,6 +16,8 @@ import type { VideoChatService } from '../services/VideoChatService';
 export interface ToolbarDependencies {
   view: EditorView;
   videoChatService: VideoChatService | null;
+  voiceInputService: VoiceInputService | null;
+  geoMarkingService: GeoMarkingService | null;
   createGeoMark: (view: EditorView) => Promise<void>;
   insertMapWithAutoGeoMark: (view: EditorView) => Promise<void>;
   hideVideoContainer: () => void;
@@ -101,6 +106,181 @@ export class ToolbarController {
           btn.style.opacity = '1';
         }
       });
+    }
+
+    // Voice input button
+    const voiceBtn = document.getElementById('voice-btn') as HTMLButtonElement;
+    const languageSelect = document.getElementById('language-select') as HTMLSelectElement;
+    const transcriptOverlay = document.getElementById('transcript-overlay');
+    const transcriptText = document.getElementById('transcript-text');
+
+    if (voiceBtn && this.deps.voiceInputService) {
+      const service = this.deps.voiceInputService;
+
+      // Check browser support
+      if (!service.isSupportedBrowser()) {
+        voiceBtn.disabled = true;
+        voiceBtn.title = 'Voice input not supported in this browser';
+        console.warn('[ToolbarController] Voice input not supported');
+      } else {
+        // Press-and-hold behavior: Desktop (mousedown/mouseup)
+        voiceBtn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          service.start();
+        });
+
+        voiceBtn.addEventListener('mouseup', (e) => {
+          e.preventDefault();
+          service.stop();
+        });
+
+        // Press-and-hold behavior: Mobile (touchstart/touchend)
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouchDevice) {
+          voiceBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            service.start();
+          }, { passive: false });
+
+          voiceBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            service.stop();
+          }, { passive: false });
+        }
+
+        // Handle user releasing outside button (mouse leaves while pressed)
+        voiceBtn.addEventListener('mouseleave', () => {
+          if (service.isActive()) {
+            service.stop();
+          }
+        });
+
+        // Service event handlers
+        service.onStart = () => {
+          voiceBtn.classList.add('recording');
+          voiceBtn.setAttribute('aria-pressed', 'true');
+          voiceBtn.title = 'Release to stop recording';
+          if (transcriptOverlay) {
+            transcriptOverlay.classList.add('visible');
+          }
+          if (transcriptText) {
+            transcriptText.textContent = 'Listening...';
+            transcriptText.style.color = '';
+          }
+          console.log('[ToolbarController] Voice recording started');
+        };
+
+        service.onTranscriptUpdate = (interim: string, final: string) => {
+          if (transcriptText) {
+            // Show final + interim text
+            const display = final + (interim ? ` ${interim}` : '');
+            transcriptText.textContent = display || 'Listening...';
+          }
+        };
+
+        service.onFinalResult = async (text: string) => {
+          // Insert text into editor at cursor position
+          const { state } = view;
+          const { from } = state.selection;
+          const tr = state.tr.insertText(text + ' ', from); // Add space after
+          const newPos = from + text.length + 1;
+          tr.setSelection(TextSelection.create(tr.doc, newPos));
+          view.dispatch(tr);
+          view.focus();
+
+          console.log('[ToolbarController] Inserted voice text:', text);
+
+          // Trigger location detection from voice input
+          if (this.deps.geoMarkingService) {
+            console.log('[ToolbarController] 🤖 Triggering location detection from voice input...');
+
+            // Show visual feedback in transcript overlay
+            if (transcriptText) {
+              transcriptText.textContent = '🔍 Detecting locations...';
+            }
+
+            try {
+              await this.deps.geoMarkingService.processDocument();
+              console.log('[ToolbarController] ✅ Location detection complete');
+
+              // Update feedback
+              if (transcriptText) {
+                transcriptText.textContent = '✅ Locations detected!';
+              }
+            } catch (error) {
+              console.error('[ToolbarController] ❌ Location detection failed:', error);
+
+              // Show error
+              if (transcriptText) {
+                transcriptText.textContent = '❌ Location detection failed';
+                transcriptText.style.color = '#dc2626';
+              }
+            } finally {
+              // Fade out overlay after showing result
+              if (transcriptOverlay) {
+                setTimeout(() => {
+                  transcriptOverlay.classList.remove('visible');
+                  if (transcriptText) {
+                    transcriptText.style.color = ''; // Reset color
+                  }
+                }, 1500); // Show result for 1.5s before fading
+              }
+            }
+          }
+        };
+
+        service.onEnd = () => {
+          voiceBtn.classList.remove('recording');
+          voiceBtn.setAttribute('aria-pressed', 'false');
+          voiceBtn.title = 'Hold to record voice';
+
+          // Note: Transcript overlay hiding is now handled by onFinalResult
+          // after location detection completes, so we don't hide it here
+
+          console.log('[ToolbarController] Voice recording ended');
+        };
+
+        service.onError = (error) => {
+          console.error('[ToolbarController] Voice input error:', error);
+          voiceBtn.classList.remove('recording');
+          voiceBtn.setAttribute('aria-pressed', 'false');
+
+          // Show user-friendly error message
+          let message = 'Voice input error';
+          if (error.error === 'not-allowed') {
+            message = 'Microphone permission denied. Please allow microphone access.';
+          } else if (error.error === 'no-speech') {
+            message = 'No speech detected. Please try again.';
+          } else if (error.error === 'network') {
+            message = 'Network error. Voice recognition requires internet connection.';
+          }
+
+          if (transcriptText) {
+            transcriptText.textContent = message;
+            transcriptText.style.color = '#dc2626'; // Red error color
+            setTimeout(() => {
+              transcriptText.style.color = '';
+              if (transcriptOverlay) {
+                transcriptOverlay.classList.remove('visible');
+              }
+            }, 3000);
+          }
+        };
+      }
+    }
+
+    // Language selector
+    if (languageSelect && this.deps.voiceInputService) {
+      const service = this.deps.voiceInputService;
+
+      languageSelect.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        service.setLanguage(target.value as any);
+        console.log('[ToolbarController] Language changed to:', target.value);
+      });
+
+      // Set initial value
+      languageSelect.value = service.getLanguage();
     }
 
     // Format toolbar button handlers

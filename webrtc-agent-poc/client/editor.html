@@ -314,6 +314,153 @@
     .close-btn:hover {
       transform: scale(1.1);
     }
+
+    /* Voice Input Styles */
+    #language-select {
+      height: 40px;
+      padding: 0 8px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      outline: none;
+    }
+
+    #language-select:hover {
+      border-color: #d1d5db;
+      background: #f9fafb;
+    }
+
+    #language-select:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Voice button recording state */
+    #voice-btn.recording {
+      background: #dc2626 !important;
+      color: white !important;
+      filter: grayscale(0%) !important;
+      opacity: 1 !important;
+      animation: pulse-red 1.5s ease-in-out infinite;
+    }
+
+    #voice-btn.recording svg {
+      stroke: white;
+    }
+
+    /* Transcript Overlay */
+    #transcript-overlay {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7));
+      padding: 20px;
+      z-index: 9999;
+      display: none;
+      opacity: 0;
+      transition: opacity 300ms ease-in-out;
+    }
+
+    #transcript-overlay.visible {
+      display: block;
+      animation: fade-in 300ms forwards;
+    }
+
+    .transcript-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .recording-pulse {
+      width: 12px;
+      height: 12px;
+      background: #dc2626;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    #transcript-text {
+      color: white;
+      font-size: 16px;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+      }
+    }
+
+    @keyframes pulse-red {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(220, 38, 38, 0);
+      }
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* Responsive adjustments for mobile */
+    @media (max-width: 768px) {
+      #language-select {
+        font-size: 12px;
+        padding: 0 6px;
+        min-width: 70px;
+      }
+
+      #transcript-overlay {
+        padding: 16px;
+      }
+
+      #transcript-text {
+        font-size: 14px;
+      }
+
+      .recording-pulse {
+        width: 10px;
+        height: 10px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      #language-select {
+        font-size: 11px;
+        min-width: 60px;
+      }
+
+      .toolbar {
+        gap: 4px;
+      }
+
+      .toolbar button {
+        width: 36px;
+        height: 36px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -409,6 +556,21 @@
             <line x1="16" y1="6" x2="16" y2="22"></line>
           </svg>
         </button>
+        <button id="voice-btn" aria-label="Voice Input" aria-pressed="false" title="Hold to record voice">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </button>
+        <select id="language-select" aria-label="Voice Language">
+          <option value="en-US">🇺🇸 EN</option>
+          <option value="da-DK">🇩🇰 DA</option>
+          <option value="de-DE">🇩🇪 DE</option>
+          <option value="fr-FR">🇫🇷 FR</option>
+          <option value="es-ES">🇪🇸 ES</option>
+        </select>
       </div>
       <div class="spacer"></div>
       <div id="avatars" class="avatars"></div>
@@ -436,6 +598,14 @@
     </div>
     <div class="location-sheet-content">
       <div id="location-sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- Voice Input Transcript Overlay (hidden by default) -->
+  <div id="transcript-overlay">
+    <div class="transcript-indicator">
+      <div class="recording-pulse"></div>
+      <span id="transcript-text">Listening...</span>
     </div>
   </div>
 
