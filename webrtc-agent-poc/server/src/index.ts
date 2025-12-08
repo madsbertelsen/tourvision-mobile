@@ -239,6 +239,53 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
+// Geocoding search with prefix (for autocomplete/spelling)
+app.get('/api/geocode/search', async (req, res) => {
+  const { q, lat, lon, zoom } = req.query;
+
+  if (!q || typeof q !== 'string') {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Query parameter "q" is required'
+    });
+  }
+
+  try {
+    let url = `http://localhost:8080/search?q=${encodeURIComponent(q)}&format=json&limit=10`;
+
+    // Bias results toward nearby location if provided
+    if (lat && lon && typeof lat === 'string' && typeof lon === 'string') {
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      const zoomNum = zoom && typeof zoom === 'string' ? parseInt(zoom, 10) : 10;
+
+      // Calculate viewbox based on zoom level (approximate degrees)
+      const delta = 1 / Math.pow(2, zoomNum - 10); // Rough approximation
+      const viewbox = `${lonNum - delta},${latNum - delta},${lonNum + delta},${latNum + delta}`;
+
+      url += `&viewbox=${viewbox}&bounded=0`;
+    }
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: 'Geocoding search failed',
+        message: `Local Nominatim returned ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error('[Server] Geocoding search error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 // Reverse geocoding proxy to local Nominatim service
 app.get('/api/reverse-geocode', async (req, res) => {
   const { lat, lon } = req.query;

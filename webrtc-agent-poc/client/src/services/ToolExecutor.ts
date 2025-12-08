@@ -71,6 +71,9 @@ async function executeTool(
     case 'createGeoMark':
       return executeCreateGeoMark(tool.parameters, context);
 
+    case 'setTransportation':
+      return executeSetTransportation(tool.parameters, context);
+
     default:
       return {
         toolName: tool.name,
@@ -292,6 +295,107 @@ function executeCreateGeoMark(
       toolName: 'createGeoMark',
       success: false,
       error: error.message || 'Failed to create geo-mark'
+    };
+  }
+}
+
+/**
+ * Tool 5: setTransportation
+ * Set transportation configuration between two locations
+ */
+function executeSetTransportation(
+  params: { toLocation: string; fromLocation: string; mode: string },
+  context: ExecutionContext
+): ExecutionResult {
+  const { editorView, schema, detectedLocations } = context;
+  const { state } = editorView;
+
+  console.log('[ToolExecutor] setTransportation:', params.mode, 'from', params.fromLocation, 'to', params.toLocation);
+
+  // Find the toLocation in detected locations
+  const toLocation = detectedLocations.find(loc =>
+    loc.status === 'found' && loc.locationName.toLowerCase() === params.toLocation.toLowerCase()
+  );
+
+  if (!toLocation) {
+    return {
+      toolName: 'setTransportation',
+      success: false,
+      error: `Destination location "${params.toLocation}" not found in detected locations`
+    };
+  }
+
+  // Find the fromLocation in detected locations
+  const fromLocation = detectedLocations.find(loc =>
+    loc.status === 'found' && loc.locationName.toLowerCase() === params.fromLocation.toLowerCase()
+  );
+
+  if (!fromLocation) {
+    return {
+      toolName: 'setTransportation',
+      success: false,
+      error: `Origin location "${params.fromLocation}" not found in detected locations`
+    };
+  }
+
+  // Map transportation modes to profile names
+  const transportProfileMap: { [key: string]: string } = {
+    'cycling': 'cycling',
+    'driving': 'driving-car',
+    'walking': 'foot-walking',
+    'flying': 'plane'
+  };
+
+  const transportProfile = transportProfileMap[params.mode] || params.mode;
+
+  try {
+    let tr = state.tr;
+    let found = false;
+
+    // Find all geo-marks for the toLocation and update their transport attributes
+    state.doc.descendants((node: any, pos: number) => {
+      if (node.isText && node.marks) {
+        for (const mark of node.marks) {
+          if (mark.type.name === 'geoMark' &&
+              mark.attrs.placeName.toLowerCase() === params.toLocation.toLowerCase()) {
+            // Remove old mark
+            tr = tr.removeMark(pos, pos + node.nodeSize, mark);
+
+            // Create new mark with transport attributes
+            const newMark = schema.marks.geoMark.create({
+              ...mark.attrs,
+              transportFrom: fromLocation.geoId,
+              transportProfile: transportProfile
+            });
+
+            // Add new mark
+            tr = tr.addMark(pos, pos + node.nodeSize, newMark);
+            found = true;
+          }
+        }
+      }
+    });
+
+    if (!found) {
+      return {
+        toolName: 'setTransportation',
+        success: false,
+        error: `No geo-mark found for "${params.toLocation}"`
+      };
+    }
+
+    editorView.dispatch(tr);
+
+    return {
+      toolName: 'setTransportation',
+      success: true,
+      message: `Set ${params.mode} from ${params.fromLocation} to ${params.toLocation}`
+    };
+  } catch (error) {
+    return {
+      toolName: 'setTransportation',
+      success: false,
+      error: error.message || 'Failed to set transportation'
     };
   }
 }

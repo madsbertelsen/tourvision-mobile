@@ -95,6 +95,57 @@ export class GeocodingService {
       return null;
     }
   }
+
+  /**
+   * Search for locations matching a prefix (for autocomplete/spelling)
+   *
+   * @param prefix - The prefix to search for (e.g., "Rosk")
+   * @param nearbyLocation - Optional nearby location to bias results
+   * @returns Top 5 matches sorted by relevance
+   */
+  async searchByPrefix(
+    prefix: string,
+    nearbyLocation?: { lat: number; lng: number }
+  ): Promise<Array<{ name: string; lat: number; lng: number; relevance: number }>> {
+    if (prefix.length < 2) {
+      return [];  // Need at least 2 characters
+    }
+
+    await this.rateLimit();
+
+    let url = `${this.proxyUrl}/geocode/search?q=${encodeURIComponent(prefix)}`;
+
+    // If we have a nearby location, bias results toward it
+    if (nearbyLocation) {
+      url += `&lat=${nearbyLocation.lat}&lon=${nearbyLocation.lng}&zoom=10`;
+    }
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Geocoding search API error: ${response.status}`);
+      }
+
+      const results = await response.json();
+
+      if (!Array.isArray(results)) {
+        console.warn('[GeocodingService] Unexpected search response format');
+        return [];
+      }
+
+      // Map results and calculate relevance
+      return results.slice(0, 5).map((r: any, index: number) => ({
+        name: r.display_name,
+        lat: parseFloat(r.lat),
+        lng: parseFloat(r.lon),
+        relevance: 1 - (index / results.length)  // First result = highest relevance
+      }));
+    } catch (error) {
+      console.error('[GeocodingService] Prefix search error:', error);
+      return [];
+    }
+  }
 }
 
 // Export a singleton instance for convenience

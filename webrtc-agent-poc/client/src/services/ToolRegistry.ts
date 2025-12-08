@@ -111,13 +111,45 @@ const createGeoMarkTool: ToolDefinition = {
 };
 
 /**
+ * Tool 5: setTransportation
+ * Purpose: Configure transportation between two locations
+ */
+const setTransportationTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'setTransportation',
+    description: 'Set transportation configuration between two locations. Use this when the user mentions travel methods like "bicycle to", "drive to", "walk to", "fly to", etc.',
+    parameters: {
+      type: 'object',
+      required: ['toLocation', 'fromLocation', 'mode'],
+      properties: {
+        toLocation: {
+          type: 'string',
+          description: 'The destination location name'
+        },
+        fromLocation: {
+          type: 'string',
+          description: 'The origin location name'
+        },
+        mode: {
+          type: 'string',
+          enum: ['cycling', 'driving', 'walking', 'flying'],
+          description: 'The transportation mode: cycling (bike/bicycle), driving (car), walking (foot), or flying (plane)'
+        }
+      }
+    }
+  }
+};
+
+/**
  * All available tool definitions
  */
 const ALL_TOOLS: ToolDefinition[] = [
   replaceTextTool,
   insertTextTool,
   insertMapTool,
-  createGeoMarkTool
+  createGeoMarkTool,
+  setTransportationTool
 ];
 
 /**
@@ -185,6 +217,9 @@ export function describeToolCall(toolCall: ToolCall): string {
 
     case 'createGeoMark':
       return `Mark "${toolCall.parameters.text}" as ${toolCall.parameters.placeName}`;
+
+    case 'setTransportation':
+      return `Set ${toolCall.parameters.mode} from ${toolCall.parameters.fromLocation} to ${toolCall.parameters.toLocation}`;
 
     default:
       return `Execute ${toolCall.name}`;

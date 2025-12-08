@@ -111,6 +111,7 @@ AVAILABLE TOOLS:
 2. insertText(text) - Insert new text at cursor (automatically applies geo-marks to detected locations)
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
 4. createGeoMark(text, placeName) - ONLY use to mark text that is ALREADY in the document but not yet marked
+5. setTransportation(toLocation, fromLocation, mode) - Set transportation between locations (mode: cycling/driving/walking/flying)
 
 You must respond with valid JSON in this exact format:
 {
@@ -125,6 +126,7 @@ You must respond with valid JSON in this exact format:
 Examples:
 - Execute command "insert map": {"tools": [{"name": "insertMap", "parameters": {}}]}
 - Insert text: {"tools": [{"name": "insertText", "parameters": {"text": "I want to visit Copenhagen"}}]}
+- Insert text with transportation: {"tools": [{"name": "insertText", "parameters": {"text": "from Copenhagen I will bicycle to Stockholm"}}, {"name": "setTransportation", "parameters": {"toLocation": "Stockholm", "fromLocation": "Copenhagen", "mode": "cycling"}}]}
 - Insert text + map: {"tools": [{"name": "insertText", "parameters": {"text": "I want to visit Copenhagen"}}, {"name": "insertMap", "parameters": {}}]}
 - Replace text: {"tools": [{"name": "replaceText", "parameters": {"targetText": "old", "replacementText": "new"}}]}
 - Mark existing text: {"tools": [{"name": "createGeoMark", "parameters": {"text": "Copenhagen", "placeName": "Copenhagen"}}]}
@@ -134,6 +136,7 @@ IMPORTANT RULES:
 - insertText automatically applies geo-marks to detected locations - DO NOT call createGeoMark after insertText
 - Only use createGeoMark for text that is ALREADY in the document
 - When adding text with locations, just use insertText (optionally followed by insertMap)
+- When text mentions transportation (bicycle/bike/cycle to, drive/car to, walk to, fly to), use setTransportation after insertText
 
 Select appropriate tools and parameters to fulfill the user's intent.`;
 }

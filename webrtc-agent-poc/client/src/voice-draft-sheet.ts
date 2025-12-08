@@ -574,6 +574,16 @@ function renderToolPlan(tools: ToolCall[]): string {
     } else if (tool.name === 'createGeoMark') {
       html += `<div class="voice-draft-tool-icon">📍</div>`;
       html += `<div class="voice-draft-tool-desc">Mark "${escapeHtml(tool.parameters.text)}" as ${escapeHtml(tool.parameters.placeName)}</div>`;
+    } else if (tool.name === 'setTransportation') {
+      const modeIcons: { [key: string]: string } = {
+        'cycling': '🚴',
+        'driving': '🚗',
+        'walking': '🚶',
+        'flying': '✈️'
+      };
+      const icon = modeIcons[tool.parameters.mode] || '🚶';
+      html += `<div class="voice-draft-tool-icon">${icon}</div>`;
+      html += `<div class="voice-draft-tool-desc">Set ${escapeHtml(tool.parameters.mode)} from ${escapeHtml(tool.parameters.fromLocation)} to ${escapeHtml(tool.parameters.toLocation)}</div>`;
     } else {
       // Unknown tool
       html += `<div class="voice-draft-tool-icon">🔧</div>`;
@@ -831,48 +841,84 @@ function showAmbiguityQuestion(
   html += '</div>';
   html += '</div>';
 
-  // Radio button options
-  html += '<div class="voice-draft-options">';
-  question.options.forEach((option, index) => {
-    html += `
-      <label class="voice-draft-option">
-        <input
-          type="radio"
-          name="ambiguity-choice"
-          value="${option.value}"
-          ${index === 0 ? 'checked' : ''}
-        />
-        <span>${option.label}</span>
-      </label>
-    `;
-  });
-  html += '</div>';
+  // Check if this is a spelling request
+  if (question.requiresSpelling) {
+    // Show spelling prompt UI
+    html += '<div class="voice-draft-spelling-prompt">';
+    html += '<p style="margin: 12px 0 8px 0; font-size: 14px; color: #495057;">Please spell the location name letter by letter:</p>';
+    html += `<button class="voice-draft-action-btn primary" id="start-spelling-btn" style="margin: 8px 0;">
+      🎤 Start Spelling
+    </button>`;
+    html += '<div id="spelling-transcript" style="display:none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 14px;"></div>';
+    html += '</div>';
 
-  // Confirm button
-  html += `
-    <button
-      class="voice-draft-action-btn primary"
-      id="voice-draft-confirm-choice"
-      style="margin-top: 16px;"
-    >
-      Confirm Choice
-    </button>
-  `;
+    // Add re-record button
+    html += '<div style="margin-top: 16px;">';
+    html += `<button class="voice-draft-action-btn" id="spelling-rerecord-btn">
+      🔄 Re-record Instead
+    </button>`;
+    html += '</div>';
+  } else {
+    // Radio button options (existing UI)
+    html += '<div class="voice-draft-options">';
+    question.options.forEach((option, index) => {
+      html += `
+        <label class="voice-draft-option">
+          <input
+            type="radio"
+            name="ambiguity-choice"
+            value="${option.value}"
+            ${index === 0 ? 'checked' : ''}
+          />
+          <span>${option.label}</span>
+        </label>
+      `;
+    });
+    html += '</div>';
+
+    // Confirm button
+    html += `
+      <button
+        class="voice-draft-action-btn primary"
+        id="voice-draft-confirm-choice"
+        style="margin-top: 16px;"
+      >
+        Confirm Choice
+      </button>
+    `;
+  }
+
   html += '</div>';
 
   bodyElement.innerHTML = html;
 
-  // Attach confirm button handler
-  const confirmBtn = document.getElementById('voice-draft-confirm-choice');
-  if (confirmBtn) {
-    confirmBtn.addEventListener('click', () => {
-      const selectedOption = document.querySelector<HTMLInputElement>(
-        'input[name="ambiguity-choice"]:checked'
-      );
-      if (selectedOption) {
-        handleAmbiguityResponse(selectedOption.value, transcript, context);
-      }
-    });
+  // Attach event handlers
+  if (question.requiresSpelling) {
+    // Spelling mode handlers
+    const startBtn = document.getElementById('start-spelling-btn');
+    if (startBtn) {
+      startBtn.addEventListener('click', () => {
+        handleStartSpelling(transcript, context);
+      });
+    }
+
+    const rerecordBtn = document.getElementById('spelling-rerecord-btn');
+    if (rerecordBtn) {
+      rerecordBtn.addEventListener('click', handleReRecord);
+    }
+  } else {
+    // Attach confirm button handler (existing code)
+    const confirmBtn = document.getElementById('voice-draft-confirm-choice');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        const selectedOption = document.querySelector<HTMLInputElement>(
+          'input[name="ambiguity-choice"]:checked'
+        );
+        if (selectedOption) {
+          handleAmbiguityResponse(selectedOption.value, transcript, context);
+        }
+      });
+    }
   }
 }
 
@@ -885,6 +931,20 @@ async function handleAmbiguityResponse(
   context: string
 ): Promise<void> {
   console.log('[VoiceDraftSheet] User selected:', selectedValue);
+
+  // Handle spelling mode activation
+  if (selectedValue === 'spell') {
+    console.log('[VoiceDraftSheet] User chose to spell location');
+    // TODO: Activate voice spelling mode
+    // For now, just show a message
+    alert('Voice spelling mode coming soon! Please use re-record for now.');
+    return;
+  }
+
+  if (selectedValue === 're-record') {
+    handleReRecord();
+    return;
+  }
 
   // Show processing state
   currentDraft.isProcessing = true;
@@ -937,3 +997,332 @@ async function handleAmbiguityResponse(
     renderDraftContent();
   }
 }
+
+// ============================================
+// VOICE SPELLING MODE
+// ============================================
+
+/**
+ * Extract single letter from voice transcript
+ * Handles various ways users might say letters:
+ * - Direct: "R", "O", "S"
+ * - Phonetic: "Romeo", "Oscar", "Sierra"
+ * - Spelled out: "are", "oh", "ess"
+ */
+function extractLetterFromTranscript(transcript: string): string | null {
+  const text = transcript.trim().toLowerCase();
+
+  // Direct single letter
+  if (text.length === 1 && /[a-z]/.test(text)) {
+    return text.toUpperCase();
+  }
+
+  // Phonetic alphabet patterns (NATO)
+  const phoneticMap: { [key: string]: string } = {
+    'alpha': 'A', 'bravo': 'B', 'charlie': 'C', 'delta': 'D',
+    'echo': 'E', 'foxtrot': 'F', 'golf': 'G', 'hotel': 'H',
+    'india': 'I', 'juliett': 'J', 'juliet': 'J', 'kilo': 'K', 'lima': 'L',
+    'mike': 'M', 'november': 'N', 'oscar': 'O', 'papa': 'P',
+    'quebec': 'Q', 'romeo': 'R', 'sierra': 'S', 'tango': 'T',
+    'uniform': 'U', 'victor': 'V', 'whiskey': 'W', 'xray': 'X', 'x-ray': 'X',
+    'yankee': 'Y', 'zulu': 'Z'
+  };
+
+  if (phoneticMap[text]) {
+    return phoneticMap[text];
+  }
+
+  // "Letter X" or "capital X"
+  const letterMatch = text.match(/(?:letter|capital)?\s*([a-z])/);
+  if (letterMatch) {
+    return letterMatch[1].toUpperCase();
+  }
+
+  // Spelled out letter names: "are" → "R", "ess" → "S"
+  const spellMap: { [key: string]: string } = {
+    'a': 'A', 'ay': 'A', 'are': 'R', 'bee': 'B', 'cee': 'C', 'see': 'C',
+    'dee': 'D', 'e': 'E', 'ee': 'E', 'eff': 'F', 'gee': 'G', 'aitch': 'H',
+    'i': 'I', 'eye': 'I', 'jay': 'J', 'kay': 'K', 'el': 'L', 'elle': 'L',
+    'em': 'M', 'en': 'N', 'oh': 'O', 'pee': 'P', 'queue': 'Q', 'cue': 'Q',
+    'ess': 'S', 'tee': 'T', 'tea': 'T', 'you': 'U', 'vee': 'V', 'double-you': 'W',
+    'doubleyou': 'W', 'ex': 'X', 'why': 'Y', 'wye': 'Y', 'zee': 'Z', 'zed': 'Z'
+  };
+
+  if (spellMap[text]) {
+    return spellMap[text];
+  }
+
+  return null;
+}
+
+/**
+ * Extract spelled word from voice transcript
+ * Handles: "R O S K I L D E" or "are oh ess kay eye el dee ee"
+ */
+function extractSpelledWord(transcript: string): string {
+  const text = transcript.trim().toLowerCase();
+
+  // Split by spaces/punctuation
+  const parts = text.split(/[\s,.-]+/);
+
+  let result = '';
+
+  for (const part of parts) {
+    const letter = extractLetterFromTranscript(part);
+    if (letter) {
+      result += letter;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Handle voice spelling mode
+ * User speaks letters one by one, we extract and search
+ */
+async function handleStartSpelling(
+  originalTranscript: string,
+  context: string
+): Promise<void> {
+  if (!voiceInputService) {
+    console.error('[VoiceSpelling] VoiceInputService not available');
+    return;
+  }
+
+  console.log('[VoiceSpelling] Starting spelling mode for transcript:', originalTranscript);
+
+  // Get transcript display element
+  const transcriptDiv = document.getElementById('spelling-transcript');
+  if (!transcriptDiv) {
+    console.error('[VoiceSpelling] Spelling transcript div not found');
+    return;
+  }
+
+  // Show listening UI
+  transcriptDiv.style.display = 'block';
+  transcriptDiv.innerHTML = '<p>🎤 Listening... speak each letter clearly (e.g., "R", "O", "S")</p>';
+
+  // Disable start button
+  const startBtn = document.getElementById('start-spelling-btn');
+  if (startBtn) {
+    (startBtn as HTMLButtonElement).disabled = true;
+    startBtn.textContent = '⏺️ Listening...';
+  }
+
+  // Set up voice input handlers
+  const handleInterim = (transcript: string) => {
+    // Show interim transcript
+    if (transcriptDiv) {
+      transcriptDiv.innerHTML = `<p>Hearing: <em>${escapeHtml(transcript)}</em></p>`;
+    }
+  };
+
+  const handleFinal = async (transcript: string) => {
+    console.log('[VoiceSpelling] Final transcript:', transcript);
+
+    // Extract letters from the transcript
+    const spelledWord = extractSpelledWord(transcript);
+    console.log('[VoiceSpelling] Extracted word:', spelledWord);
+
+    if (spelledWord.length < 2) {
+      if (transcriptDiv) {
+        transcriptDiv.innerHTML = '<p style="color: #dc3545;">⚠️ Could not understand. Please try again.</p>';
+      }
+
+      // Re-enable button
+      if (startBtn) {
+        (startBtn as HTMLButtonElement).disabled = false;
+        startBtn.innerHTML = '🎤 Start Spelling';
+      }
+
+      return;
+    }
+
+    // Show extracted word
+    if (transcriptDiv) {
+      transcriptDiv.innerHTML = `<p>You spelled: <strong>${escapeHtml(spelledWord)}</strong></p><p>Searching for locations...</p>`;
+    }
+
+    // Search for matching locations
+    if (!geocodingService) {
+      console.error('[VoiceSpelling] GeocodingService not available');
+      return;
+    }
+
+    const nearbyLoc = currentDraft.detectedLocations.find(loc =>
+      loc.status === 'found' && loc.lat && loc.lng
+    );
+
+    const suggestions = await geocodingService.searchByPrefix(
+      spelledWord,
+      nearbyLoc ? { lat: nearbyLoc.lat!, lng: nearbyLoc.lng! } : undefined
+    );
+
+    if (suggestions.length > 0) {
+      // Show suggestions
+      showSpellingSuggestions(suggestions, originalTranscript, context, spelledWord);
+    } else {
+      if (transcriptDiv) {
+        transcriptDiv.innerHTML = `<p style="color: #dc3545;">⚠️ No locations found for "<strong>${escapeHtml(spelledWord)}</strong>".</p><p>Please try again or re-record.</p>`;
+      }
+
+      // Re-enable button
+      if (startBtn) {
+        (startBtn as HTMLButtonElement).disabled = false;
+        startBtn.innerHTML = '🎤 Try Again';
+      }
+    }
+
+    // Clean up listeners
+    voiceInputService.off('interim', handleInterim);
+    voiceInputService.off('final', handleFinal);
+  };
+
+  // Attach listeners
+  voiceInputService.on('interim', handleInterim);
+  voiceInputService.on('final', handleFinal);
+
+  // Start listening
+  await voiceInputService.start();
+}
+
+/**
+ * Show spelling suggestions after geocoding search
+ */
+function showSpellingSuggestions(
+  suggestions: Array<{ name: string; lat: number; lng: number; relevance: number }>,
+  originalTranscript: string,
+  context: string,
+  spelledWord: string
+): void {
+  const transcriptDiv = document.getElementById('spelling-transcript');
+  if (!transcriptDiv) return;
+
+  let html = `<p>You spelled: <strong>${escapeHtml(spelledWord)}</strong></p>`;
+  html += '<p style="margin-top: 12px; font-weight: 600;">Did you mean:</p>';
+  html += '<div class="spelling-suggestions" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">';
+
+  suggestions.forEach((suggestion, index) => {
+    const confidence = suggestion.relevance > 0.8 ? 'high' : 'medium';
+    const checkmark = index === 0 && suggestion.relevance > 0.8 ? ' ✓' : '';
+
+    // Encode parameters for onclick handler
+    const encodedName = escapeHtml(suggestion.name).replace(/'/g, '&apos;');
+    const encodedTranscript = escapeHtml(originalTranscript).replace(/'/g, '&apos;');
+    const encodedContext = escapeHtml(context).replace(/'/g, '&apos;');
+    const encodedSpelled = escapeHtml(spelledWord).replace(/'/g, '&apos;');
+
+    html += `<button
+      class="suggestion-item ${confidence}"
+      style="padding: 12px; background: ${confidence === 'high' ? '#d4edda' : 'white'}; border: 1px solid ${confidence === 'high' ? '#28a745' : '#dee2e6'}; border-radius: 6px; text-align: left; cursor: pointer; font-size: 14px; transition: all 0.15s ease;"
+      onclick="window.__handleSpellingSuggestionClick('${encodedName}', ${suggestion.lat}, ${suggestion.lng}, '${encodedTranscript}', '${encodedContext}', '${encodedSpelled}')"
+      onmouseover="this.style.background='${confidence === 'high' ? '#c3e6cb' : '#e9ecef'}'"
+      onmouseout="this.style.background='${confidence === 'high' ? '#d4edda' : 'white'}'"
+    >
+      ${escapeHtml(suggestion.name)}${checkmark}
+    </button>`;
+  });
+
+  html += '</div>';
+  transcriptDiv.innerHTML = html;
+}
+
+/**
+ * Handle user clicking a spelling suggestion
+ * This needs to be globally accessible for onclick handlers
+ */
+async function handleSpellingSuggestionClick(
+  correctedName: string,
+  lat: number,
+  lng: number,
+  originalTranscript: string,
+  context: string,
+  spelledWord: string
+): Promise<void> {
+  console.log('[VoiceSpelling] User selected:', correctedName);
+
+  const transcriptDiv = document.getElementById('spelling-transcript');
+  if (transcriptDiv) {
+    transcriptDiv.innerHTML = `<p>✅ Selected: <strong>${escapeHtml(correctedName)}</strong></p><p>Updating analysis...</p>`;
+  }
+
+  // Update the transcript by replacing the mistranscribed word with the correct one
+  // For simplicity, we'll just use the corrected name directly
+  // TODO: In a more sophisticated version, we could try to find and replace the specific mistranscribed word
+  const correctedTranscript = originalTranscript; // For now, keep original transcript structure
+
+  // Add the corrected location to detected locations
+  const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const colorIndex = currentDraft.detectedLocations.length % GEO_MARK_COLORS.length;
+
+  // Find if there's an error location that matches the spelled word (case-insensitive)
+  const errorLocationIndex = currentDraft.detectedLocations.findIndex(
+    loc => loc.status === 'error' && loc.locationName.toLowerCase().includes(spelledWord.toLowerCase())
+  );
+
+  if (errorLocationIndex >= 0) {
+    // Update the existing error location
+    currentDraft.detectedLocations[errorLocationIndex] = {
+      ...currentDraft.detectedLocations[errorLocationIndex],
+      locationName: correctedName,
+      lat: Number(lat),
+      lng: Number(lng),
+      geoId,
+      colorIndex,
+      status: 'found'
+    };
+  } else {
+    // Add as new location
+    currentDraft.detectedLocations.push({
+      locationName: correctedName,
+      lat: Number(lat),
+      lng: Number(lng),
+      geoId,
+      colorIndex,
+      status: 'found',
+      ranges: [] // We'll skip highlighting for now
+    });
+  }
+
+  // Re-run agent analysis with updated detected locations
+  currentDraft.isProcessing = true;
+  renderDraftContent();
+
+  try {
+    const agentResult = await analyzeWithAgent(correctedTranscript, context);
+
+    if (agentResult) {
+      currentDraft.agentPlan = agentResult;
+
+      // Ensure we have at least insertText tool
+      if (agentResult.tools.length === 0) {
+        console.warn('[VoiceSpelling] No tools after correction, adding insertText');
+        agentResult.tools = [{
+          name: 'insertText',
+          parameters: { text: correctedTranscript }
+        }];
+      }
+    } else {
+      // Fallback
+      currentDraft.agentPlan = {
+        status: 'ready',
+        reasoning: `Location corrected to ${correctedName}`,
+        tools: [{
+          name: 'insertText',
+          parameters: { text: correctedTranscript }
+        }]
+      };
+    }
+
+    currentDraft.isProcessing = false;
+    renderDraftContent();
+  } catch (error) {
+    console.error('[VoiceSpelling] Error after spelling correction:', error);
+    currentDraft.isProcessing = false;
+    renderDraftContent();
+  }
+}
+
+// Make handleSpellingSuggestionClick globally accessible for onclick handlers
+(window as any).__handleSpellingSuggestionClick = handleSpellingSuggestionClick;
