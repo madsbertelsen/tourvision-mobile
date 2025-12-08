@@ -1017,3 +1017,12 @@ async function handleSpellingSuggestionClick(
 
 // Make handleSpellingSuggestionClick globally accessible for onclick handlers
 (window as any).__handleSpellingSuggestionClick = handleSpellingSuggestionClick;
+
+/**
+ * Debug function: Test voice draft with a custom transcript
+ * Usage from console: testVoice("I want to visit Copenhagen")
+ */
+(window as any).testVoice = function(transcript: string) {
+  console.log('[VoiceDraftSheet] Debug: Testing with transcript:', transcript);
+  showVoiceDraftSheet(transcript);
+};
