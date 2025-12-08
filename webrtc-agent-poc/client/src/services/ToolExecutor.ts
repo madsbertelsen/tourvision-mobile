@@ -112,8 +112,13 @@ function executeReplaceText(
     // Replace the text (LLM will use createGeoMark separately if needed)
     tr = tr.replaceWith(range.from, range.to, schema.text(params.replacementText));
 
-    // Move cursor to end of replaced text
+    // Track the replacement range for subsequent createGeoMark calls
     const newEnd = range.from + params.replacementText.length;
+    context.lastInsertedRange = { from: range.from, to: newEnd };
+
+    console.log('[ToolExecutor] Tracked replacement range:', context.lastInsertedRange);
+
+    // Move cursor to end of replaced text
     tr = tr.setSelection(TextSelection.create(tr.doc, newEnd));
 
     editorView.dispatch(tr);
@@ -156,9 +161,15 @@ function executeInsertText(
     // The LLM will use createGeoMark separately if needed
     tr = tr.insertText(params.text + ' ', insertPos);
 
-    // Move cursor to end of inserted text
-    const textEnd = insertPos + params.text.length + 1;
-    tr = tr.setSelection(TextSelection.create(tr.doc, textEnd));
+    // Track the insertion range for subsequent createGeoMark calls
+    const textEnd = insertPos + params.text.length;
+    context.lastInsertedRange = { from: insertPos, to: textEnd };
+
+    console.log('[ToolExecutor] Tracked insertion range:', context.lastInsertedRange);
+
+    // Move cursor to end of inserted text (includes space)
+    const cursorPos = textEnd + 1;
+    tr = tr.setSelection(TextSelection.create(tr.doc, cursorPos));
 
     editorView.dispatch(tr);
 
@@ -232,7 +243,7 @@ function executeCreateGeoMark(
   params: { text: string; placeName: string; lat?: number; lng?: number },
   context: ExecutionContext
 ): ExecutionResult {
-  const { editorView, schema, detectedLocations } = context;
+  const { editorView, schema, detectedLocations, lastInsertedRange } = context;
   const { state } = editorView;
 
   console.log('[ToolExecutor] createGeoMark:', params.text, 'as', params.placeName, `(${params.lat}, ${params.lng})`);
@@ -246,15 +257,24 @@ function executeCreateGeoMark(
     };
   }
 
-  // Find the text in the document
-  const range = findTextPosition(state.doc, params.text);
+  // Find the text in the document, preferring the last inserted range if available
+  // This prevents marking text from earlier in the document when the same location name appears multiple times
+  const range = findTextPosition(state.doc, params.text, lastInsertedRange);
+
   if (!range) {
+    // If not found in insertion range, provide helpful error
+    const searchContext = lastInsertedRange
+      ? ` (searched within recently inserted text at positions ${lastInsertedRange.from}-${lastInsertedRange.to})`
+      : '';
+
     return {
       toolName: 'createGeoMark',
       success: false,
-      error: `Text "${params.text}" not found in document`
+      error: `Text "${params.text}" not found in document${searchContext}`
     };
   }
+
+  console.log('[ToolExecutor] Found text at position:', range, lastInsertedRange ? '(within inserted range)' : '(global search)');
 
   try {
     // Generate geo-mark ID and color
@@ -408,9 +428,13 @@ function executeSetTransportation(
 
 /**
  * Find the position of a text string in the document
- * Returns the first occurrence found
+ * Returns the first occurrence found (optionally within a specific range)
  */
-function findTextPosition(doc: any, text: string): { from: number; to: number } | null {
+function findTextPosition(
+  doc: any,
+  text: string,
+  searchRange?: { from: number; to: number }
+): { from: number; to: number } | null {
   let foundPosition: { from: number; to: number } | null = null;
 
   doc.descendants((node: any, pos: number) => {
@@ -419,11 +443,19 @@ function findTextPosition(doc: any, text: string): { from: number; to: number } 
     if (node.isText && node.text) {
       const index = node.text.indexOf(text);
       if (index !== -1) {
-        foundPosition = {
-          from: pos + index,
-          to: pos + index + text.length
-        };
-        return false; // Stop iterating
+        const matchFrom = pos + index;
+        const matchTo = pos + index + text.length;
+
+        // If searchRange is specified, only accept matches within that range
+        if (searchRange) {
+          if (matchFrom >= searchRange.from && matchTo <= searchRange.to) {
+            foundPosition = { from: matchFrom, to: matchTo };
+            return false; // Stop iterating
+          }
+        } else {
+          foundPosition = { from: matchFrom, to: matchTo };
+          return false; // Stop iterating
+        }
       }
     }
   });

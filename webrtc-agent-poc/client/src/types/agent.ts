@@ -52,6 +52,9 @@ export interface ExecutionContext {
 
   /** Detected locations from voice input */
   detectedLocations: DetectedLocation[];
+
+  /** Range of last inserted text (for scoped text search in createGeoMark) */
+  lastInsertedRange?: { from: number; to: number };
 }
 
 /**
