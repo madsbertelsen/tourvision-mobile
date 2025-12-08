@@ -11,7 +11,7 @@ import type { DetectedLocation } from './index';
  */
 export interface ToolCall {
   /** Tool name */
-  name: 'replaceText' | 'insertText' | 'insertMap' | 'createGeoMark';
+  name: 'replaceText' | 'insertText' | 'insertMap' | 'geocode' | 'createGeoMark' | 'setTransportation';
 
   /** Tool parameters (structure depends on tool) */
   parameters: Record<string, any>;

@@ -85,14 +85,52 @@ const insertMapTool: ToolDefinition = {
 };
 
 /**
- * Tool 4: createGeoMark
- * Purpose: Mark existing text as a geographic location without modifying content
+ * Tool 4: geocode
+ * Purpose: Geocode a location name to get coordinates (used during plan generation)
+ */
+const geocodeTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'geocode',
+    description: 'Geocode a location name to get coordinates. Provide qualification parameters (country, proximity) to help resolve ambiguous locations. You must call this before createGeoMark.',
+    parameters: {
+      type: 'object',
+      required: ['placeName'],
+      properties: {
+        placeName: {
+          type: 'string',
+          description: 'The location name to geocode'
+        },
+        country: {
+          type: 'string',
+          description: 'Optional country code or name to filter results (e.g., "Denmark", "US", "FR"). Use this when you know the country from context.'
+        },
+        proximity: {
+          type: 'object',
+          description: 'Optional nearby location to bias results toward (e.g., {lat: 55.6761, lng: 12.5683})',
+          properties: {
+            lat: { type: 'number' },
+            lng: { type: 'number' }
+          }
+        },
+        zoom: {
+          type: 'number',
+          description: 'Optional zoom level for proximity bias (default: 10). Higher = stronger bias toward proximity.'
+        }
+      }
+    }
+  }
+};
+
+/**
+ * Tool 5: createGeoMark
+ * Purpose: Mark existing text as a geographic location with pre-resolved coordinates
  */
 const createGeoMarkTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'createGeoMark',
-    description: 'Mark existing text in the document as a geographic location without modifying the text. Use this when location names are already in the document but not yet marked.',
+    description: 'Mark text with coordinates (requires geocode first). The coordinates will be automatically populated from the geocode tool results.',
     parameters: {
       type: 'object',
       required: ['text', 'placeName'],
@@ -103,7 +141,15 @@ const createGeoMarkTool: ToolDefinition = {
         },
         placeName: {
           type: 'string',
-          description: 'The location name for the marker (should match a detected location)'
+          description: 'The location name for the marker (should match the placeName used in geocode)'
+        },
+        lat: {
+          type: 'number',
+          description: 'Latitude coordinate (will be automatically populated from geocode results)'
+        },
+        lng: {
+          type: 'number',
+          description: 'Longitude coordinate (will be automatically populated from geocode results)'
         }
       }
     }
@@ -111,7 +157,7 @@ const createGeoMarkTool: ToolDefinition = {
 };
 
 /**
- * Tool 5: setTransportation
+ * Tool 6: setTransportation
  * Purpose: Configure transportation between two locations
  */
 const setTransportationTool: ToolDefinition = {
@@ -148,6 +194,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   replaceTextTool,
   insertTextTool,
   insertMapTool,
+  geocodeTool,
   createGeoMarkTool,
   setTransportationTool
 ];
@@ -215,8 +262,15 @@ export function describeToolCall(toolCall: ToolCall): string {
     case 'insertMap':
       return `Insert map (will auto-discover geo-marks from context)`;
 
+    case 'geocode':
+      const country = toolCall.parameters.country ? ` in ${toolCall.parameters.country}` : '';
+      return `Geocode "${toolCall.parameters.placeName}"${country}`;
+
     case 'createGeoMark':
-      return `Mark "${toolCall.parameters.text}" as ${toolCall.parameters.placeName}`;
+      const coords = toolCall.parameters.lat && toolCall.parameters.lng
+        ? ` (${toolCall.parameters.lat.toFixed(4)}, ${toolCall.parameters.lng.toFixed(4)})`
+        : '';
+      return `Mark "${toolCall.parameters.text}" as ${toolCall.parameters.placeName}${coords}`;
 
     case 'setTransportation':
       return `Set ${toolCall.parameters.mode} from ${toolCall.parameters.fromLocation} to ${toolCall.parameters.toLocation}`;

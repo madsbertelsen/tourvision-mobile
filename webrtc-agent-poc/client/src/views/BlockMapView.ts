@@ -225,6 +225,62 @@ export class BlockMapView {
             lightMarkers.push(marker);
           });
 
+          // Render routes on light map
+          locations.forEach(async (toLocation: Location) => {
+            if (toLocation.transportFrom && toLocation.transportProfile) {
+              const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
+              if (!fromLocation) return;
+
+              const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                             toLocation.transportProfile === 'cycling' ? 'cycling' :
+                             'driving-traffic';
+
+              const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
+
+              try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.routes && data.routes.length > 0) {
+                  const route = data.routes[0];
+                  const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+                  if (lightMap && !lightMap.getSource(routeId)) {
+                    lightMap.addSource(routeId, {
+                      type: 'geojson',
+                      data: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: route.geometry
+                      }
+                    });
+
+                    lightMap.addLayer({
+                      id: routeId,
+                      type: 'line',
+                      source: routeId,
+                      layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                      },
+                      paint: {
+                        'line-color': toLocation.color || '#3B82F6',
+                        'line-width': 4,
+                        'line-opacity': 0.8
+                      }
+                    });
+
+                    currentRouteIds.push(routeId);
+                    console.log('[BlockMap] Route created on light map:', routeId);
+                  }
+                }
+              } catch (error) {
+                console.error('[BlockMap] Error fetching route:', error);
+              }
+            }
+          });
+
           // Fit bounds on light map
           if (locations.length === 1) {
             lightMap!.jumpTo({
@@ -257,7 +313,7 @@ export class BlockMapView {
             coloredMarkers.push(marker);
           });
 
-          // Render routes on colored map (not on light map for cleaner look)
+          // Render routes on colored map (for fullscreen transition)
           locations.forEach(async (toLocation: Location) => {
             if (toLocation.transportFrom && toLocation.transportProfile) {
               const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
@@ -298,8 +354,8 @@ export class BlockMapView {
                       },
                       paint: {
                         'line-color': toLocation.color || '#3B82F6',
-                        'line-width': 3,
-                        'line-opacity': 0.7
+                        'line-width': 4,
+                        'line-opacity': 0.8
                       }
                     });
 
@@ -404,6 +460,75 @@ export class BlockMapView {
             lightMarkers.push(marker);
           });
 
+          // Update routes on LIGHT map
+          locations.forEach(async (toLocation: Location) => {
+            if (toLocation.transportFrom && toLocation.transportProfile) {
+              const fromLocation = locations.find((loc: Location) => loc.geoId === toLocation.transportFrom);
+              if (!fromLocation) return;
+
+              const profile = toLocation.transportProfile === 'walking' ? 'walking' :
+                             toLocation.transportProfile === 'cycling' ? 'cycling' :
+                             'driving-traffic';
+
+              const waypointsStr = deps.waypointController.buildWaypointsString(toLocation.waypoints);
+              const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${fromLocation.lng},${fromLocation.lat}${waypointsStr};${toLocation.lng},${toLocation.lat}?geometries=geojson&overview=full&access_token=${deps.mapboxToken}`;
+
+              try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.routes && data.routes.length > 0) {
+                  const route = data.routes[0];
+                  const routeId = `route-${fromLocation.geoId}-${toLocation.geoId}`;
+
+                  if (lightMap) {
+                    const existingSource = lightMap.getSource(routeId);
+
+                    if (existingSource) {
+                      // Update existing source data
+                      (existingSource as mapboxgl.GeoJSONSource).setData({
+                        type: 'Feature',
+                        properties: {},
+                        geometry: route.geometry
+                      });
+                      console.log('[BlockMap] Route source updated on light map:', routeId);
+                    } else {
+                      // Add new source and layer
+                      lightMap.addSource(routeId, {
+                        type: 'geojson',
+                        data: {
+                          type: 'Feature',
+                          properties: {},
+                          geometry: route.geometry
+                        }
+                      });
+
+                      lightMap.addLayer({
+                        id: routeId,
+                        type: 'line',
+                        source: routeId,
+                        layout: {
+                          'line-join': 'round',
+                          'line-cap': 'round'
+                        },
+                        paint: {
+                          'line-color': toLocation.color || '#3B82F6',
+                          'line-width': 4,
+                          'line-opacity': 0.8
+                        }
+                      });
+
+                      currentRouteIds.push(routeId);
+                      console.log('[BlockMap] Route created on light map:', routeId);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('[BlockMap] Error updating route on light map:', error);
+              }
+            }
+          });
+
           // Add new markers to COLORED map
           if (coloredMap) {
             locations.forEach((location: Location) => {
@@ -415,7 +540,7 @@ export class BlockMapView {
             });
           }
 
-          // Update routes on COLORED map
+          // Update routes on COLORED map (for fullscreen transition)
           if (coloredMap) {
             locations.forEach(async (toLocation: Location) => {
               if (toLocation.transportFrom && toLocation.transportProfile) {
@@ -469,8 +594,8 @@ export class BlockMapView {
                           },
                           paint: {
                             'line-color': toLocation.color || '#3B82F6',
-                            'line-width': 3,
-                            'line-opacity': 0.7
+                            'line-width': 4,
+                            'line-opacity': 0.8
                           }
                         });
 
@@ -480,7 +605,7 @@ export class BlockMapView {
                     }
                   }
                 } catch (error) {
-                  console.error('[BlockMap] Error updating route:', error);
+                  console.error('[BlockMap] Error updating route on colored map:', error);
                 }
               }
             });

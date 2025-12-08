@@ -150,10 +150,10 @@ export function showVoiceDraftSheet(transcript: string): void {
     return;
   }
 
-  // Initialize draft data
+  // Initialize draft data (NO location detection)
   currentDraft = {
     transcript: transcript.trim(),
-    detectedLocations: [],
+    detectedLocations: [],  // Empty - LLM will populate via createGeoMark
     isProcessing: true
   };
 
@@ -173,8 +173,14 @@ export function showVoiceDraftSheet(transcript: string): void {
   // Render initial content
   renderDraftContent();
 
-  // Start background location detection
-  startLocationDetection(currentDraft.transcript);
+  // ONLY run agent analysis (no parallel location detection)
+  analyzeWithAgent(transcript, getDocumentContext()).then(agentPlan => {
+    if (agentPlan) {
+      currentDraft.agentPlan = agentPlan;
+    }
+    currentDraft.isProcessing = false;
+    renderDraftContent();
+  });
 }
 
 export function hideVoiceDraftSheet(): void {
@@ -199,175 +205,6 @@ export function hideVoiceDraftSheet(): void {
 }
 
 // ============================================
-// LOCATION DETECTION
-// ============================================
-
-async function startLocationDetection(text: string): Promise<void> {
-  console.log('[VoiceDraftSheet] Starting location detection and agent analysis for:', text);
-
-  if (!geocodingService) {
-    console.error('[VoiceDraftSheet] GeocodingService not available');
-    currentDraft.isProcessing = false;
-    renderDraftContent();
-    return;
-  }
-
-  try {
-    // Extract document context for agent analysis
-    const context = getDocumentContext();
-
-    // Extract location names using regex (same pattern as GeoMarkingService)
-    const locationNames = extractLocationNames(text);
-    console.log('[VoiceDraftSheet] Extracted location names:', locationNames);
-
-    // Initialize detected locations with 'detecting' status
-    if (locationNames.length > 0) {
-      currentDraft.detectedLocations = locationNames.map(name => ({
-        locationName: name,
-        status: 'detecting' as const,
-        ranges: findLocationRanges(text, name)
-      }));
-    }
-
-    // Render with detecting status
-    renderDraftContent();
-
-    // Run location detection and agent analysis in parallel
-    const [locationResult, agentResult] = await Promise.allSettled([
-      // Location detection
-      (async () => {
-        if (locationNames.length === 0) {
-          console.log('[VoiceDraftSheet] No locations detected');
-          return;
-        }
-
-        // Geocode each location in parallel
-        const geocodePromises = locationNames.map(async (locationName, index) => {
-          try {
-            console.log(`[VoiceDraftSheet] Geocoding: ${locationName}`);
-
-            const result = await geocodingService!.geocode(locationName);
-
-            if (result && result.lat !== undefined && result.lng !== undefined) {
-              // Success - update location as found
-              const colorIndex = index % GEO_MARK_COLORS.length;
-              const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-              currentDraft.detectedLocations[index] = {
-                ...currentDraft.detectedLocations[index],
-                status: 'found',
-                lat: Number(result.lat),
-                lng: Number(result.lng),
-                geoId,
-                colorIndex
-              };
-
-              console.log(`[VoiceDraftSheet] ✅ Found: ${locationName} at (${result.lat}, ${result.lng})`);
-            } else {
-              // Not found
-              currentDraft.detectedLocations[index] = {
-                ...currentDraft.detectedLocations[index],
-                status: 'error',
-                errorMessage: 'Location not found'
-              };
-
-              console.log(`[VoiceDraftSheet] ❌ Not found: ${locationName}`);
-            }
-          } catch (error) {
-            console.error(`[VoiceDraftSheet] Error geocoding ${locationName}:`, error);
-
-            currentDraft.detectedLocations[index] = {
-              ...currentDraft.detectedLocations[index],
-              status: 'error',
-              errorMessage: 'Geocoding failed'
-            };
-          }
-
-          // Re-render after each location completes
-          renderDraftContent();
-        });
-
-        await Promise.all(geocodePromises);
-        console.log('[VoiceDraftSheet] Location detection complete');
-      })(),
-
-      // Agent analysis
-      analyzeWithAgent(text, context)
-    ]);
-
-    // Handle agent analysis result
-    if (agentResult.status === 'fulfilled' && agentResult.value) {
-      currentDraft.agentPlan = agentResult.value;
-      console.log('[VoiceDraftSheet] Agent plan ready:', agentResult.value);
-
-      // If LLM returned no tools, add default insertText
-      if (currentDraft.agentPlan.tools.length === 0) {
-        console.warn('[VoiceDraftSheet] LLM returned empty tools array, adding default insertText');
-        currentDraft.agentPlan.tools = [{
-          name: 'insertText',
-          parameters: { text }
-        }];
-        currentDraft.agentPlan.reasoning = 'Ready to insert your text';
-      }
-    } else {
-      // Fallback: create simple insertText plan
-      currentDraft.agentPlan = {
-        status: 'ready',
-        reasoning: 'Ready to insert your text',
-        tools: [{
-          name: 'insertText',
-          parameters: { text }
-        }]
-      };
-      console.log('[VoiceDraftSheet] Using fallback insertText plan');
-    }
-
-    currentDraft.isProcessing = false;
-    renderDraftContent();
-
-    console.log('[VoiceDraftSheet] All analysis complete');
-  } catch (error) {
-    console.error('[VoiceDraftSheet] Error during analysis:', error);
-    currentDraft.isProcessing = false;
-    renderDraftContent();
-  }
-}
-
-function extractLocationNames(text: string): string[] {
-  // Same regex pattern as GeoMarkingService
-  const locationPattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/g;
-  const matches = text.match(locationPattern) || [];
-
-  // Filter out common words (blacklist)
-  const blacklist = [
-    'The', 'A', 'An', 'I', 'He', 'She', 'It', 'We', 'They',
-    'Visit', 'Go', 'Travel', 'See', 'Explore', 'Discover',
-    'My', 'Your', 'Our', 'This', 'That', 'These', 'Those'
-  ];
-
-  const filtered = matches.filter(name => !blacklist.includes(name));
-
-  // Remove duplicates and limit to 5 locations
-  const unique = Array.from(new Set(filtered));
-  return unique.slice(0, 5);
-}
-
-function findLocationRanges(text: string, locationName: string): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  let startIndex = 0;
-
-  while ((startIndex = text.indexOf(locationName, startIndex)) !== -1) {
-    ranges.push({
-      from: startIndex,
-      to: startIndex + locationName.length
-    });
-    startIndex += locationName.length;
-  }
-
-  return ranges;
-}
-
-// ============================================
 // RENDER CONTENT
 // ============================================
 
@@ -375,59 +212,38 @@ function renderDraftContent(): void {
   const contentDiv = document.getElementById('voice-draft-content');
   if (!contentDiv) return;
 
-  const { transcript, detectedLocations, isProcessing, agentPlan } = currentDraft;
+  const { transcript, isProcessing, agentPlan } = currentDraft;
 
   let html = '';
 
-  // Draft text with highlighted locations (shown first)
+  // Draft text (NO location highlighting - we don't know which are locations yet)
   html += '<div class="voice-draft-text">';
-  html += highlightLocationsInText(transcript, detectedLocations);
+  html += escapeHtml(transcript);  // Plain text, no highlights
   html += '</div>';
 
-  // Location list
-  if (detectedLocations.length > 0) {
-    html += `
-      <div class="voice-draft-locations-section">
-        <div class="voice-draft-section-title">Detected Locations</div>
-        <div class="voice-draft-location-list">
-    `;
-
-    detectedLocations.forEach(location => {
-      html += renderLocationItem(location);
-    });
-
-    html += `
-        </div>
-      </div>
-    `;
-  } else if (!isProcessing) {
-    html += `
-      <div class="voice-draft-empty">
-        No locations detected in this text.
-      </div>
-    `;
-  }
+  // NO "Detected Locations" section - LLM will handle this
 
   // Processing indicator
   if (isProcessing) {
     html += `
       <div class="voice-draft-processing">
         <div class="voice-draft-processing-spinner"></div>
-        <span>Analyzing context and detecting locations...</span>
+        <span>Analyzing...</span>
       </div>
     `;
   }
 
-  // Conversational Message Section (use agent reasoning if available)
-  const message = agentPlan?.reasoning || generateConfirmationMessage();
-  html += `
-    <div class="voice-draft-assistant-message">
-      <div class="voice-draft-assistant-avatar">🤖</div>
-      <div class="voice-draft-assistant-bubble">
-        ${escapeHtml(message)}
+  // Assistant message (LLM reasoning)
+  if (agentPlan?.reasoning) {
+    html += `
+      <div class="voice-draft-assistant-message">
+        <div class="voice-draft-assistant-avatar">🤖</div>
+        <div class="voice-draft-assistant-bubble">
+          ${escapeHtml(agentPlan.reasoning)}
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }
 
   // Tool Plan Preview
   if (agentPlan?.tools && agentPlan.tools.length > 0 && !isProcessing) {
@@ -435,120 +251,6 @@ function renderDraftContent(): void {
   }
 
   contentDiv.innerHTML = html;
-}
-
-function generateConfirmationMessage(): string {
-  const { transcript, detectedLocations, isProcessing } = currentDraft;
-
-  // Part 1: Transcript readback
-  const transcriptPart = `You said: "${transcript}"`;
-
-  // Part 2: Location status
-  let locationPart = '';
-
-  if (isProcessing) {
-    // Still detecting
-    locationPart = `I'm detecting locations...`;
-  } else {
-    // Detection complete
-    const foundLocations = detectedLocations.filter(loc => loc.status === 'found');
-    const errorLocations = detectedLocations.filter(loc => loc.status === 'error');
-
-    if (foundLocations.length === 0) {
-      locationPart = `I didn't find any locations.`;
-    } else if (foundLocations.length === 1) {
-      const name = foundLocations[0].locationName;
-      locationPart = `I found 1 location: ${name}.`;
-    } else {
-      const names = foundLocations.map(loc => loc.locationName).join(', ');
-      const lastComma = names.lastIndexOf(',');
-      const formattedNames = lastComma > 0
-        ? names.substring(0, lastComma) + ' and' + names.substring(lastComma + 1)
-        : names;
-      locationPart = `I found ${foundLocations.length} locations: ${formattedNames}.`;
-    }
-
-    // Add error note if some failed
-    if (errorLocations.length > 0) {
-      const errorNames = errorLocations.map(loc => loc.locationName).join(', ');
-      locationPart += ` I couldn't find: ${errorNames}.`;
-    }
-  }
-
-  return `${transcriptPart} ${locationPart}`;
-}
-
-function highlightLocationsInText(text: string, locations: DetectedLocation[]): string {
-  // Build array of all ranges with their metadata
-  const allRanges: Array<{ from: number; to: number; location: DetectedLocation }> = [];
-
-  locations.forEach(location => {
-    location.ranges.forEach(range => {
-      allRanges.push({ ...range, location });
-    });
-  });
-
-  // Sort by position
-  allRanges.sort((a, b) => a.from - b.from);
-
-  // Build highlighted HTML
-  let result = '';
-  let lastIndex = 0;
-
-  allRanges.forEach(({ from, to, location }) => {
-    // Add text before this range
-    if (from > lastIndex) {
-      result += escapeHtml(text.substring(lastIndex, from));
-    }
-
-    // Add highlighted text
-    const statusClass = `location-${location.status}`;
-    const style = location.status === 'found' && location.colorIndex !== undefined
-      ? `style="background-color: ${GEO_MARK_COLORS[location.colorIndex]}33;"`
-      : '';
-
-    result += `<span class="voice-draft-highlight ${statusClass}" ${style}>`;
-    result += escapeHtml(text.substring(from, to));
-    result += '</span>';
-
-    lastIndex = to;
-  });
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    result += escapeHtml(text.substring(lastIndex));
-  }
-
-  return result;
-}
-
-function renderLocationItem(location: DetectedLocation): string {
-  const { locationName, status, lat, lng, colorIndex, errorMessage } = location;
-
-  let statusHtml = '';
-  let detailsHtml = '';
-
-  if (status === 'detecting') {
-    statusHtml = '<div class="voice-draft-location-status detecting"></div>';
-    detailsHtml = '<div class="voice-draft-location-coords">Detecting...</div>';
-  } else if (status === 'found') {
-    const color = colorIndex !== undefined ? GEO_MARK_COLORS[colorIndex] : '#ccc';
-    statusHtml = `<div class="voice-draft-location-status found" style="background-color: ${color};"></div>`;
-    detailsHtml = `<div class="voice-draft-location-coords">${Number(lat)?.toFixed(4)}, ${Number(lng)?.toFixed(4)}</div>`;
-  } else if (status === 'error') {
-    statusHtml = '<div class="voice-draft-location-status error"></div>';
-    detailsHtml = `<div class="voice-draft-location-error-msg">${errorMessage || 'Error'}</div>`;
-  }
-
-  return `
-    <div class="voice-draft-location-item">
-      ${statusHtml}
-      <div class="voice-draft-location-details">
-        <div class="voice-draft-location-name">${escapeHtml(locationName)}</div>
-        ${detailsHtml}
-      </div>
-    </div>
-  `;
 }
 
 function renderToolPlan(tools: ToolCall[]): string {

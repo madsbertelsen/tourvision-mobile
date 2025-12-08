@@ -85,13 +85,13 @@ async function executeTool(
 
 /**
  * Tool 1: replaceText
- * Replace existing text in the document
+ * Replace existing text in the document (does NOT auto-create geo-marks)
  */
 function executeReplaceText(
   params: { targetText: string; replacementText: string; reason?: string },
   context: ExecutionContext
 ): ExecutionResult {
-  const { editorView, schema, detectedLocations } = context;
+  const { editorView, schema } = context;
   const { state } = editorView;
 
   console.log('[ToolExecutor] replaceText:', params.targetText, '→', params.replacementText);
@@ -109,11 +109,8 @@ function executeReplaceText(
   try {
     let tr = state.tr;
 
-    // Replace the text
+    // Replace the text (LLM will use createGeoMark separately if needed)
     tr = tr.replaceWith(range.from, range.to, schema.text(params.replacementText));
-
-    // Apply geo-marks to the replacement text
-    tr = applyGeoMarks(tr, params.replacementText, range.from, detectedLocations, schema);
 
     // Move cursor to end of replaced text
     const newEnd = range.from + params.replacementText.length;
@@ -137,13 +134,13 @@ function executeReplaceText(
 
 /**
  * Tool 2: insertText
- * Insert text at cursor or end of document
+ * Insert text at cursor or end of document (does NOT auto-create geo-marks)
  */
 function executeInsertText(
   params: { text: string; position?: 'cursor' | 'end' },
   context: ExecutionContext
 ): ExecutionResult {
-  const { editorView, schema, detectedLocations } = context;
+  const { editorView, schema } = context;
   const { state } = editorView;
 
   console.log('[ToolExecutor] insertText at', params.position || 'cursor');
@@ -155,11 +152,9 @@ function executeInsertText(
   try {
     let tr = state.tr;
 
-    // Insert text with trailing space
+    // Just insert text - DON'T auto-create geo-marks
+    // The LLM will use createGeoMark separately if needed
     tr = tr.insertText(params.text + ' ', insertPos);
-
-    // Apply geo-marks
-    tr = applyGeoMarks(tr, params.text, insertPos, detectedLocations, schema);
 
     // Move cursor to end of inserted text
     const textEnd = insertPos + params.text.length + 1;
@@ -231,16 +226,25 @@ function executeInsertMap(
 
 /**
  * Tool 4: createGeoMark
- * Mark existing text as a location without modifying content
+ * Mark existing text as a location with pre-resolved coordinates
  */
 function executeCreateGeoMark(
-  params: { text: string; placeName: string },
+  params: { text: string; placeName: string; lat?: number; lng?: number },
   context: ExecutionContext
 ): ExecutionResult {
   const { editorView, schema, detectedLocations } = context;
   const { state } = editorView;
 
-  console.log('[ToolExecutor] createGeoMark:', params.text, 'as', params.placeName);
+  console.log('[ToolExecutor] createGeoMark:', params.text, 'as', params.placeName, `(${params.lat}, ${params.lng})`);
+
+  // Coordinates should already be resolved by geocode tool during planning
+  if (!params.lat || !params.lng) {
+    return {
+      toolName: 'createGeoMark',
+      success: false,
+      error: `Missing coordinates for "${params.placeName}". Did you forget to call geocode tool first?`
+    };
+  }
 
   // Find the text in the document
   const range = findTextPosition(state.doc, params.text);
@@ -252,29 +256,31 @@ function executeCreateGeoMark(
     };
   }
 
-  // Find the corresponding detected location
-  const location = detectedLocations.find(loc =>
-    loc.status === 'found' && loc.locationName.toLowerCase() === params.placeName.toLowerCase()
-  );
-
-  if (!location) {
-    return {
-      toolName: 'createGeoMark',
-      success: false,
-      error: `Location "${params.placeName}" not found in detected locations`
-    };
-  }
-
   try {
+    // Generate geo-mark ID and color
+    const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const colorIndex = detectedLocations.length % 10; // 10 colors in palette
+
+    // Add to detectedLocations for reference by other tools (e.g., setTransportation)
+    detectedLocations.push({
+      locationName: params.placeName,
+      geoId,
+      lat: params.lat,
+      lng: params.lng,
+      colorIndex,
+      status: 'found',
+      ranges: [{ from: range.from, to: range.to }]
+    });
+
     let tr = state.tr;
 
-    // Create geo-mark
+    // Create geo-mark with pre-resolved coordinates
     const geoMark = schema.marks.geoMark.create({
-      geoId: location.geoId,
-      placeName: location.locationName,
-      lat: location.lat,
-      lng: location.lng,
-      colorIndex: location.colorIndex,
+      geoId,
+      placeName: params.placeName,
+      lat: params.lat,
+      lng: params.lng,
+      colorIndex,
       coordSource: 'nominatim',
       createdAt: new Date().toISOString(),
       createdBy: 'voice-agent'
@@ -288,7 +294,7 @@ function executeCreateGeoMark(
     return {
       toolName: 'createGeoMark',
       success: true,
-      message: `Marked "${params.text}" as ${params.placeName}`
+      message: `Marked "${params.text}" as ${params.placeName} (${params.lat}, ${params.lng})`
     };
   } catch (error) {
     return {
