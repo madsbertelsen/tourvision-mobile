@@ -90,6 +90,9 @@ import { FullscreenMapView } from './views/FullscreenMapView';
 // Location Sheet
 import { initializeLocationSheet, setLocationSheetDependencies, showLocationSheet, hideLocationSheet } from './location-sheet';
 
+// Voice Draft Sheet
+import { initializeVoiceDraftSheet, setVoiceDraftSheetDependencies } from './voice-draft-sheet';
+
 // Get document ID from URL path (e.g., /doc/tv-session -> tv-session)
 // Path format: /doc/{id}, fallback to query param for backwards compatibility
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -4199,6 +4202,19 @@ async function main() {
     }
   );
 
+  // Set voice draft sheet dependencies
+  setVoiceDraftSheetDependencies(
+    editor,
+    customSchema,
+    geocodingService,
+    voiceInputService,
+    () => {
+      // Change callback - refresh maps, etc.
+      console.log('[Main] Voice draft applied, refreshing maps');
+      notifyGeoMarkChange();
+    }
+  );
+
   // Set up toolbar button handlers
   initToolbar({
     view: editor,
@@ -5151,6 +5167,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize location sheet
   initializeLocationSheet();
+
+  // Initialize voice draft sheet
+  initializeVoiceDraftSheet();
 });
 
 // Start the application

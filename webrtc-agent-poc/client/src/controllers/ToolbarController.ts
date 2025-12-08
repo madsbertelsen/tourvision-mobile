@@ -9,6 +9,7 @@ import type { VideoChatService } from '../services/VideoChatService';
 import type { VoiceInputService } from '../services/VoiceInputService';
 import type { GeoMarkingService } from '../services/GeoMarkingService';
 import { TextSelection } from 'prosemirror-state';
+import { showVoiceDraftSheet } from '../voice-draft-sheet';
 
 /**
  * Dependencies required by the ToolbarController
@@ -179,54 +180,19 @@ export class ToolbarController {
         };
 
         service.onFinalResult = async (text: string) => {
-          // Insert text into editor at cursor position
-          const { state } = view;
-          const { from } = state.selection;
-          const tr = state.tr.insertText(text + ' ', from); // Add space after
-          const newPos = from + text.length + 1;
-          tr.setSelection(TextSelection.create(tr.doc, newPos));
-          view.dispatch(tr);
-          view.focus();
+          console.log('[ToolbarController] Voice recognition complete, showing draft sheet:', text);
 
-          console.log('[ToolbarController] Inserted voice text:', text);
-
-          // Trigger location detection from voice input
-          if (this.deps.geoMarkingService) {
-            console.log('[ToolbarController] 🤖 Triggering location detection from voice input...');
-
-            // Show visual feedback in transcript overlay
+          // Hide transcript overlay
+          if (transcriptOverlay) {
+            transcriptOverlay.classList.remove('visible');
             if (transcriptText) {
-              transcriptText.textContent = '🔍 Detecting locations...';
-            }
-
-            try {
-              await this.deps.geoMarkingService.processDocument();
-              console.log('[ToolbarController] ✅ Location detection complete');
-
-              // Update feedback
-              if (transcriptText) {
-                transcriptText.textContent = '✅ Locations detected!';
-              }
-            } catch (error) {
-              console.error('[ToolbarController] ❌ Location detection failed:', error);
-
-              // Show error
-              if (transcriptText) {
-                transcriptText.textContent = '❌ Location detection failed';
-                transcriptText.style.color = '#dc2626';
-              }
-            } finally {
-              // Fade out overlay after showing result
-              if (transcriptOverlay) {
-                setTimeout(() => {
-                  transcriptOverlay.classList.remove('visible');
-                  if (transcriptText) {
-                    transcriptText.style.color = ''; // Reset color
-                  }
-                }, 1500); // Show result for 1.5s before fading
-              }
+              transcriptText.style.color = ''; // Reset color
             }
           }
+
+          // Show draft sheet for user review
+          // Location detection will be handled by VoiceDraftSheet
+          showVoiceDraftSheet(text);
         };
 
         service.onEnd = () => {

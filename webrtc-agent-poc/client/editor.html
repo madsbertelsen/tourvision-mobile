@@ -601,6 +601,27 @@
     </div>
   </div>
 
+  <!-- Voice Draft Approval Sheet (hidden by default) -->
+  <div id="voice-draft-backdrop"></div>
+  <div id="voice-draft-sheet">
+    <div class="voice-draft-handle"></div>
+    <div class="voice-draft-header">
+      <div class="voice-draft-title">
+        <span>🎤</span>
+        <span>Voice Draft</span>
+      </div>
+      <button id="voice-draft-close-btn" class="voice-draft-close">✕</button>
+    </div>
+    <div class="voice-draft-body">
+      <div id="voice-draft-content"></div>
+    </div>
+    <div class="voice-draft-actions">
+      <button id="voice-draft-cancel-btn" class="voice-draft-action-btn secondary">Cancel</button>
+      <button id="voice-draft-rerecord-btn" class="voice-draft-action-btn secondary">🎤 Re-record</button>
+      <button id="voice-draft-approve-btn" class="voice-draft-action-btn primary">✓ Approve</button>
+    </div>
+  </div>
+
   <!-- Voice Input Transcript Overlay (hidden by default) -->
   <div id="transcript-overlay">
     <div class="transcript-indicator">
