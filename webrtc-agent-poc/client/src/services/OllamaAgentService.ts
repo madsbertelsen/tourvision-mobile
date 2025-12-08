@@ -3,10 +3,10 @@
  * Integrates with local Ollama LLM for intelligent voice input analysis
  */
 
-import Ollama from 'ollama/browser';
-import type { AgentPlan, ToolCall, OllamaMessage, OllamaResponse, ToolDefinition, ClarifiedIntent } from '../types/agent';
-import { getToolDefinitions, validateToolCall } from './ToolRegistry';
+import ollama from 'ollama';
+import type { AgentPlan, ClarifiedIntent, OllamaMessage, OllamaResponse, ToolCall, ToolDefinition } from '../types/agent';
 import { geocodingService } from './GeocodingService';
+import { getToolDefinitions, validateToolCall } from './ToolRegistry';
 
 // Temporary type until we extract to shared types
 interface DetectedLocation {
@@ -24,9 +24,6 @@ interface DetectedLocation {
 const OLLAMA_URL = (import.meta as any).env?.VITE_OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = (import.meta as any).env?.VITE_OLLAMA_MODEL || 'ministral-3:8b';
 const OLLAMA_TIMEOUT = Number((import.meta as any).env?.VITE_OLLAMA_TIMEOUT) || 30000;
-
-// Initialize Ollama client
-const ollama = new Ollama({ host: OLLAMA_URL });
 
 /**
  * Check if Ollama is available and responsive
@@ -245,7 +242,8 @@ async function callOllama(
     const options: any = {
       model: OLLAMA_MODEL,
       messages,
-      stream: false
+      stream: false,
+      think: true  // Enable thinking/reasoning for better results
     };
 
     // Add tools for native function calling
