@@ -518,6 +518,65 @@
 }
 
 /* ============================================
+   AMBIGUITY QUESTION UI
+   ============================================ */
+
+/* Container for ambiguity question */
+.voice-draft-ambiguity {
+  padding: 0;
+}
+
+/* Options container */
+.voice-draft-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Individual option label */
+.voice-draft-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.voice-draft-option:hover {
+  background: #f9fafb;
+  border-color: #3b82f6;
+}
+
+.voice-draft-option input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.voice-draft-option span {
+  flex: 1;
+  font-size: 15px;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.voice-draft-option:has(input:checked) {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.voice-draft-option:has(input:checked) span {
+  font-weight: 600;
+  color: #1e40af;
+}
+
+/* ============================================
    DARK MODE SUPPORT (Optional - prepared)
    ============================================ */
 @media (prefers-color-scheme: dark) {
@@ -547,4 +606,91 @@
     color: #f9fafb;
   }
   */
+}
+
+/* ============================================
+   TOOL PLAN PREVIEW
+   ============================================ */
+
+/* Tool plan container */
+.voice-draft-tool-plan {
+  margin: 16px 0;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* Plan title */
+.voice-draft-plan-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+/* Individual tool item */
+.voice-draft-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.voice-draft-tool-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Tool icon */
+.voice-draft-tool-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Tool description */
+.voice-draft-tool-desc {
+  flex: 1;
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+/* Execution status states */
+.voice-draft-tool-item.executing {
+  opacity: 0.6;
+  animation: pulse 1s infinite;
+}
+
+.voice-draft-tool-item.completed {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.voice-draft-tool-item.completed .voice-draft-tool-desc {
+  color: #065f46;
+}
+
+.voice-draft-tool-item.failed {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.voice-draft-tool-item.failed .voice-draft-tool-desc {
+  color: #991b1b;
+}
+
+/* Pulse animation for executing state */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.9;
+  }
 }

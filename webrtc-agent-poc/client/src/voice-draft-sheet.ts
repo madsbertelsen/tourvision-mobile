@@ -11,7 +11,11 @@ import type { EditorView } from 'prosemirror-view';
 import type { Schema } from 'prosemirror-model';
 import type { GeocodingService } from './services/GeocodingService';
 import type { VoiceInputService } from './services/VoiceInputService';
+import type { AgentPlan, ExecutionContext, ToolCall, IntentResult, AmbiguityQuestion } from './types/agent';
 import { TextSelection } from 'prosemirror-state';
+import { isOllamaAvailable, generatePlan } from './services/OllamaAgentService';
+import { clarifyIntent } from './services/IntentClarificationService';
+import { executePlan } from './services/ToolExecutor';
 
 // ============================================
 // INTERFACES
@@ -32,6 +36,7 @@ interface VoiceDraftData {
   transcript: string;
   detectedLocations: DetectedLocation[];
   isProcessing: boolean;
+  agentPlan?: AgentPlan; // NEW: Agent's execution plan
 }
 
 // ============================================
@@ -46,7 +51,8 @@ let isDragging = false;
 let currentDraft: VoiceDraftData = {
   transcript: '',
   detectedLocations: [],
-  isProcessing: false
+  isProcessing: false,
+  agentPlan: undefined
 };
 
 // Dependencies (injected from main.ts)
@@ -187,7 +193,8 @@ export function hideVoiceDraftSheet(): void {
   currentDraft = {
     transcript: '',
     detectedLocations: [],
-    isProcessing: false
+    isProcessing: false,
+    agentPlan: undefined
   };
 }
 
@@ -196,7 +203,7 @@ export function hideVoiceDraftSheet(): void {
 // ============================================
 
 async function startLocationDetection(text: string): Promise<void> {
-  console.log('[VoiceDraftSheet] Starting location detection for:', text);
+  console.log('[VoiceDraftSheet] Starting location detection and agent analysis for:', text);
 
   if (!geocodingService) {
     console.error('[VoiceDraftSheet] GeocodingService not available');
@@ -206,82 +213,121 @@ async function startLocationDetection(text: string): Promise<void> {
   }
 
   try {
+    // Extract document context for agent analysis
+    const context = getDocumentContext();
+
     // Extract location names using regex (same pattern as GeoMarkingService)
     const locationNames = extractLocationNames(text);
     console.log('[VoiceDraftSheet] Extracted location names:', locationNames);
 
-    if (locationNames.length === 0) {
-      console.log('[VoiceDraftSheet] No locations detected');
-      currentDraft.isProcessing = false;
-      renderDraftContent();
-      return;
-    }
-
     // Initialize detected locations with 'detecting' status
-    currentDraft.detectedLocations = locationNames.map(name => ({
-      locationName: name,
-      status: 'detecting' as const,
-      ranges: findLocationRanges(text, name)
-    }));
+    if (locationNames.length > 0) {
+      currentDraft.detectedLocations = locationNames.map(name => ({
+        locationName: name,
+        status: 'detecting' as const,
+        ranges: findLocationRanges(text, name)
+      }));
+    }
 
     // Render with detecting status
     renderDraftContent();
 
-    // Geocode each location in parallel
-    const geocodePromises = locationNames.map(async (locationName, index) => {
-      try {
-        console.log(`[VoiceDraftSheet] Geocoding: ${locationName}`);
-
-        const result = await geocodingService!.geocode(locationName);
-
-        if (result && result.lat !== undefined && result.lng !== undefined) {
-          // Success - update location as found
-          const colorIndex = index % GEO_MARK_COLORS.length;
-          const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-          currentDraft.detectedLocations[index] = {
-            ...currentDraft.detectedLocations[index],
-            status: 'found',
-            lat: Number(result.lat),
-            lng: Number(result.lng),
-            geoId,
-            colorIndex
-          };
-
-          console.log(`[VoiceDraftSheet] ✅ Found: ${locationName} at (${result.lat}, ${result.lng})`);
-        } else {
-          // Not found
-          currentDraft.detectedLocations[index] = {
-            ...currentDraft.detectedLocations[index],
-            status: 'error',
-            errorMessage: 'Location not found'
-          };
-
-          console.log(`[VoiceDraftSheet] ❌ Not found: ${locationName}`);
+    // Run location detection and agent analysis in parallel
+    const [locationResult, agentResult] = await Promise.allSettled([
+      // Location detection
+      (async () => {
+        if (locationNames.length === 0) {
+          console.log('[VoiceDraftSheet] No locations detected');
+          return;
         }
-      } catch (error) {
-        console.error(`[VoiceDraftSheet] Error geocoding ${locationName}:`, error);
 
-        currentDraft.detectedLocations[index] = {
-          ...currentDraft.detectedLocations[index],
-          status: 'error',
-          errorMessage: 'Geocoding failed'
-        };
+        // Geocode each location in parallel
+        const geocodePromises = locationNames.map(async (locationName, index) => {
+          try {
+            console.log(`[VoiceDraftSheet] Geocoding: ${locationName}`);
+
+            const result = await geocodingService!.geocode(locationName);
+
+            if (result && result.lat !== undefined && result.lng !== undefined) {
+              // Success - update location as found
+              const colorIndex = index % GEO_MARK_COLORS.length;
+              const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+              currentDraft.detectedLocations[index] = {
+                ...currentDraft.detectedLocations[index],
+                status: 'found',
+                lat: Number(result.lat),
+                lng: Number(result.lng),
+                geoId,
+                colorIndex
+              };
+
+              console.log(`[VoiceDraftSheet] ✅ Found: ${locationName} at (${result.lat}, ${result.lng})`);
+            } else {
+              // Not found
+              currentDraft.detectedLocations[index] = {
+                ...currentDraft.detectedLocations[index],
+                status: 'error',
+                errorMessage: 'Location not found'
+              };
+
+              console.log(`[VoiceDraftSheet] ❌ Not found: ${locationName}`);
+            }
+          } catch (error) {
+            console.error(`[VoiceDraftSheet] Error geocoding ${locationName}:`, error);
+
+            currentDraft.detectedLocations[index] = {
+              ...currentDraft.detectedLocations[index],
+              status: 'error',
+              errorMessage: 'Geocoding failed'
+            };
+          }
+
+          // Re-render after each location completes
+          renderDraftContent();
+        });
+
+        await Promise.all(geocodePromises);
+        console.log('[VoiceDraftSheet] Location detection complete');
+      })(),
+
+      // Agent analysis
+      analyzeWithAgent(text, context)
+    ]);
+
+    // Handle agent analysis result
+    if (agentResult.status === 'fulfilled' && agentResult.value) {
+      currentDraft.agentPlan = agentResult.value;
+      console.log('[VoiceDraftSheet] Agent plan ready:', agentResult.value);
+
+      // If LLM returned no tools, add default insertText
+      if (currentDraft.agentPlan.tools.length === 0) {
+        console.warn('[VoiceDraftSheet] LLM returned empty tools array, adding default insertText');
+        currentDraft.agentPlan.tools = [{
+          name: 'insertText',
+          parameters: { text }
+        }];
+        currentDraft.agentPlan.reasoning = 'Ready to insert your text';
       }
-
-      // Re-render after each location completes
-      renderDraftContent();
-    });
-
-    // Wait for all geocoding to complete
-    await Promise.all(geocodePromises);
+    } else {
+      // Fallback: create simple insertText plan
+      currentDraft.agentPlan = {
+        status: 'ready',
+        reasoning: 'Ready to insert your text',
+        tools: [{
+          name: 'insertText',
+          parameters: { text }
+        }]
+      };
+      console.log('[VoiceDraftSheet] Using fallback insertText plan');
+    }
 
     currentDraft.isProcessing = false;
     renderDraftContent();
 
-    console.log('[VoiceDraftSheet] Location detection complete');
+    console.log('[VoiceDraftSheet] All analysis complete');
   } catch (error) {
-    console.error('[VoiceDraftSheet] Error during location detection:', error);
+    console.error('[VoiceDraftSheet] Error during analysis:', error);
     currentDraft.isProcessing = false;
     renderDraftContent();
   }
@@ -329,31 +375,11 @@ function renderDraftContent(): void {
   const contentDiv = document.getElementById('voice-draft-content');
   if (!contentDiv) return;
 
-  const { transcript, detectedLocations, isProcessing } = currentDraft;
+  const { transcript, detectedLocations, isProcessing, agentPlan } = currentDraft;
 
   let html = '';
 
-  // Conversational Message Section
-  html += `
-    <div class="voice-draft-assistant-message">
-      <div class="voice-draft-assistant-avatar">🤖</div>
-      <div class="voice-draft-assistant-bubble">
-        ${escapeHtml(generateConfirmationMessage())}
-      </div>
-    </div>
-  `;
-
-  // Processing indicator
-  if (isProcessing) {
-    html += `
-      <div class="voice-draft-processing">
-        <div class="voice-draft-processing-spinner"></div>
-        <span>Detecting locations...</span>
-      </div>
-    `;
-  }
-
-  // Draft text with highlighted locations
+  // Draft text with highlighted locations (shown first)
   html += '<div class="voice-draft-text">';
   html += highlightLocationsInText(transcript, detectedLocations);
   html += '</div>';
@@ -380,6 +406,32 @@ function renderDraftContent(): void {
         No locations detected in this text.
       </div>
     `;
+  }
+
+  // Processing indicator
+  if (isProcessing) {
+    html += `
+      <div class="voice-draft-processing">
+        <div class="voice-draft-processing-spinner"></div>
+        <span>Analyzing context and detecting locations...</span>
+      </div>
+    `;
+  }
+
+  // Conversational Message Section (use agent reasoning if available)
+  const message = agentPlan?.reasoning || generateConfirmationMessage();
+  html += `
+    <div class="voice-draft-assistant-message">
+      <div class="voice-draft-assistant-avatar">🤖</div>
+      <div class="voice-draft-assistant-bubble">
+        ${escapeHtml(message)}
+      </div>
+    </div>
+  `;
+
+  // Tool Plan Preview
+  if (agentPlan?.tools && agentPlan.tools.length > 0 && !isProcessing) {
+    html += renderToolPlan(agentPlan.tools);
   }
 
   contentDiv.innerHTML = html;
@@ -499,6 +551,42 @@ function renderLocationItem(location: DetectedLocation): string {
   `;
 }
 
+function renderToolPlan(tools: ToolCall[]): string {
+  let html = '<div class="voice-draft-tool-plan">';
+  html += '<h4 class="voice-draft-plan-title">📋 Plan:</h4>';
+
+  tools.forEach((tool) => {
+    const statusClass = tool.status ? ` ${tool.status}` : '';
+    html += `<div class="voice-draft-tool-item${statusClass}">`;
+
+    // Tool icon and description based on tool type
+    if (tool.name === 'replaceText') {
+      html += `<div class="voice-draft-tool-icon">📝</div>`;
+      html += `<div class="voice-draft-tool-desc">Replace "${escapeHtml(tool.parameters.targetText)}" → "${escapeHtml(tool.parameters.replacementText)}"</div>`;
+    } else if (tool.name === 'insertText') {
+      const preview = tool.parameters.text.substring(0, 50);
+      const hasMore = tool.parameters.text.length > 50 ? '...' : '';
+      html += `<div class="voice-draft-tool-icon">➕</div>`;
+      html += `<div class="voice-draft-tool-desc">Insert text: "${escapeHtml(preview)}${hasMore}"</div>`;
+    } else if (tool.name === 'insertMap') {
+      html += `<div class="voice-draft-tool-icon">🗺️</div>`;
+      html += `<div class="voice-draft-tool-desc">Insert map (will auto-discover geo-marks from context)</div>`;
+    } else if (tool.name === 'createGeoMark') {
+      html += `<div class="voice-draft-tool-icon">📍</div>`;
+      html += `<div class="voice-draft-tool-desc">Mark "${escapeHtml(tool.parameters.text)}" as ${escapeHtml(tool.parameters.placeName)}</div>`;
+    } else {
+      // Unknown tool
+      html += `<div class="voice-draft-tool-icon">🔧</div>`;
+      html += `<div class="voice-draft-tool-desc">Execute ${escapeHtml(tool.name)}</div>`;
+    }
+
+    html += '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
@@ -529,77 +617,73 @@ function handleReRecord(): void {
   }, 300);
 }
 
-function handleApprove(): void {
-  console.log('[VoiceDraftSheet] Approve clicked');
+async function handleApprove(): Promise<void> {
+  console.log('[VoiceDraftSheet] Approve clicked - executing agent plan');
 
   if (!editorView || !schema) {
     console.error('[VoiceDraftSheet] EditorView or Schema not available');
     return;
   }
 
-  const { transcript, detectedLocations } = currentDraft;
-  const { state } = editorView;
-  const { from } = state.selection;
+  if (!currentDraft.agentPlan) {
+    console.error('[VoiceDraftSheet] No agent plan available');
+    return;
+  }
 
   try {
-    // Start transaction
-    let tr = state.tr;
+    // Update plan status
+    currentDraft.agentPlan.status = 'executing';
+    renderDraftContent();
 
-    // Insert plain text at cursor position
-    tr = tr.insertText(transcript + ' ', from);
-    const textEnd = from + transcript.length + 1;
+    // Execute tool plan
+    const context: ExecutionContext = {
+      editorView,
+      schema,
+      detectedLocations: currentDraft.detectedLocations
+    };
 
-    // Apply geo-marks to successfully geocoded locations
-    const foundLocations = detectedLocations.filter(loc => loc.status === 'found');
+    const results = await executePlan(currentDraft.agentPlan, context);
 
-    foundLocations.forEach(location => {
-      const { locationName, geoId, lat, lng, colorIndex } = location;
+    // Check execution results
+    const allSuccess = results.every(r => r.success);
 
-      if (geoId && lat !== undefined && lng !== undefined && colorIndex !== undefined) {
-        // Apply geo-mark to each occurrence of this location
-        location.ranges.forEach(range => {
-          const markFrom = from + range.from;
-          const markTo = from + range.to;
+    if (allSuccess) {
+      console.log('[VoiceDraftSheet] ✅ All tools executed successfully');
+      currentDraft.agentPlan.status = 'complete';
+      currentDraft.agentPlan.executionResults = results;
 
-          // Create geo-mark
-          const geoMark = schema.marks.geoMark.create({
-            geoId,
-            placeName: locationName,
-            lat,
-            lng,
-            colorIndex,
-            coordSource: 'nominatim',
-            createdAt: new Date().toISOString(),
-            createdBy: 'voice-input'
-          });
-
-          // Apply mark to range
-          tr = tr.addMark(markFrom, markTo, geoMark);
-        });
-
-        console.log(`[VoiceDraftSheet] Applied geo-mark: ${locationName} (${geoId})`);
+      // Trigger change callback (refresh maps, etc.)
+      if (onChangeCallback) {
+        onChangeCallback();
       }
-    });
 
-    // Move cursor to end of inserted text
-    tr = tr.setSelection(TextSelection.create(tr.doc, textEnd));
+      // Focus editor
+      editorView.focus();
 
-    // Dispatch transaction
-    editorView.dispatch(tr);
-    editorView.focus();
+      // Close sheet after brief delay
+      setTimeout(() => {
+        hideVoiceDraftSheet();
+      }, 300);
+    } else {
+      // Some tools failed
+      const errors = results.filter(r => !r.success).map(r => r.error).join('; ');
+      console.error('[VoiceDraftSheet] ❌ Tool execution failed:', errors);
 
-    console.log('[VoiceDraftSheet] ✅ Text and geo-marks inserted successfully');
+      currentDraft.agentPlan.status = 'failed';
+      currentDraft.agentPlan.error = errors;
+      currentDraft.agentPlan.executionResults = results;
 
-    // Trigger change callback (refresh maps, etc.)
-    if (onChangeCallback) {
-      onChangeCallback();
+      renderDraftContent();
+      alert(`Failed to execute plan: ${errors}`);
     }
-
-    // Close sheet
-    hideVoiceDraftSheet();
   } catch (error) {
-    console.error('[VoiceDraftSheet] Error inserting text and geo-marks:', error);
-    alert('Failed to insert text. Please try again.');
+    console.error('[VoiceDraftSheet] Error executing plan:', error);
+
+    currentDraft.agentPlan.status = 'failed';
+    currentDraft.agentPlan.error = error.message || 'Unknown error';
+
+    renderDraftContent();
+    alert('Failed to execute plan. Please try again.');
   }
 }
 
@@ -658,4 +742,198 @@ function handleTouchEnd(): void {
 
 function isMobileDevice(): boolean {
   return window.innerWidth < 768;
+}
+
+/**
+ * Get document context around cursor (300 chars before)
+ */
+function getDocumentContext(): string {
+  if (!editorView) return '';
+
+  const { state } = editorView;
+  const cursorPos = state.selection.from;
+  const contextStart = Math.max(0, cursorPos - 300);
+
+  return state.doc.textBetween(contextStart, cursorPos, ' ');
+}
+
+/**
+ * Analyze voice input with Ollama agent
+ */
+async function analyzeWithAgent(
+  transcript: string,
+  context: string
+): Promise<AgentPlan | null> {
+  try {
+    // Check Ollama availability
+    const available = await isOllamaAvailable();
+    if (!available) {
+      console.warn('[VoiceDraftSheet] Ollama unavailable, using fallback');
+      return null;
+    }
+
+    if (!editorView) {
+      console.error('[VoiceDraftSheet] EditorView not available');
+      return null;
+    }
+
+    // Phase 1: Intent Clarification
+    console.log('[VoiceDraftSheet] Phase 1: Clarifying intent...');
+    const intentResult = await clarifyIntent(transcript, context, editorView);
+
+    // If ambiguous, show question to user and wait for response
+    if (intentResult.type === 'ambiguous') {
+      console.log('[VoiceDraftSheet] Intent is ambiguous, showing question to user');
+      showAmbiguityQuestion(intentResult.question, transcript, context);
+      return null; // Will be handled by user response
+    }
+
+    // Phase 2: Generate Plan
+    console.log('[VoiceDraftSheet] Phase 2: Generating plan from clarified intent...');
+    const plan = await generatePlan(
+      intentResult.intent,
+      currentDraft.detectedLocations
+    );
+
+    return plan;
+  } catch (error) {
+    console.error('[VoiceDraftSheet] Agent analysis failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Show ambiguity question to user with multiple choice options
+ */
+function showAmbiguityQuestion(
+  question: AmbiguityQuestion,
+  transcript: string,
+  context: string
+): void {
+  console.log('[VoiceDraftSheet] Showing ambiguity question:', question);
+
+  // Update draft with ambiguity question
+  currentDraft.isProcessing = false;
+
+  // Render question UI in the draft body
+  const bodyElement = document.querySelector('.voice-draft-body');
+  if (!bodyElement) {
+    console.error('[VoiceDraftSheet] Draft body element not found');
+    return;
+  }
+
+  // Build question HTML
+  let html = '<div class="voice-draft-ambiguity">';
+  html += '<div class="voice-draft-assistant-message">';
+  html += '<div class="voice-draft-assistant-avatar">🤔</div>';
+  html += '<div class="voice-draft-assistant-bubble">';
+  html += question.question;
+  html += '</div>';
+  html += '</div>';
+
+  // Radio button options
+  html += '<div class="voice-draft-options">';
+  question.options.forEach((option, index) => {
+    html += `
+      <label class="voice-draft-option">
+        <input
+          type="radio"
+          name="ambiguity-choice"
+          value="${option.value}"
+          ${index === 0 ? 'checked' : ''}
+        />
+        <span>${option.label}</span>
+      </label>
+    `;
+  });
+  html += '</div>';
+
+  // Confirm button
+  html += `
+    <button
+      class="voice-draft-action-btn primary"
+      id="voice-draft-confirm-choice"
+      style="margin-top: 16px;"
+    >
+      Confirm Choice
+    </button>
+  `;
+  html += '</div>';
+
+  bodyElement.innerHTML = html;
+
+  // Attach confirm button handler
+  const confirmBtn = document.getElementById('voice-draft-confirm-choice');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      const selectedOption = document.querySelector<HTMLInputElement>(
+        'input[name="ambiguity-choice"]:checked'
+      );
+      if (selectedOption) {
+        handleAmbiguityResponse(selectedOption.value, transcript, context);
+      }
+    });
+  }
+}
+
+/**
+ * Handle user's response to ambiguity question
+ */
+async function handleAmbiguityResponse(
+  selectedValue: string,
+  transcript: string,
+  context: string
+): Promise<void> {
+  console.log('[VoiceDraftSheet] User selected:', selectedValue);
+
+  // Show processing state
+  currentDraft.isProcessing = true;
+  renderDraftContent();
+
+  try {
+    // For now, create a simple plan based on user's choice
+    // In future, could add additional LLM call with user's clarification
+    const intent = selectedValue === 'insert'
+      ? `Insert the text: "${transcript}"`
+      : `Insert the text with a map showing locations: "${transcript}"`;
+
+    const plan = await generatePlan(
+      {
+        intent,
+        confidence: 'high',
+        reasoning: `User clarified: ${selectedValue}`
+      },
+      currentDraft.detectedLocations
+    );
+
+    if (plan) {
+      currentDraft.agentPlan = plan;
+
+      // Ensure we have at least insertText tool
+      if (plan.tools.length === 0) {
+        console.warn('[VoiceDraftSheet] No tools after clarification, adding insertText');
+        plan.tools = [{
+          name: 'insertText',
+          parameters: { text: transcript }
+        }];
+      }
+    } else {
+      // Fallback
+      currentDraft.agentPlan = {
+        status: 'ready',
+        reasoning: `User clarified: ${selectedValue}`,
+        tools: [{
+          name: 'insertText',
+          parameters: { text: transcript }
+        }]
+      };
+    }
+
+    currentDraft.isProcessing = false;
+    renderDraftContent();
+  } catch (error) {
+    console.error('[VoiceDraftSheet] Error handling ambiguity response:', error);
+    currentDraft.isProcessing = false;
+    renderDraftContent();
+  }
 }

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intent Clarification Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 900px;
+      width: 100%;
+      padding: 32px;
+    }
+
+    h1 {
+      color: #1f2937;
+      margin-bottom: 8px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      transition: border-color 0.2s ease;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    button.primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: #2563eb;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    button.secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #e5e7eb;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      display: none;
+    }
+
+    .result.show {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .result-title {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    .result-type {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    .result-type.clear {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .result-type.ambiguous {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .result-type.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .result-content {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .result-field {
+      margin-bottom: 12px;
+    }
+
+    .result-field:last-child {
+      margin-bottom: 0;
+    }
+
+    .result-field-label {
+      font-weight: 600;
+      color: #6b7280;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .result-field-value {
+      color: #1f2937;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .confidence-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .confidence-high {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .confidence-medium {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .confidence-low {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .options-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .options-list li {
+      padding: 10px 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .options-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    .code-block {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .test-scenarios {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid #e5e7eb;
+    }
+
+    .scenario-button {
+      width: 100%;
+      margin-bottom: 8px;
+      justify-content: flex-start;
+      text-align: left;
+      padding: 12px 16px;
+    }
+
+    .scenario-button .scenario-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .scenario-button .scenario-desc {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Intent Clarification Test</h1>
+    <p class="subtitle">Test the two-phase intent clarification system</p>
+
+    <div class="form-group">
+      <label for="transcript">Voice Transcript</label>
+      <input
+        type="text"
+        id="transcript"
+        placeholder="e.g., Stockholm"
+        value="I want to visit Copenhagen"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="context">Document Context (300 chars before cursor)</label>
+      <textarea
+        id="context"
+        placeholder="e.g., ...I got stuck on this summer..."
+      ></textarea>
+    </div>
+
+    <div class="button-group">
+      <button class="primary" id="test-btn">
+        <span id="test-btn-text">🚀 Test Intent Clarification</span>
+        <div class="spinner" id="test-spinner" style="display: none;"></div>
+      </button>
+      <button class="secondary" id="clear-btn">Clear</button>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="test-scenarios">
+      <div class="result-title">📋 Test Scenarios</div>
+      <button class="scenario-button secondary" data-scenario="replacement">
+        <div class="scenario-name">1. Clear Replacement</div>
+        <div class="scenario-desc">Voice: "Stockholm" with context "stuck on" - should detect mistranscription</div>
+      </button>
+      <button class="scenario-button secondary" data-scenario="ambiguous">
+        <div class="scenario-name">2. Ambiguous Insertion</div>
+        <div class="scenario-desc">Voice: "Copenhagen and Berlin" with empty context - should ask about map</div>
+      </button>
+      <button class="scenario-button secondary" data-scenario="clear-insert">
+        <div class="scenario-name">3. Clear Insertion</div>
+        <div class="scenario-desc">Voice: "I want to visit Paris" - should clearly insert text</div>
+      </button>
+      <button class="scenario-button secondary" data-scenario="need-context">
+        <div class="scenario-name">4. Needs More Context</div>
+        <div class="scenario-desc">Voice: "replace that" with minimal context - LLM should call getMoreContext</div>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/intent-test.ts"></script>
+</body>
+</html>
