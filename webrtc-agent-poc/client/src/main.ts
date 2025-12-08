@@ -34,6 +34,7 @@ import { VideoChatService } from './services/VideoChatService';
 import { ViewSyncService } from './services/ViewSyncService';
 import { voiceInputService } from './services/VoiceInputService';
 import { setupYjs, customCursorBuilder, type YjsSetupDependencies } from './services/YjsSetupService';
+import { initializeAgentDataChannelService } from './services/AgentDataChannelService';
 
 // Conditionally import agent module
 // In dev mode: Load based on URL parameter
@@ -299,6 +300,9 @@ let animateAgent: AnimateAgent | null = null;
 // Global VideoChatService for video calls
 let videoChatService: VideoChatService | null = null;
 let videoSignalingWs: WebSocket | null = null;
+
+// Global AgentDataChannelService for agent communication via WebRTC data channels
+let agentDataChannelService: AgentDataChannelService | null = null;
 
 // Initialize AwarenessOverlayRenderer
 awarenessOverlayRenderer = new AwarenessOverlayRenderer();
@@ -1501,6 +1505,12 @@ async function main() {
     yjsDeps
   );
   globalAwareness = awareness; // Store globally for window functions
+
+  // Initialize AgentDataChannelService if we have a provider (not in offline mode)
+  if (provider) {
+    agentDataChannelService = initializeAgentDataChannelService(provider, awareness, isAgentMode);
+    console.log('[Main] AgentDataChannelService initialized');
+  }
 
   updateStatus('Initializing editor...', 'connecting');
 

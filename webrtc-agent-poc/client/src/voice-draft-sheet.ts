@@ -13,8 +13,7 @@ import type { GeocodingService } from './services/GeocodingService';
 import type { VoiceInputService } from './services/VoiceInputService';
 import type { AgentPlan, ExecutionContext, ToolCall, IntentResult, AmbiguityQuestion } from './types/agent';
 import { TextSelection } from 'prosemirror-state';
-import { isOllamaAvailable, generatePlan } from './services/OllamaAgentService';
-import { clarifyIntent } from './services/IntentClarificationService';
+import { getAgentDataChannelService } from './services/AgentDataChannelService';
 import { executePlan } from './services/ToolExecutor';
 
 // ============================================
@@ -470,42 +469,28 @@ function getDocumentContext(): string {
 }
 
 /**
- * Analyze voice input with Ollama agent
+ * Analyze transcript with agent via WebRTC data channel
+ * Delegates to agent tab which has access to localhost services (Ollama, Nominatim)
  */
 async function analyzeWithAgent(
   transcript: string,
   context: string
 ): Promise<AgentPlan | null> {
   try {
-    // Check Ollama availability
-    const available = await isOllamaAvailable();
-    if (!available) {
-      console.warn('[VoiceDraftSheet] Ollama unavailable, using fallback');
+    const agentService = getAgentDataChannelService();
+    if (!agentService) {
+      console.error('[VoiceDraftSheet] AgentDataChannelService not initialized');
       return null;
     }
 
-    if (!editorView) {
-      console.error('[VoiceDraftSheet] EditorView not available');
+    if (!agentService.isAgentConnected()) {
+      console.warn('[VoiceDraftSheet] Agent not connected - waiting for connection...');
+      // TODO: Could add retry logic or wait for connection
       return null;
     }
 
-    // Phase 1: Intent Clarification
-    console.log('[VoiceDraftSheet] Phase 1: Clarifying intent...');
-    const intentResult = await clarifyIntent(transcript, context, editorView);
-
-    // If ambiguous, show question to user and wait for response
-    if (intentResult.type === 'ambiguous') {
-      console.log('[VoiceDraftSheet] Intent is ambiguous, showing question to user');
-      showAmbiguityQuestion(intentResult.question, transcript, context);
-      return null; // Will be handled by user response
-    }
-
-    // Phase 2: Generate Plan
-    console.log('[VoiceDraftSheet] Phase 2: Generating plan from clarified intent...');
-    const plan = await generatePlan(
-      intentResult.intent,
-      currentDraft.detectedLocations
-    );
+    console.log('[VoiceDraftSheet] Sending transcript to agent via WebRTC data channel...');
+    const plan = await agentService.analyzeTranscript(transcript, context);
 
     return plan;
   } catch (error) {
