@@ -315,7 +315,16 @@ function parseToolCalls(response: OllamaResponse): ToolCall[] {
 
   try {
     console.log('[OllamaAgentService] Trying JSON format fallback');
-    const parsed = JSON.parse(content);
+
+    // Strip markdown code blocks if present (```json ... ```)
+    let jsonContent = content.trim();
+    const codeBlockMatch = jsonContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      jsonContent = codeBlockMatch[1].trim();
+      console.log('[OllamaAgentService] Stripped markdown code blocks');
+    }
+
+    const parsed = JSON.parse(jsonContent);
 
     if (!parsed.tools || !Array.isArray(parsed.tools)) {
       console.warn('[OllamaAgentService] No tools array in JSON response');
