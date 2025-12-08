@@ -3,6 +3,7 @@
  * Integrates with local Ollama LLM for intelligent voice input analysis
  */
 
+import Ollama from 'ollama/browser';
 import type { AgentPlan, ToolCall, OllamaMessage, OllamaResponse, ToolDefinition, ClarifiedIntent } from '../types/agent';
 import { getToolDefinitions, validateToolCall } from './ToolRegistry';
 import { geocodingService } from './GeocodingService';
@@ -24,20 +25,17 @@ const OLLAMA_URL = (import.meta as any).env?.VITE_OLLAMA_URL || 'http://localhos
 const OLLAMA_MODEL = (import.meta as any).env?.VITE_OLLAMA_MODEL || 'ministral-3:8b';
 const OLLAMA_TIMEOUT = Number((import.meta as any).env?.VITE_OLLAMA_TIMEOUT) || 30000;
 
+// Initialize Ollama client
+const ollama = new Ollama({ host: OLLAMA_URL });
+
 /**
  * Check if Ollama is available and responsive
  */
 export async function isOllamaAvailable(): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-    const response = await fetch(`${OLLAMA_URL}/api/tags`, {
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-    return response.ok;
+    // Use the SDK's list method to check if Ollama is available
+    await ollama.list();
+    return true;
   } catch (error) {
     console.warn('[OllamaAgentService] Ollama not available:', error);
     return false;
@@ -237,17 +235,14 @@ Select appropriate tools and parameters to fulfill the user's intent.`;
 }
 
 /**
- * Call Ollama API with timeout
+ * Call Ollama API with timeout using the JavaScript SDK
  */
 async function callOllama(
   messages: OllamaMessage[],
   tools?: ToolDefinition[]
 ): Promise<OllamaResponse> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT);
-
   try {
-    const requestBody: any = {
+    const options: any = {
       model: OLLAMA_MODEL,
       messages,
       stream: false
@@ -255,37 +250,23 @@ async function callOllama(
 
     // Add tools for native function calling
     if (tools && tools.length > 0) {
-      requestBody.tools = tools;
-      // Don't use format: 'json' when using native tool calling
+      options.tools = tools;
+      console.log('[OllamaAgentService] Calling Ollama with', tools.length, 'tool definitions');
     } else {
       // Only force JSON format if not using tool calling
-      requestBody.format = 'json';
+      options.format = 'json';
+      console.log('[OllamaAgentService] Calling Ollama with JSON format (no tools)');
     }
 
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    });
+    // Use the SDK's chat method
+    const response = await ollama.chat(options);
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data: OllamaResponse = await response.json();
-    return data;
+    // The SDK returns the response directly, no need to parse JSON
+    return response as OllamaResponse;
   } catch (error) {
-    clearTimeout(timeoutId);
-
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Ollama request timed out');
+    if (error instanceof Error) {
+      throw new Error(`Ollama error: ${error.message}`);
     }
-
     throw error;
   }
 }
