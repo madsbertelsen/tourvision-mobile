@@ -285,12 +285,17 @@ function parseToolCalls(response: OllamaResponse): ToolCall[] {
   const tools: ToolCall[] = [];
   const content = response.message.content;
 
+  console.log('[OllamaAgentService] Raw LLM response:', content);
+
   try {
     // Parse JSON response
     const parsed = JSON.parse(content);
 
+    console.log('[OllamaAgentService] Parsed JSON:', parsed);
+
     if (!parsed.tools || !Array.isArray(parsed.tools)) {
       console.warn('[OllamaAgentService] No tools array in JSON response');
+      console.warn('[OllamaAgentService] Parsed object keys:', Object.keys(parsed));
       return [];
     }
 
