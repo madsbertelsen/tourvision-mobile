@@ -127,7 +127,24 @@ VOICE INPUT (what the user just said):
 
 YOUR TASK: Analyze the VOICE INPUT only. The context is just for reference to understand corrections.
 
-GUIDELINES:
+STEP 1 - VALIDATE TRANSCRIPT:
+Before determining intent, check if the transcript makes sense:
+- Does it follow natural grammar and sentence structure?
+- Are there nonsensical word combinations? (e.g., "Russ killed" when expecting a location name)
+- Could this be a speech-to-text mistranscription?
+
+Examples of likely mistranscriptions:
+- "I want to visit Russ killed" → "Russ killed" doesn't make sense as a location (likely "Roskilde")
+- "oh I did not mean Oscar but Russ killed" → "Russ killed" is grammatically odd (likely "Roskilde")
+- "from Copenhagen to oscula" → "oscula" is not a known place (likely a mistranscribed location)
+
+If you detect a likely mistranscription:
+- Set confidence='low'
+- In ambiguity field, ask user to spell the problematic word
+- Example: "ambiguity": "Could not understand 'Russ killed'. Could you spell that location name?"
+
+STEP 2 - DETERMINE INTENT (only if transcript seems valid):
+
 1. COMMAND/INSTRUCTION: If the voice input is a command or instruction (e.g., "insert a map", "could you add a map", "show me a map"), recognize it as an ACTION, not literal text to insert
    - Intent should be: "Execute command: insert map" (NOT "Insert text: 'insert a map'")
 
@@ -139,9 +156,10 @@ GUIDELINES:
 
 4. AMBIGUITY: Only mark as LOW confidence if the intent is genuinely unclear (e.g., "replace that" without context showing what "that" refers to)
 
-IMPORTANT: Only analyze the VOICE INPUT. Do NOT create intents for text that is already in the DOCUMENT CONTEXT.
-
-Be decisive. Distinguish between commands (actions to execute) and content (text to insert).
+IMPORTANT:
+- First validate the transcript makes sense
+- Only analyze the VOICE INPUT, not the DOCUMENT CONTEXT
+- Proactively detect mistranscriptions based on grammar, context, and common sense
 
 TOOLS AVAILABLE:
 - getMoreContext: Only call if you cannot determine intent from current context
@@ -315,17 +333,30 @@ function detectAmbiguity(response: OllamaResponse): AmbiguityQuestion | null {
       });
     }
 
-    // If no structured options, create default ones
+    // Detect if this is asking for spelling (mistranscription detected)
+    const isSpellingRequest = questionText.toLowerCase().includes('spell') ||
+                              questionText.toLowerCase().includes('could not understand');
+
+    // If asking for spelling, provide spelling-specific options
     if (options.length === 0) {
-      options.push(
-        { label: 'Insert text only', value: 'insert' },
-        { label: 'Insert with map', value: 'insert_with_map' }
-      );
+      if (isSpellingRequest) {
+        options.push(
+          { label: 'Spell it', value: 'spell' },
+          { label: 'Re-record', value: 're-record' }
+        );
+      } else {
+        // Generic fallback options (should rarely be used)
+        options.push(
+          { label: 'Insert text only', value: 'insert' },
+          { label: 'Insert with map', value: 'insert_with_map' }
+        );
+      }
     }
 
     return {
       question: questionText,
-      options
+      options,
+      requiresSpelling: isSpellingRequest  // Flag for voice-draft-sheet to trigger spelling mode
     };
   } catch (error) {
     console.error('[IntentClarificationService] Failed to parse JSON for ambiguity detection:', error);

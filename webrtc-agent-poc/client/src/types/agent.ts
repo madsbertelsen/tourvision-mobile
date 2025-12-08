@@ -149,6 +149,9 @@ export interface AmbiguityQuestion {
     label: string;
     value: string;
   }>;
+
+  /** Whether this ambiguity is asking user to spell a mistranscribed word */
+  requiresSpelling?: boolean;
 }
 
 /**
