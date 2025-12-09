@@ -181,7 +181,7 @@ export class GeoMarkingService {
     // 4. Generate unique geoId
     const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // 4. Create the geo-mark
+    // 5. Create the geo-mark
     const geoMarkType = this.schema.marks.geoMark;
     if (!geoMarkType) {
       throw new Error('geoMark mark type not found in schema');
@@ -197,8 +197,7 @@ export class GeoMarkingService {
       coordSource: 'nominatim'
     });
 
-    // 5. Apply the mark to the text
-    const { state } = this.editorView;
+    // 6. Apply the mark to the text (reuse state from check above)
     const tr = state.tr.addMark(from, to, mark);
     this.editorView.dispatch(tr);
 
