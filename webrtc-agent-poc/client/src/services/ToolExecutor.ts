@@ -668,14 +668,23 @@ async function executeOpenFullscreenMap(
     const zoom = params.zoom ?? 10;
     const action = params.action ?? 'open';
 
+    // Check if fullscreen map is already open
+    const fullscreenMapView = (window as any).fullscreenMapView;
+    const isMapOpen = fullscreenMapView && fullscreenMapView.map && fullscreenMapView.container?.style.display !== 'none';
+
     // Get the global showFullscreenMap function
     const showFullscreenMap = (window as any).showFullscreenMap;
     if (!showFullscreenMap) {
       throw new Error('showFullscreenMap function not available');
     }
 
-    // Open fullscreen map immediately
-    showFullscreenMap(null);
+    // Only open the map if it's not already open
+    if (!isMapOpen) {
+      console.log('[ToolExecutor:openFullscreenMap] Opening fullscreen map');
+      showFullscreenMap(null);
+    } else {
+      console.log('[ToolExecutor:openFullscreenMap] Fullscreen map already open, focusing without reopening');
+    }
 
     // If focusing on a location, geocode and animate to it
     if (params.focusLocation) {
@@ -694,7 +703,8 @@ async function executeOpenFullscreenMap(
 
       console.log(`[ToolExecutor:openFullscreenMap] Geocoded ${params.focusLocation}:`, geocodedResult);
 
-      // Wait for map to load, then animate to location
+      // Animate to location (wait 300ms if map was just opened, animate immediately if already open)
+      const delay = isMapOpen ? 0 : 300;
       setTimeout(() => {
         const fullscreenMapView = (window as any).fullscreenMapView;
         if (fullscreenMapView && fullscreenMapView.map) {
@@ -715,15 +725,19 @@ async function executeOpenFullscreenMap(
             map.flyTo({ center, zoom, duration: 1000 });
           }
         }
-      }, 300); // 300ms delay for map to initialize
+      }, delay); // Wait for map to initialize if just opened, otherwise animate immediately
     }
 
     return {
       toolName: 'openFullscreenMap',
       success: true,
       message: params.focusLocation
-        ? `Opened fullscreen map focused on ${params.focusLocation} (zoom: ${zoom})`
-        : 'Opened fullscreen map'
+        ? isMapOpen
+          ? `Focused map on ${params.focusLocation}`
+          : `Opened fullscreen map focused on ${params.focusLocation} (zoom: ${zoom})`
+        : isMapOpen
+          ? 'Fullscreen map already open'
+          : 'Opened fullscreen map'
     };
   } catch (error: any) {
     console.error('[ToolExecutor:openFullscreenMap] Error:', error);
