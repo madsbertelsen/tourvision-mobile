@@ -200,9 +200,12 @@ async function executeToolForPlanning(
     case 'setTransportation':
     case 'createGeoMark':
       // These are action tools, not information tools
-      // Return "OK" - they will be executed later by ToolExecutor
+      // Return success - they will be executed later by ToolExecutor
       console.log('[OllamaAgentService] Action tool queued for execution:', toolCall.name);
-      return JSON.stringify({ status: 'queued', tool: toolCall.name });
+      return JSON.stringify({
+        status: 'success',
+        message: `${toolCall.name} will be executed. Task is now complete.`
+      });
 
     default:
       console.warn('[OllamaAgentService] Unknown tool:', toolCall.name);
@@ -217,6 +220,7 @@ async function executeToolForPlanning(
  */
 function extractActionTools(messages: OllamaMessage[]): ToolCall[] {
   const actionTools: ToolCall[] = [];
+  const seen = new Set<string>();
 
   console.log('[OllamaAgentService] Extracting action tools from', messages.length, 'messages');
 
@@ -231,9 +235,19 @@ function extractActionTools(messages: OllamaMessage[]): ToolCall[] {
             status: 'pending'
           };
 
+          // Create a unique key for deduplication
+          const key = JSON.stringify({ name: tool.name, parameters: tool.parameters });
+
+          // Skip if we've already seen this exact tool call
+          if (seen.has(key)) {
+            console.log('[OllamaAgentService] Skipping duplicate tool:', tool.name);
+            continue;
+          }
+
           // Validate
           if (validateToolCall(tool)) {
             actionTools.push(tool);
+            seen.add(key);
             console.log('[OllamaAgentService] Extracted action tool:', tool.name);
           } else {
             console.warn('[OllamaAgentService] Invalid action tool, skipping:', tool);
@@ -243,7 +257,7 @@ function extractActionTools(messages: OllamaMessage[]): ToolCall[] {
     }
   }
 
-  console.log('[OllamaAgentService] Extracted', actionTools.length, 'action tools');
+  console.log('[OllamaAgentService] Extracted', actionTools.length, 'action tools (after deduplication)');
   return actionTools;
 }
 
@@ -360,17 +374,24 @@ DETECTED LOCATIONS: ${locationNames || 'None'}
 AVAILABLE TOOLS:
 1. replaceText(targetText, replacementText) - Replace existing text in the document
 2. insertText(html) - Insert HTML with embedded geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
+   - For travel, add transport to DESTINATION: data-transport-from="Origin" data-transport-mode="driving|cycling|walking|flying"
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
 4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (information gathering only)
-5. setTransportation(toLocation, fromLocation, mode) - Set transportation between locations (mode: cycling/driving/walking/flying)
 
 CRITICAL WORKFLOW FOR LOCATIONS:
-If the user wants to insert text with a location, you MUST complete ALL these steps:
+If the user wants to insert text with locations, you MUST:
 
-Step 1: Call geocode to get coordinates
-Step 2: Receive geocode result (you will get coordinates back)
-Step 3: Call insertText with the FULL user sentence as HTML, using the coordinates from Step 2
-Step 4: Task is COMPLETE only after insertText is called!
+Step 1: Call geocode for EACH location mentioned
+Step 2: After receiving ALL geocode results, call insertText with:
+  - The FULL user sentence as HTML
+  - Geo-marks for each location with coordinates
+  - If travel is mentioned, add transport attributes to the DESTINATION geo-mark
+
+EXAMPLE: "I will drive my car from Copenhagen to Stockholm"
+Turn 1: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
+Turn 2: After receiving coordinates, call insertText with HTML:
+  "I will drive my car from <span class='geo-mark' data-place-name='Copenhagen' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span> to <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06' data-transport-from='Copenhagen' data-transport-mode='driving'>Stockholm</span>"
+STATUS: COMPLETE ✓ (insertText includes both locations AND transport config in Stockholm's geo-mark)
 
 IMPORTANT RULES:
 - The geocode tool only gathers information - it does NOT insert anything into the document
@@ -380,6 +401,9 @@ IMPORTANT RULES:
 - WRONG: "<span class='geo-mark' ...>Copenhagen</span>"
 - CORRECT: "I want to visit <span class='geo-mark' ...>Copenhagen</span>"
 - Do NOT guess coordinates! Always use the exact coordinates returned by geocode.
+- When insertText returns {"status": "success"}, STOP - the task is complete
+- For travel statements, embed transport attributes in the destination geo-mark (do NOT use separate setTransportation tool)
+- Do NOT call the same action tool twice with identical parameters
 
 EXAMPLE CONVERSATION FLOWS:
 

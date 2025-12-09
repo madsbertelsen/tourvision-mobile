@@ -3,6 +3,7 @@
  * Multi-turn loop to understand user's true intent before generating execution plan
  */
 
+import ollama from 'ollama/browser';
 import type { EditorView } from 'prosemirror-view';
 import type {
   IntentResult,
@@ -14,7 +15,6 @@ import type {
 } from '../types/agent';
 
 // Configuration
-const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = import.meta.env.VITE_OLLAMA_MODEL || 'ministral-3:8b';
 const OLLAMA_TIMEOUT = Number(import.meta.env.VITE_OLLAMA_TIMEOUT) || 30000;
 const MAX_TURNS = 3;
@@ -174,46 +174,31 @@ Respond with valid JSON:
 }
 
 /**
- * Call Ollama API with timeout
+ * Call Ollama API with timeout using Ollama SDK
  */
 async function callOllama(
   messages: OllamaMessage[],
   tools: ToolDefinition[]
 ): Promise<OllamaResponse> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT);
-
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    const response = await Promise.race([
+      ollama.chat({
         model: OLLAMA_MODEL,
         messages,
         stream: false,
         format: 'json',
         tools
       }),
-      signal: controller.signal
-    });
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Ollama request timed out')), OLLAMA_TIMEOUT)
+      )
+    ]);
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data: OllamaResponse = await response.json();
-    return data;
+    return response as any as OllamaResponse;
   } catch (error) {
-    clearTimeout(timeoutId);
-
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Ollama request timed out');
+    if (error instanceof Error) {
+      throw new Error(`Ollama error: ${error.message}`);
     }
-
     throw error;
   }
 }
