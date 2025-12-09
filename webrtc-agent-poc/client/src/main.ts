@@ -444,6 +444,19 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     return null;
   }
 
+  // Initialize new documents with a default map block
+  if (yXmlFragment.length === 0) {
+    console.log('[Main] Initializing new document with default map block');
+
+    // Create initial content: empty paragraph + map block
+    const paragraph = yXmlFragment.doc!.getXmlElement('paragraph');
+    const map = yXmlFragment.doc!.getXmlElement('map');
+    map.setAttribute('height', '400');
+
+    yXmlFragment.push([paragraph, map]);
+    console.log('[Main] Default map block added to new document');
+  }
+
   const state = EditorState.create({
     schema: customSchema,
     plugins: [
