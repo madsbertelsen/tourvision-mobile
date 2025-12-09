@@ -668,12 +668,13 @@ async function executeOpenFullscreenMap(
     const zoom = params.zoom ?? 10;
     const action = params.action ?? 'open';
 
-    // Check if fullscreen map is already open by checking the container visibility
+    // Check if fullscreen map is already open by checking the container dimensions
     const fullscreenMapView = (window as any).fullscreenMapView;
     const isMapOpen = fullscreenMapView &&
                       fullscreenMapView.container &&
                       fullscreenMapView.map &&
-                      fullscreenMapView.container.offsetParent !== null; // offsetParent is null when element is hidden
+                      fullscreenMapView.container.clientHeight > 0 &&
+                      fullscreenMapView.container.clientWidth > 0; // Visible elements have non-zero dimensions
 
     // Get the global showFullscreenMap function
     const showFullscreenMap = (window as any).showFullscreenMap;
