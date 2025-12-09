@@ -29,10 +29,14 @@ export async function clarifyIntent(
 ): Promise<IntentResult> {
   console.log('[IntentClarificationService] Starting intent clarification');
 
+  // Check if document already has a map
+  const hasMap = checkForMapInDocument(editorView);
+  console.log('[IntentClarificationService] Document has map:', hasMap);
+
   const messages: OllamaMessage[] = [
     {
       role: 'user',
-      content: buildIntentPrompt(transcript, documentContext)
+      content: buildIntentPrompt(transcript, documentContext, hasMap)
     }
   ];
 
@@ -114,13 +118,31 @@ export async function clarifyIntent(
 }
 
 /**
+ * Check if document contains a map node
+ */
+function checkForMapInDocument(editorView: EditorView): boolean {
+  let hasMap = false;
+  editorView.state.doc.descendants((node) => {
+    if (node.type.name === 'map') {
+      hasMap = true;
+      return false; // Stop searching
+    }
+  });
+  return hasMap;
+}
+
+/**
  * Build the initial intent clarification prompt
  */
-function buildIntentPrompt(transcript: string, context: string): string {
+function buildIntentPrompt(transcript: string, context: string, hasMap: boolean): string {
+  const mapStatus = hasMap ? 'YES - A map already exists in the document' : 'NO - No map in the document yet';
+
   return `You are analyzing voice input to understand user intent for document editing.
 
 DOCUMENT CONTEXT (for reference only - already in document):
 "${context}"
+
+MAP IN DOCUMENT: ${mapStatus}
 
 VOICE INPUT (what the user just said):
 "${transcript}"
@@ -145,8 +167,12 @@ If you detect a likely mistranscription:
 
 STEP 2 - DETERMINE INTENT (only if transcript seems valid):
 
-1. COMMAND/INSTRUCTION: If the voice input is a command or instruction (e.g., "insert a map", "could you add a map", "show me a map"), recognize it as an ACTION, not literal text to insert
-   - Intent should be: "Execute command: insert map" (NOT "Insert text: 'insert a map'")
+1. MAP COMMANDS - Check MAP IN DOCUMENT status:
+   - If MAP IN DOCUMENT is YES and user says "open map", "show map", "zoom in on [location]", etc.:
+     Intent should be: "Execute command: open fullscreen map" or "Execute command: open fullscreen map and zoom to [location]"
+   - If MAP IN DOCUMENT is NO and user says "insert map", "add a map", "show me a map":
+     Intent should be: "Execute command: insert map"
+   - IMPORTANT: "open map" when map exists = open fullscreen map (NOT insert map!)
 
 2. CONTENT DICTATION: If the voice input is natural speech/content (e.g., "I want to visit Copenhagen"), assume HIGH confidence to INSERT it as text
    - Intent should be: "Insert text: 'I want to visit Copenhagen'"
