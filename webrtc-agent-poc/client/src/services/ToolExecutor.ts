@@ -685,23 +685,32 @@ async function executeOpenFullscreenMap(
         throw new Error(`Location "${params.focusLocation}" not found or not geocoded. Call geocode first.`);
       }
 
-      // Calculate bounds for the focus location with zoom
-      const { lat, lng } = location;
+      // Use Nominatim's bounding box if available (more accurate than calculation)
+      const { lat, lng, boundingbox } = location;
 
-      // Approximate: 1 zoom level = 2x scale
-      // Zoom 10 ≈ ±0.5 degrees, Zoom 12 ≈ ±0.125 degrees, etc.
-      const delta = 0.5 / Math.pow(2, zoom - 10);
+      let bounds;
+      if (boundingbox) {
+        // Use Nominatim's accurate bounding box
+        bounds = {
+          north: boundingbox.north,
+          south: boundingbox.south,
+          east: boundingbox.east,
+          west: boundingbox.west
+        };
+        console.log(`[ToolExecutor:openFullscreenMap] Using Nominatim bounds for ${params.focusLocation}:`, bounds);
+      } else {
+        // Fallback: center on point with zoom-based approximation
+        const delta = 0.5 / Math.pow(2, zoom - 10);
+        bounds = {
+          north: lat + delta,
+          south: lat - delta,
+          east: lng + delta,
+          west: lng - delta
+        };
+        console.log(`[ToolExecutor:openFullscreenMap] Calculated fallback bounds for ${params.focusLocation}:`, bounds);
+      }
 
-      const bounds = {
-        north: lat + delta,
-        south: lat - delta,
-        east: lng + delta,
-        west: lng - delta
-      };
-
-      console.log(`[ToolExecutor:openFullscreenMap] Calculated bounds for ${params.focusLocation}:`, bounds);
-
-      // Open fullscreen map with these bounds
+      // Open fullscreen map with bounds
       showFullscreenMap(bounds);
 
       return {

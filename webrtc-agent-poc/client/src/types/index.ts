@@ -27,6 +27,29 @@ export interface Location {
 }
 
 /**
+ * Detected location from geocoding (used during plan execution)
+ */
+export interface DetectedLocation {
+  locationName: string;
+  geoId?: string;
+  lat?: number;
+  lng?: number;
+  colorIndex?: number;
+  status?: 'detecting' | 'found' | 'error';
+  ranges?: Array<{ from: number; to: number }>;
+  displayName?: string;
+  coordSource?: string;
+  transportFrom?: string;
+  transportProfile?: string;
+  boundingbox?: {
+    south: number;
+    north: number;
+    west: number;
+    east: number;
+  };
+}
+
+/**
  * Waypoint on a route
  */
 export interface Waypoint {
@@ -41,6 +64,7 @@ export interface GeocodingResult {
   lat: string;
   lon: string;
   display_name: string;
+  boundingbox?: string[];  // [south, north, west, east] from Nominatim
 }
 
 /**

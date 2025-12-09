@@ -10,6 +10,12 @@ export interface GeocodedLocation {
   placeName: string;
   lat: string;
   lng: string;
+  boundingbox?: {
+    south: number;
+    north: number;
+    west: number;
+    east: number;
+  };
 }
 
 export class GeocodingService {
@@ -60,11 +66,23 @@ export class GeocodingService {
       }
 
       const result = data[0];
-      return {
+      const geocoded: GeocodedLocation = {
         placeName: result.display_name,
         lat: result.lat,
         lng: result.lon
       };
+
+      // Parse boundingbox if present: [south, north, west, east]
+      if (result.boundingbox && result.boundingbox.length === 4) {
+        geocoded.boundingbox = {
+          south: parseFloat(result.boundingbox[0]),
+          north: parseFloat(result.boundingbox[1]),
+          west: parseFloat(result.boundingbox[2]),
+          east: parseFloat(result.boundingbox[3])
+        };
+      }
+
+      return geocoded;
     } catch (error) {
       console.error('[GeocodingService] Geocoding error:', error);
       return null;
@@ -146,11 +164,23 @@ export class GeocodingService {
       }
 
       const result = data[0];
-      return {
+      const geocoded: GeocodedLocation = {
         placeName: result.display_name,
         lat: result.lat,
         lng: result.lon
       };
+
+      // Parse boundingbox if present: [south, north, west, east]
+      if (result.boundingbox && result.boundingbox.length === 4) {
+        geocoded.boundingbox = {
+          south: parseFloat(result.boundingbox[0]),
+          north: parseFloat(result.boundingbox[1]),
+          west: parseFloat(result.boundingbox[2]),
+          east: parseFloat(result.boundingbox[3])
+        };
+      }
+
+      return geocoded;
     } catch (error) {
       console.error('[GeocodingService] Structured geocoding error:', error);
       return null;
