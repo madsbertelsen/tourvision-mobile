@@ -449,8 +449,8 @@ function createEditor(yXmlFragment: Y.XmlFragment, awareness: any) {
     console.log('[Main] Initializing new document with default map block');
 
     // Create initial content: empty paragraph + map block
-    const paragraph = yXmlFragment.doc!.getXmlElement('paragraph');
-    const map = yXmlFragment.doc!.getXmlElement('map');
+    const paragraph = new Y.XmlElement('paragraph');
+    const map = new Y.XmlElement('map');
     map.setAttribute('height', '400');
 
     yXmlFragment.push([paragraph, map]);
