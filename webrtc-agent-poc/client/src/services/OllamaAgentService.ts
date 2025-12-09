@@ -374,7 +374,7 @@ DETECTED LOCATIONS: ${locationNames || 'None'}
 AVAILABLE TOOLS:
 1. replaceText(targetText, replacementText) - Replace existing text in the document
 2. insertText(html) - Insert HTML with embedded geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
-   - For travel, add transport to DESTINATION: data-transport-from="Origin" data-transport-mode="driving|cycling|walking|flying"
+   - For travel, add transport to DESTINATION: data-transport-from="Origin" data-transport-profile="driving|cycling|walking|flying"
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
 4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (information gathering only)
 
@@ -390,7 +390,7 @@ Step 2: After receiving ALL geocode results, call insertText with:
 EXAMPLE: "I will drive my car from Copenhagen to Stockholm"
 Turn 1: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
 Turn 2: After receiving coordinates, call insertText with HTML:
-  "I will drive my car from <span class='geo-mark' data-place-name='Copenhagen' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span> to <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06' data-transport-from='Copenhagen' data-transport-mode='driving'>Stockholm</span>"
+  "I will drive my car from <span class='geo-mark' data-place-name='Copenhagen' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span> to <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06' data-transport-from='Copenhagen' data-transport-profile='driving'>Stockholm</span>"
 STATUS: COMPLETE ✓ (insertText includes both locations AND transport config in Stockholm's geo-mark)
 
 IMPORTANT RULES:

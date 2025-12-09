@@ -494,6 +494,9 @@ function findTextPosition(
 /**
  * Enrich geo-mark spans in HTML with generated attributes
  * Adds: data-geo-id, data-color-index, data-coord-source, data-created-at, data-created-by
+ * Two-pass approach:
+ *   Pass 1: Assign geo-ids to all geo-marks
+ *   Pass 2: Update transport-from references to use actual geo-ids
  */
 function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): string {
   // Parse HTML
@@ -503,10 +506,14 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
   // Find all geo-mark spans
   const geoMarkSpans = tempDiv.querySelectorAll('span.geo-mark');
 
+  // Pass 1: Assign geo-ids and collect mapping
+  const placeNameToGeoId = new Map<string, string>();
+
   geoMarkSpans.forEach((span, index) => {
     const placeName = span.getAttribute('data-place-name');
     const lat = span.getAttribute('data-lat');
     const lng = span.getAttribute('data-lng');
+    const displayText = span.textContent || ''; // Get the inner text (what user typed)
 
     if (!placeName || !lat || !lng) {
       console.warn('[ToolExecutor] Skipping invalid geo-mark:', span.innerHTML);
@@ -514,8 +521,16 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
     }
 
     // Generate attributes
-    const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Use place name as geo-id to allow transport-from references by name
+    const geoId = placeName;
     const colorIndex = detectedLocations.length + index;
+
+    // Store mapping for Pass 2 - map BOTH place name AND display text to geo-id
+    // This handles cases where LLM uses "Copenhagen" but geocode returned "København"
+    placeNameToGeoId.set(placeName, geoId);
+    if (displayText && displayText !== placeName) {
+      placeNameToGeoId.set(displayText, geoId);
+    }
 
     // Add to detectedLocations for reference by other tools
     detectedLocations.push({
@@ -535,7 +550,24 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
     span.setAttribute('data-created-at', new Date().toISOString());
     span.setAttribute('data-created-by', 'voice-agent');
 
-    console.log('[ToolExecutor] Enriched geo-mark:', placeName, geoId);
+    console.log('[ToolExecutor] Enriched geo-mark:', placeName, '(display:', displayText, ') → geo-id:', geoId);
+  });
+
+  // Pass 2: Update transport-from references to use actual geo-ids
+  geoMarkSpans.forEach((span) => {
+    const transportFrom = span.getAttribute('data-transport-from');
+
+    if (transportFrom) {
+      // If transport-from is a place name, convert it to geo-id
+      const fromGeoId = placeNameToGeoId.get(transportFrom);
+
+      if (fromGeoId) {
+        span.setAttribute('data-transport-from', fromGeoId);
+        console.log('[ToolExecutor] Updated transport-from:', transportFrom, '→', fromGeoId);
+      } else {
+        console.warn('[ToolExecutor] Could not find geo-id for transport-from:', transportFrom);
+      }
+    }
   });
 
   return tempDiv.innerHTML;

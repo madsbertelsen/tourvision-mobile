@@ -72,9 +72,8 @@ export const customSchema = new Schema({
         const color = colors[colorIndex % colors.length];
         const backgroundColor = color + '33'; // 33 = 20% opacity
 
-        const attrs = {
+        const attrs: Record<string, any> = {
           class: 'geo-mark',
-          'data-geo-id': mark.attrs.geoId,
           'data-place-name': mark.attrs.placeName,
           'data-lat': mark.attrs.lat,
           'data-lng': mark.attrs.lng,
@@ -82,6 +81,9 @@ export const customSchema = new Schema({
           'data-coord-source': mark.attrs.coordSource,
           style: `background-color: ${backgroundColor}; padding: 2px 4px; border-radius: 3px; cursor: pointer; transition: all 0.2s ease;`
         };
+
+        // Add geo-id if it exists
+        if (mark.attrs.geoId) attrs['data-geo-id'] = mark.attrs.geoId;
 
         // Add transport attributes if they exist
         if (mark.attrs.transportFrom) attrs['data-transport-from'] = mark.attrs.transportFrom;

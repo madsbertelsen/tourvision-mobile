@@ -47,11 +47,11 @@ const insertTextTool: ToolDefinition = {
 
 For travel between locations, add transport attributes to the DESTINATION geo-mark:
 - data-transport-from: origin location name
-- data-transport-mode: "cycling", "driving", "walking", or "flying"
+- data-transport-profile: "cycling", "driving", "walking", or "flying"
 
 Example (simple): I want to visit <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span>
 
-Example (with transport): I will drive from <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span> to <span class="geo-mark" data-place-name="Stockholm" data-lat="59.3333" data-lng="18.0271" data-transport-from="Copenhagen" data-transport-mode="driving">Stockholm</span>
+Example (with transport): I will drive from <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span> to <span class="geo-mark" data-place-name="Stockholm" data-lat="59.3333" data-lng="18.0271" data-transport-from="Copenhagen" data-transport-profile="driving">Stockholm</span>
 
 Do NOT include data-geo-id or data-color-index - these will be generated automatically.`,
     parameters: {
