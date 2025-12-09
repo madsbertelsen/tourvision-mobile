@@ -382,6 +382,13 @@ function buildPlanPrompt(
 ): string {
   const locationNames = locations.map(loc => loc.locationName).join(', ');
 
+  // Check if fullscreen map is currently open
+  const fullscreenMapView = (window as any).fullscreenMapView;
+  const isMapAlreadyOpen = fullscreenMapView &&
+                           fullscreenMapView.map &&
+                           typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
+                           fullscreenMapView.map.isStyleLoaded();
+
   // Parse intent to extract command vs content
   let intentInstruction = intent.intent;
   if (intent.intent.startsWith('Execute command: insert map')) {
@@ -389,14 +396,27 @@ function buildPlanPrompt(
   } else if (intent.intent.startsWith('Execute command: open map') ||
              intent.intent.startsWith('Execute command: open fullscreen map') ||
              intent.intent.toLowerCase().includes('show me the map') ||
-             intent.intent.toLowerCase().includes('zoom in on')) {
+             intent.intent.toLowerCase().includes('zoom in on') ||
+             intent.intent.toLowerCase().includes('focus map')) {
     // Extract location if present (supports Unicode characters like ö, å, ä)
     const locationMatch = intent.intent.match(/(?:on|to|at|around|near)\s+([\p{L}\s]+)/u);
     if (locationMatch) {
       const location = locationMatch[1].trim();
-      intentInstruction = `Call geocode("${location}") first, then call openFullscreenMap(focusLocation: "${location}", zoom: 12)`;
+
+      // If map is already open, use focus action instead of opening
+      if (isMapAlreadyOpen) {
+        intentInstruction = `Call geocode("${location}") first, then call openFullscreenMap(focusLocation: "${location}", zoom: 12, action: "focus")`;
+        console.log('[OllamaAgentService] Map already open, using focus action for:', location);
+      } else {
+        intentInstruction = `Call geocode("${location}") first, then call openFullscreenMap(focusLocation: "${location}", zoom: 12)`;
+      }
     } else {
-      intentInstruction = 'Call openFullscreenMap() to open the fullscreen map view';
+      // No location specified - open map if not already open
+      if (isMapAlreadyOpen) {
+        intentInstruction = 'The fullscreen map is already open. No action needed.';
+      } else {
+        intentInstruction = 'Call openFullscreenMap() to open the fullscreen map view';
+      }
     }
   } else if (intent.intent.startsWith('Execute command:')) {
     // Extract the command (e.g., "Execute command: insert map" -> "insert map")
