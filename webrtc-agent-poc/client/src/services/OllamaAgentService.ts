@@ -271,129 +271,130 @@ function extractActionTools(messages: OllamaMessage[]): ToolCall[] {
 
 /**
  * Generate execution plan based on clarified user intent
- * Implements proper agent loop pattern following Ollama SDK best practices
+ * Single-turn approach: LLM outputs JSON plan, we execute geocoding, then build tool calls
  * (Phase 2: After intent clarification is complete)
  */
 export async function generatePlan(
   intent: ClarifiedIntent,
   detectedLocations: DetectedLocation[]
 ): Promise<AgentPlan | null> {
-  console.log('[OllamaAgentService] Generating plan from clarified intent');
+  console.log('[OllamaAgentService] Generating plan from clarified intent (single-turn)');
 
   try {
-    // Build initial prompt
-    const prompt = buildPlanPrompt(intent);
+    // Build prompt asking for JSON plan
+    const prompt = buildSingleTurnPlanPrompt(intent);
 
     console.log('[OllamaAgentService] Plan generation prompt:');
     console.log(prompt);
 
-    // Initialize messages for agent loop (following official Ollama pattern)
-    const messages: OllamaMessage[] = [
-      { role: 'user', content: prompt }
-    ];
+    // Single LLM call (no tool calling, just JSON output)
+    const response = await callOllama([{ role: 'user', content: prompt }]);
 
-    // Get tool definitions
-    const tools = getToolDefinitions();
-    console.log('[OllamaAgentService] Tool definitions:', tools.map(t => t.function.name));
+    console.log('[OllamaAgentService] LLM response:', response.message.content);
 
-    // Agent loop - iterate until LLM has no more tool calls
-    let maxIterations = 10; // Prevent infinite loops
-    let iteration = 0;
-
-    while (iteration < maxIterations) {
-      iteration++;
-      console.log(`[OllamaAgentService] Agent loop iteration ${iteration}`);
-      console.log('[OllamaAgentService] Messages array:', JSON.stringify(messages, null, 2));
-
-      const response = await callOllama(messages, tools);
-
-      // Add LLM response to conversation (includes tool_calls)
-      console.log('[OllamaAgentService] Raw response.message:', JSON.stringify(response.message, null, 2));
-
-      // Debug: Save to window for inspection
-      if (typeof window !== 'undefined') {
-        (window as any).lastOllamaResponse = response.message;
-        (window as any).lastMessagesArray = messages;
+    // Parse JSON response
+    let planJson: any;
+    try {
+      // Strip markdown code blocks if present
+      let jsonContent = response.message.content.trim();
+      const codeBlockMatch = jsonContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (codeBlockMatch) {
+        jsonContent = codeBlockMatch[1].trim();
       }
 
-      // Clean the message to remove any non-standard fields before pushing
-      const cleanedMessage: OllamaMessage = {
-        role: response.message.role,
-        // If content is empty and there are tool calls, add a description
-        // This might help Ollama handle multi-turn conversations better
-        content: response.message.content || (response.message.tool_calls && response.message.tool_calls.length > 0
-          ? `Calling ${response.message.tool_calls.length} tool(s)`
-          : "")
-      };
+      planJson = JSON.parse(jsonContent);
+      console.log('[OllamaAgentService] Parsed plan:', planJson);
+    } catch (error) {
+      console.error('[OllamaAgentService] Failed to parse plan JSON:', error);
+      return null;
+    }
 
-      // If there are tool_calls, add them but clean the structure
-      if (response.message.tool_calls && response.message.tool_calls.length > 0) {
-        cleanedMessage.tool_calls = response.message.tool_calls.map((call: any) => ({
-          id: call.id,
-          function: {
-            name: call.function.name,
-            arguments: call.function.arguments
-            // Deliberately omit 'index' field which might cause issues
-          }
-        }));
+    // Execute geocoding for all locations
+    const geocodedLocations: Map<string, { placeName: string; lat: number; lng: number }> = new Map();
+
+    if (planJson.locations && planJson.locations.length > 0) {
+      console.log('[OllamaAgentService] Geocoding locations:', planJson.locations);
+
+      for (const locationName of planJson.locations) {
+        const result = await geocodingService.geocode(locationName);
+        if (result) {
+          geocodedLocations.set(locationName, {
+            placeName: result.placeName,
+            lat: parseFloat(result.lat),
+            lng: parseFloat(result.lng)
+          });
+          console.log(`[OllamaAgentService] Geocoded ${locationName}:`, geocodedLocations.get(locationName));
+        } else {
+          console.warn(`[OllamaAgentService] Failed to geocode ${locationName}`);
+        }
+      }
+    }
+
+    // Build tool calls based on plan type
+    const tools: ToolCall[] = [];
+
+    if (planJson.planType === 'travel' && planJson.fromLocation && planJson.toLocation) {
+      // Get geocoded coordinates
+      const fromCoords = geocodedLocations.get(planJson.fromLocation);
+      const toCoords = geocodedLocations.get(planJson.toLocation);
+
+      if (!fromCoords || !toCoords) {
+        console.error('[OllamaAgentService] Missing geocoded coordinates for travel');
+        return null;
       }
 
-      messages.push(cleanedMessage);
+      // Build HTML with geo-marks
+      const html = `I want to ${planJson.transportMode === 'driving' ? 'drive' : planJson.transportMode === 'cycling' ? 'cycle' : planJson.transportMode === 'walking' ? 'walk' : 'fly'} from <span class="geo-mark" data-place-name="${fromCoords.placeName}" data-lat="${fromCoords.lat}" data-lng="${fromCoords.lng}">${fromCoords.placeName}</span> to <span class="geo-mark" data-place-name="${toCoords.placeName}" data-lat="${toCoords.lat}" data-lng="${toCoords.lng}">${toCoords.placeName}</span>`;
 
-      console.log('[OllamaAgentService] LLM response:', {
-        content: response.message.content,
-        tool_calls: response.message.tool_calls?.length ?? 0
+      tools.push({
+        name: 'insertText',
+        parameters: { html },
+        status: 'pending'
       });
 
-      // Check for tool calls
-      const toolCalls = response.message.tool_calls ?? [];
+      tools.push({
+        name: 'setTransportation',
+        parameters: {
+          fromLocation: fromCoords.placeName,
+          toLocation: toCoords.placeName,
+          mode: planJson.transportMode
+        },
+        status: 'pending'
+      });
+    } else if (planJson.planType === 'location') {
+      // Simple location mention
+      const locationCoords = geocodedLocations.get(planJson.locations[0]);
+      if (locationCoords) {
+        const html = `I want to visit <span class="geo-mark" data-place-name="${locationCoords.placeName}" data-lat="${locationCoords.lat}" data-lng="${locationCoords.lng}">${locationCoords.placeName}</span>`;
 
-      if (toolCalls.length === 0) {
-        console.log('[OllamaAgentService] No more tool calls - agent loop complete');
-        break;
-      }
-
-      console.log(`[OllamaAgentService] LLM called ${toolCalls.length} tool(s)`);
-
-      // Execute each tool call and add results to conversation (following official pattern)
-      for (const call of toolCalls) {
-        console.log(`[OllamaAgentService] Executing tool: ${call.function.name}`);
-
-        const result = await executeToolForPlanning({
-          name: call.function.name,
-          arguments: call.function.arguments
+        tools.push({
+          name: 'insertText',
+          parameters: { html },
+          status: 'pending'
         });
-
-        console.log(`[OllamaAgentService] Tool result:`, result);
-
-        // Add tool result to messages (official Ollama format with tool_name)
-        messages.push({
-          role: 'tool',
-          tool_name: call.function.name,
-          content: String(result)
-        } as OllamaMessage);
       }
+    } else if (planJson.planType === 'map' && planJson.focusLocation) {
+      // Open fullscreen map
+      tools.push({
+        name: 'openFullscreenMap',
+        parameters: {
+          focusLocation: planJson.focusLocation,
+          zoom: 12
+        },
+        status: 'pending'
+      });
     }
-
-    if (iteration >= maxIterations) {
-      console.warn('[OllamaAgentService] Agent loop max iterations reached');
-    }
-
-    // Extract action tools from conversation history
-    // Action tools (insertText, insertMap, etc.) will be executed by ToolExecutor
-    // Information tools (geocode) were executed during planning and are not included
-    const actionTools = extractActionTools(messages);
 
     // Build final plan
     const plan: AgentPlan = {
       status: 'ready',
       reasoning: intent.reasoning,
-      tools: actionTools,
+      tools,
       executionResults: []
     };
 
     console.log('[OllamaAgentService] Plan generation complete:', plan);
-    console.log('[OllamaAgentService] Action tools to execute:', actionTools.length);
+    console.log('[OllamaAgentService] Tools to execute:', tools.length);
     return plan;
 
   } catch (error) {
@@ -403,8 +404,46 @@ export async function generatePlan(
 }
 
 /**
- * Build the plan generation prompt for Ollama
- * Updated to guide LLM through agent loop pattern
+ * Build single-turn plan generation prompt
+ * Asks LLM to output JSON plan with locations and metadata
+ */
+function buildSingleTurnPlanPrompt(intent: ClarifiedIntent): string {
+  return `Analyze this user intent and output a JSON plan.
+
+USER INTENT: ${intent.intent}
+
+Determine the plan type and extract relevant information:
+- If user wants to TRAVEL between locations (mentions "drive", "cycle", "walk", "fly", "from X to Y"): planType = "travel"
+- If user wants to MENTION a location (e.g., "I want to visit X"): planType = "location"
+- If user wants to OPEN/VIEW the map (e.g., "show me the map", "zoom on X"): planType = "map"
+
+Output JSON format:
+{
+  "locations": ["location1", "location2"],  // All location names to geocode
+  "planType": "travel" | "location" | "map",
+  "transportMode": "driving" | "cycling" | "walking" | "flying" | null,  // Only for travel
+  "fromLocation": "..." | null,  // Only for travel
+  "toLocation": "..." | null,  // Only for travel
+  "focusLocation": "..." | null  // Only for map
+}
+
+Examples:
+
+Input: "I want to drive from Copenhagen to Stockholm"
+Output: {"locations": ["Copenhagen", "Stockholm"], "planType": "travel", "transportMode": "driving", "fromLocation": "Copenhagen", "toLocation": "Stockholm", "focusLocation": null}
+
+Input: "I want to visit Paris"
+Output: {"locations": ["Paris"], "planType": "location", "transportMode": null, "fromLocation": null, "toLocation": null, "focusLocation": null}
+
+Input: "Show me the map of London"
+Output: {"locations": ["London"], "planType": "map", "transportMode": null, "fromLocation": null, "toLocation": null, "focusLocation": "London"}
+
+ONLY output valid JSON, no other text.`;
+}
+
+/**
+ * Build the plan generation prompt for Ollama (OLD - multi-turn approach)
+ * DEPRECATED: Use buildSingleTurnPlanPrompt instead
  */
 function buildPlanPrompt(
   intent: ClarifiedIntent

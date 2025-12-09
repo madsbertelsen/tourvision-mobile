@@ -45,19 +45,15 @@ const insertTextTool: ToolDefinition = {
     name: 'insertText',
     description: `Insert HTML content with geo-marks and optional map blocks. Wrap location names in: <span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
 
-For travel between locations, add transport attributes to the DESTINATION geo-mark:
-- data-transport-from: origin location name
-- data-transport-profile: "cycling", "driving", "walking", or "flying"
+For travel between locations, do NOT add transport attributes here - use the setTransportation tool separately instead.
 
 To visualize locations on a map, include a map block AFTER the text: <div class="prosemirror-map" data-height="400"></div>
 
 Example (simple): I want to visit <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span>
 
-Example (with transport): I will drive from <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span> to <span class="geo-mark" data-place-name="Stockholm" data-lat="59.3333" data-lng="18.0271" data-transport-from="Copenhagen" data-transport-profile="driving">Stockholm</span>
-
 Example (with map): I want to visit <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6867" data-lng="12.5701">Copenhagen</span><div class="prosemirror-map" data-height="400"></div>
 
-Do NOT include data-geo-id or data-color-index - these will be generated automatically.`,
+Do NOT include data-geo-id, data-color-index, data-transport-from, or data-transport-profile - these will be generated automatically or set via setTransportation.`,
     parameters: {
       type: 'object',
       required: ['html'],
