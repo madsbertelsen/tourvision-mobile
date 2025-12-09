@@ -287,7 +287,7 @@ export async function generatePlan(
     console.log('[OllamaAgentService] Plan generation prompt:');
     console.log(prompt);
 
-    // Initialize messages for agent loop
+    // Initialize messages for agent loop (following official Ollama pattern)
     const messages: OllamaMessage[] = [
       { role: 'user', content: prompt }
     ];
@@ -303,17 +303,47 @@ export async function generatePlan(
     while (iteration < maxIterations) {
       iteration++;
       console.log(`[OllamaAgentService] Agent loop iteration ${iteration}`);
+      console.log('[OllamaAgentService] Messages array:', JSON.stringify(messages, null, 2));
 
-      // Call LLM with current conversation history and tools
       const response = await callOllama(messages, tools);
+
+      // Add LLM response to conversation (includes tool_calls)
+      console.log('[OllamaAgentService] Raw response.message:', JSON.stringify(response.message, null, 2));
+
+      // Debug: Save to window for inspection
+      if (typeof window !== 'undefined') {
+        (window as any).lastOllamaResponse = response.message;
+        (window as any).lastMessagesArray = messages;
+      }
+
+      // Clean the message to remove any non-standard fields before pushing
+      const cleanedMessage: OllamaMessage = {
+        role: response.message.role,
+        // If content is empty and there are tool calls, add a description
+        // This might help Ollama handle multi-turn conversations better
+        content: response.message.content || (response.message.tool_calls && response.message.tool_calls.length > 0
+          ? `Calling ${response.message.tool_calls.length} tool(s)`
+          : "")
+      };
+
+      // If there are tool_calls, add them but clean the structure
+      if (response.message.tool_calls && response.message.tool_calls.length > 0) {
+        cleanedMessage.tool_calls = response.message.tool_calls.map((call: any) => ({
+          id: call.id,
+          function: {
+            name: call.function.name,
+            arguments: call.function.arguments
+            // Deliberately omit 'index' field which might cause issues
+          }
+        }));
+      }
+
+      messages.push(cleanedMessage);
 
       console.log('[OllamaAgentService] LLM response:', {
         content: response.message.content,
         tool_calls: response.message.tool_calls?.length ?? 0
       });
-
-      // Add LLM response to conversation
-      messages.push(response.message);
 
       // Check for tool calls
       const toolCalls = response.message.tool_calls ?? [];
@@ -325,7 +355,7 @@ export async function generatePlan(
 
       console.log(`[OllamaAgentService] LLM called ${toolCalls.length} tool(s)`);
 
-      // Execute each tool call and add results to conversation
+      // Execute each tool call and add results to conversation (following official pattern)
       for (const call of toolCalls) {
         console.log(`[OllamaAgentService] Executing tool: ${call.function.name}`);
 
@@ -336,12 +366,12 @@ export async function generatePlan(
 
         console.log(`[OllamaAgentService] Tool result:`, result);
 
-        // Add tool result to messages
+        // Add tool result to messages (official Ollama format with tool_name)
         messages.push({
           role: 'tool',
           tool_name: call.function.name,
-          content: result
-        });
+          content: String(result)
+        } as OllamaMessage);
       }
     }
 
@@ -485,12 +515,34 @@ async function callOllama(
       console.log('[OllamaAgentService] Calling Ollama with JSON format (no tools)');
     }
 
-    // Use the SDK's chat method
-    const response = await ollama.chat(options);
+    // Use fetch directly instead of SDK to get better error messages
+    const fetchResponse = await fetch('http://127.0.0.1:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options)
+    });
 
-    // The SDK returns the response directly, convert to our type
-    return response as any as OllamaResponse;
+    if (!fetchResponse.ok) {
+      const errorText = await fetchResponse.text();
+      console.error('[OllamaAgentService] HTTP error response:', errorText);
+      throw new Error(`Ollama HTTP ${fetchResponse.status}: ${errorText}`);
+    }
+
+    const responseText = await fetchResponse.text();
+    console.log('[OllamaAgentService] Raw response text length:', responseText.length);
+
+    try {
+      const response = JSON.parse(responseText);
+      return response as OllamaResponse;
+    } catch (parseError) {
+      console.error('[OllamaAgentService] Failed to parse response:', responseText.substring(0, 500));
+      throw new Error(`Failed to parse Ollama response: ${parseError}`);
+    }
   } catch (error) {
+    // Log the full error for debugging
+    console.error('[OllamaAgentService] Full error object:', error);
+    console.error('[OllamaAgentService] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
     if (error instanceof Error) {
       throw new Error(`Ollama error: ${error.message}`);
     }
