@@ -1540,7 +1540,7 @@ async function main() {
     await agentModulePromise;
     if (initializeAgent) {
       console.log('[Main] Initializing agent with Y.js document observation');
-      initializeAgent(yXmlFragment, ydoc, documentId, editor, customSchema);
+      initializeAgent(yXmlFragment, ydoc, documentId, editor, customSchema, notifyGeoMarkChange);
     } else {
       console.error('[Main] Agent module failed to load');
     }

@@ -210,6 +210,12 @@ function executeInsertText(
 
     editorView.dispatch(tr);
 
+    // Notify geo mark change to trigger map updates
+    if (isHtml && context.notifyGeoMarkChange) {
+      console.log('[ToolExecutor] Calling notifyGeoMarkChange after insertText');
+      context.notifyGeoMarkChange();
+    }
+
     return {
       toolName: 'insertText',
       success: true,
@@ -349,6 +355,12 @@ function executeCreateGeoMark(
 
     editorView.dispatch(tr);
 
+    // Notify geo mark change to trigger map updates
+    if (context.notifyGeoMarkChange) {
+      console.log('[ToolExecutor] Calling notifyGeoMarkChange after createGeoMark');
+      context.notifyGeoMarkChange();
+    }
+
     return {
       toolName: 'createGeoMark',
       success: true,
@@ -449,6 +461,12 @@ function executeSetTransportation(
     }
 
     editorView.dispatch(tr);
+
+    // Notify geo mark change to trigger map updates (transport routes)
+    if (context.notifyGeoMarkChange) {
+      console.log('[ToolExecutor] Calling notifyGeoMarkChange after setTransportation');
+      context.notifyGeoMarkChange();
+    }
 
     return {
       toolName: 'setTransportation',

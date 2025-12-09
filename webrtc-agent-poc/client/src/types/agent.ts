@@ -55,6 +55,9 @@ export interface ExecutionContext {
 
   /** Range of last inserted text (for scoped text search in createGeoMark) */
   lastInsertedRange?: { from: number; to: number };
+
+  /** Callback to notify when geo marks change (triggers map updates) */
+  notifyGeoMarkChange?: () => void;
 }
 
 /**

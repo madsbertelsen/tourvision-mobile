@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Test - Fullscreen Map</title>
+
+  <!-- Mapbox GL CSS and JS -->
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Semi-transparent overlay header */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .logo {
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+    }
+
+    .status {
+      margin-left: auto;
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* Chat History */
+    #chat-history {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease;
+      max-height: 50vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat-history.collapsed {
+      transform: translateY(calc(100% - 48px));
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .chat-header:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .chat-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .collapse-btn {
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 18px;
+      color: #666;
+      transition: transform 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #chat-history.collapsed .collapse-btn {
+      transform: rotate(180deg);
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .message-role {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .message-role.user {
+      color: #3b82f6;
+    }
+
+    .message-role.agent {
+      color: #10b981;
+    }
+
+    .message-content {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 100%;
+    }
+
+    .message.user .message-content {
+      background: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .message.agent .message-content {
+      background: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">🗺️ Agent Test</div>
+    <div class="status">Map Ready</div>
+  </header>
+
+  <div id="map"></div>
+
+  <!-- Chat History -->
+  <div id="chat-history" class="collapsed">
+    <div class="chat-header" onclick="toggleChat()">
+      <div class="chat-title">
+        <span>💬</span>
+        <span>Chat History</span>
+      </div>
+      <button class="collapse-btn">▼</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <!-- Messages will be added here dynamically -->
+    </div>
+  </div>
+
+  <script type="module">
+    // Import only Ollama client
+    import ollama from 'ollama';
+
+    // Get Mapbox token from environment or use placeholder
+    const MAPBOX_TOKEN = import.meta.env?.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoibWFkc2JlcnRlbHNlbiIsImEiOiJja2tjeDgxZWYwNHU5MnhtaTVndWRmeHpzIn0.Zs-SFtuSE9I1XAG-TG2fsw';
+
+    // Initialize map
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    // Europe bounds
+    const europeBounds = new mapboxgl.LngLatBounds(
+      [-10, 35],  // Southwest: West of Portugal, South of Spain
+      [30, 65]    // Northeast: East of Poland, North of Scandinavia
+    );
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/streets-v12',
+      bounds: europeBounds,
+      fitBoundsOptions: {
+        padding: 20
+      }
+    });
+
+    // Add navigation controls
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    map.on('load', () => {
+      console.log('[Agent Test] Map loaded successfully');
+    });
+
+    // Store map reference globally
+    window.map = map;
+
+    // Ollama configuration
+    const OLLAMA_MODEL = 'ministral-3:8b';
+
+    // Store detected locations
+    const detectedLocations = [];
+    const markers = [];
+
+    // Simple geocoding function (inspired by GeocodingService)
+    async function geocode(placeName) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.length === 0) return null;
+
+        const result = data[0];
+        return {
+          placeName: result.display_name,
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lon),
+          boundingbox: result.boundingbox ? {
+            south: parseFloat(result.boundingbox[0]),
+            north: parseFloat(result.boundingbox[1]),
+            west: parseFloat(result.boundingbox[2]),
+            east: parseFloat(result.boundingbox[3])
+          } : null
+        };
+      } catch (error) {
+        console.error('[Geocode] Error:', error);
+        return null;
+      }
+    }
+
+    // Tool definition - single tool that does everything
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'showLocationOnMap',
+          description: 'Look up a location and show it on the map with a marker. Use this when the user asks to see a place.',
+          parameters: {
+            type: 'object',
+            properties: {
+              placeName: {
+                type: 'string',
+                description: 'The name of the location to show (e.g., "Copenhagen", "Stockholm", "Paris")'
+              },
+              message: {
+                type: 'string',
+                description: 'Friendly message to show the user'
+              }
+            },
+            required: ['placeName', 'message']
+          }
+        }
+      }
+    ];
+
+    // Single-phase agent loop
+    async function runAgent(userMessage) {
+      const messages = [
+        {
+          role: 'user',
+          content: `You are a travel assistant. The user said: "${userMessage}"
+
+If they mention a location, call showLocationOnMap with the place name and a friendly message.
+
+Example: "Show me Paris" → showLocationOnMap(placeName: "Paris", message: "Here's Paris! 🗼")`
+        }
+      ];
+
+      console.log('[Agent] Calling Ollama...');
+
+      // Single call to Ollama
+      const response = await ollama.chat({
+        model: OLLAMA_MODEL,
+        messages,
+        tools,
+        stream: false
+      });
+
+      console.log('[Agent] Response:', response);
+
+      // Check for tool calls
+      const toolCalls = response.message.tool_calls || [];
+
+      if (toolCalls.length === 0) {
+        // No tools - just show the message
+        if (response.message.content) {
+          window.addMessage('agent', response.message.content);
+        }
+        return;
+      }
+
+      // Execute tool calls
+      for (const toolCall of toolCalls) {
+        if (toolCall.function.name === 'showLocationOnMap') {
+          const { placeName, message } = toolCall.function.arguments;
+
+          window.addMessage('agent', `🔍 Looking up ${placeName}...`);
+
+          // Geocode the location
+          const location = await geocode(placeName);
+
+          if (location) {
+            // Add marker
+            const marker = new mapboxgl.Marker({ color: '#3b82f6' })
+              .setLngLat([location.lng, location.lat])
+              .setPopup(new mapboxgl.Popup().setHTML(`<strong>${location.placeName}</strong>`))
+              .addTo(window.map);
+            markers.push(marker);
+
+            // Fly to location
+            if (location.boundingbox) {
+              window.map.fitBounds([
+                [location.boundingbox.west, location.boundingbox.south],
+                [location.boundingbox.east, location.boundingbox.north]
+              ], { padding: 50, duration: 1000 });
+            } else {
+              window.map.flyTo({
+                center: [location.lng, location.lat],
+                zoom: 12,
+                duration: 1000
+              });
+            }
+
+            window.addMessage('agent', message);
+            console.log('[Agent] Showed location:', location.placeName);
+          } else {
+            window.addMessage('agent', `❌ Could not find ${placeName}`);
+          }
+        }
+      }
+    }
+
+    // Simple Ollama availability check
+    async function checkOllama() {
+      try {
+        await ollama.list();
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    // Implement testAgentCommand
+    window.testAgentCommand = async function(message) {
+      console.log('[Test] User command:', message);
+      window.addMessage('user', message);
+
+      try {
+        window.addMessage('agent', '🤔 Thinking...');
+        await runAgent(message);
+      } catch (error) {
+        console.error('[Test] Agent error:', error);
+        window.addMessage('agent', `❌ Error: ${error.message}`);
+      }
+    };
+
+    // Check Ollama on page load
+    (async () => {
+      const available = await checkOllama();
+      if (available) {
+        document.querySelector('.status').textContent = 'Agent Ready';
+        console.log('[Agent Test] Ollama available - agent ready');
+        window.addMessage('agent', '👋 Agent ready! Try: testAgentCommand("Show me Copenhagen")');
+      } else {
+        document.querySelector('.status').textContent = 'Ollama Offline';
+        console.warn('[Agent Test] Ollama not available');
+        window.addMessage('agent', '⚠️ Ollama not available. Please start Ollama service.');
+      }
+    })();
+  </script>
+
+  <script>
+    // Toggle chat history
+    function toggleChat() {
+      const chat = document.getElementById('chat-history');
+      chat.classList.toggle('collapsed');
+    }
+
+    // Add message to chat
+    function addMessage(role, content) {
+      const messagesContainer = document.getElementById('chat-messages');
+      const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+      messageDiv.innerHTML = `
+        <div class="message-header">
+          <span class="message-role ${role}">${role === 'user' ? 'User' : 'Agent'}</span>
+          <span class="message-time">${time}</span>
+        </div>
+        <div class="message-content">${content}</div>
+      `;
+
+      messagesContainer.appendChild(messageDiv);
+
+      // Auto-scroll to bottom
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      // Expand chat if collapsed
+      const chat = document.getElementById('chat-history');
+      if (chat.classList.contains('collapsed')) {
+        chat.classList.remove('collapsed');
+      }
+    }
+
+    // testAgentCommand is now defined in the module script above
+    // Make addMessage available globally for the module script
+    window.addMessage = addMessage;
+
+    console.log('[Agent Test] Use testAgentCommand("message") to test agent');
+  </script>
+</body>
+</html>

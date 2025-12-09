@@ -24,7 +24,8 @@ export function initializeAgent(
   ydoc: Y.Doc,
   documentId: string,
   editorView: EditorView,
-  schema: Schema
+  schema: Schema,
+  notifyGeoMarkChange: () => void
 ) {
   console.log('[Agent] Initializing agent with modular services');
   console.log(`[Agent] Document ID: ${documentId}`);
@@ -178,7 +179,8 @@ export function initializeAgent(
           schema,
           detectedLocations: [],
           yXmlFragment,
-          ydoc
+          ydoc,
+          notifyGeoMarkChange
         }
       );
 
