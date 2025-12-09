@@ -432,11 +432,11 @@ DETECTED LOCATIONS: ${locationNames || 'None'}
 
 AVAILABLE TOOLS:
 1. replaceText(targetText, replacementText) - Replace existing text in the document
-2. insertText(html) - Insert HTML with embedded geo-marks and optional map blocks
+2. insertText(html) - Insert HTML with embedded geo-marks (NO map blocks - document already has one!)
    - Geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
    - Transport: data-transport-from="Origin" data-transport-profile="driving|cycling|walking|flying"
-   - Map block: <div class="prosemirror-map" data-height="400"></div> (include AFTER text with locations)
-3. insertMap() - Insert a standalone map block (only use if you forgot to include map in insertText)
+   - IMPORTANT: Do NOT include map blocks in insertText! The document already has a default map that updates automatically.
+3. insertMap() - Insert a standalone map block (RARELY NEEDED - only use if document is missing a map)
 4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (INFORMATION GATHERING ONLY - does NOT perform any action)
 5. openFullscreenMap(focusLocation?, zoom?, action?) - Open fullscreen map and optionally pan/zoom to a location (ACTION TOOL)
 
@@ -521,17 +521,17 @@ Example 6: "Show me the map"
 Turn 1 - YOU: Call openFullscreenMap()
 STATUS: TASK COMPLETE ✓
 
-Example 7: "I want to travel from Copenhagen to Stockholm" (multiple locations - insert text AND map)
+Example 7: "I want to travel from Copenhagen to Stockholm" (multiple locations with transport)
 Turn 1 - YOU: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
 Turn 2 - SYSTEM: Returns coordinates for both locations
-Turn 3 - YOU: Call insertText with HTML: "I want to travel from <span class='geo-mark' ...>Copenhagen</span> to <span class='geo-mark' ... data-transport-from='Copenhagen' data-transport-profile='flying'>Stockholm</span><div class='prosemirror-map' data-height='400'></div>"
-STATUS: TASK COMPLETE ✓ (text with geo-marks AND map block inserted in single operation)
+Turn 3 - YOU: Call insertText with HTML: "I want to travel from <span class='geo-mark' ...>Copenhagen</span> to <span class='geo-mark' ... data-transport-from='Copenhagen' data-transport-profile='flying'>Stockholm</span>"
+STATUS: TASK COMPLETE ✓ (text with geo-marks inserted - the document's existing map will automatically show these locations)
 
-BEST PRACTICE:
-- When inserting text with locations (geo-marks), INCLUDE a map block in the HTML: <div class='prosemirror-map' data-height='400'></div>
-- Place the map block AFTER the paragraph with locations
-- This provides a better user experience by visualizing locations automatically in a single operation
-- NO need to call insertMap() separately - just include the div in the HTML!
+IMPORTANT - ABOUT MAP BLOCKS:
+- Documents ALREADY have a default map block that updates automatically when you insert geo-marks
+- Do NOT include <div class='prosemirror-map'> in insertText HTML - this will create duplicate maps!
+- The existing map discovers geo-marks automatically and displays them
+- Only use insertMap() if you're certain the document is missing a map (very rare)
 
 QUALIFICATION PARAMETERS for geocode:
 - country: Use when you know the country from context
