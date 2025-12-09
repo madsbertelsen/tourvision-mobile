@@ -365,9 +365,19 @@ function buildPlanPrompt(
 ): string {
   const locationNames = locations.map(loc => loc.locationName).join(', ');
 
+  // Parse intent to extract command vs content
+  let intentInstruction = intent.intent;
+  if (intent.intent.startsWith('Execute command: insert map')) {
+    intentInstruction = 'Call insertMap() to insert a map block';
+  } else if (intent.intent.startsWith('Execute command:')) {
+    // Extract the command (e.g., "Execute command: insert map" -> "insert map")
+    const command = intent.intent.replace('Execute command:', '').trim();
+    intentInstruction = `Execute the command: "${command}"`;
+  }
+
   return `You are executing a plan to fulfill the user's intent. This is a MULTI-TURN conversation where you call tools, receive results, and continue until the task is COMPLETE.
 
-USER INTENT: ${intent.intent}
+USER INTENT: ${intentInstruction}
 
 DETECTED LOCATIONS: ${locationNames || 'None'}
 
