@@ -668,13 +668,13 @@ async function executeOpenFullscreenMap(
     const zoom = params.zoom ?? 10;
     const action = params.action ?? 'open';
 
-    // Check if fullscreen map is already open by checking the container dimensions
+    // Check if fullscreen map is already open by checking the stored reference
+    // The reference is set when showFullscreenMap creates the map and cleared when closed
     const fullscreenMapView = (window as any).fullscreenMapView;
     const isMapOpen = fullscreenMapView &&
-                      fullscreenMapView.container &&
                       fullscreenMapView.map &&
-                      fullscreenMapView.container.clientHeight > 0 &&
-                      fullscreenMapView.container.clientWidth > 0; // Visible elements have non-zero dimensions
+                      typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
+                      fullscreenMapView.map.isStyleLoaded();
 
     // Get the global showFullscreenMap function
     const showFullscreenMap = (window as any).showFullscreenMap;
@@ -684,10 +684,10 @@ async function executeOpenFullscreenMap(
 
     // Only open the map if it's not already open
     if (!isMapOpen) {
-      console.log('[ToolExecutor:openFullscreenMap] Opening fullscreen map');
+      console.log('[ToolExecutor:openFullscreenMap] Opening fullscreen map (no reference or map not ready)');
       showFullscreenMap(null);
     } else {
-      console.log('[ToolExecutor:openFullscreenMap] Fullscreen map already open, skipping reopen and just animating');
+      console.log('[ToolExecutor:openFullscreenMap] Fullscreen map already open (using stored reference), skipping reopen');
     }
 
     // If focusing on a location, geocode and animate to it
@@ -707,7 +707,8 @@ async function executeOpenFullscreenMap(
 
       console.log(`[ToolExecutor:openFullscreenMap] Geocoded ${params.focusLocation}:`, geocodedResult);
 
-      // Animate to location (wait 300ms if map was just opened, animate immediately if already open)
+      // Animate to location using the stored reference
+      // Wait 300ms if map was just opened to allow initialization, animate immediately if already open
       const delay = isMapOpen ? 0 : 300;
       setTimeout(() => {
         const fullscreenMapView = (window as any).fullscreenMapView;
