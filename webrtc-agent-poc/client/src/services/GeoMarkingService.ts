@@ -163,7 +163,22 @@ export class GeoMarkingService {
 
     const { from, to } = position;
 
-    // 3. Generate unique geoId
+    // 3. Check if text is already marked with a geo-mark
+    const { state } = this.editorView;
+    let alreadyMarked = false;
+    state.doc.nodesBetween(from, to, (node) => {
+      if (node.marks && node.marks.some(mark => mark.type.name === 'geoMark')) {
+        alreadyMarked = true;
+        return false; // Stop iteration
+      }
+    });
+
+    if (alreadyMarked) {
+      console.log(`[GeoMarkingService] "${locationName}" already has a geo-mark, skipping`);
+      return;
+    }
+
+    // 4. Generate unique geoId
     const geoId = `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // 4. Create the geo-mark
