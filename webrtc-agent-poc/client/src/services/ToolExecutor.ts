@@ -674,60 +674,57 @@ async function executeOpenFullscreenMap(
       throw new Error('showFullscreenMap function not available');
     }
 
-    // If focusing on a location, we need coordinates
+    // Open fullscreen map immediately
+    showFullscreenMap(null);
+
+    // If focusing on a location, geocode and animate to it
     if (params.focusLocation) {
-      // Find the location in detected locations (should have been geocoded already)
-      const location = context.detectedLocations.find(
-        loc => loc.locationName.toLowerCase() === params.focusLocation!.toLowerCase()
-      );
+      // Start geocoding (async)
+      const geocodingService = await import('./GeocodingService').then(m => m.geocodingService);
+      const geocodedResult = await geocodingService.geocode(params.focusLocation);
 
-      if (!location || !location.lat || !location.lng) {
-        throw new Error(`Location "${params.focusLocation}" not found or not geocoded. Call geocode first.`);
+      if (!geocodedResult) {
+        console.warn(`[ToolExecutor:openFullscreenMap] Could not geocode ${params.focusLocation}`);
+        return {
+          toolName: 'openFullscreenMap',
+          success: true,
+          message: 'Opened fullscreen map (could not find location to focus on)'
+        };
       }
 
-      // Use Nominatim's bounding box if available (more accurate than calculation)
-      const { lat, lng, boundingbox } = location;
+      console.log(`[ToolExecutor:openFullscreenMap] Geocoded ${params.focusLocation}:`, geocodedResult);
 
-      let bounds;
-      if (boundingbox) {
-        // Use Nominatim's accurate bounding box
-        bounds = {
-          north: boundingbox.north,
-          south: boundingbox.south,
-          east: boundingbox.east,
-          west: boundingbox.west
-        };
-        console.log(`[ToolExecutor:openFullscreenMap] Using Nominatim bounds for ${params.focusLocation}:`, bounds);
-      } else {
-        // Fallback: center on point with zoom-based approximation
-        const delta = 0.5 / Math.pow(2, zoom - 10);
-        bounds = {
-          north: lat + delta,
-          south: lat - delta,
-          east: lng + delta,
-          west: lng - delta
-        };
-        console.log(`[ToolExecutor:openFullscreenMap] Calculated fallback bounds for ${params.focusLocation}:`, bounds);
-      }
+      // Wait for map to load, then animate to location
+      setTimeout(() => {
+        const fullscreenMapView = (window as any).fullscreenMapView;
+        if (fullscreenMapView && fullscreenMapView.map) {
+          const map = fullscreenMapView.map;
 
-      // Open fullscreen map with bounds
-      showFullscreenMap(bounds);
-
-      return {
-        toolName: 'openFullscreenMap',
-        success: true,
-        message: `Opened fullscreen map focused on ${location.locationName} (zoom: ${zoom})`
-      };
-    } else {
-      // Open map without specific focus
-      showFullscreenMap(null);
-
-      return {
-        toolName: 'openFullscreenMap',
-        success: true,
-        message: 'Opened fullscreen map'
-      };
+          if (geocodedResult.boundingbox) {
+            // Use fitBounds with Nominatim's accurate boundingbox
+            const bounds: [[number, number], [number, number]] = [
+              [geocodedResult.boundingbox.west, geocodedResult.boundingbox.south],
+              [geocodedResult.boundingbox.east, geocodedResult.boundingbox.north]
+            ];
+            console.log(`[ToolExecutor:openFullscreenMap] Flying to bounds for ${params.focusLocation}:`, bounds);
+            map.fitBounds(bounds, { padding: 50, duration: 1000 });
+          } else {
+            // Fallback: flyTo center point with zoom
+            const center: [number, number] = [parseFloat(geocodedResult.lng), parseFloat(geocodedResult.lat)];
+            console.log(`[ToolExecutor:openFullscreenMap] Flying to center for ${params.focusLocation}:`, center);
+            map.flyTo({ center, zoom, duration: 1000 });
+          }
+        }
+      }, 300); // 300ms delay for map to initialize
     }
+
+    return {
+      toolName: 'openFullscreenMap',
+      success: true,
+      message: params.focusLocation
+        ? `Opened fullscreen map focused on ${params.focusLocation} (zoom: ${zoom})`
+        : 'Opened fullscreen map'
+    };
   } catch (error: any) {
     console.error('[ToolExecutor:openFullscreenMap] Error:', error);
     return {

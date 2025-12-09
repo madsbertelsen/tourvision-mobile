@@ -132,11 +132,18 @@ async function executeGeocodeTool(args: {
       });
 
       if (result) {
-        const coords = {
+        const coords: any = {
           placeName: result.placeName,
           lat: parseFloat(result.lat),
           lng: parseFloat(result.lng)
         };
+
+        // Include boundingbox if present (for accurate map focusing)
+        if (result.boundingbox) {
+          coords.boundingbox = result.boundingbox;
+          console.log('[OllamaAgentService] ✅ Including boundingbox:', result.boundingbox);
+        }
+
         console.log('[OllamaAgentService] Structured geocoding resolved to', coords);
         return JSON.stringify(coords);
       } else {

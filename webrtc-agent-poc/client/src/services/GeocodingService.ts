@@ -80,6 +80,9 @@ export class GeocodingService {
           west: parseFloat(result.boundingbox[2]),
           east: parseFloat(result.boundingbox[3])
         };
+        console.log('[GeocodingService] ✅ Parsed boundingbox:', geocoded.boundingbox);
+      } else {
+        console.warn('[GeocodingService] ⚠️ No boundingbox in response');
       }
 
       return geocoded;
@@ -178,6 +181,9 @@ export class GeocodingService {
           west: parseFloat(result.boundingbox[2]),
           east: parseFloat(result.boundingbox[3])
         };
+        console.log('[GeocodingService] ✅ Parsed boundingbox:', geocoded.boundingbox);
+      } else {
+        console.warn('[GeocodingService] ⚠️ No boundingbox in response');
       }
 
       return geocoded;
