@@ -390,8 +390,8 @@ function buildPlanPrompt(
              intent.intent.startsWith('Execute command: open fullscreen map') ||
              intent.intent.toLowerCase().includes('show me the map') ||
              intent.intent.toLowerCase().includes('zoom in on')) {
-    // Extract location if present
-    const locationMatch = intent.intent.match(/(?:on|to|at|around|near)\s+([A-Z][a-zA-Z\s]+)/);
+    // Extract location if present (supports Unicode characters like ö, å, ä)
+    const locationMatch = intent.intent.match(/(?:on|to|at|around|near)\s+([\p{L}\s]+)/u);
     if (locationMatch) {
       const location = locationMatch[1].trim();
       intentInstruction = `Call geocode("${location}") first, then call openFullscreenMap(focusLocation: "${location}", zoom: 12)`;
