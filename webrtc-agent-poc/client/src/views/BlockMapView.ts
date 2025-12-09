@@ -144,19 +144,46 @@ export class BlockMapView {
     const updateMap = () => {
       const locations = extractLocations();
 
+      // If no locations, show map centered on Europe
       if (locations.length === 0) {
-        lightMapContainer.innerHTML = `
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280;">
-            🗺️ No locations found
-          </div>
-        `;
-        if (lightMap) {
-          lightMap.remove();
-          lightMap = null;
-        }
-        if (coloredMap) {
-          coloredMap.remove();
-          coloredMap = null;
+        if (!lightMap) {
+          // Create map centered on Europe
+          (window as any).mapboxgl.accessToken = deps.mapboxToken;
+
+          const europeCenter: [number, number] = [10, 50]; // Centered on Europe
+          const europeZoom = 4; // Zoom level showing all of Europe
+
+          const commonMapOptions = {
+            center: europeCenter,
+            zoom: europeZoom,
+            dragPan: false,
+            scrollZoom: false,
+            boxZoom: false,
+            dragRotate: false,
+            keyboard: false,
+            doubleClickZoom: false,
+            touchZoomRotate: false,
+          };
+
+          // Create LIGHT map (visible on top)
+          lightMap = new (window as any).mapboxgl.Map({
+            container: lightMapContainer,
+            style: 'mapbox://styles/mapbox/light-v11',
+            ...commonMapOptions,
+          });
+
+          // Create COLORED map (pre-loading behind)
+          coloredMap = new (window as any).mapboxgl.Map({
+            container: coloredMapContainer,
+            style: 'mapbox://styles/mapbox/streets-v12',
+            ...commonMapOptions,
+          });
+
+          // Store both map instances on DOM for fullscreen transition
+          (dom as any)._lightMapInstance = lightMap;
+          (dom as any)._coloredMapInstance = coloredMap;
+          (dom as any)._lightMapContainer = lightMapContainer;
+          (dom as any)._mapInstance = lightMap;
         }
         return;
       }

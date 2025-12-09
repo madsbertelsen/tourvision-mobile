@@ -204,9 +204,9 @@ export class FullscreenMapView {
     // Extract locations from document
     const currentLocations = this.deps.extractLocationsForFullscreen();
 
-    if (currentLocations.length === 0) {
-      console.warn('[Fullscreen] No locations found to display');
-      return;
+    const hasLocations = currentLocations.length > 0;
+    if (!hasLocations) {
+      console.log('[Fullscreen] No locations found - will show map centered on Europe');
     }
 
     // Find the first map container in the document to get its position
@@ -257,6 +257,14 @@ export class FullscreenMapView {
         );
         console.log('[Fullscreen] Using target bounds from followed user (fallback):', targetCamera);
       }
+    } else if (!hasLocations) {
+      // No locations: use default Europe bounds
+      const europeBounds = new (window as any).mapboxgl.LngLatBounds(
+        [-10, 35],  // Southwest: West of Portugal, South of Spain
+        [30, 65]    // Northeast: East of Poland, North of Scandinavia
+      );
+      adjustedBounds = europeBounds;
+      console.log('[Fullscreen] Using default Europe bounds (no locations)');
     } else {
       // Normal mode: calculate bounds from colored map (already visible behind light map)
       // Prefer the colored map instance for bounds calculation (same coordinates, but it's the one that will be visible)
