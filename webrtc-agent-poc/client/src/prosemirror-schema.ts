@@ -49,7 +49,7 @@ export const customSchema = new Schema({
       parseDOM: [{
         tag: 'span.geo-mark',
         getAttrs(dom) {
-          return {
+          const attrs = {
             geoId: dom.getAttribute('data-geo-id'),
             placeName: dom.getAttribute('data-place-name'),
             lat: dom.getAttribute('data-lat'),
@@ -60,9 +60,23 @@ export const customSchema = new Schema({
             transportProfile: dom.getAttribute('data-transport-profile') || null,
             waypoints: dom.getAttribute('data-waypoints') ? JSON.parse(dom.getAttribute('data-waypoints')) : null
           };
+          console.log('[Schema:parseDOM] Parsing geo-mark:', {
+            geoId: attrs.geoId,
+            placeName: attrs.placeName,
+            transportFrom: attrs.transportFrom,
+            transportProfile: attrs.transportProfile
+          });
+          return attrs;
         }
       }],
       toDOM(mark) {
+        console.log('[Schema:toDOM] Rendering geo-mark:', {
+          geoId: mark.attrs.geoId,
+          placeName: mark.attrs.placeName,
+          transportFrom: mark.attrs.transportFrom,
+          transportProfile: mark.attrs.transportProfile
+        });
+
         // Apply background color based on colorIndex
         const colors = [
           '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444',
@@ -83,7 +97,12 @@ export const customSchema = new Schema({
         };
 
         // Add geo-id if it exists
-        if (mark.attrs.geoId) attrs['data-geo-id'] = mark.attrs.geoId;
+        if (mark.attrs.geoId) {
+          attrs['data-geo-id'] = mark.attrs.geoId;
+          console.log('[Schema:toDOM] Including data-geo-id:', mark.attrs.geoId);
+        } else {
+          console.log('[Schema:toDOM] WARNING: No geoId in mark.attrs!');
+        }
 
         // Add transport attributes if they exist
         if (mark.attrs.transportFrom) attrs['data-transport-from'] = mark.attrs.transportFrom;
