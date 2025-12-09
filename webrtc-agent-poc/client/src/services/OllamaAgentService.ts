@@ -282,7 +282,7 @@ export async function generatePlan(
 
   try {
     // Build initial prompt
-    const prompt = buildPlanPrompt(intent, detectedLocations);
+    const prompt = buildPlanPrompt(intent);
 
     console.log('[OllamaAgentService] Plan generation prompt:');
     console.log(prompt);
@@ -377,11 +377,8 @@ export async function generatePlan(
  * Updated to guide LLM through agent loop pattern
  */
 function buildPlanPrompt(
-  intent: ClarifiedIntent,
-  locations: DetectedLocation[]
+  intent: ClarifiedIntent
 ): string {
-  const locationNames = locations.map(loc => loc.locationName).join(', ');
-
   // Check if fullscreen map is currently open
   const fullscreenMapView = (window as any).fullscreenMapView;
   const isMapAlreadyOpen = fullscreenMapView &&
@@ -424,130 +421,41 @@ function buildPlanPrompt(
     intentInstruction = `Execute the command: "${command}"`;
   }
 
-  return `You are executing a plan to fulfill the user's intent. This is a MULTI-TURN conversation where you call tools, receive results, and continue until the task is COMPLETE.
+  return `You are executing a plan. This is a MULTI-TURN conversation: call tools, get results, continue until complete.
 
 USER INTENT: ${intentInstruction}
 
-DETECTED LOCATIONS: ${locationNames || 'None'}
+TOOLS:
+1. geocode(placeName, country?) - Get coordinates (info only, no visible action)
+2. insertText(html) - Insert text with geo-marks: <span class="geo-mark" data-place-name="Place" data-lat="12.34" data-lng="56.78">Place</span>
+3. openFullscreenMap(focusLocation?, zoom?) - Open map, optionally focus on location
+4. replaceText(targetText, replacementText) - Replace text
+5. insertMap() - Add map block (rarely needed, document has default map)
 
-AVAILABLE TOOLS:
-1. replaceText(targetText, replacementText) - Replace existing text in the document
-2. insertText(html) - Insert HTML with embedded geo-marks (NO map blocks - document already has one!)
-   - Geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
-   - Transport: data-transport-from="Origin" data-transport-profile="driving|cycling|walking|flying"
-   - IMPORTANT: Do NOT include map blocks in insertText! The document already has a default map that updates automatically.
-3. insertMap() - Insert a standalone map block (RARELY NEEDED - only use if document is missing a map)
-4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (INFORMATION GATHERING ONLY - does NOT perform any action)
-5. openFullscreenMap(focusLocation?, zoom?, action?) - Open fullscreen map and optionally pan/zoom to a location (ACTION TOOL)
+WORKFLOW:
+- For text with locations: geocode() → insertText(html with geo-marks)
+- For map focus: geocode() → openFullscreenMap(focusLocation)
+- geocode alone does NOTHING visible - you must call an action tool after
 
-CRITICAL: TWO-STEP WORKFLOW PATTERN
-When the user wants to focus the map on a location:
-1. FIRST: Call geocode(placeName: "Location") to get coordinates
-2. THEN: Call openFullscreenMap(focusLocation: "Location", zoom: 12) to actually open/focus the map
+RULES:
+1. Use exact location names from USER INTENT, not other locations
+2. Always geocode locations mentioned in the intent before using them
+3. insertText must include FULL sentence, not just location: "I want to visit <span...>Place</span>"
+4. Use exact coordinates from geocode results, don't guess
+5. Stop when action tool returns {"status": "success"}
 
-REMEMBER: geocode alone does NOTHING visible to the user. You MUST call the action tool (openFullscreenMap or insertText) after geocoding!
+EXAMPLES:
 
-CRITICAL WORKFLOW FOR INSERTING LOCATION TEXT:
-If the user wants to insert text with locations, you MUST:
+"Show me Paris"
+→ geocode("Paris", "France") → openFullscreenMap("Paris", 12)
 
-Step 1: Call geocode for EACH location mentioned
-Step 2: After receiving ALL geocode results, call insertText with:
-  - The FULL user sentence as HTML
-  - Geo-marks for each location with coordinates
-  - If travel is mentioned, add transport attributes to the DESTINATION geo-mark
+"I want to visit Tokyo"
+→ geocode("Tokyo", "Japan") → insertText("I want to visit <span class='geo-mark' data-place-name='Tokyo' data-lat='...' data-lng='...'>Tokyo</span>")
 
-EXAMPLE: "I will drive my car from Copenhagen to Stockholm"
-Turn 1: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
-Turn 2: After receiving coordinates, call insertText with HTML:
-  "I will drive my car from <span class='geo-mark' data-place-name='Copenhagen' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span> to <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06' data-transport-from='Copenhagen' data-transport-profile='driving'>Stockholm</span>"
-STATUS: COMPLETE ✓ (insertText includes both locations AND transport config in Stockholm's geo-mark)
+"Travel from London to Rome"
+→ geocode("London") + geocode("Rome") → insertText("Travel from <span...>London</span> to <span... data-transport-from='London' data-transport-profile='flying'>Rome</span>")
 
-IMPORTANT RULES:
-- The geocode tool only gathers information - it does NOT insert anything into the document or open any maps
-- You MUST call the appropriate action tool after geocoding:
-  * For text insertion: call insertText after geocoding
-  * For map focus: call openFullscreenMap after geocoding
-- If you've called geocode but not the action tool, the task is INCOMPLETE
-- insertText must contain the FULL user sentence, not just the location name!
-- WRONG: "<span class='geo-mark' ...>Copenhagen</span>"
-- CORRECT: "I want to visit <span class='geo-mark' ...>Copenhagen</span>"
-- Do NOT guess coordinates! Always use the exact coordinates returned by geocode.
-- When an action tool (insertText, openFullscreenMap, etc.) returns {"status": "success"}, STOP - the task is complete
-- For travel statements, embed transport attributes in the destination geo-mark (do NOT use separate setTransportation tool)
-- Do NOT call the same action tool twice with identical parameters
-
-EXAMPLE CONVERSATION FLOWS:
-
-Example 1: "I want to visit Copenhagen" (location-based)
-Turn 1 - YOU: Call geocode(placeName: "Copenhagen", country: "Denmark")
-Turn 2 - SYSTEM: Returns {"placeName": "København", "lat": 55.6867, "lng": 12.5701}
-Turn 3 - YOU: Call insertText with html: "I want to visit <span class='geo-mark' data-place-name='København' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span>"
-STATUS: TASK COMPLETE ✓ (both geocode AND insertText called)
-
-Example 2: "I also want to visit Stockholm" (location-based)
-Turn 1 - YOU: Call geocode(placeName: "Stockholm", country: "Sweden")
-Turn 2 - SYSTEM: Returns {"placeName": "Stockholm", "lat": 59.33, "lng": 18.06}
-Turn 3 - YOU: Call insertText with html: "I also want to visit <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06'>Stockholm</span>"
-STATUS: TASK COMPLETE ✓
-
-WRONG Example (INCOMPLETE):
-Turn 1 - YOU: Call geocode(placeName: "Stockholm", country: "Sweden")
-Turn 2 - SYSTEM: Returns coordinates
-Turn 3 - YOU: [stops without calling insertText]
-STATUS: TASK INCOMPLETE ✗ (geocode was called but insertText was NOT - the text was never inserted!)
-
-Example 3: "I want to go shopping" (no location)
-Turn 1 - YOU: Call insertText with html: "I want to go shopping"
-STATUS: TASK COMPLETE ✓ (no geocoding needed)
-
-Example 4: "Insert map"
-Turn 1 - YOU: Call insertMap()
-STATUS: TASK COMPLETE ✓
-
-Example 5: "Open the map and zoom in on Jönköping"
-Turn 1 - YOU: Call geocode(placeName: "Jönköping", country: "Sweden")
-Turn 2 - SYSTEM: Returns {"placeName": "Jönköping", "lat": 57.78, "lng": 14.16, "boundingbox": {...}}
-Turn 3 - YOU: Call openFullscreenMap(focusLocation: "Jönköping", zoom: 12)
-Turn 4 - SYSTEM: Returns {"status": "success", "message": "openFullscreenMap will be executed. Task is now complete."}
-STATUS: TASK COMPLETE ✓ (both geocode AND openFullscreenMap called)
-
-WRONG Example 5 (INCOMPLETE):
-Turn 1 - YOU: Call geocode(placeName: "Jönköping", country: "Sweden")
-Turn 2 - SYSTEM: Returns coordinates
-Turn 3 - YOU: [stops without calling openFullscreenMap]
-STATUS: TASK INCOMPLETE ✗ (geocode was called but openFullscreenMap was NOT - the map was never opened!)
-
-Example 6: "Show me the map"
-Turn 1 - YOU: Call openFullscreenMap()
-STATUS: TASK COMPLETE ✓
-
-Example 7: "I want to travel from Copenhagen to Stockholm" (multiple locations with transport)
-Turn 1 - YOU: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
-Turn 2 - SYSTEM: Returns coordinates for both locations
-Turn 3 - YOU: Call insertText with HTML: "I want to travel from <span class='geo-mark' ...>Copenhagen</span> to <span class='geo-mark' ... data-transport-from='Copenhagen' data-transport-profile='flying'>Stockholm</span>"
-STATUS: TASK COMPLETE ✓ (text with geo-marks inserted - the document's existing map will automatically show these locations)
-
-IMPORTANT - ABOUT MAP BLOCKS:
-- Documents ALREADY have a default map block that updates automatically when you insert geo-marks
-- Do NOT include <div class='prosemirror-map'> in insertText HTML - this will create duplicate maps!
-- The existing map discovers geo-marks automatically and displays them
-- Only use insertMap() if you're certain the document is missing a map (very rare)
-
-QUALIFICATION PARAMETERS for geocode:
-- country: Use when you know the country from context
-- proximity: Use when you have nearby locations to bias results
-- zoom: Higher values = stronger proximity bias (default: 10)
-
-WHAT TO GEOCODE:
-✓ Geocode: cities, countries, regions, landmarks, museums, monuments, parks
-✗ Do NOT geocode: abstract events, activities without specific places
-
-HTML GEO-MARK FORMAT:
-<span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
-
-NOTE: Do NOT include data-geo-id or data-color-index - these will be generated automatically!
-
-Now select the appropriate tool(s) to fulfill the user's intent. Remember: call geocode first for locations, then wait for the result before calling insertText!`;
+Execute the plan now. Use locations from USER INTENT only.`;
 }
 
 /**
@@ -561,7 +469,8 @@ async function callOllama(
     const options: any = {
       model: OLLAMA_MODEL,
       messages,
-      stream: false
+      stream: false,
+      keep_alive: 0  // Don't keep model in memory to prevent KV cache contamination between requests
       // Note: think: true is only supported by some models (deepseek-r1, qwen2.5, etc.)
       // ministral-3:8b does not support it
     };
@@ -591,8 +500,9 @@ async function callOllama(
 
 /**
  * Parse tool calls from Ollama response (supports both native tool calling and JSON format)
+ * Note: Currently unused - kept for future reference
  */
-function parseToolCalls(response: OllamaResponse): ToolCall[] {
+function _parseToolCalls(response: OllamaResponse): ToolCall[] {
   const tools: ToolCall[] = [];
 
   console.log('[OllamaAgentService] Parsing tool calls from response');
