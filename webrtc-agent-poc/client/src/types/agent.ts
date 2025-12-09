@@ -110,6 +110,7 @@ export interface OllamaMessage {
       arguments: Record<string, any>;
     };
   }>;
+  tool_name?: string;  // For tool result messages (role: 'tool')
 }
 
 /**

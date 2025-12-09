@@ -40,7 +40,216 @@ export async function isOllamaAvailable(): Promise<boolean> {
 }
 
 /**
+ * Map country names to ISO 3166-1 alpha-2 codes for Nominatim filtering
+ */
+const COUNTRY_CODE_MAP: { [key: string]: string } = {
+  // Nordic countries
+  'denmark': 'dk',
+  'sweden': 'se',
+  'norway': 'no',
+  'finland': 'fi',
+  'iceland': 'is',
+
+  // Western Europe
+  'france': 'fr',
+  'germany': 'de',
+  'netherlands': 'nl',
+  'belgium': 'be',
+  'luxembourg': 'lu',
+  'switzerland': 'ch',
+  'austria': 'at',
+
+  // Southern Europe
+  'spain': 'es',
+  'portugal': 'pt',
+  'italy': 'it',
+  'greece': 'gr',
+
+  // British Isles
+  'united kingdom': 'gb',
+  'uk': 'gb',
+  'great britain': 'gb',
+  'england': 'gb',
+  'scotland': 'gb',
+  'wales': 'gb',
+  'ireland': 'ie',
+
+  // Eastern Europe
+  'poland': 'pl',
+  'czech republic': 'cz',
+  'czechia': 'cz',
+  'slovakia': 'sk',
+  'hungary': 'hu',
+  'romania': 'ro',
+  'bulgaria': 'bg',
+
+  // Americas
+  'united states': 'us',
+  'usa': 'us',
+  'us': 'us',
+  'america': 'us',
+  'canada': 'ca',
+  'mexico': 'mx',
+  'brazil': 'br',
+  'argentina': 'ar',
+
+  // Asia
+  'china': 'cn',
+  'japan': 'jp',
+  'south korea': 'kr',
+  'india': 'in',
+  'thailand': 'th',
+  'vietnam': 'vn',
+  'singapore': 'sg',
+
+  // Oceania
+  'australia': 'au',
+  'new zealand': 'nz'
+};
+
+/**
+ * Execute geocode tool during planning and return coordinates
+ * Uses qualification parameters (country, proximity) to resolve locations
+ */
+async function executeGeocodeTool(args: {
+  placeName: string;
+  country?: string;
+  proximity?: { lat: number; lng: number };
+  zoom?: number;
+}): Promise<string> {
+  const { placeName, country, proximity } = args;
+
+  console.log('[OllamaAgentService] Geocoding:', placeName, 'with params:', { country, proximity });
+
+  try {
+    // Strategy 1: Use structured geocoding if we have country (most accurate)
+    if (country) {
+      console.log('[OllamaAgentService] Using structured geocoding for', placeName, 'in', country);
+
+      const result = await geocodingService.geocodeStructured({
+        city: placeName,
+        country: country
+      });
+
+      if (result) {
+        const coords = {
+          placeName: result.placeName,
+          lat: parseFloat(result.lat),
+          lng: parseFloat(result.lng)
+        };
+        console.log('[OllamaAgentService] Structured geocoding resolved to', coords);
+        return JSON.stringify(coords);
+      } else {
+        console.warn('[OllamaAgentService] Structured geocoding failed - falling back to prefix search');
+      }
+    }
+
+    // Strategy 2: Fallback to prefix search with country codes
+    let countryCodes: string[] | undefined;
+    if (country) {
+      const countryLower = country.toLowerCase().trim();
+      const code = COUNTRY_CODE_MAP[countryLower];
+
+      if (code) {
+        countryCodes = [code];
+        console.log('[OllamaAgentService] Using prefix search with country code:', code);
+      }
+    }
+
+    const results = await geocodingService.searchByPrefix(
+      placeName,
+      proximity ? { lat: proximity.lat, lng: proximity.lng } : undefined,
+      countryCodes
+    );
+
+    if (results.length === 0) {
+      console.warn('[OllamaAgentService] No results found for:', placeName);
+      return JSON.stringify({ error: 'Location not found' });
+    }
+
+    // Return top result
+    const selected = results[0];
+    const coords = {
+      placeName: selected.name,
+      lat: selected.lat,
+      lng: selected.lng
+    };
+    console.log('[OllamaAgentService] Prefix search resolved to', coords);
+    return JSON.stringify(coords);
+  } catch (error) {
+    console.error('[OllamaAgentService] Geocoding error:', error);
+    return JSON.stringify({ error: 'Geocoding failed' });
+  }
+}
+
+/**
+ * Execute a tool call during planning and return result as string for LLM
+ */
+async function executeToolForPlanning(
+  toolCall: { name: string; arguments: Record<string, any> }
+): Promise<string> {
+  console.log('[OllamaAgentService] Executing tool during planning:', toolCall.name);
+
+  switch (toolCall.name) {
+    case 'geocode':
+      return await executeGeocodeTool(toolCall.arguments as any);
+
+    case 'insertText':
+    case 'insertMap':
+    case 'replaceText':
+    case 'setTransportation':
+    case 'createGeoMark':
+      // These are action tools, not information tools
+      // Return "OK" - they will be executed later by ToolExecutor
+      console.log('[OllamaAgentService] Action tool queued for execution:', toolCall.name);
+      return JSON.stringify({ status: 'queued', tool: toolCall.name });
+
+    default:
+      console.warn('[OllamaAgentService] Unknown tool:', toolCall.name);
+      return JSON.stringify({ error: 'Unknown tool' });
+  }
+}
+
+/**
+ * Extract action tools from conversation messages
+ * Action tools are the ones we execute in the document (insertText, insertMap, etc.)
+ * Information tools (geocode) were executed during planning and are not included
+ */
+function extractActionTools(messages: OllamaMessage[]): ToolCall[] {
+  const actionTools: ToolCall[] = [];
+
+  console.log('[OllamaAgentService] Extracting action tools from', messages.length, 'messages');
+
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls) {
+      for (const call of message.tool_calls) {
+        // Only include action tools, not information tools
+        if (call.function.name !== 'geocode') {
+          const tool: ToolCall = {
+            name: call.function.name as any,
+            parameters: call.function.arguments,
+            status: 'pending'
+          };
+
+          // Validate
+          if (validateToolCall(tool)) {
+            actionTools.push(tool);
+            console.log('[OllamaAgentService] Extracted action tool:', tool.name);
+          } else {
+            console.warn('[OllamaAgentService] Invalid action tool, skipping:', tool);
+          }
+        }
+      }
+    }
+  }
+
+  console.log('[OllamaAgentService] Extracted', actionTools.length, 'action tools');
+  return actionTools;
+}
+
+/**
  * Generate execution plan based on clarified user intent
+ * Implements proper agent loop pattern following Ollama SDK best practices
  * (Phase 2: After intent clarification is complete)
  */
 export async function generatePlan(
@@ -50,80 +259,82 @@ export async function generatePlan(
   console.log('[OllamaAgentService] Generating plan from clarified intent');
 
   try {
-    // Build plan generation prompt (simplified - intent is already clear)
+    // Build initial prompt
     const prompt = buildPlanPrompt(intent, detectedLocations);
 
-    // Create messages
+    // Initialize messages for agent loop
     const messages: OllamaMessage[] = [
-      {
-        role: 'user',
-        content: prompt
-      }
+      { role: 'user', content: prompt }
     ];
 
-    // Get tool definitions for Ollama function calling
-    const toolDefinitions = getToolDefinitions();
+    // Get tool definitions
+    const tools = getToolDefinitions();
 
-    // Call Ollama with native tool calling
-    const response = await callOllama(messages, toolDefinitions);
+    // Agent loop - iterate until LLM has no more tool calls
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
 
-    // Parse tool calls from response
-    const tools = parseToolCalls(response);
+    while (iteration < maxIterations) {
+      iteration++;
+      console.log(`[OllamaAgentService] Agent loop iteration ${iteration}`);
 
-    // Execute geocode tools during planning and resolve coordinates
-    const geocodeResults = new Map<string, { lat: number; lng: number }>();
+      // Call LLM with current conversation history and tools
+      const response = await callOllama(messages, tools);
 
-    for (let i = 0; i < tools.length; i++) {
-      const tool = tools[i];
+      // Add LLM response to conversation
+      messages.push(response.message);
 
-      if (tool.name === 'geocode') {
-        // Execute geocode tool during planning
-        const result = await executeGeocodeToolForPlanning(tool.parameters);
+      // Check for tool calls
+      const toolCalls = response.message.tool_calls ?? [];
 
-        if (result) {
-          // Store result for later createGeoMark tools
-          geocodeResults.set(tool.parameters.placeName, {
-            lat: result.lat,
-            lng: result.lng
-          });
+      if (toolCalls.length === 0) {
+        console.log('[OllamaAgentService] No more tool calls - agent loop complete');
+        break;
+      }
 
-          console.log('[OllamaAgentService] Geocoded', tool.parameters.placeName, '→', result);
-        } else {
-          console.warn('[OllamaAgentService] Failed to geocode:', tool.parameters.placeName);
-        }
+      console.log(`[OllamaAgentService] LLM called ${toolCalls.length} tool(s)`);
 
-        // Remove geocode tool from final plan (it's only for planning)
-        tools.splice(i, 1);
-        i--;
-      } else if (tool.name === 'createGeoMark') {
-        // Check if we have resolved coordinates for this location
-        const placeName = tool.parameters.placeName;
-        const coords = geocodeResults.get(placeName);
+      // Execute each tool call and add results to conversation
+      for (const call of toolCalls) {
+        console.log(`[OllamaAgentService] Executing tool: ${call.function.name}`);
 
-        if (coords) {
-          // Update createGeoMark with resolved coordinates
-          tool.parameters.lat = coords.lat;
-          tool.parameters.lng = coords.lng;
-          console.log('[OllamaAgentService] Updated createGeoMark for', placeName, 'with coords:', coords);
-        } else {
-          console.warn('[OllamaAgentService] No geocode result for createGeoMark:', placeName);
-        }
+        const result = await executeToolForPlanning({
+          name: call.function.name,
+          arguments: call.function.arguments
+        });
+
+        console.log(`[OllamaAgentService] Tool result:`, result);
+
+        // Add tool result to messages
+        messages.push({
+          role: 'tool',
+          tool_name: call.function.name,
+          content: result
+        });
       }
     }
 
-    // Use intent reasoning as plan reasoning
-    const reasoning = intent.reasoning;
+    if (iteration >= maxIterations) {
+      console.warn('[OllamaAgentService] Agent loop max iterations reached');
+    }
 
-    // Build agent plan
+    // Extract action tools from conversation history
+    // Action tools (insertText, insertMap, etc.) will be executed by ToolExecutor
+    // Information tools (geocode) were executed during planning and are not included
+    const actionTools = extractActionTools(messages);
+
+    // Build final plan
     const plan: AgentPlan = {
       status: 'ready',
-      reasoning,
-      tools,
+      reasoning: intent.reasoning,
+      tools: actionTools,
       executionResults: []
     };
 
     console.log('[OllamaAgentService] Plan generation complete:', plan);
+    console.log('[OllamaAgentService] Action tools to execute:', actionTools.length);
     return plan;
+
   } catch (error) {
     console.error('[OllamaAgentService] Plan generation failed:', error);
     return null;
@@ -132,7 +343,7 @@ export async function generatePlan(
 
 /**
  * Build the plan generation prompt for Ollama
- * (Simplified - intent has already been clarified in Phase 1)
+ * Updated to guide LLM through agent loop pattern
  */
 function buildPlanPrompt(
   intent: ClarifiedIntent,
@@ -140,7 +351,7 @@ function buildPlanPrompt(
 ): string {
   const locationNames = locations.map(loc => loc.locationName).join(', ');
 
-  return `Based on the user's clarified intent, generate an execution plan using available tools.
+  return `You are executing a plan to fulfill the user's intent. This is a MULTI-TURN conversation where you call tools, receive results, and continue until the task is COMPLETE.
 
 USER INTENT: ${intent.intent}
 
@@ -150,85 +361,69 @@ AVAILABLE TOOLS:
 1. replaceText(targetText, replacementText) - Replace existing text in the document
 2. insertText(html) - Insert HTML with embedded geo-marks: <span class="geo-mark" data-place-name="Location" data-lat="12.34" data-lng="56.78">Location</span>
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
-4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (call this FIRST to get lat/lng)
+4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (information gathering only)
 5. setTransportation(toLocation, fromLocation, mode) - Set transportation between locations (mode: cycling/driving/walking/flying)
 
-WORKFLOW FOR LOCATIONS (REQUIRED):
-1. If user mentions a location, FIRST call geocode with qualification parameters to get coordinates
-2. Use document context to provide hints: country, proximity to other locations, etc.
-3. Then ALWAYS call insertText with HTML containing geo-mark spans with the resolved coordinates
+CRITICAL WORKFLOW FOR LOCATIONS:
+If the user wants to insert text with a location, you MUST complete ALL these steps:
 
-CRITICAL: You MUST generate BOTH geocode AND insertText tools for any location-based input!
-
-QUALIFICATION PARAMETERS:
-- country: Use when you know the country from context (e.g., document mentions "Denmark")
-- proximity: Use when you have nearby locations to bias results (e.g., document already has "Paris")
-- zoom: Higher values = stronger proximity bias (default: 10)
+Step 1: Call geocode to get coordinates
+Step 2: Receive geocode result (you will get coordinates back)
+Step 3: Call insertText with the FULL user sentence as HTML, using the coordinates from Step 2
+Step 4: Task is COMPLETE only after insertText is called!
 
 IMPORTANT RULES:
-- Geocode geographic locations: cities, countries, regions
-- Geocode physical landmarks with specific locations: The Little Mermaid statue, Eiffel Tower, Statue of Liberty, etc.
-- Geocode named attractions with fixed locations: museums, monuments, parks, buildings
-- Do NOT geocode abstract events: concerts, shows, festivals (unless they mention a venue)
-- Do NOT geocode activities without a specific place: "shopping", "dining", "sightseeing"
-- ALWAYS provide qualification parameters (country, proximity) when you have context hints
+- The geocode tool only gathers information - it does NOT insert anything into the document
+- You MUST call insertText after geocoding to actually insert the text
+- If you've called geocode but not insertText, the task is INCOMPLETE
+- insertText must contain the FULL user sentence, not just the location name!
+- WRONG: "<span class='geo-mark' ...>Copenhagen</span>"
+- CORRECT: "I want to visit <span class='geo-mark' ...>Copenhagen</span>"
+- Do NOT guess coordinates! Always use the exact coordinates returned by geocode.
 
-Examples (ALWAYS generate BOTH tools for locations):
-- "I want to visit Copenhagen" → MUST generate: geocode tool + insertText tool with HTML geo-mark
-- "I want to see The Little Mermaid" → MUST generate: geocode tool + insertText tool with HTML geo-mark
-- "I want to visit the Louvre Museum" → MUST generate: geocode tool + insertText tool with HTML geo-mark
-- "I want to go shopping" → insertText only (no specific location, so no geocode needed)
-- "I want to attend a concert" → insertText only (no venue specified, so no geocode needed)
+EXAMPLE CONVERSATION FLOWS:
 
-You must respond with valid JSON in this exact format:
-{
-  "tools": [
-    {
-      "name": "toolName",
-      "parameters": { /* tool parameters */ }
-    }
-  ]
-}
+Example 1: "I want to visit Copenhagen" (location-based)
+Turn 1 - YOU: Call geocode(placeName: "Copenhagen", country: "Denmark")
+Turn 2 - SYSTEM: Returns {"placeName": "København", "lat": 55.6867, "lng": 12.5701}
+Turn 3 - YOU: Call insertText with html: "I want to visit <span class='geo-mark' data-place-name='København' data-lat='55.6867' data-lng='12.5701'>Copenhagen</span>"
+STATUS: TASK COMPLETE ✓ (both geocode AND insertText called)
 
-IMPORTANT: Embed geo-marks DIRECTLY in the HTML - ONE insertText call with all locations marked.
+Example 2: "I also want to visit Stockholm" (location-based)
+Turn 1 - YOU: Call geocode(placeName: "Stockholm", country: "Sweden")
+Turn 2 - SYSTEM: Returns {"placeName": "Stockholm", "lat": 59.33, "lng": 18.06}
+Turn 3 - YOU: Call insertText with html: "I also want to visit <span class='geo-mark' data-place-name='Stockholm' data-lat='59.33' data-lng='18.06'>Stockholm</span>"
+STATUS: TASK COMPLETE ✓
+
+WRONG Example (INCOMPLETE):
+Turn 1 - YOU: Call geocode(placeName: "Stockholm", country: "Sweden")
+Turn 2 - SYSTEM: Returns coordinates
+Turn 3 - YOU: [stops without calling insertText]
+STATUS: TASK INCOMPLETE ✗ (geocode was called but insertText was NOT - the text was never inserted!)
+
+Example 3: "I want to go shopping" (no location)
+Turn 1 - YOU: Call insertText with html: "I want to go shopping"
+STATUS: TASK COMPLETE ✓ (no geocoding needed)
+
+Example 4: "Insert map"
+Turn 1 - YOU: Call insertMap()
+STATUS: TASK COMPLETE ✓
+
+QUALIFICATION PARAMETERS for geocode:
+- country: Use when you know the country from context
+- proximity: Use when you have nearby locations to bias results
+- zoom: Higher values = stronger proximity bias (default: 10)
+
+WHAT TO GEOCODE:
+✓ Geocode: cities, countries, regions, landmarks, museums, monuments, parks
+✗ Do NOT geocode: abstract events, activities without specific places
 
 HTML GEO-MARK FORMAT:
 <span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
 
-Examples (NOTICE: TWO tools are generated for each location!):
-- "I want to visit Copenhagen" (document mentions Denmark):
-  CORRECT RESPONSE - TWO TOOLS:
-  {"tools": [
-    {"name": "geocode", "parameters": {"placeName": "Copenhagen", "country": "Denmark"}},
-    {"name": "insertText", "parameters": {"html": "I want to visit <span class=\"geo-mark\" data-place-name=\"Copenhagen\" data-lat=\"55.6867\" data-lng=\"12.5701\">Copenhagen</span>"}}
-  ]}
-
-  WRONG RESPONSE - Only geocode (MISSING insertText!):
-  {"tools": [{"name": "geocode", "parameters": {"placeName": "Copenhagen", "country": "Denmark"}}]}
-
-- "I want to drive from Copenhagen to Stockholm" (European context):
-  {"tools": [
-    {"name": "geocode", "parameters": {"placeName": "Copenhagen", "country": "Denmark"}},
-    {"name": "geocode", "parameters": {"placeName": "Stockholm", "country": "Sweden"}},
-    {"name": "insertText", "parameters": {"html": "I want to drive from <span class=\"geo-mark\" data-place-name=\"Copenhagen\" data-lat=\"55.6867\" data-lng=\"12.5701\">Copenhagen</span> to <span class=\"geo-mark\" data-place-name=\"Stockholm\" data-lat=\"59.3333\" data-lng=\"18.0271\">Stockholm</span>"}},
-    {"name": "setTransportation", "parameters": {"fromLocation": "Copenhagen", "toLocation": "Stockholm", "mode": "driving"}}
-  ]}
-
-- "then to Paris" (document has Berlin at 52.52, 13.40):
-  {"tools": [
-    {"name": "geocode", "parameters": {"placeName": "Paris", "country": "France", "proximity": {"lat": 52.52, "lng": 13.40}}},
-    {"name": "insertText", "parameters": {"html": "then to <span class=\"geo-mark\" data-place-name=\"Paris\" data-lat=\"48.8566\" data-lng=\"2.3522\">Paris</span>"}}
-  ]}
-
-- "I want to go shopping" (no specific location):
-  {"tools": [{"name": "insertText", "parameters": {"html": "I want to go shopping"}}]}
-
-- Execute command "insert map": {"tools": [{"name": "insertMap", "parameters": {}}]}
-- Replace text: {"tools": [{"name": "replaceText", "parameters": {"targetText": "old", "replacementText": "new"}}]}
-
 NOTE: Do NOT include data-geo-id or data-color-index - these will be generated automatically!
 
-Select appropriate tools and parameters to fulfill the user's intent.`;
+Now select the appropriate tool(s) to fulfill the user's intent. Remember: call geocode first for locations, then wait for the result before calling insertText!`;
 }
 
 /**
@@ -360,150 +555,5 @@ function parseToolCalls(response: OllamaResponse): ToolCall[] {
     console.error('[OllamaAgentService] Failed to parse JSON response:', error);
     console.error('[OllamaAgentService] Raw content:', content);
     return [];
-  }
-}
-
-/**
- * Map country names to ISO 3166-1 alpha-2 codes for Nominatim filtering
- */
-const COUNTRY_CODE_MAP: { [key: string]: string } = {
-  // Nordic countries
-  'denmark': 'dk',
-  'sweden': 'se',
-  'norway': 'no',
-  'finland': 'fi',
-  'iceland': 'is',
-
-  // Western Europe
-  'france': 'fr',
-  'germany': 'de',
-  'netherlands': 'nl',
-  'belgium': 'be',
-  'luxembourg': 'lu',
-  'switzerland': 'ch',
-  'austria': 'at',
-
-  // Southern Europe
-  'spain': 'es',
-  'portugal': 'pt',
-  'italy': 'it',
-  'greece': 'gr',
-
-  // British Isles
-  'united kingdom': 'gb',
-  'uk': 'gb',
-  'great britain': 'gb',
-  'england': 'gb',
-  'scotland': 'gb',
-  'wales': 'gb',
-  'ireland': 'ie',
-
-  // Eastern Europe
-  'poland': 'pl',
-  'czech republic': 'cz',
-  'czechia': 'cz',
-  'slovakia': 'sk',
-  'hungary': 'hu',
-  'romania': 'ro',
-  'bulgaria': 'bg',
-
-  // Americas
-  'united states': 'us',
-  'usa': 'us',
-  'us': 'us',
-  'america': 'us',
-  'canada': 'ca',
-  'mexico': 'mx',
-  'brazil': 'br',
-  'argentina': 'ar',
-
-  // Asia
-  'china': 'cn',
-  'japan': 'jp',
-  'south korea': 'kr',
-  'india': 'in',
-  'thailand': 'th',
-  'vietnam': 'vn',
-  'singapore': 'sg',
-
-  // Oceania
-  'australia': 'au',
-  'new zealand': 'nz'
-};
-
-/**
- * Execute geocode tool during plan generation
- * Uses qualification parameters (country, proximity) to resolve locations upfront
- * Prefers structured geocoding when country is provided for better accuracy
- */
-async function executeGeocodeToolForPlanning(
-  params: {
-    placeName: string;
-    country?: string;
-    proximity?: { lat: number; lng: number };
-    zoom?: number;
-  }
-): Promise<{ placeName: string; lat: number; lng: number } | null> {
-  const { placeName, country, proximity, zoom } = params;
-
-  console.log('[OllamaAgentService] Geocoding during planning:', placeName, 'with params:', { country, proximity });
-
-  try {
-    // Strategy 1: Use structured geocoding if we have country (most accurate)
-    if (country) {
-      console.log('[OllamaAgentService] Using structured geocoding for', placeName, 'in', country);
-
-      const result = await geocodingService.geocodeStructured({
-        city: placeName,
-        country: country
-      });
-
-      if (result) {
-        console.log('[OllamaAgentService] Structured geocoding resolved', placeName, 'to', result.placeName, `(${result.lat}, ${result.lng})`);
-        return {
-          placeName: result.placeName,
-          lat: parseFloat(result.lat),
-          lng: parseFloat(result.lng)
-        };
-      } else {
-        console.warn('[OllamaAgentService] Structured geocoding failed for', placeName, '- falling back to prefix search');
-      }
-    }
-
-    // Strategy 2: Fallback to prefix search with country codes
-    let countryCodes: string[] | undefined;
-    if (country) {
-      const countryLower = country.toLowerCase().trim();
-      const code = COUNTRY_CODE_MAP[countryLower];
-
-      if (code) {
-        countryCodes = [code];
-        console.log('[OllamaAgentService] Using prefix search with country code:', code);
-      }
-    }
-
-    let results = await geocodingService.searchByPrefix(
-      placeName,
-      proximity ? { lat: proximity.lat, lng: proximity.lng } : undefined,
-      countryCodes
-    );
-
-    if (results.length === 0) {
-      console.warn('[OllamaAgentService] No results found for:', placeName);
-      return null;
-    }
-
-    // Return top result
-    const selected = results[0];
-    console.log('[OllamaAgentService] Prefix search resolved', placeName, 'to', selected.name, `(${selected.lat}, ${selected.lng})`);
-
-    return {
-      placeName: selected.name,
-      lat: selected.lat,
-      lng: selected.lng
-    };
-  } catch (error) {
-    console.error('[OllamaAgentService] Geocoding error:', error);
-    return null;
   }
 }
