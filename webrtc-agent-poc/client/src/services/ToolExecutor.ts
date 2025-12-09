@@ -668,9 +668,12 @@ async function executeOpenFullscreenMap(
     const zoom = params.zoom ?? 10;
     const action = params.action ?? 'open';
 
-    // Check if fullscreen map is already open
+    // Check if fullscreen map is already open by checking the container visibility
     const fullscreenMapView = (window as any).fullscreenMapView;
-    const isMapOpen = fullscreenMapView && fullscreenMapView.map && fullscreenMapView.container?.style.display !== 'none';
+    const isMapOpen = fullscreenMapView &&
+                      fullscreenMapView.container &&
+                      fullscreenMapView.map &&
+                      fullscreenMapView.container.offsetParent !== null; // offsetParent is null when element is hidden
 
     // Get the global showFullscreenMap function
     const showFullscreenMap = (window as any).showFullscreenMap;
@@ -683,7 +686,7 @@ async function executeOpenFullscreenMap(
       console.log('[ToolExecutor:openFullscreenMap] Opening fullscreen map');
       showFullscreenMap(null);
     } else {
-      console.log('[ToolExecutor:openFullscreenMap] Fullscreen map already open, focusing without reopening');
+      console.log('[ToolExecutor:openFullscreenMap] Fullscreen map already open, skipping reopen and just animating');
     }
 
     // If focusing on a location, geocode and animate to it
