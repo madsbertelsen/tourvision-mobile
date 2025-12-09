@@ -87,7 +87,6 @@ const insertMapTool: ToolDefinition = {
     description: 'Insert a map block that automatically discovers and displays geo-marks from the surrounding context (current section/heading). The map will parse all geo-marked locations in the same section.',
     parameters: {
       type: 'object',
-      required: [],
       properties: {
         height: {
           type: 'number',
@@ -109,7 +108,6 @@ const openFullscreenMapTool: ToolDefinition = {
     description: 'Open the fullscreen map view and optionally pan/zoom to a specific location. Use when user asks to "open the map", "show me the map", "zoom in on [location]", etc.',
     parameters: {
       type: 'object',
-      required: [],
       properties: {
         focusLocation: {
           type: 'string',
@@ -272,7 +270,7 @@ export function validateToolCall(toolCall: ToolCall): boolean {
     return false;
   }
 
-  const required = schema.function.parameters.required;
+  const required = schema.function.parameters.required || [];
   const params = toolCall.parameters;
 
   // Check all required parameters are present
