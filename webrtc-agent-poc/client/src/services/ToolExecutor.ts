@@ -75,6 +75,16 @@ async function executeTool(
     case 'setTransportation':
       return executeSetTransportation(tool.parameters, context);
 
+    case 'openFullscreenMap':
+      return await executeOpenFullscreenMap(
+        tool.parameters as {
+          focusLocation?: string;
+          zoom?: number;
+          action?: 'open' | 'focus';
+        },
+        context
+      );
+
     default:
       return {
         toolName: tool.name,
@@ -638,4 +648,83 @@ function applyGeoMarks(
   });
 
   return tr;
+}
+
+/**
+ * Tool 7: openFullscreenMap
+ * Open fullscreen map and optionally pan/zoom to a location
+ */
+async function executeOpenFullscreenMap(
+  params: {
+    focusLocation?: string;
+    zoom?: number;
+    action?: 'open' | 'focus';
+  },
+  context: ExecutionContext
+): Promise<ExecutionResult> {
+  console.log('[ToolExecutor:openFullscreenMap] Opening fullscreen map', params);
+
+  try {
+    const zoom = params.zoom ?? 10;
+    const action = params.action ?? 'open';
+
+    // Get the global showFullscreenMap function
+    const showFullscreenMap = (window as any).showFullscreenMap;
+    if (!showFullscreenMap) {
+      throw new Error('showFullscreenMap function not available');
+    }
+
+    // If focusing on a location, we need coordinates
+    if (params.focusLocation) {
+      // Find the location in detected locations (should have been geocoded already)
+      const location = context.detectedLocations.find(
+        loc => loc.locationName.toLowerCase() === params.focusLocation!.toLowerCase()
+      );
+
+      if (!location || !location.lat || !location.lng) {
+        throw new Error(`Location "${params.focusLocation}" not found or not geocoded. Call geocode first.`);
+      }
+
+      // Calculate bounds for the focus location with zoom
+      const { lat, lng } = location;
+
+      // Approximate: 1 zoom level = 2x scale
+      // Zoom 10 ≈ ±0.5 degrees, Zoom 12 ≈ ±0.125 degrees, etc.
+      const delta = 0.5 / Math.pow(2, zoom - 10);
+
+      const bounds = {
+        north: lat + delta,
+        south: lat - delta,
+        east: lng + delta,
+        west: lng - delta
+      };
+
+      console.log(`[ToolExecutor:openFullscreenMap] Calculated bounds for ${params.focusLocation}:`, bounds);
+
+      // Open fullscreen map with these bounds
+      showFullscreenMap(bounds);
+
+      return {
+        toolName: 'openFullscreenMap',
+        success: true,
+        message: `Opened fullscreen map focused on ${location.locationName} (zoom: ${zoom})`
+      };
+    } else {
+      // Open map without specific focus
+      showFullscreenMap(null);
+
+      return {
+        toolName: 'openFullscreenMap',
+        success: true,
+        message: 'Opened fullscreen map'
+      };
+    }
+  } catch (error: any) {
+    console.error('[ToolExecutor:openFullscreenMap] Error:', error);
+    return {
+      toolName: 'openFullscreenMap',
+      success: false,
+      error: error.message || 'Failed to open fullscreen map'
+    };
+  }
 }

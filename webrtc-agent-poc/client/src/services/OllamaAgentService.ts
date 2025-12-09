@@ -199,6 +199,7 @@ async function executeToolForPlanning(
     case 'replaceText':
     case 'setTransportation':
     case 'createGeoMark':
+    case 'openFullscreenMap':
       // These are action tools, not information tools
       // Return success - they will be executed later by ToolExecutor
       console.log('[OllamaAgentService] Action tool queued for execution:', toolCall.name);
@@ -276,6 +277,9 @@ export async function generatePlan(
     // Build initial prompt
     const prompt = buildPlanPrompt(intent, detectedLocations);
 
+    console.log('[OllamaAgentService] Plan generation prompt:');
+    console.log(prompt);
+
     // Initialize messages for agent loop
     const messages: OllamaMessage[] = [
       { role: 'user', content: prompt }
@@ -283,6 +287,7 @@ export async function generatePlan(
 
     // Get tool definitions
     const tools = getToolDefinitions();
+    console.log('[OllamaAgentService] Tool definitions:', tools.map(t => t.function.name));
 
     // Agent loop - iterate until LLM has no more tool calls
     let maxIterations = 10; // Prevent infinite loops
@@ -294,6 +299,11 @@ export async function generatePlan(
 
       // Call LLM with current conversation history and tools
       const response = await callOllama(messages, tools);
+
+      console.log('[OllamaAgentService] LLM response:', {
+        content: response.message.content,
+        tool_calls: response.message.tool_calls?.length ?? 0
+      });
 
       // Add LLM response to conversation
       messages.push(response.message);
@@ -369,6 +379,18 @@ function buildPlanPrompt(
   let intentInstruction = intent.intent;
   if (intent.intent.startsWith('Execute command: insert map')) {
     intentInstruction = 'Call insertMap() to insert a map block';
+  } else if (intent.intent.startsWith('Execute command: open map') ||
+             intent.intent.startsWith('Execute command: open fullscreen map') ||
+             intent.intent.toLowerCase().includes('show me the map') ||
+             intent.intent.toLowerCase().includes('zoom in on')) {
+    // Extract location if present
+    const locationMatch = intent.intent.match(/(?:on|to|at|around|near)\s+([A-Z][a-zA-Z\s]+)/);
+    if (locationMatch) {
+      const location = locationMatch[1].trim();
+      intentInstruction = `Call geocode("${location}") first, then call openFullscreenMap(focusLocation: "${location}", zoom: 12)`;
+    } else {
+      intentInstruction = 'Call openFullscreenMap() to open the fullscreen map view';
+    }
   } else if (intent.intent.startsWith('Execute command:')) {
     // Extract the command (e.g., "Execute command: insert map" -> "insert map")
     const command = intent.intent.replace('Execute command:', '').trim();
@@ -387,6 +409,7 @@ AVAILABLE TOOLS:
    - For travel, add transport to DESTINATION: data-transport-from="Origin" data-transport-profile="driving|cycling|walking|flying"
 3. insertMap() - Insert a map that auto-discovers geo-marks from surrounding context
 4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (information gathering only)
+5. openFullscreenMap(focusLocation?, zoom?, action?) - Open fullscreen map and optionally pan/zoom to a location
 
 CRITICAL WORKFLOW FOR LOCATIONS:
 If the user wants to insert text with locations, you MUST:
@@ -441,6 +464,16 @@ STATUS: TASK COMPLETE ✓ (no geocoding needed)
 
 Example 4: "Insert map"
 Turn 1 - YOU: Call insertMap()
+STATUS: TASK COMPLETE ✓
+
+Example 5: "Open the map and zoom in on Jönköping"
+Turn 1 - YOU: Call geocode(placeName: "Jönköping", country: "Sweden")
+Turn 2 - SYSTEM: Returns {"placeName": "Jönköping", "lat": 57.78, "lng": 14.16}
+Turn 3 - YOU: Call openFullscreenMap(focusLocation: "Jönköping", zoom: 12)
+STATUS: TASK COMPLETE ✓
+
+Example 6: "Show me the map"
+Turn 1 - YOU: Call openFullscreenMap()
 STATUS: TASK COMPLETE ✓
 
 QUALIFICATION PARAMETERS for geocode:

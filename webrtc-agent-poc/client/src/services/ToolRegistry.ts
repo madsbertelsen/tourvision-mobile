@@ -95,7 +95,38 @@ const insertMapTool: ToolDefinition = {
 };
 
 /**
- * Tool 4: geocode
+ * Tool 4: openFullscreenMap
+ * Purpose: Open fullscreen map and optionally pan/zoom to a location
+ */
+const openFullscreenMapTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'openFullscreenMap',
+    description: 'Open the fullscreen map view and optionally pan/zoom to a specific location. Use when user asks to "open the map", "show me the map", "zoom in on [location]", etc.',
+    parameters: {
+      type: 'object',
+      required: [],
+      properties: {
+        focusLocation: {
+          type: 'string',
+          description: 'Optional location name to center the map on (e.g., "Jönköping", "Stockholm", "Copenhagen"). If provided, you MUST call geocode first to get coordinates.'
+        },
+        zoom: {
+          type: 'number',
+          description: 'Optional zoom level (1-20). Default: 10. Higher = more zoomed in. City-level: 10-12, Street-level: 15-18.'
+        },
+        action: {
+          type: 'string',
+          enum: ['open', 'focus'],
+          description: 'Action to perform. "open" = open fullscreen map (default). "focus" = pan/zoom on already-open map.'
+        }
+      }
+    }
+  }
+};
+
+/**
+ * Tool 5: geocode
  * Purpose: Geocode a location name to get coordinates (used during plan generation)
  */
 const geocodeTool: ToolDefinition = {
@@ -207,6 +238,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   replaceTextTool,
   insertTextTool,
   insertMapTool,
+  openFullscreenMapTool,
   geocodeTool,
   createGeoMarkTool,
   setTransportationTool
@@ -290,6 +322,14 @@ export function describeToolCall(toolCall: ToolCall): string {
 
     case 'setTransportation':
       return `Set ${toolCall.parameters.mode} from ${toolCall.parameters.fromLocation} to ${toolCall.parameters.toLocation}`;
+
+    case 'openFullscreenMap':
+      if (toolCall.parameters.focusLocation) {
+        const zoom = toolCall.parameters.zoom ? ` (zoom: ${toolCall.parameters.zoom})` : '';
+        return `Open fullscreen map focused on ${escapeHtml(toolCall.parameters.focusLocation)}${zoom}`;
+      } else {
+        return 'Open fullscreen map';
+      }
 
     default:
       return `Execute ${toolCall.name}`;

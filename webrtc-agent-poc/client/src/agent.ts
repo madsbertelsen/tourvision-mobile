@@ -16,6 +16,7 @@ import { DocumentObserverService } from './services/DocumentObserverService';
 import { getAgentDataChannelService } from './services/AgentDataChannelService';
 import { clarifyIntent } from './services/IntentClarificationService';
 import { generatePlan } from './services/OllamaAgentService';
+import { executePlan } from './services/ToolExecutor';
 import type { ClarifiedIntent, AgentCommandMessage } from './types/agent';
 
 export function initializeAgent(
@@ -136,7 +137,66 @@ export function initializeAgent(
   // Mark that agent is enabled
   (window as any).AGENT_ENABLED = true;
 
+  // Add test helper function to window for debugging
+  (window as any).testAgentCommand = async (transcript: string) => {
+    console.log('[TestAgent] Testing command:', transcript);
+
+    try {
+      // Phase 1: Intent Clarification
+      console.log('[TestAgent] Phase 1: Intent clarification...');
+      const intentResult = await clarifyIntent(transcript, '', editorView);
+
+      if (intentResult.type === 'ambiguous') {
+        console.warn('[TestAgent] Intent ambiguous:', intentResult.question);
+        return { error: 'Ambiguous intent', question: intentResult.question };
+      }
+
+      const intent = intentResult.intent;
+      console.log('[TestAgent] Intent:', intent.intent);
+      console.log('[TestAgent] Confidence:', intent.confidence);
+      console.log('[TestAgent] Reasoning:', intent.reasoning);
+
+      // Phase 2: Plan Generation
+      console.log('[TestAgent] Phase 2: Plan generation...');
+      const plan = await generatePlan(intent, []);
+
+      if (!plan) {
+        throw new Error('generatePlan returned null');
+      }
+
+      console.log('[TestAgent] Plan generated:');
+      console.log('  - Status:', plan.status);
+      console.log('  - Tools:', plan.tools.length);
+      console.log('  - Tools details:', plan.tools);
+
+      // Phase 3: Execute the plan
+      console.log('[TestAgent] Phase 3: Executing plan...');
+      const executionResults = await executePlan(
+        plan,
+        {
+          editorView,
+          schema,
+          detectedLocations: [],
+          yXmlFragment,
+          ydoc
+        }
+      );
+
+      console.log('[TestAgent] Plan executed, results:', executionResults);
+
+      return {
+        intent,
+        plan,
+        executionResults
+      };
+    } catch (error) {
+      console.error('[TestAgent] Error:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  };
+
   console.log('[Agent] ✅ Agent initialized with services');
+  console.log('[Agent] 🧪 Test function available: testAgentCommand("your command here")');
   console.log('[Agent] Waiting for 2-second pause after text changes to trigger LLM processing...');
   console.log('[Agent] Listening for analyze-transcript commands via WebRTC data channel...');
 }
