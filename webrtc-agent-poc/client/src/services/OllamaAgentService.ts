@@ -476,6 +476,17 @@ Example 6: "Show me the map"
 Turn 1 - YOU: Call openFullscreenMap()
 STATUS: TASK COMPLETE ✓
 
+Example 7: "I want to travel from Copenhagen to Stockholm" (multiple locations - insert text AND map)
+Turn 1 - YOU: Call geocode(placeName: "Copenhagen", country: "Denmark") AND geocode(placeName: "Stockholm", country: "Sweden")
+Turn 2 - SYSTEM: Returns coordinates for both locations
+Turn 3 - YOU: Call insertText with HTML: "I want to travel from <span class='geo-mark' ...>Copenhagen</span> to <span class='geo-mark' ... data-transport-from='Copenhagen' data-transport-profile='flying'>Stockholm</span>"
+Turn 4 - YOU: Call insertMap() to visualize the locations on a map
+STATUS: TASK COMPLETE ✓ (both text with geo-marks AND map inserted)
+
+BEST PRACTICE:
+- When inserting text with locations (geo-marks), ALSO call insertMap() afterward to visualize the locations
+- This provides a better user experience by showing locations on a map
+
 QUALIFICATION PARAMETERS for geocode:
 - country: Use when you know the country from context
 - proximity: Use when you have nearby locations to bias results
