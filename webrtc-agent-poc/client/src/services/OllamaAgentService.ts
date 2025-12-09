@@ -417,10 +417,17 @@ AVAILABLE TOOLS:
    - Transport: data-transport-from="Origin" data-transport-profile="driving|cycling|walking|flying"
    - Map block: <div class="prosemirror-map" data-height="400"></div> (include AFTER text with locations)
 3. insertMap() - Insert a standalone map block (only use if you forgot to include map in insertText)
-4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (information gathering only)
-5. openFullscreenMap(focusLocation?, zoom?, action?) - Open fullscreen map and optionally pan/zoom to a location
+4. geocode(placeName, country?, proximity?, zoom?) - Geocode a location to get coordinates (INFORMATION GATHERING ONLY - does NOT perform any action)
+5. openFullscreenMap(focusLocation?, zoom?, action?) - Open fullscreen map and optionally pan/zoom to a location (ACTION TOOL)
 
-CRITICAL WORKFLOW FOR LOCATIONS:
+CRITICAL: TWO-STEP WORKFLOW PATTERN
+When the user wants to focus the map on a location:
+1. FIRST: Call geocode(placeName: "Location") to get coordinates
+2. THEN: Call openFullscreenMap(focusLocation: "Location", zoom: 12) to actually open/focus the map
+
+REMEMBER: geocode alone does NOTHING visible to the user. You MUST call the action tool (openFullscreenMap or insertText) after geocoding!
+
+CRITICAL WORKFLOW FOR INSERTING LOCATION TEXT:
 If the user wants to insert text with locations, you MUST:
 
 Step 1: Call geocode for EACH location mentioned
@@ -436,14 +443,16 @@ Turn 2: After receiving coordinates, call insertText with HTML:
 STATUS: COMPLETE ✓ (insertText includes both locations AND transport config in Stockholm's geo-mark)
 
 IMPORTANT RULES:
-- The geocode tool only gathers information - it does NOT insert anything into the document
-- You MUST call insertText after geocoding to actually insert the text
-- If you've called geocode but not insertText, the task is INCOMPLETE
+- The geocode tool only gathers information - it does NOT insert anything into the document or open any maps
+- You MUST call the appropriate action tool after geocoding:
+  * For text insertion: call insertText after geocoding
+  * For map focus: call openFullscreenMap after geocoding
+- If you've called geocode but not the action tool, the task is INCOMPLETE
 - insertText must contain the FULL user sentence, not just the location name!
 - WRONG: "<span class='geo-mark' ...>Copenhagen</span>"
 - CORRECT: "I want to visit <span class='geo-mark' ...>Copenhagen</span>"
 - Do NOT guess coordinates! Always use the exact coordinates returned by geocode.
-- When insertText returns {"status": "success"}, STOP - the task is complete
+- When an action tool (insertText, openFullscreenMap, etc.) returns {"status": "success"}, STOP - the task is complete
 - For travel statements, embed transport attributes in the destination geo-mark (do NOT use separate setTransportation tool)
 - Do NOT call the same action tool twice with identical parameters
 
@@ -477,9 +486,16 @@ STATUS: TASK COMPLETE ✓
 
 Example 5: "Open the map and zoom in on Jönköping"
 Turn 1 - YOU: Call geocode(placeName: "Jönköping", country: "Sweden")
-Turn 2 - SYSTEM: Returns {"placeName": "Jönköping", "lat": 57.78, "lng": 14.16}
+Turn 2 - SYSTEM: Returns {"placeName": "Jönköping", "lat": 57.78, "lng": 14.16, "boundingbox": {...}}
 Turn 3 - YOU: Call openFullscreenMap(focusLocation: "Jönköping", zoom: 12)
-STATUS: TASK COMPLETE ✓
+Turn 4 - SYSTEM: Returns {"status": "success", "message": "openFullscreenMap will be executed. Task is now complete."}
+STATUS: TASK COMPLETE ✓ (both geocode AND openFullscreenMap called)
+
+WRONG Example 5 (INCOMPLETE):
+Turn 1 - YOU: Call geocode(placeName: "Jönköping", country: "Sweden")
+Turn 2 - SYSTEM: Returns coordinates
+Turn 3 - YOU: [stops without calling openFullscreenMap]
+STATUS: TASK INCOMPLETE ✗ (geocode was called but openFullscreenMap was NOT - the map was never opened!)
 
 Example 6: "Show me the map"
 Turn 1 - YOU: Call openFullscreenMap()
