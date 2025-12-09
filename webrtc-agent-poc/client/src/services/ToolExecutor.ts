@@ -499,12 +499,16 @@ function findTextPosition(
  *   Pass 2: Update transport-from references to use actual geo-ids
  */
 function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): string {
+  console.log('[ToolExecutor:enrichGeoMarks] === STARTING GEO-MARK ENRICHMENT ===');
+  console.log('[ToolExecutor:enrichGeoMarks] Input HTML:', html);
+
   // Parse HTML
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
 
   // Find all geo-mark spans
   const geoMarkSpans = tempDiv.querySelectorAll('span.geo-mark');
+  console.log('[ToolExecutor:enrichGeoMarks] Found', geoMarkSpans.length, 'geo-mark spans');
 
   // Pass 1: Assign geo-ids and collect mapping
   const placeNameToGeoId = new Map<string, string>();
@@ -525,11 +529,17 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
     const geoId = placeName;
     const colorIndex = detectedLocations.length + index;
 
+    console.log('[ToolExecutor:enrichGeoMarks] Pass 1 - Processing geo-mark #' + index);
+    console.log('[ToolExecutor:enrichGeoMarks]   placeName:', placeName);
+    console.log('[ToolExecutor:enrichGeoMarks]   displayText:', displayText);
+    console.log('[ToolExecutor:enrichGeoMarks]   ASSIGNING geo-id:', geoId);
+
     // Store mapping for Pass 2 - map BOTH place name AND display text to geo-id
     // This handles cases where LLM uses "Copenhagen" but geocode returned "København"
     placeNameToGeoId.set(placeName, geoId);
     if (displayText && displayText !== placeName) {
       placeNameToGeoId.set(displayText, geoId);
+      console.log('[ToolExecutor:enrichGeoMarks]   Also mapping displayText "' + displayText + '" → ' + geoId);
     }
 
     // Add to detectedLocations for reference by other tools
@@ -554,23 +564,33 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
   });
 
   // Pass 2: Update transport-from references to use actual geo-ids
-  geoMarkSpans.forEach((span) => {
+  console.log('[ToolExecutor:enrichGeoMarks] === PASS 2: Updating transport-from references ===');
+  console.log('[ToolExecutor:enrichGeoMarks] Place name to geo-id map:', Array.from(placeNameToGeoId.entries()));
+
+  geoMarkSpans.forEach((span, index) => {
     const transportFrom = span.getAttribute('data-transport-from');
 
     if (transportFrom) {
+      console.log('[ToolExecutor:enrichGeoMarks] Pass 2 - Geo-mark #' + index + ' has transport-from:', transportFrom);
+
       // If transport-from is a place name, convert it to geo-id
       const fromGeoId = placeNameToGeoId.get(transportFrom);
 
       if (fromGeoId) {
         span.setAttribute('data-transport-from', fromGeoId);
-        console.log('[ToolExecutor] Updated transport-from:', transportFrom, '→', fromGeoId);
+        console.log('[ToolExecutor:enrichGeoMarks]   Updated transport-from:', transportFrom, '→', fromGeoId);
       } else {
-        console.warn('[ToolExecutor] Could not find geo-id for transport-from:', transportFrom);
+        console.warn('[ToolExecutor:enrichGeoMarks]   Could not find geo-id for transport-from:', transportFrom);
+        console.warn('[ToolExecutor:enrichGeoMarks]   Available mappings:', Array.from(placeNameToGeoId.keys()));
       }
     }
   });
 
-  return tempDiv.innerHTML;
+  const result = tempDiv.innerHTML;
+  console.log('[ToolExecutor:enrichGeoMarks] === FINAL ENRICHED HTML ===');
+  console.log('[ToolExecutor:enrichGeoMarks]', result);
+
+  return result;
 }
 
 /**
