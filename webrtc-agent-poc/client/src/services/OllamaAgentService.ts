@@ -470,7 +470,7 @@ async function callOllama(
       model: OLLAMA_MODEL,
       messages,
       stream: false,
-      keep_alive: 0  // Don't keep model in memory to prevent KV cache contamination between requests
+      keep_alive: 60  // Keep model loaded for 60s (enough for one agent loop, prevents reload crashes)
       // Note: think: true is only supported by some models (deepseek-r1, qwen2.5, etc.)
       // ministral-3:8b does not support it
     };

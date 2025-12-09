@@ -214,7 +214,7 @@ async function callOllama(
         stream: false,
         format: 'json',
         tools,
-        keep_alive: 0  // Don't keep model in memory to prevent KV cache contamination
+        keep_alive: 60  // Keep model loaded for 60s (enough for clarification loop)
       }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Ollama request timed out')), OLLAMA_TIMEOUT)
