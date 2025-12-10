@@ -15,7 +15,7 @@ import { GeoMarkingService } from './services/GeoMarkingService';
 import { DocumentObserverService } from './services/DocumentObserverService';
 import { getAgentDataChannelService } from './services/AgentDataChannelService';
 import { clarifyIntent } from './services/IntentClarificationService';
-import { generatePlan } from './services/OllamaAgentService';
+import { parsePlanToToolCalls } from './services/PlanParser';
 import { executePlan } from './services/ToolExecutor';
 import type { ClarifiedIntent, AgentCommandMessage } from './types/agent';
 
@@ -101,18 +101,18 @@ export function initializeAgent(
           }
 
           const intent: ClarifiedIntent = intentResult.intent;
-          console.log('[Agent] Intent clarified:', intent.intent);
+          console.log('[Agent] Plan received:', intent.intent);
           console.log('[Agent] Confidence:', intent.confidence);
 
-          // Phase 2: Plan Generation (includes geocoding)
-          console.log('[Agent] Phase 2: Generating plan with geocoding...');
-          const plan = await generatePlan(intent, []);
+          // Phase 2: Parse plan and geocode locations
+          console.log('[Agent] Phase 2: Parsing plan and geocoding locations...');
+          const plan = await parsePlanToToolCalls(intent);
 
           if (!plan) {
-            throw new Error('Failed to generate plan - generatePlan returned null');
+            throw new Error('Failed to parse plan - parsePlanToToolCalls returned null');
           }
 
-          console.log('[Agent] Plan generated successfully');
+          console.log('[Agent] Plan parsed successfully');
           console.log('[Agent] Tools:', plan.tools.length);
 
           // Send plan back to user tab
@@ -153,19 +153,19 @@ export function initializeAgent(
       }
 
       const intent = intentResult.intent;
-      console.log('[TestAgent] Intent:', intent.intent);
+      console.log('[TestAgent] Plan:', intent.intent);
       console.log('[TestAgent] Confidence:', intent.confidence);
       console.log('[TestAgent] Reasoning:', intent.reasoning);
 
-      // Phase 2: Plan Generation
-      console.log('[TestAgent] Phase 2: Plan generation...');
-      const plan = await generatePlan(intent, []);
+      // Phase 2: Parse plan and geocode
+      console.log('[TestAgent] Phase 2: Parsing plan and geocoding...');
+      const plan = await parsePlanToToolCalls(intent);
 
       if (!plan) {
-        throw new Error('generatePlan returned null');
+        throw new Error('parsePlanToToolCalls returned null');
       }
 
-      console.log('[TestAgent] Plan generated:');
+      console.log('[TestAgent] Plan parsed:');
       console.log('  - Status:', plan.status);
       console.log('  - Tools:', plan.tools.length);
       console.log('  - Tools details:', plan.tools);
