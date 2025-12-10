@@ -33,10 +33,14 @@ export async function clarifyIntent(
   const hasMap = checkForMapInDocument(editorView);
   console.log('[IntentClarificationService] Document has map:', hasMap);
 
+  // Check if fullscreen map is currently open
+  const isFullscreenMapOpen = checkForFullscreenMap();
+  console.log('[IntentClarificationService] Fullscreen map open:', isFullscreenMapOpen);
+
   const messages: OllamaMessage[] = [
     {
       role: 'user',
-      content: buildIntentPrompt(transcript, documentContext, hasMap)
+      content: buildIntentPrompt(transcript, documentContext, hasMap, isFullscreenMapOpen)
     }
   ];
 
@@ -132,10 +136,22 @@ function checkForMapInDocument(editorView: EditorView): boolean {
 }
 
 /**
+ * Check if fullscreen map is currently open
+ */
+function checkForFullscreenMap(): boolean {
+  const fullscreenMapView = (window as any).fullscreenMapView;
+  return !!(fullscreenMapView &&
+           fullscreenMapView.map &&
+           typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
+           fullscreenMapView.map.isStyleLoaded());
+}
+
+/**
  * Build the initial plan generation prompt
  */
-function buildIntentPrompt(transcript: string, context: string, hasMap: boolean): string {
+function buildIntentPrompt(transcript: string, context: string, hasMap: boolean, isFullscreenMapOpen: boolean): string {
   const mapStatus = hasMap ? 'YES - A map already exists in the document' : 'NO - No map in the document yet';
+  const fullscreenMapStatus = isFullscreenMapOpen ? 'OPEN - Fullscreen map is currently displayed' : 'CLOSED - Fullscreen map is not open';
 
   return `You are analyzing voice input to understand user intent and generate an execution plan.
 
@@ -143,6 +159,7 @@ DOCUMENT CONTEXT (for reference only - already in document):
 "${context}"
 
 MAP IN DOCUMENT: ${mapStatus}
+FULLSCREEN MAP: ${fullscreenMapStatus}
 
 VOICE INPUT (what the user just said):
 "${transcript}"
@@ -172,9 +189,10 @@ Action format (each line is one action):
 1. Geocode <location> - for extracting coordinates
 2. Insert text: "<content with geo-marks>" - for adding content with location markers
 3. Set transportation from <location1> to <location2> (<mode>) - for travel routes
-4. Insert map - for adding a map visualization
-5. Open fullscreen map - for opening existing map
-6. Replace "<old>" with "<new>" - for corrections
+4. Insert map - for adding a map visualization (only if MAP IN DOCUMENT is NO)
+5. Open fullscreen map - for opening fullscreen map (only if FULLSCREEN MAP is CLOSED)
+6. Center map on <location> - for focusing existing fullscreen map on a location (only if FULLSCREEN MAP is OPEN)
+7. Replace "<old>" with "<new>" - for corrections
 
 EXAMPLES:
 
@@ -196,12 +214,22 @@ Output:
   "plan": "1. Geocode Paris\n2. Insert text: \"I want to visit Paris\" (with geo-marks)"
 }
 
-Example 3 - Map command:
+Example 3 - Map command (fullscreen map closed):
 Input: "open the map"
+FULLSCREEN MAP: CLOSED
 Output:
 {
   "userIntent": "User wants to open the fullscreen map",
   "plan": "1. Open fullscreen map"
+}
+
+Example 3b - Focus map command (fullscreen map already open):
+Input: "focus map on Copenhagen"
+FULLSCREEN MAP: OPEN
+Output:
+{
+  "userIntent": "User wants to center the fullscreen map on Copenhagen",
+  "plan": "1. Geocode Copenhagen\n2. Center map on Copenhagen"
 }
 
 Example 4 - Correction:
@@ -219,6 +247,8 @@ IMPORTANT:
 - For travel, always include both geocode + insert + set transportation
 - DO NOT include "Insert map" if MAP IN DOCUMENT is YES - a map already exists
 - Only use "Insert map" if MAP IN DOCUMENT is NO and user explicitly asks for a map
+- DO NOT include "Open fullscreen map" if FULLSCREEN MAP is OPEN - use "Center map on <location>" instead
+- Only use "Open fullscreen map" if FULLSCREEN MAP is CLOSED
 - Use getMoreContext tool if you need more information before generating the plan
 
 TOOLS AVAILABLE:
