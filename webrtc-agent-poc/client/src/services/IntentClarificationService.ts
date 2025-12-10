@@ -190,7 +190,7 @@ Action format (each line is one action):
 2. Insert text: "<content with geo-marks>" - for adding content with location markers
 3. Set transportation from <location1> to <location2> (<mode>) - for travel routes
 4. Insert map - for adding a map visualization (only if MAP IN DOCUMENT is NO)
-5. Open fullscreen map - for opening fullscreen map (only if FULLSCREEN MAP is CLOSED)
+5. Open fullscreen map focused on <location> - for opening fullscreen map and focusing on a location (only if FULLSCREEN MAP is CLOSED)
 6. Center map on <location> - for focusing existing fullscreen map on a location (only if FULLSCREEN MAP is OPEN)
 7. Replace "<old>" with "<new>" - for corrections
 
@@ -214,7 +214,7 @@ Output:
   "plan": "1. Geocode Paris\n2. Insert text: \"I want to visit Paris\" (with geo-marks)"
 }
 
-Example 3 - Map command (fullscreen map closed):
+Example 3 - Open map (fullscreen map closed, no location):
 Input: "open the map"
 FULLSCREEN MAP: CLOSED
 Output:
@@ -223,7 +223,16 @@ Output:
   "plan": "1. Open fullscreen map"
 }
 
-Example 3b - Focus map command (fullscreen map already open):
+Example 3b - Open map with focus (fullscreen map closed, with location):
+Input: "focus map on Copenhagen"
+FULLSCREEN MAP: CLOSED
+Output:
+{
+  "userIntent": "User wants to open the fullscreen map and focus on Copenhagen",
+  "plan": "1. Geocode Copenhagen\n2. Open fullscreen map focused on Copenhagen"
+}
+
+Example 3c - Focus map (fullscreen map already open):
 Input: "focus map on Copenhagen"
 FULLSCREEN MAP: OPEN
 Output:

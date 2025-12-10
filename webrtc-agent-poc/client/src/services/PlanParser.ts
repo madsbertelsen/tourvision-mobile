@@ -120,8 +120,8 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
       continue;
     }
 
-    // Parse Open fullscreen map
-    const openMapMatch = line.match(/^\d+\.\s*Open fullscreen map(?:\s+(?:focused on|zoomed to)\s+(.+?)(?:\s+\(zoom:\s*(\d+)\))?)?$/i);
+    // Parse Open fullscreen map (with optional focus location)
+    const openMapMatch = line.match(/^\d+\.\s*Open fullscreen map(?:\s+focused on\s+(.+?))?(?:\s+\(zoom:\s*(\d+)\))?$/i);
     if (openMapMatch) {
       const focusLocation = openMapMatch[1]?.trim();
       const zoom = openMapMatch[2] ? parseInt(openMapMatch[2]) : undefined;
