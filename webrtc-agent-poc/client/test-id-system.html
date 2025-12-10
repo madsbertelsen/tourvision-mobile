@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test ID-Based Location Referencing</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 20px;
+      background: #2d2d2d;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .success { color: #4ec9b0; }
+    .error { color: #f48771; }
+    .info { color: #9cdcfe; }
+  </style>
+</head>
+<body>
+  <h1>Test ID-Based Location Referencing</h1>
+
+  <button onclick="runTest1()">Test 1: Multiple Occurrences (Copenhagen → Stockholm → Copenhagen)</button>
+  <button onclick="runTest2()">Test 2: Single Location</button>
+  <button onclick="clearOutput()">Clear Output</button>
+
+  <div id="output"></div>
+
+  <script type="module">
+    import { parsePlanToToolCalls } from '/src/services/PlanParser.ts';
+
+    window.log = (message, type = 'info') => {
+      const output = document.getElementById('output');
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = message;
+      output.appendChild(div);
+      console.log(message);
+    };
+
+    window.clearOutput = () => {
+      document.getElementById('output').innerHTML = '';
+    };
+
+    window.runTest1 = async () => {
+      window.log('=== TEST 1: Multiple Occurrences ===', 'info');
+      window.log('Input: "I flew from Copenhagen to Stockholm, then back to Copenhagen"', 'info');
+      window.log('', 'info');
+
+      const intent = {
+        intent: `1. Geocode Copenhagen
+2. Geocode Stockholm
+3. Insert text: "I flew from Copenhagen to Stockholm, then back to Copenhagen" (with geo-marks)
+4. Set transportation from Copenhagen to Stockholm (flying)
+5. Set transportation from Stockholm to Copenhagen (flying)`,
+        confidence: 'high',
+        reasoning: 'Testing multiple occurrences of same location'
+      };
+
+      try {
+        window.log('Calling parsePlanToToolCalls...', 'info');
+        const plan = await parsePlanToToolCalls(intent);
+
+        if (!plan) {
+          window.log('ERROR: Plan parsing returned null', 'error');
+          return;
+        }
+
+        window.log('✓ Plan parsed successfully', 'success');
+        window.log('', 'info');
+        window.log('Generated Tools:', 'info');
+
+        plan.tools.forEach((tool, i) => {
+          window.log(`Tool ${i + 1}: ${tool.name}`, 'info');
+          if (tool.name === 'insertText') {
+            window.log(`  HTML preview: ${tool.parameters.html.substring(0, 200)}...`, 'info');
+            // Extract and show geo-mark IDs
+            const geoIdMatches = tool.parameters.html.matchAll(/data-geo-id="([^"]+)"/g);
+            for (const match of geoIdMatches) {
+              window.log(`    Found ID: ${match[1]}`, 'success');
+            }
+          } else if (tool.name === 'setTransportation') {
+            window.log(`  fromLocationId: ${tool.parameters.fromLocationId}`, 'success');
+            window.log(`  toLocationId: ${tool.parameters.toLocationId}`, 'success');
+            window.log(`  fromLocation: ${tool.parameters.fromLocation} (legacy)`, 'info');
+            window.log(`  toLocation: ${tool.parameters.toLocation} (legacy)`, 'info');
+            window.log(`  mode: ${tool.parameters.mode}`, 'info');
+          }
+          window.log('', 'info');
+        });
+
+        // Verify expectations
+        window.log('=== Verification ===', 'info');
+        const insertTextTool = plan.tools.find(t => t.name === 'insertText');
+        if (insertTextTool) {
+          const geoIds = [...insertTextTool.parameters.html.matchAll(/data-geo-id="([^"]+)"/g)].map(m => m[1]);
+          window.log(`Found ${geoIds.length} geo-mark IDs in HTML`, geoIds.length === 3 ? 'success' : 'error');
+
+          // Check if IDs are unique
+          const uniqueIds = new Set(geoIds);
+          window.log(`Unique IDs: ${uniqueIds.size}`, uniqueIds.size === 3 ? 'success' : 'error');
+
+          // Check if IDs have _occ suffix
+          const hasOccSuffix = geoIds.every(id => /_occ\d+$/.test(id));
+          window.log(`All IDs have _occ suffix: ${hasOccSuffix}`, hasOccSuffix ? 'success' : 'error');
+        }
+
+        const setTransportTools = plan.tools.filter(t => t.name === 'setTransportation');
+        window.log(`Found ${setTransportTools.length} setTransportation tools`, setTransportTools.length === 2 ? 'success' : 'error');
+
+        setTransportTools.forEach((tool, i) => {
+          const hasIdParams = !!(tool.parameters.fromLocationId && tool.parameters.toLocationId);
+          window.log(`  Tool ${i + 1} has ID params: ${hasIdParams}`, hasIdParams ? 'success' : 'error');
+        });
+
+      } catch (error) {
+        window.log(`ERROR: ${error.message}`, 'error');
+        window.log(error.stack, 'error');
+      }
+    };
+
+    window.runTest2 = async () => {
+      window.log('=== TEST 2: Single Location ===', 'info');
+      window.log('Input: "I want to visit Paris"', 'info');
+      window.log('', 'info');
+
+      const intent = {
+        intent: `1. Geocode Paris
+2. Insert text: "I want to visit Paris" (with geo-marks)`,
+        confidence: 'high',
+        reasoning: 'Testing single location'
+      };
+
+      try {
+        const plan = await parsePlanToToolCalls(intent);
+
+        if (!plan) {
+          window.log('ERROR: Plan parsing returned null', 'error');
+          return;
+        }
+
+        window.log('✓ Plan parsed successfully', 'success');
+        window.log('', 'info');
+
+        const insertTextTool = plan.tools.find(t => t.name === 'insertText');
+        if (insertTextTool) {
+          const geoIds = [...insertTextTool.parameters.html.matchAll(/data-geo-id="([^"]+)"/g)].map(m => m[1]);
+          window.log(`Generated ID: ${geoIds[0]}`, 'success');
+          window.log(`ID format valid: ${/^loc_\d+_\d+_occ\d+$/.test(geoIds[0])}`, 'success');
+        }
+
+      } catch (error) {
+        window.log(`ERROR: ${error.message}`, 'error');
+      }
+    };
+
+    window.log('Ready! Click a test button to begin.', 'info');
+  </script>
+</body>
+</html>

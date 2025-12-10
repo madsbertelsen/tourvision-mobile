@@ -139,11 +139,8 @@ function checkForMapInDocument(editorView: EditorView): boolean {
  * Check if fullscreen map is currently open
  */
 function checkForFullscreenMap(): boolean {
-  const fullscreenMapView = (window as any).fullscreenMapView;
-  return !!(fullscreenMapView &&
-           fullscreenMapView.map &&
-           typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
-           fullscreenMapView.map.isStyleLoaded());
+  // Check if the fullscreen overlay is visible (correct check used throughout codebase)
+  return document.getElementById('fullscreen-overlay')?.classList.contains('visible') ?? false;
 }
 
 /**
@@ -185,16 +182,42 @@ STEP 3 - GENERATE INTENT & PLAN (only when you have enough info):
 USER INTENT: Natural language description of what the user wants
 PLAN: Step-by-step actions to execute
 
+LOCATION REFERENCING (CRITICAL):
+- Check the DOCUMENT CONTEXT above for existing location mentions
+- If a location is already mentioned in the document context, you can reference it directly in setTransportation
+- Only use "Geocode" + "Insert text" if the location is NOT already in the document
+- Example: Document contains "I visited Stockholm" → You can use "Set transportation from Stockholm to..." directly
+
 Action format (each line is one action):
-1. Geocode <location> - for extracting coordinates
-2. Insert text: "<content with geo-marks>" - for adding content with location markers
-3. Set transportation from <location1> to <location2> (<mode>) - for travel routes
+1. Geocode <location> - for extracting coordinates (only if location NOT in document)
+2. Insert text: "<content with geo-marks>" - for adding content with location markers (only if location NOT in document)
+3. Set transportation from <location1> to <location2> (<mode>) - for travel routes (can reference existing locations in document)
 4. Insert map - for adding a map visualization (only if MAP IN DOCUMENT is NO)
-5. Open fullscreen map focused on <location> - for opening fullscreen map and focusing on a location (only if FULLSCREEN MAP is CLOSED)
-6. Center map on <location> - for focusing existing fullscreen map on a location (only if FULLSCREEN MAP is OPEN)
+5. Open fullscreen map - for opening fullscreen map (only if FULLSCREEN MAP is CLOSED)
+6. Center map on <location> - for focusing map on a location (only if FULLSCREEN MAP is OPEN)
 7. Replace "<old>" with "<new>" - for corrections
 
 EXAMPLES:
+
+Example 0a - NEW locations (locations NOT in document):
+Input: "I want to drive from Stockholm to Oslo"
+DOCUMENT CONTEXT: "" (empty - no existing locations)
+Output:
+{
+  "userIntent": "User wants to document a driving trip from Stockholm to Oslo",
+  "plan": "1. Geocode Stockholm\\n2. Geocode Oslo\\n3. Insert text: \\"I want to drive from Stockholm to Oslo\\" (with geo-marks)\\n4. Set transportation from Stockholm to Oslo (driving)"
+}
+Reasoning: Stockholm and Oslo are NOT in the document, so we need to geocode them and insert them as geo-marks before setting transportation.
+
+Example 0b - EXISTING locations (locations already in document):
+Input: "set transportation from Stockholm to Oslo to driving"
+DOCUMENT CONTEXT: "I visited Stockholm yesterday. Then I went to Oslo."
+Output:
+{
+  "userIntent": "User wants to set transportation mode between existing locations",
+  "plan": "1. Set transportation from Stockholm to Oslo (driving)"
+}
+Reasoning: Stockholm and Oslo are ALREADY in the document context, so we can reference them directly. No need to geocode or insert text again.
 
 Example 1 - Travel intent (map already exists):
 Input: "I want to drive from Copenhagen to Stockholm"
@@ -229,7 +252,7 @@ FULLSCREEN MAP: CLOSED
 Output:
 {
   "userIntent": "User wants to open the fullscreen map and focus on Copenhagen",
-  "plan": "1. Geocode Copenhagen\n2. Open fullscreen map focused on Copenhagen"
+  "plan": "1. Geocode Copenhagen\n2. Open fullscreen map\n3. Center map on Copenhagen"
 }
 
 Example 3c - Focus map (fullscreen map already open):
@@ -253,7 +276,9 @@ IMPORTANT:
 - Each plan line must be a single, clear action
 - Use simple, imperative statements
 - Include location names exactly as user said them
-- For travel, always include both geocode + insert + set transportation
+- ALWAYS check DOCUMENT CONTEXT first before deciding to geocode/insert locations
+- For travel with NEW locations: include geocode + insert + set transportation
+- For travel with EXISTING locations (in document): only include set transportation
 - DO NOT include "Insert map" if MAP IN DOCUMENT is YES - a map already exists
 - Only use "Insert map" if MAP IN DOCUMENT is NO and user explicitly asks for a map
 - DO NOT include "Open fullscreen map" if FULLSCREEN MAP is OPEN - use "Center map on <location>" instead

@@ -25,7 +25,19 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
 
   const tools: ToolCall[] = [];
   const geocodingService = new GeocodingService();
-  const geocodedLocations = new Map<string, { placeName: string; lat: number; lng: number }>();
+
+  // NEW: ID generation setup
+  const planTimestamp = Date.now();
+  let locationIdCounter = 0;
+
+  // NEW: Updated geocoded locations structure with IDs
+  const geocodedLocations = new Map<string, {
+    locationId: string;      // Unique ID for this geocoding
+    displayName: string;     // Original name from plan
+    placeName: string;       // Full name from Nominatim
+    lat: number;
+    lng: number;
+  }>();
 
   // First pass: Execute geocoding actions
   for (const line of lines) {
@@ -36,12 +48,18 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
 
       const result = await geocodingService.geocode(locationName);
       if (result) {
+        // NEW: Generate unique ID for this location
+        const locationId = `loc_${planTimestamp}_${locationIdCounter}`;
+        locationIdCounter++;
+
         geocodedLocations.set(locationName, {
+          locationId,
+          displayName: locationName,
           placeName: result.placeName,
           lat: parseFloat(result.lat),
           lng: parseFloat(result.lng)
         });
-        console.log(`[PlanParser] Geocoded ${locationName}:`, geocodedLocations.get(locationName));
+        console.log(`[PlanParser] Geocoded ${locationName} → ID: ${locationId}`);
       } else {
         console.warn(`[PlanParser] Failed to geocode ${locationName}`);
       }
@@ -49,6 +67,9 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
   }
 
   // Second pass: Parse all actions into tool calls
+  // NEW: Track occurrence usage for setTransportation
+  const locationUsageCounter = new Map<string, number>();
+
   for (const line of lines) {
     // Skip geocode lines (already processed)
     if (line.match(/^\d+\.\s*Geocode\s+/i)) {
@@ -64,12 +85,27 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
       // Build HTML with geo-marks
       let html = textContent;
 
+      // NEW: Track each occurrence separately (different ID per occurrence)
+      const locationOccurrences = new Map<string, number>();
+
       // Replace location names with geo-mark spans
-      for (const [locationName, coords] of geocodedLocations.entries()) {
+      for (const [locationName, locData] of geocodedLocations.entries()) {
         const regex = new RegExp(`\\b${escapeRegex(locationName)}\\b`, 'gi');
+
+        // NEW: Generate unique ID for EACH occurrence
+        let occurrenceCount = 0;
+
         html = html.replace(regex, (match) => {
-          return `<span class="geo-mark" data-place-name="${match}" data-lat="${coords.lat}" data-lng="${coords.lng}">${match}</span>`;
+          // Generate unique ID for this specific occurrence
+          const occurrenceId = `${locData.locationId}_occ${occurrenceCount}`;
+          occurrenceCount++;
+
+          console.log(`[PlanParser] Replacing occurrence #${occurrenceCount} of ${match} with ID ${occurrenceId}`);
+
+          return `<span class="geo-mark" data-geo-id="${occurrenceId}" data-place-name="${match}" data-lat="${locData.lat}" data-lng="${locData.lng}">${match}</span>`;
         });
+
+        locationOccurrences.set(locationName, occurrenceCount);
       }
 
       tools.push({
@@ -89,15 +125,34 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
 
       console.log(`[PlanParser] Parsing set transportation: ${fromLocation} → ${toLocation} (${mode})`);
 
-      const fromCoords = geocodedLocations.get(fromLocation);
-      const toCoords = geocodedLocations.get(toLocation);
+      const fromData = geocodedLocations.get(fromLocation);
+      const toData = geocodedLocations.get(toLocation);
 
-      if (fromCoords && toCoords) {
+      if (fromData && toData) {
+        // NEW: Determine which occurrence to use (based on order of appearance in plan)
+        const fromOccurrence = locationUsageCounter.get(fromLocation) || 0;
+        const toOccurrence = locationUsageCounter.get(toLocation) || 0;
+
+        locationUsageCounter.set(fromLocation, fromOccurrence + 1);
+        locationUsageCounter.set(toLocation, toOccurrence + 1);
+
+        const fromLocationId = `${fromData.locationId}_occ${fromOccurrence}`;
+        const toLocationId = `${toData.locationId}_occ${toOccurrence}`;
+
+        console.log(`[PlanParser] setTransportation: ${fromLocation}[occ${fromOccurrence}] → ${toLocation}[occ${toOccurrence}]`);
+        console.log(`[PlanParser] IDs: ${fromLocationId} → ${toLocationId}`);
+
         tools.push({
           name: 'setTransportation',
           parameters: {
+            // NEW: ID-based referencing
+            fromLocationId,
+            toLocationId,
+
+            // LEGACY: Keep for backward compatibility
             fromLocation: fromLocation,  // Use original name from plan, not Nominatim placeName
             toLocation: toLocation,      // Use original name from plan, not Nominatim placeName
+
             mode: mode as 'cycling' | 'driving' | 'walking' | 'flying'
           },
           status: 'pending'
@@ -120,20 +175,14 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
       continue;
     }
 
-    // Parse Open fullscreen map (with optional focus location)
-    const openMapMatch = line.match(/^\d+\.\s*Open fullscreen map(?:\s+focused on\s+(.+?))?(?:\s+\(zoom:\s*(\d+)\))?$/i);
+    // Parse Open fullscreen map (no location parameter)
+    const openMapMatch = line.match(/^\d+\.\s*Open fullscreen map$/i);
     if (openMapMatch) {
-      const focusLocation = openMapMatch[1]?.trim();
-      const zoom = openMapMatch[2] ? parseInt(openMapMatch[2]) : undefined;
-
-      console.log(`[PlanParser] Parsing open fullscreen map`, { focusLocation, zoom });
+      console.log(`[PlanParser] Parsing open fullscreen map`);
 
       tools.push({
         name: 'openFullscreenMap',
-        parameters: {
-          focusLocation: focusLocation || undefined,
-          zoom: zoom || 12
-        },
+        parameters: {},
         status: 'pending'
       });
       continue;

@@ -1570,6 +1570,9 @@ async function main() {
   });
   console.log('[Main] FullscreenMapView initialized with awareness');
 
+  // Expose fullscreenMapView to window for tool execution (focusMap)
+  (window as any).fullscreenMapView = fullscreenMapView;
+
   // Wire up ViewSyncService with FullscreenMapView for follow mode map sync
   if (viewSyncService) {
     viewSyncService.setFullscreenMapView(fullscreenMapView);

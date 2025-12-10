@@ -389,32 +389,70 @@ function executeCreateGeoMark(
  * Set transportation configuration between two locations
  */
 function executeSetTransportation(
-  params: { toLocation: string; fromLocation: string; mode: string },
+  params: {
+    // NEW: ID-based params
+    fromLocationId?: string;
+    toLocationId?: string;
+
+    // LEGACY: Name-based params
+    fromLocation?: string;
+    toLocation?: string;
+
+    mode: string;
+  },
   context: ExecutionContext
 ): ExecutionResult {
   const { editorView, schema } = context;
   const { state } = editorView;
 
-  console.log('[ToolExecutor] setTransportation:', params.mode, 'from', params.fromLocation, 'to', params.toLocation);
+  console.log('[ToolExecutor] setTransportation:', params.mode,
+              'from', params.fromLocation || params.fromLocationId,
+              'to', params.toLocation || params.toLocationId);
 
   // First pass: Find geo-marks in the document to get their geoIds
   let fromGeoId: string | null = null;
   let toGeoId: string | null = null;
+  let fromDisplayName: string | null = null;  // NEW: For error messages
+  let toDisplayName: string | null = null;    // NEW: For error messages
+
+  const useIdBasedLookup = !!(params.fromLocationId && params.toLocationId);
+
+  console.log(useIdBasedLookup
+    ? `[ToolExecutor] Using ID-based lookup: ${params.fromLocationId} → ${params.toLocationId}`
+    : `[ToolExecutor] Using legacy name-based lookup: ${params.fromLocation} → ${params.toLocation}`
+  );
 
   state.doc.descendants((node: any, pos: number) => {
     if (node.isText && node.marks) {
       for (const mark of node.marks) {
         if (mark.type.name === 'geoMark') {
-          const placeName = mark.attrs.placeName.toLowerCase();
+          const geoId = mark.attrs.geoId;
+          const placeName = mark.attrs.placeName;
 
-          if (placeName === params.fromLocation.toLowerCase()) {
-            fromGeoId = mark.attrs.geoId;
-            console.log('[ToolExecutor] Found fromLocation geo-mark:', params.fromLocation, 'geoId:', fromGeoId);
-          }
-
-          if (placeName === params.toLocation.toLowerCase()) {
-            toGeoId = mark.attrs.geoId;
-            console.log('[ToolExecutor] Found toLocation geo-mark:', params.toLocation, 'geoId:', toGeoId);
+          if (useIdBasedLookup) {
+            // NEW: Direct ID matching
+            if (geoId === params.fromLocationId) {
+              fromGeoId = geoId;
+              fromDisplayName = placeName;
+              console.log('[ToolExecutor] Found fromLocation by ID:', geoId, '(', placeName, ')');
+            }
+            if (geoId === params.toLocationId) {
+              toGeoId = geoId;
+              toDisplayName = placeName;
+              console.log('[ToolExecutor] Found toLocation by ID:', geoId, '(', placeName, ')');
+            }
+          } else {
+            // LEGACY: Name-based matching
+            if (placeName.toLowerCase() === params.fromLocation?.toLowerCase()) {
+              fromGeoId = geoId;
+              fromDisplayName = placeName;
+              console.log('[ToolExecutor] Found fromLocation by name:', placeName, 'geoId:', geoId);
+            }
+            if (placeName.toLowerCase() === params.toLocation?.toLowerCase()) {
+              toGeoId = geoId;
+              toDisplayName = placeName;
+              console.log('[ToolExecutor] Found toLocation by name:', placeName, 'geoId:', geoId);
+            }
           }
         }
       }
@@ -422,18 +460,26 @@ function executeSetTransportation(
   });
 
   if (!fromGeoId) {
+    const locationRef = useIdBasedLookup
+      ? `"${fromDisplayName || params.fromLocation}" (ID: ${params.fromLocationId})`
+      : `"${params.fromLocation}"`;
+
     return {
       toolName: 'setTransportation',
       success: false,
-      error: `Origin location "${params.fromLocation}" not found in document`
+      error: `Origin location ${locationRef} not found in document`
     };
   }
 
   if (!toGeoId) {
+    const locationRef = useIdBasedLookup
+      ? `"${toDisplayName || params.toLocation}" (ID: ${params.toLocationId})`
+      : `"${params.toLocation}"`;
+
     return {
       toolName: 'setTransportation',
       success: false,
-      error: `Destination location "${params.toLocation}" not found in document`
+      error: `Destination location ${locationRef} not found in document`
     };
   }
 
@@ -580,15 +626,17 @@ function enrichGeoMarks(html: string, detectedLocations: DetectedLocation[]): st
       return;
     }
 
-    // Generate attributes
-    // Use place name as geo-id to allow transport-from references by name
-    const geoId = placeName;
+    // NEW: Read geo-id from HTML if present (from PlanParser)
+    const existingGeoId = span.getAttribute('data-geo-id');
+
+    // NEW: Use existing ID, or generate fallback for legacy geo-marks
+    const geoId = existingGeoId || `geo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const colorIndex = detectedLocations.length + index;
 
     console.log('[ToolExecutor:enrichGeoMarks] Pass 1 - Processing geo-mark #' + index);
     console.log('[ToolExecutor:enrichGeoMarks]   placeName:', placeName);
     console.log('[ToolExecutor:enrichGeoMarks]   displayText:', displayText);
-    console.log('[ToolExecutor:enrichGeoMarks]   ASSIGNING geo-id:', geoId);
+    console.log('[ToolExecutor:enrichGeoMarks]   Using geo-id:', geoId, '(from HTML:', !!existingGeoId, ')');
 
     // Store mapping for Pass 2 - map BOTH place name AND display text to geo-id
     // This handles cases where LLM uses "Copenhagen" but geocode returned "København"
@@ -816,18 +864,24 @@ async function executeFocusMap(
   try {
     const zoom = params.zoom ?? 12;
 
-    // Check if fullscreen map is open
-    const fullscreenMapView = (window as any).fullscreenMapView;
-    const isMapOpen = fullscreenMapView &&
-                      fullscreenMapView.map &&
-                      typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
-                      fullscreenMapView.map.isStyleLoaded();
+    // Check if fullscreen map is open (by checking if overlay is visible)
+    const isMapOpen = document.getElementById('fullscreen-overlay')?.classList.contains('visible') ?? false;
 
     if (!isMapOpen) {
       return {
         toolName: 'focusMap',
         success: false,
         error: 'Fullscreen map is not open - cannot focus on location'
+      };
+    }
+
+    // Get the fullscreen map instance
+    const fullscreenMapView = (window as any).fullscreenMapView;
+    if (!fullscreenMapView || !fullscreenMapView.map) {
+      return {
+        toolName: 'focusMap',
+        success: false,
+        error: 'Fullscreen map view not initialized'
       };
     }
 

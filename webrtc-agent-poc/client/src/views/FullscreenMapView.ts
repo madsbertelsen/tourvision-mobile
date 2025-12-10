@@ -110,6 +110,13 @@ export class FullscreenMapView {
   }
 
   /**
+   * Public getter for the fullscreen map instance (for tool execution)
+   */
+  get map(): mapboxgl.Map | null {
+    return this.fullscreenMap;
+  }
+
+  /**
    * Setup event listeners for the map style switcher buttons
    */
   private setupStyleSwitcher(): void {
