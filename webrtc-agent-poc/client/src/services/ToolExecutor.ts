@@ -383,34 +383,48 @@ function executeSetTransportation(
   params: { toLocation: string; fromLocation: string; mode: string },
   context: ExecutionContext
 ): ExecutionResult {
-  const { editorView, schema, detectedLocations } = context;
+  const { editorView, schema } = context;
   const { state } = editorView;
 
   console.log('[ToolExecutor] setTransportation:', params.mode, 'from', params.fromLocation, 'to', params.toLocation);
 
-  // Find the toLocation in detected locations
-  const toLocation = detectedLocations.find(loc =>
-    loc.status === 'found' && loc.locationName.toLowerCase() === params.toLocation.toLowerCase()
-  );
+  // First pass: Find geo-marks in the document to get their geoIds
+  let fromGeoId: string | null = null;
+  let toGeoId: string | null = null;
 
-  if (!toLocation) {
+  state.doc.descendants((node: any, pos: number) => {
+    if (node.isText && node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type.name === 'geoMark') {
+          const placeName = mark.attrs.placeName.toLowerCase();
+
+          if (placeName === params.fromLocation.toLowerCase()) {
+            fromGeoId = mark.attrs.geoId;
+            console.log('[ToolExecutor] Found fromLocation geo-mark:', params.fromLocation, 'geoId:', fromGeoId);
+          }
+
+          if (placeName === params.toLocation.toLowerCase()) {
+            toGeoId = mark.attrs.geoId;
+            console.log('[ToolExecutor] Found toLocation geo-mark:', params.toLocation, 'geoId:', toGeoId);
+          }
+        }
+      }
+    }
+  });
+
+  if (!fromGeoId) {
     return {
       toolName: 'setTransportation',
       success: false,
-      error: `Destination location "${params.toLocation}" not found in detected locations`
+      error: `Origin location "${params.fromLocation}" not found in document`
     };
   }
 
-  // Find the fromLocation in detected locations
-  const fromLocation = detectedLocations.find(loc =>
-    loc.status === 'found' && loc.locationName.toLowerCase() === params.fromLocation.toLowerCase()
-  );
-
-  if (!fromLocation) {
+  if (!toGeoId) {
     return {
       toolName: 'setTransportation',
       success: false,
-      error: `Origin location "${params.fromLocation}" not found in detected locations`
+      error: `Destination location "${params.toLocation}" not found in document`
     };
   }
 
@@ -426,9 +440,9 @@ function executeSetTransportation(
 
   try {
     let tr = state.tr;
-    let found = false;
+    let updatedCount = 0;
 
-    // Find all geo-marks for the toLocation and update their transport attributes
+    // Second pass: Update all geo-marks for the toLocation with transport attributes
     state.doc.descendants((node: any, pos: number) => {
       if (node.isText && node.marks) {
         for (const mark of node.marks) {
@@ -440,23 +454,28 @@ function executeSetTransportation(
             // Create new mark with transport attributes
             const newMark = schema.marks.geoMark.create({
               ...mark.attrs,
-              transportFrom: fromLocation.geoId,
+              transportFrom: fromGeoId,
               transportProfile: transportProfile
             });
 
             // Add new mark
             tr = tr.addMark(pos, pos + node.nodeSize, newMark);
-            found = true;
+            updatedCount++;
+            console.log('[ToolExecutor] Updated geo-mark with transport:', {
+              toLocation: params.toLocation,
+              fromGeoId,
+              transportProfile
+            });
           }
         }
       }
     });
 
-    if (!found) {
+    if (updatedCount === 0) {
       return {
         toolName: 'setTransportation',
         success: false,
-        error: `No geo-mark found for "${params.toLocation}"`
+        error: `No geo-mark found for "${params.toLocation}" to update`
       };
     }
 
@@ -471,7 +490,7 @@ function executeSetTransportation(
     return {
       toolName: 'setTransportation',
       success: true,
-      message: `Set ${params.mode} from ${params.fromLocation} to ${params.toLocation}`
+      message: `Set ${params.mode} from ${params.fromLocation} to ${params.toLocation} (updated ${updatedCount} geo-mark(s))`
     };
   } catch (error) {
     return {
