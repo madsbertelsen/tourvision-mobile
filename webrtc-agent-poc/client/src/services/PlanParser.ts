@@ -96,8 +96,8 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
         tools.push({
           name: 'setTransportation',
           parameters: {
-            fromLocation: fromCoords.placeName,
-            toLocation: toCoords.placeName,
+            fromLocation: fromLocation,  // Use original name from plan, not Nominatim placeName
+            toLocation: toLocation,      // Use original name from plan, not Nominatim placeName
             mode: mode as 'cycling' | 'driving' | 'walking' | 'flying'
           },
           status: 'pending'
