@@ -112,7 +112,7 @@ export async function clarifyIntent(
     intent: {
       intent: `1. Insert text: "${transcript}"`,  // Simple one-line plan
       confidence: 'low',
-      reasoning: 'Fallback: Max turns reached without clear intent'
+      reasoning: `User wants to insert text: "${transcript}"\n\nReasoning: Fallback - Max turns reached without clear intent`
     }
   };
 }
@@ -137,7 +137,7 @@ function checkForMapInDocument(editorView: EditorView): boolean {
 function buildIntentPrompt(transcript: string, context: string, hasMap: boolean): string {
   const mapStatus = hasMap ? 'YES - A map already exists in the document' : 'NO - No map in the document yet';
 
-  return `You are analyzing voice input to generate an execution plan for document editing.
+  return `You are analyzing voice input to understand user intent and generate an execution plan.
 
 DOCUMENT CONTEXT (for reference only - already in document):
 "${context}"
@@ -147,7 +147,9 @@ MAP IN DOCUMENT: ${mapStatus}
 VOICE INPUT (what the user just said):
 "${transcript}"
 
-YOUR TASK: Generate a step-by-step action plan. Each line should be one action to execute.
+YOUR TASK:
+1. Understand what the user wants (user intent)
+2. Generate a step-by-step action plan to fulfill that intent
 
 STEP 1 - VALIDATE TRANSCRIPT:
 Check if the transcript makes sense or if there are likely mistranscriptions.
@@ -157,7 +159,14 @@ If you detect a mistranscription:
 - In ambiguity field, ask user to clarify
 - Example: "ambiguity": "Could not understand 'Russ killed'. Could you spell that location name?"
 
-STEP 2 - GENERATE PLAN (only if transcript seems valid):
+STEP 2 - CLARIFICATION:
+If you need more context to understand the intent, use the getMoreContext tool.
+DO NOT generate a plan until you have enough information.
+
+STEP 3 - GENERATE INTENT & PLAN (only when you have enough info):
+
+USER INTENT: Natural language description of what the user wants
+PLAN: Step-by-step actions to execute
 
 Action format (each line is one action):
 1. Geocode <location> - for extracting coordinates
@@ -171,39 +180,52 @@ EXAMPLES:
 
 Example 1 - Travel intent:
 Input: "I want to drive from Copenhagen to Stockholm"
-Plan:
-1. Geocode Copenhagen
-2. Geocode Stockholm
-3. Insert text: "I want to drive from Copenhagen to Stockholm" (with geo-marks)
-4. Set transportation from Copenhagen to Stockholm (driving)
+Output:
+{
+  "userIntent": "User wants to document a driving trip from Copenhagen to Stockholm",
+  "plan": "1. Geocode Copenhagen\n2. Geocode Stockholm\n3. Insert text: \"I want to drive from Copenhagen to Stockholm\" (with geo-marks)\n4. Set transportation from Copenhagen to Stockholm (driving)"
+}
 
 Example 2 - Simple location:
 Input: "I want to visit Paris"
-Plan:
-1. Geocode Paris
-2. Insert text: "I want to visit Paris" (with geo-marks)
+Output:
+{
+  "userIntent": "User wants to mention visiting Paris",
+  "plan": "1. Geocode Paris\n2. Insert text: \"I want to visit Paris\" (with geo-marks)"
+}
 
 Example 3 - Map command:
 Input: "open the map"
-Plan:
-1. Open fullscreen map
+Output:
+{
+  "userIntent": "User wants to open the fullscreen map",
+  "plan": "1. Open fullscreen map"
+}
 
 Example 4 - Correction:
 Input: "Stockholm" (context shows "stuck on")
-Plan:
-1. Replace "stuck on" with "Stockholm"
+Output:
+{
+  "userIntent": "User is correcting a mistranscription from 'stuck on' to 'Stockholm'",
+  "plan": "1. Replace \"stuck on\" with \"Stockholm\""
+}
 
 IMPORTANT:
-- Each line must be a single, clear action
+- Each plan line must be a single, clear action
 - Use simple, imperative statements
 - Include location names exactly as user said them
 - For travel, always include both geocode + insert + set transportation
+- Use getMoreContext tool if you need more information before generating the plan
+
+TOOLS AVAILABLE:
+- getMoreContext: Request additional document context to better understand user intent
 
 Respond with valid JSON:
 {
   "reasoning": "Brief analysis (1-2 sentences)",
   "confidence": "high|medium|low",
-  "plan": "Line 1\nLine 2\nLine 3...",
+  "userIntent": "Natural language description of what user wants",
+  "plan": "Line 1\\nLine 2\\nLine 3...",
   "ambiguity": "Only if confidence is low, what to ask user? (optional)"
 }`;
 }
@@ -297,7 +319,7 @@ function executeGetMoreContext(
 }
 
 /**
- * Parse plan from LLM response (expects JSON format with plan field)
+ * Parse plan from LLM response (expects JSON format with userIntent and plan fields)
  */
 function parseIntentFromResponse(response: OllamaResponse): ClarifiedIntent | null {
   const content = response.message.content;
@@ -306,18 +328,20 @@ function parseIntentFromResponse(response: OllamaResponse): ClarifiedIntent | nu
     // Parse JSON response
     const parsed = JSON.parse(content);
 
-    if (!parsed.plan) {
-      console.warn('[IntentClarificationService] Missing plan field in JSON response');
+    // Check for required fields
+    if (!parsed.plan || !parsed.userIntent) {
+      console.warn('[IntentClarificationService] Missing plan or userIntent field in JSON response');
       return null;
     }
 
-    // Store plan as intent for now (maintains compatibility with existing flow)
+    // Store both userIntent and plan
     const intent: ClarifiedIntent = {
-      intent: parsed.plan,  // The plan text block
+      intent: parsed.plan,  // The plan text block (for execution)
       confidence: (parsed.confidence?.toLowerCase() as 'high' | 'medium' | 'low') || 'medium',
-      reasoning: parsed.reasoning || 'No reasoning provided'
+      reasoning: `${parsed.userIntent}\n\nReasoning: ${parsed.reasoning || 'No reasoning provided'}`  // Combine userIntent and reasoning
     };
 
+    console.log('[IntentClarificationService] User intent:', parsed.userIntent);
     console.log('[IntentClarificationService] Generated plan:\n', parsed.plan);
     return intent;
   } catch (error) {
