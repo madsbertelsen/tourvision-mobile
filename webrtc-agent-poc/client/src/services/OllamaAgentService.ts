@@ -330,11 +330,28 @@ export async function generatePlan(
       }
     }
 
+    // Phase 2: Have LLM generate HTML content with geocoded coordinates
+    console.log('[OllamaAgentService] Phase 2: LLM generating HTML with geo-marks');
+
+    const contentPrompt = buildContentGenerationPrompt(intent, planJson, geocodedLocations);
+    const contentResponse = await callOllama([{ role: 'user', content: contentPrompt }]);
+
+    // Parse LLM response for HTML content
+    let generatedHtml = contentResponse.message.content.trim();
+
+    // Strip markdown code blocks if present
+    const htmlCodeBlockMatch = generatedHtml.match(/```(?:html)?\s*\n?([\s\S]*?)\n?```/);
+    if (htmlCodeBlockMatch) {
+      generatedHtml = htmlCodeBlockMatch[1].trim();
+    }
+
+    console.log('[OllamaAgentService] LLM generated HTML:', generatedHtml);
+
     // Build tool calls based on plan type
     const tools: ToolCall[] = [];
 
     if (planJson.planType === 'travel' && planJson.fromLocation && planJson.toLocation) {
-      // Get geocoded coordinates
+      // Get geocoded coordinates for setTransportation
       const fromCoords = geocodedLocations.get(planJson.fromLocation);
       const toCoords = geocodedLocations.get(planJson.toLocation);
 
@@ -343,12 +360,10 @@ export async function generatePlan(
         return null;
       }
 
-      // Build HTML with geo-marks
-      const html = `I want to ${planJson.transportMode === 'driving' ? 'drive' : planJson.transportMode === 'cycling' ? 'cycle' : planJson.transportMode === 'walking' ? 'walk' : 'fly'} from <span class="geo-mark" data-place-name="${fromCoords.placeName}" data-lat="${fromCoords.lat}" data-lng="${fromCoords.lng}">${fromCoords.placeName}</span> to <span class="geo-mark" data-place-name="${toCoords.placeName}" data-lat="${toCoords.lat}" data-lng="${toCoords.lng}">${toCoords.placeName}</span>`;
-
+      // Use LLM-generated HTML
       tools.push({
         name: 'insertText',
-        parameters: { html },
+        parameters: { html: generatedHtml },
         status: 'pending'
       });
 
@@ -362,17 +377,12 @@ export async function generatePlan(
         status: 'pending'
       });
     } else if (planJson.planType === 'location') {
-      // Simple location mention
-      const locationCoords = geocodedLocations.get(planJson.locations[0]);
-      if (locationCoords) {
-        const html = `I want to visit <span class="geo-mark" data-place-name="${locationCoords.placeName}" data-lat="${locationCoords.lat}" data-lng="${locationCoords.lng}">${locationCoords.placeName}</span>`;
-
-        tools.push({
-          name: 'insertText',
-          parameters: { html },
-          status: 'pending'
-        });
-      }
+      // Use LLM-generated HTML
+      tools.push({
+        name: 'insertText',
+        parameters: { html: generatedHtml },
+        status: 'pending'
+      });
     } else if (planJson.planType === 'map' && planJson.focusLocation) {
       // Open fullscreen map
       tools.push({
@@ -439,6 +449,45 @@ Input: "Show me the map of London"
 Output: {"locations": ["London"], "planType": "map", "transportMode": null, "fromLocation": null, "toLocation": null, "focusLocation": "London"}
 
 ONLY output valid JSON, no other text.`;
+}
+
+/**
+ * Build prompt for LLM to generate HTML content with geo-marks
+ * Phase 2: After geocoding, ask LLM to create rich text based on intent
+ */
+function buildContentGenerationPrompt(
+  intent: ClarifiedIntent,
+  planJson: any,
+  geocodedLocations: Map<string, { placeName: string; lat: number; lng: number }>
+): string {
+  // Build location coordinates reference
+  const coordsReference = Array.from(geocodedLocations.entries())
+    .map(([name, coords]) => `${name}: lat=${coords.lat}, lng=${coords.lng}`)
+    .join('\n');
+
+  return `Generate HTML content based on the user's intent. Wrap location names in geo-mark spans.
+
+USER INTENT: ${intent.intent}
+
+GEOCODED LOCATIONS:
+${coordsReference}
+
+INSTRUCTIONS:
+1. Generate natural text that reflects the user's original phrasing
+2. Wrap each location name in a geo-mark span with this exact format:
+   <span class="geo-mark" data-place-name="LocationName" data-lat="12.34" data-lng="56.78">LocationName</span>
+3. Use the ORIGINAL location names (e.g., "Copenhagen", not "København, Københavns Kommune...")
+4. Use the geocoded coordinates provided above for data-lat and data-lng
+5. Do NOT add data-geo-id, data-color-index, data-transport-from, or data-transport-profile
+6. Output ONLY the HTML content, no explanations or markdown code blocks
+
+EXAMPLE:
+User intent: "I want to drive from Copenhagen to Stockholm"
+Locations: Copenhagen (lat=55.6761, lng=12.5683), Stockholm (lat=59.3293, lng=18.0686)
+
+Output: I want to drive from <span class="geo-mark" data-place-name="Copenhagen" data-lat="55.6761" data-lng="12.5683">Copenhagen</span> to <span class="geo-mark" data-place-name="Stockholm" data-lat="59.3293" data-lng="18.0686">Stockholm</span>
+
+Now generate HTML for the user's intent above:`;
 }
 
 /**
