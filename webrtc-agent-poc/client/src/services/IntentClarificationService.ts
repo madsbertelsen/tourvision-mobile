@@ -178,13 +178,15 @@ Action format (each line is one action):
 
 EXAMPLES:
 
-Example 1 - Travel intent:
+Example 1 - Travel intent (map already exists):
 Input: "I want to drive from Copenhagen to Stockholm"
+MAP IN DOCUMENT: YES
 Output:
 {
   "userIntent": "User wants to document a driving trip from Copenhagen to Stockholm",
   "plan": "1. Geocode Copenhagen\n2. Geocode Stockholm\n3. Insert text: \"I want to drive from Copenhagen to Stockholm\" (with geo-marks)\n4. Set transportation from Copenhagen to Stockholm (driving)"
 }
+Note: No "Insert map" because map already exists
 
 Example 2 - Simple location:
 Input: "I want to visit Paris"
@@ -215,6 +217,8 @@ IMPORTANT:
 - Use simple, imperative statements
 - Include location names exactly as user said them
 - For travel, always include both geocode + insert + set transportation
+- DO NOT include "Insert map" if MAP IN DOCUMENT is YES - a map already exists
+- Only use "Insert map" if MAP IN DOCUMENT is NO and user explicitly asks for a map
 - Use getMoreContext tool if you need more information before generating the plan
 
 TOOLS AVAILABLE:
