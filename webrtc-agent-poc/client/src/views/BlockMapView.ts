@@ -163,6 +163,7 @@ export class BlockMapView {
             keyboard: false,
             doubleClickZoom: false,
             touchZoomRotate: false,
+            preserveDrawingBuffer: true, // Enable WebGL canvas capture for screenshots
           };
 
           // Create LIGHT map (visible on top)
@@ -218,6 +219,7 @@ export class BlockMapView {
           keyboard: false,
           doubleClickZoom: false,
           touchZoomRotate: false,
+          preserveDrawingBuffer: true, // Enable WebGL canvas capture for screenshots
         };
 
         // Create LIGHT map (visible on top)

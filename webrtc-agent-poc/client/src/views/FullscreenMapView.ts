@@ -383,7 +383,8 @@ export class FullscreenMapView {
       style: MAP_STYLES['streets'],
       interactive: true,
       trackResize: true,
-      fadeDuration: 0
+      fadeDuration: 0,
+      preserveDrawingBuffer: true, // Enable WebGL canvas capture for screenshots
     };
 
     if (initialCenter && initialZoom !== undefined) {

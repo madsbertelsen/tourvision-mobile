@@ -13,6 +13,7 @@ import type {
   OllamaMessage,
   OllamaResponse
 } from '../types/agent';
+import { ScreenshotService } from './ScreenshotService';
 
 // Configuration
 const OLLAMA_MODEL = import.meta.env.VITE_OLLAMA_MODEL || 'ministral-3:8b';
@@ -20,14 +21,48 @@ const OLLAMA_TIMEOUT = Number(import.meta.env.VITE_OLLAMA_TIMEOUT) || 30000;
 const MAX_TURNS = 3;
 
 /**
+ * Check if question likely requires visual context
+ */
+function requiresVisualContext(transcript: string): boolean {
+  const visualKeywords = [
+    'see', 'show', 'look', 'screen', 'display', 'visible',
+    'button', 'element', 'UI', 'interface', 'layout',
+    'color', 'position', 'where', 'what', 'which'
+  ];
+
+  const lowerTranscript = transcript.toLowerCase();
+  return visualKeywords.some(keyword => lowerTranscript.includes(keyword));
+}
+
+/**
  * Main entry point: Clarify user intent through multi-turn LLM loop
  */
 export async function clarifyIntent(
   transcript: string,
   documentContext: string,
-  editorView: EditorView
+  editorView: EditorView,
+  documentId: string
 ): Promise<IntentResult> {
   console.log('[IntentClarificationService] Starting intent clarification');
+
+  // Check if visual context needed
+  let screenshotDataUrl: string | undefined;
+  const needsVisual = requiresVisualContext(transcript);
+
+  if (needsVisual) {
+    console.log('[IntentClarificationService] Visual context detected, capturing screenshot');
+    const screenshotService = new ScreenshotService();
+    await screenshotService.init();
+
+    try {
+      screenshotDataUrl = await screenshotService.captureViewport();
+      await screenshotService.storeScreenshot(documentId, screenshotDataUrl, transcript);
+      console.log('[IntentClarificationService] Screenshot captured:', screenshotDataUrl.substring(0, 50) + '...');
+    } catch (error) {
+      console.error('[IntentClarificationService] Screenshot capture failed:', error);
+      // Continue without screenshot
+    }
+  }
 
   // Check if document already has a map
   const hasMap = checkForMapInDocument(editorView);
@@ -37,12 +72,22 @@ export async function clarifyIntent(
   const isFullscreenMapOpen = checkForFullscreenMap();
   console.log('[IntentClarificationService] Fullscreen map open:', isFullscreenMapOpen);
 
-  const messages: OllamaMessage[] = [
-    {
-      role: 'user',
-      content: buildIntentPrompt(transcript, documentContext, hasMap, isFullscreenMapOpen)
-    }
-  ];
+  // Build initial message - with screenshot if available
+  // Note: Ollama expects images in an 'images' array at message level, not in content
+  // Ollama expects base64 string without the data URL prefix
+  const initialPrompt = buildIntentPrompt(transcript, documentContext, hasMap, isFullscreenMapOpen);
+  const initialMessage: OllamaMessage = screenshotDataUrl
+    ? {
+        role: 'user',
+        content: initialPrompt,
+        images: [screenshotDataUrl.replace(/^data:image\/[a-z]+;base64,/, '')] as any
+      }
+    : {
+        role: 'user',
+        content: initialPrompt
+      };
+
+  const messages: OllamaMessage[] = [initialMessage];
 
   // Define clarification tools
   const tools = [getMoreContextToolDefinition()];
@@ -163,7 +208,9 @@ VOICE INPUT (what the user just said):
 
 YOUR TASK:
 1. Understand what the user wants (user intent)
-2. Generate a step-by-step action plan to fulfill that intent
+2. Determine if this is an INFORMATIONAL QUESTION or an ACTION REQUEST
+3. If informational → Answer the question directly
+4. If action → Generate a step-by-step action plan to fulfill that intent
 
 STEP 1 - VALIDATE TRANSCRIPT:
 Check if the transcript makes sense or if there are likely mistranscriptions.
@@ -189,6 +236,11 @@ LOCATION REFERENCING (CRITICAL):
 - Example: Document contains "I visited Stockholm" → You can use "Set transportation from Stockholm to..." directly
 
 Action format (each line is one action):
+
+FOR INFORMATIONAL QUESTIONS (what/which/where/how - asking about something):
+1. Answer: "<your answer based on what you can see/observe>"
+
+FOR ACTION REQUESTS (do something, add something, change something):
 1. Geocode <location> - for extracting coordinates (only if location NOT in document)
 2. Insert text: "<content with geo-marks>" - for adding content with location markers (only if location NOT in document)
 3. Set transportation from <location1> to <location2> (<mode>) - for travel routes (can reference existing locations in document)
@@ -198,6 +250,16 @@ Action format (each line is one action):
 7. Replace "<old>" with "<new>" - for corrections
 
 EXAMPLES:
+
+Example 0 - INFORMATIONAL QUESTION (answer, don't act):
+Input: "what city do you see in the center of the map?"
+FULLSCREEN MAP: OPEN
+Output:
+{
+  "userIntent": "User wants to know what city is visible in the center of the map",
+  "plan": "1. Answer: \"Based on the map view, I can see [city name] in the center of the map.\""
+}
+Reasoning: This is a question asking for information (what/where), not a request to do something. Answer it directly based on what you can observe.
 
 Example 0a - NEW locations (locations NOT in document):
 Input: "I want to drive from Stockholm to Oslo"

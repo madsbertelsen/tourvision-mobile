@@ -17,6 +17,7 @@ import { getAgentDataChannelService } from './services/AgentDataChannelService';
 import { clarifyIntent } from './services/IntentClarificationService';
 import { parsePlanToToolCalls } from './services/PlanParser';
 import { executePlan } from './services/ToolExecutor';
+import { ScreenshotService } from './services/ScreenshotService';
 import type { ClarifiedIntent, AgentCommandMessage } from './types/agent';
 
 export function initializeAgent(
@@ -48,6 +49,33 @@ export function initializeAgent(
       }
     }
   );
+
+  // Initialize screenshot service
+  const screenshotService = new ScreenshotService();
+  screenshotService.init().then(() => {
+    console.log('[Agent] ScreenshotService initialized');
+  }).catch((error) => {
+    console.error('[Agent] Failed to initialize ScreenshotService:', error);
+  });
+
+  // Cleanup screenshots on document unload
+  window.addEventListener('beforeunload', () => {
+    // Optional: clear screenshots for this document
+    // screenshotService.clearDocument(documentId);
+  });
+
+  // Expose screenshot viewer for debugging
+  (window as any).viewLatestScreenshot = async () => {
+    console.log('[Window Helper] viewLatestScreenshot documentId:', documentId);
+    await screenshotService.displayLatestScreenshot(documentId);
+  };
+  (window as any).downloadLatestScreenshot = async () => {
+    console.log('[Window Helper] downloadLatestScreenshot documentId:', documentId);
+    await screenshotService.downloadLatestScreenshot(documentId);
+  };
+  (window as any).listAllScreenshots = async () => {
+    return await screenshotService.listAllScreenshots();
+  };
 
   // Initialize document observer with callbacks
   const documentObserver = new DocumentObserverService(yXmlFragment, ydoc, {
@@ -83,7 +111,8 @@ export function initializeAgent(
           const intentResult = await clarifyIntent(
             message.transcript,
             message.documentContext,
-            editorView
+            editorView,
+            documentId
           );
 
           // Handle ambiguity (not yet implemented - return error for now)
@@ -145,7 +174,7 @@ export function initializeAgent(
     try {
       // Phase 1: Intent Clarification
       console.log('[TestAgent] Phase 1: Intent clarification...');
-      const intentResult = await clarifyIntent(transcript, '', editorView);
+      const intentResult = await clarifyIntent(transcript, '', editorView, documentId);
 
       if (intentResult.type === 'ambiguous') {
         console.warn('[TestAgent] Intent ambiguous:', intentResult.question);
