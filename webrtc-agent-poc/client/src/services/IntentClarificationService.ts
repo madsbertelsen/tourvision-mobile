@@ -106,11 +106,11 @@ export async function clarifyIntent(
     return { type: 'clear', intent };
   }
 
-  // Ultimate fallback
+  // Ultimate fallback - simple insert plan
   return {
     type: 'clear',
     intent: {
-      intent: `Insert the text: "${transcript}"`,
+      intent: `1. Insert text: "${transcript}"`,  // Simple one-line plan
       confidence: 'low',
       reasoning: 'Fallback: Max turns reached without clear intent'
     }
@@ -132,12 +132,12 @@ function checkForMapInDocument(editorView: EditorView): boolean {
 }
 
 /**
- * Build the initial intent clarification prompt
+ * Build the initial plan generation prompt
  */
 function buildIntentPrompt(transcript: string, context: string, hasMap: boolean): string {
   const mapStatus = hasMap ? 'YES - A map already exists in the document' : 'NO - No map in the document yet';
 
-  return `You are analyzing voice input to understand user intent for document editing.
+  return `You are analyzing voice input to generate an execution plan for document editing.
 
 DOCUMENT CONTEXT (for reference only - already in document):
 "${context}"
@@ -147,54 +147,63 @@ MAP IN DOCUMENT: ${mapStatus}
 VOICE INPUT (what the user just said):
 "${transcript}"
 
-YOUR TASK: Analyze the VOICE INPUT only. The context is just for reference to understand corrections.
+YOUR TASK: Generate a step-by-step action plan. Each line should be one action to execute.
 
 STEP 1 - VALIDATE TRANSCRIPT:
-Before determining intent, check if the transcript makes sense:
-- Does it follow natural grammar and sentence structure?
-- Are there nonsensical word combinations? (e.g., "Russ killed" when expecting a location name)
-- Could this be a speech-to-text mistranscription?
+Check if the transcript makes sense or if there are likely mistranscriptions.
 
-Examples of likely mistranscriptions:
-- "I want to visit Russ killed" → "Russ killed" doesn't make sense as a location (likely "Roskilde")
-- "oh I did not mean Oscar but Russ killed" → "Russ killed" is grammatically odd (likely "Roskilde")
-- "from Copenhagen to oscula" → "oscula" is not a known place (likely a mistranscribed location)
-
-If you detect a likely mistranscription:
+If you detect a mistranscription:
 - Set confidence='low'
-- In ambiguity field, ask user to spell the problematic word
+- In ambiguity field, ask user to clarify
 - Example: "ambiguity": "Could not understand 'Russ killed'. Could you spell that location name?"
 
-STEP 2 - DETERMINE INTENT (only if transcript seems valid):
+STEP 2 - GENERATE PLAN (only if transcript seems valid):
 
-1. MAP COMMANDS - Check MAP IN DOCUMENT status:
-   - If MAP IN DOCUMENT is YES and user says "open map", "show map", "zoom in on [location]", etc.:
-     Intent should be: "Execute command: open fullscreen map" or "Execute command: open fullscreen map and zoom to [location]"
-   - If MAP IN DOCUMENT is NO and user says "insert map", "add a map", "show me a map":
-     Intent should be: "Execute command: insert map"
-   - IMPORTANT: "open map" when map exists = open fullscreen map (NOT insert map!)
+Action format (each line is one action):
+1. Geocode <location> - for extracting coordinates
+2. Insert text: "<content with geo-marks>" - for adding content with location markers
+3. Set transportation from <location1> to <location2> (<mode>) - for travel routes
+4. Insert map - for adding a map visualization
+5. Open fullscreen map - for opening existing map
+6. Replace "<old>" with "<new>" - for corrections
 
-2. CONTENT DICTATION: If the voice input is natural speech/content (e.g., "I want to visit Copenhagen"), assume HIGH confidence to INSERT it as text
-   - Intent should be: "Insert text: 'I want to visit Copenhagen'"
+EXAMPLES:
 
-3. CORRECTION: Only if you see clear evidence in the CONTEXT that the voice input is correcting a mistranscription (e.g., context has "stuck on" and voice input is "Stockholm"), then it's a REPLACEMENT
-   - Intent should be: "Replace 'stuck on' with 'Stockholm'"
+Example 1 - Travel intent:
+Input: "I want to drive from Copenhagen to Stockholm"
+Plan:
+1. Geocode Copenhagen
+2. Geocode Stockholm
+3. Insert text: "I want to drive from Copenhagen to Stockholm" (with geo-marks)
+4. Set transportation from Copenhagen to Stockholm (driving)
 
-4. AMBIGUITY: Only mark as LOW confidence if the intent is genuinely unclear (e.g., "replace that" without context showing what "that" refers to)
+Example 2 - Simple location:
+Input: "I want to visit Paris"
+Plan:
+1. Geocode Paris
+2. Insert text: "I want to visit Paris" (with geo-marks)
+
+Example 3 - Map command:
+Input: "open the map"
+Plan:
+1. Open fullscreen map
+
+Example 4 - Correction:
+Input: "Stockholm" (context shows "stuck on")
+Plan:
+1. Replace "stuck on" with "Stockholm"
 
 IMPORTANT:
-- First validate the transcript makes sense
-- Only analyze the VOICE INPUT, not the DOCUMENT CONTEXT
-- Proactively detect mistranscriptions based on grammar, context, and common sense
-
-TOOLS AVAILABLE:
-- getMoreContext: Only call if you cannot determine intent from current context
+- Each line must be a single, clear action
+- Use simple, imperative statements
+- Include location names exactly as user said them
+- For travel, always include both geocode + insert + set transportation
 
 Respond with valid JSON:
 {
   "reasoning": "Brief analysis (1-2 sentences)",
   "confidence": "high|medium|low",
-  "intent": "Execute command: [action] OR Insert text: '[content]' OR Replace '[old]' with '[new]'",
+  "plan": "Line 1\nLine 2\nLine 3...",
   "ambiguity": "Only if confidence is low, what to ask user? (optional)"
 }`;
 }
@@ -288,7 +297,7 @@ function executeGetMoreContext(
 }
 
 /**
- * Parse intent from LLM response (expects JSON format)
+ * Parse plan from LLM response (expects JSON format with plan field)
  */
 function parseIntentFromResponse(response: OllamaResponse): ClarifiedIntent | null {
   const content = response.message.content;
@@ -297,17 +306,19 @@ function parseIntentFromResponse(response: OllamaResponse): ClarifiedIntent | nu
     // Parse JSON response
     const parsed = JSON.parse(content);
 
-    if (!parsed.intent) {
-      console.warn('[IntentClarificationService] Missing intent field in JSON response');
+    if (!parsed.plan) {
+      console.warn('[IntentClarificationService] Missing plan field in JSON response');
       return null;
     }
 
+    // Store plan as intent for now (maintains compatibility with existing flow)
     const intent: ClarifiedIntent = {
-      intent: parsed.intent,
+      intent: parsed.plan,  // The plan text block
       confidence: (parsed.confidence?.toLowerCase() as 'high' | 'medium' | 'low') || 'medium',
       reasoning: parsed.reasoning || 'No reasoning provided'
     };
 
+    console.log('[IntentClarificationService] Generated plan:\n', parsed.plan);
     return intent;
   } catch (error) {
     console.error('[IntentClarificationService] Failed to parse JSON response:', error);
