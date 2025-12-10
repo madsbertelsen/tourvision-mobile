@@ -142,17 +142,16 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
     // Parse Center map on location (for already-open fullscreen map)
     const centerMapMatch = line.match(/^\d+\.\s*Center map on\s+(.+?)(?:\s+\(zoom:\s*(\d+)\))?$/i);
     if (centerMapMatch) {
-      const focusLocation = centerMapMatch[1].trim();
+      const location = centerMapMatch[1].trim();
       const zoom = centerMapMatch[2] ? parseInt(centerMapMatch[2]) : undefined;
 
-      console.log(`[PlanParser] Parsing center map on:`, focusLocation, { zoom });
+      console.log(`[PlanParser] Parsing center map on:`, location, { zoom });
 
       tools.push({
-        name: 'openFullscreenMap',
+        name: 'focusMap',
         parameters: {
-          focusLocation,
-          zoom: zoom || 12,
-          action: 'focus' as 'focus'  // Use focus action instead of open
+          location,
+          zoom: zoom || 12
         },
         status: 'pending'
       });

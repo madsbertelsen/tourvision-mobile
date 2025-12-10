@@ -85,6 +85,15 @@ async function executeTool(
         context
       );
 
+    case 'focusMap':
+      return await executeFocusMap(
+        tool.parameters as {
+          location: string;
+          zoom?: number;
+        },
+        context
+      );
+
     default:
       return {
         toolName: tool.name,
@@ -787,6 +796,84 @@ async function executeOpenFullscreenMap(
       toolName: 'openFullscreenMap',
       success: false,
       error: error.message || 'Failed to open fullscreen map'
+    };
+  }
+}
+
+/**
+ * Tool 8: focusMap
+ * Focus/center the already-open fullscreen map on a location
+ */
+async function executeFocusMap(
+  params: {
+    location: string;
+    zoom?: number;
+  },
+  context: ExecutionContext
+): Promise<ExecutionResult> {
+  console.log('[ToolExecutor:focusMap] Focusing map on', params.location);
+
+  try {
+    const zoom = params.zoom ?? 12;
+
+    // Check if fullscreen map is open
+    const fullscreenMapView = (window as any).fullscreenMapView;
+    const isMapOpen = fullscreenMapView &&
+                      fullscreenMapView.map &&
+                      typeof fullscreenMapView.map.isStyleLoaded === 'function' &&
+                      fullscreenMapView.map.isStyleLoaded();
+
+    if (!isMapOpen) {
+      return {
+        toolName: 'focusMap',
+        success: false,
+        error: 'Fullscreen map is not open - cannot focus on location'
+      };
+    }
+
+    // Geocode the location
+    const geocodingService = await import('./GeocodingService').then(m => m.geocodingService);
+    const geocodedResult = await geocodingService.geocode(params.location);
+
+    if (!geocodedResult) {
+      return {
+        toolName: 'focusMap',
+        success: false,
+        error: `Could not geocode location: ${params.location}`
+      };
+    }
+
+    console.log(`[ToolExecutor:focusMap] Geocoded ${params.location}:`, geocodedResult);
+
+    // Animate to location
+    const map = fullscreenMapView.map;
+
+    if (geocodedResult.boundingbox) {
+      // Use fitBounds with Nominatim's accurate boundingbox
+      const bounds: [[number, number], [number, number]] = [
+        [geocodedResult.boundingbox.west, geocodedResult.boundingbox.south],
+        [geocodedResult.boundingbox.east, geocodedResult.boundingbox.north]
+      ];
+      console.log(`[ToolExecutor:focusMap] Flying to bounds for ${params.location}:`, bounds);
+      map.fitBounds(bounds, { padding: 50, duration: 1000 });
+    } else {
+      // Fallback: flyTo center point with zoom
+      const center: [number, number] = [parseFloat(geocodedResult.lng), parseFloat(geocodedResult.lat)];
+      console.log(`[ToolExecutor:focusMap] Flying to center for ${params.location}:`, center);
+      map.flyTo({ center, zoom, duration: 1000 });
+    }
+
+    return {
+      toolName: 'focusMap',
+      success: true,
+      message: `Focused map on ${params.location}`
+    };
+  } catch (error: any) {
+    console.error('[ToolExecutor:focusMap] Error:', error);
+    return {
+      toolName: 'focusMap',
+      success: false,
+      error: error.message || 'Failed to focus map'
     };
   }
 }
