@@ -226,6 +226,23 @@ export async function parsePlanToToolCalls(intent: ClarifiedIntent): Promise<Age
       continue;
     }
 
+    // Parse Answer (for informational questions)
+    const answerMatch = line.match(/^\d+\.\s*Answer:\s*"?(.+?)"?$/i);
+    if (answerMatch) {
+      const answer = answerMatch[1].trim();
+
+      console.log(`[PlanParser] Parsing answer: "${answer}"`);
+
+      tools.push({
+        name: 'answerQuestion',
+        parameters: {
+          answer
+        },
+        status: 'pending'
+      });
+      continue;
+    }
+
     console.warn(`[PlanParser] Could not parse line: ${line}`);
   }
 

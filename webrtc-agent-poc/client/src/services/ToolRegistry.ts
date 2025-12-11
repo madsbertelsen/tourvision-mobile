@@ -230,6 +230,74 @@ const setTransportationTool: ToolDefinition = {
 };
 
 /**
+ * Tool: Capture Screenshot
+ * Captures current viewport for later vision analysis
+ */
+const captureScreenshotTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'captureScreenshot',
+    description: 'Capture a screenshot of the current viewport for later analysis',
+    parameters: {
+      type: 'object',
+      properties: {
+        note: {
+          type: 'string',
+          description: 'Optional note about what to capture'
+        }
+      }
+    }
+  }
+};
+
+/**
+ * Tool: Analyze Screenshot
+ * Analyzes the most recent screenshot with vision LLM
+ */
+const analyzeScreenshotTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'analyzeScreenshot',
+    description: 'Analyze the most recent screenshot to answer questions about UI elements',
+    parameters: {
+      type: 'object',
+      required: ['question'],
+      properties: {
+        question: {
+          type: 'string',
+          description: 'What to analyze in the screenshot'
+        },
+        screenshotId: {
+          type: 'string',
+          description: 'Optional: ID of specific screenshot (uses latest if omitted)'
+        }
+      }
+    }
+  }
+};
+
+/**
+ * Answer user's question without taking action
+ */
+const answerQuestionTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'answerQuestion',
+    description: 'Answer an informational question based on visual or document context. Use this when the user asks "what", "which", "where" questions that require observation, not action.',
+    parameters: {
+      type: 'object',
+      required: ['answer'],
+      properties: {
+        answer: {
+          type: 'string',
+          description: 'The answer to the user\'s question based on what you can see or observe'
+        }
+      }
+    }
+  }
+};
+
+/**
  * All available tool definitions
  */
 const ALL_TOOLS: ToolDefinition[] = [
@@ -239,7 +307,10 @@ const ALL_TOOLS: ToolDefinition[] = [
   openFullscreenMapTool,
   geocodeTool,
   createGeoMarkTool,
-  setTransportationTool
+  setTransportationTool,
+  captureScreenshotTool,
+  analyzeScreenshotTool,
+  answerQuestionTool
 ];
 
 /**

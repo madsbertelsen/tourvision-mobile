@@ -94,6 +94,15 @@ async function executeTool(
         context
       );
 
+    case 'captureScreenshot':
+      return await executeCaptureScreenshot(tool.parameters as any, context);
+
+    case 'analyzeScreenshot':
+      return await executeAnalyzeScreenshot(tool.parameters as any, context);
+
+    case 'answerQuestion':
+      return executeAnswerQuestion(tool.parameters as { answer: string }, context);
+
     default:
       return {
         toolName: tool.name,
@@ -930,4 +939,119 @@ async function executeFocusMap(
       error: error.message || 'Failed to focus map'
     };
   }
+}
+
+/**
+ * Capture screenshot and store
+ */
+async function executeCaptureScreenshot(
+  params: { note?: string },
+  context: ExecutionContext
+): Promise<ExecutionResult> {
+  console.log('[ToolExecutor:captureScreenshot] Capturing screenshot');
+
+  try {
+    const { ScreenshotService } = await import('./ScreenshotService');
+    const screenshotService = new ScreenshotService();
+    await screenshotService.init();
+
+    const dataUrl = await screenshotService.captureViewport();
+    const documentId = 'current-doc'; // TODO: Get from context
+    const screenshotId = await screenshotService.storeScreenshot(
+      documentId,
+      dataUrl,
+      params.note
+    );
+
+    console.log('[ToolExecutor:captureScreenshot] Screenshot stored:', screenshotId);
+
+    return {
+      toolName: 'captureScreenshot',
+      success: true,
+      message: `Screenshot captured and stored (ID: ${screenshotId})`
+    };
+  } catch (error: any) {
+    console.error('[ToolExecutor:captureScreenshot] Failed:', error);
+    return {
+      toolName: 'captureScreenshot',
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Analyze screenshot with vision LLM
+ */
+async function executeAnalyzeScreenshot(
+  params: { question: string; screenshotId?: string },
+  context: ExecutionContext
+): Promise<ExecutionResult> {
+  console.log('[ToolExecutor:analyzeScreenshot] Analyzing screenshot');
+
+  try {
+    const { ScreenshotService } = await import('./ScreenshotService');
+    const screenshotService = new ScreenshotService();
+    await screenshotService.init();
+
+    // Get latest screenshot
+    const documentId = 'current-doc'; // TODO: Get from context
+    const screenshot = await screenshotService.getLatestScreenshot(documentId);
+
+    if (!screenshot) {
+      return {
+        toolName: 'analyzeScreenshot',
+        success: false,
+        error: 'No screenshot available. Capture one first with captureScreenshot.'
+      };
+    }
+
+    // Call Ollama with vision
+    // Note: Ollama expects images in an 'images' array at message level
+    // Ollama expects base64 string without the data URL prefix
+    const ollama = await import('ollama/browser').then(m => m.default);
+    const response = await ollama.chat({
+      model: import.meta.env.VITE_OLLAMA_MODEL || 'ministral-3:8b',
+      messages: [
+        {
+          role: 'user',
+          content: params.question,
+          images: [screenshot.dataUrl.replace(/^data:image\/[a-z]+;base64,/, '')]
+        } as any
+      ],
+      stream: false
+    });
+
+    console.log('[ToolExecutor:analyzeScreenshot] Analysis complete');
+
+    return {
+      toolName: 'analyzeScreenshot',
+      success: true,
+      message: response.message.content
+    };
+  } catch (error: any) {
+    console.error('[ToolExecutor:analyzeScreenshot] Failed:', error);
+    return {
+      toolName: 'analyzeScreenshot',
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Answer informational question
+ */
+function executeAnswerQuestion(
+  params: { answer: string },
+  context: ExecutionContext
+): ExecutionResult {
+  console.log('[ToolExecutor:answerQuestion] Answering question');
+  console.log('[ToolExecutor:answerQuestion] Answer:', params.answer);
+
+  return {
+    toolName: 'answerQuestion',
+    success: true,
+    message: params.answer
+  };
 }
